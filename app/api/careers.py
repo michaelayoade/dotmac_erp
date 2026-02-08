@@ -7,11 +7,11 @@ Rate limiting is applied to protect against abuse.
 
 import logging
 import uuid
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db import SessionLocal
 from app.middleware.rate_limit import check_rate_limit
 from app.schemas.careers import (
@@ -28,6 +28,7 @@ from app.schemas.careers import (
     StatusCheckResponse,
 )
 from app.services.careers.web import CareersWebService
+from app.services.upload_utils import read_upload_bytes
 
 router = APIRouter(prefix="/careers", tags=["careers"])
 logger = logging.getLogger(__name__)
@@ -98,10 +99,10 @@ def get_organization_info(org_slug: str, db: Session = Depends(get_db)):
 def list_jobs(
     org_slug: str,
     request: Request,
-    search: Optional[str] = None,
-    location: Optional[str] = None,
-    employment_type: Optional[str] = None,
-    is_remote: Optional[bool] = None,
+    search: str | None = None,
+    location: str | None = None,
+    employment_type: str | None = None,
+    is_remote: bool | None = None,
     page: int = 1,
     page_size: int = 20,
     db: Session = Depends(get_db),
@@ -200,7 +201,12 @@ async def upload_resume(
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
 
-    content = await file.read()
+    max_mb = settings.resume_max_size_bytes // 1024 // 1024
+    content = await read_upload_bytes(
+        file,
+        settings.resume_max_size_bytes,
+        error_detail=f"File too large. Maximum size: {max_mb}MB",
+    )
     file_id, error = await service.upload_resume(ctx.org_id, file.filename, content)
 
     if error:

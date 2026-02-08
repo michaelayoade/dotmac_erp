@@ -7,7 +7,6 @@ App-wide notification system for all modules (tickets, expenses, leave, etc.).
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -148,7 +147,7 @@ class Notification(Base):
     message: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Action URL (relative path)
-    action_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    action_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Status
     is_read: Mapped[bool] = mapped_column(
@@ -156,14 +155,14 @@ class Notification(Base):
         nullable=False,
         default=False,
     )
-    read_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Email status
     email_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    email_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    email_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Actor who triggered the notification (optional)
-    actor_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    actor_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,

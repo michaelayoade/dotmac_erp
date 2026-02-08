@@ -12,7 +12,7 @@ Stores employee-specific tax information for Nigerian PAYE calculation:
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
@@ -82,27 +82,27 @@ class EmployeeTaxProfile(Base, AuditMixin):
     )
 
     # Tax identification
-    tin: Mapped[Optional[str]] = mapped_column(
+    tin: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="Tax Identification Number",
     )
-    tax_state: Mapped[Optional[str]] = mapped_column(
+    tax_state: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="State for PAYE remittance",
     )
-    rsa_pin: Mapped[Optional[str]] = mapped_column(
+    rsa_pin: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="Retirement Savings Account PIN",
     )
-    pfa_code: Mapped[Optional[str]] = mapped_column(
+    pfa_code: Mapped[str | None] = mapped_column(
         String(10),
         nullable=True,
         comment="PFA code from pfa_directory",
     )
-    nhf_number: Mapped[Optional[str]] = mapped_column(
+    nhf_number: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="NHF registration number",
@@ -121,7 +121,7 @@ class EmployeeTaxProfile(Base, AuditMixin):
         nullable=False,
         comment="Whether rent documentation has been verified",
     )
-    rent_relief_amount: Mapped[Optional[Decimal]] = mapped_column(
+    rent_relief_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(19, 4),
         nullable=True,
         comment="Calculated rent relief (20% of rent, max 500k)",
@@ -154,7 +154,7 @@ class EmployeeTaxProfile(Base, AuditMixin):
         nullable=False,
         comment="Whether employee is exempt from income tax",
     )
-    exemption_reason: Mapped[Optional[str]] = mapped_column(
+    exemption_reason: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Reason for tax exemption if applicable",
@@ -165,7 +165,7 @@ class EmployeeTaxProfile(Base, AuditMixin):
         Date,
         nullable=False,
     )
-    effective_to: Mapped[Optional[date]] = mapped_column(
+    effective_to: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -175,7 +175,7 @@ class EmployeeTaxProfile(Base, AuditMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import Request
@@ -35,9 +34,9 @@ class ExpenseLimitWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        scope_type: Optional[str] = None,
-        is_active: Optional[str] = None,
-        search: Optional[str] = None,
+        scope_type: str | None = None,
+        is_active: str | None = None,
+        search: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """List expense limit rules."""
@@ -432,8 +431,8 @@ class ExpenseLimitWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        scope_type: Optional[str] = None,
-        is_active: Optional[str] = None,
+        scope_type: str | None = None,
+        is_active: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """List expense approver limits."""
@@ -494,6 +493,59 @@ class ExpenseLimitWebService:
                 "approver_limit": None,
                 "scope_types": ["EMPLOYEE", "GRADE", "DESIGNATION", "ROLE"],
                 "scope_options": scope_options,
+                "errors": {},
+            }
+        )
+        return templates.TemplateResponse(
+            request, "expense/limits/approver_form.html", context
+        )
+
+    def edit_approver_limit_form_response(
+        self,
+        request: Request,
+        approver_limit_id: UUID,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse:
+        """Edit expense approver limit form."""
+        from app.models.people.hr.designation import Designation
+        from app.models.people.hr.employee import Employee
+        from app.models.people.hr.employee_grade import EmployeeGrade
+        from app.models.rbac import Role
+
+        org_id = coerce_uuid(auth.organization_id)
+        service = ExpenseLimitService(db)
+        limit = service.get_approver_limit(org_id, approver_limit_id)
+        scope_options = self._get_scope_options(db, org_id)
+
+        scope_label = None
+        if limit.scope_type == "EMPLOYEE" and limit.scope_id:
+            employee = db.get(Employee, limit.scope_id)
+            if employee and employee.person:
+                scope_label = employee.person.name or ""
+                if employee.employee_code:
+                    scope_label = (
+                        f"{scope_label} ({employee.employee_code})"
+                        if scope_label
+                        else employee.employee_code
+                    )
+        elif limit.scope_type == "GRADE" and limit.scope_id:
+            grade = db.get(EmployeeGrade, limit.scope_id)
+            scope_label = grade.grade_name if grade else None
+        elif limit.scope_type == "DESIGNATION" and limit.scope_id:
+            designation = db.get(Designation, limit.scope_id)
+            scope_label = designation.designation_name if designation else None
+        elif limit.scope_type == "ROLE" and limit.scope_id:
+            role = db.get(Role, limit.scope_id)
+            scope_label = role.name if role else None
+
+        context = base_context(request, auth, "Edit Approver Limit", "limits")
+        context.update(
+            {
+                "approver_limit": limit,
+                "scope_types": ["EMPLOYEE", "GRADE", "DESIGNATION", "ROLE"],
+                "scope_options": scope_options,
+                "scope_label": scope_label,
                 "errors": {},
             }
         )
@@ -600,6 +652,111 @@ class ExpenseLimitWebService:
                 request, "expense/limits/approver_form.html", context
             )
 
+    async def update_approver_limit_response(
+        self,
+        request: Request,
+        approver_limit_id: UUID,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse | RedirectResponse:
+        """Update expense approver limit."""
+        org_id = coerce_uuid(auth.organization_id)
+        service = ExpenseLimitService(db)
+
+        form = getattr(request.state, "csrf_form", None)
+        if form is None:
+            form = await request.form()
+
+        scope_type = _safe_form_text(form.get("scope_type"))
+        scope_id = _safe_form_text(form.get("scope_id"))
+        max_approval_amount = _safe_form_text(form.get("max_approval_amount"))
+        can_approve_own = _safe_form_text(form.get("can_approve_own_expenses")) in {
+            "1",
+            "true",
+            "on",
+            "yes",
+        }
+        is_active = _safe_form_text(form.get("is_active")) in {"1", "true", "on", "yes"}
+
+        errors = {}
+        if not scope_type:
+            errors["scope_type"] = "Required"
+        if not max_approval_amount:
+            errors["max_approval_amount"] = "Required"
+
+        max_amount_value = None
+        if max_approval_amount:
+            try:
+                max_amount_value = Decimal(max_approval_amount)
+            except Exception:
+                errors["max_approval_amount"] = "Invalid amount"
+        if max_amount_value is None:
+            errors["max_approval_amount"] = (
+                errors.get("max_approval_amount") or "Required"
+            )
+
+        scope_options = self._get_scope_options(db, org_id)
+
+        if errors:
+            context = base_context(request, auth, "Edit Approver Limit", "limits")
+            context.update(
+                {
+                    "approver_limit": {
+                        "approver_limit_id": approver_limit_id,
+                        "scope_type": scope_type,
+                        "scope_id": scope_id,
+                        "max_approval_amount": max_approval_amount,
+                        "can_approve_own_expenses": can_approve_own,
+                        "is_active": is_active,
+                    },
+                    "scope_types": ["EMPLOYEE", "GRADE", "DESIGNATION", "ROLE"],
+                    "scope_options": scope_options,
+                    "scope_label": None,
+                    "errors": errors,
+                }
+            )
+            return templates.TemplateResponse(
+                request, "expense/limits/approver_form.html", context
+            )
+
+        try:
+            if max_amount_value is None:
+                raise ValueError("Missing approval amount")
+            service.update_approver_limit(
+                org_id,
+                approver_limit_id,
+                scope_type=scope_type,
+                scope_id=coerce_uuid(scope_id) if scope_id else None,
+                max_approval_amount=max_amount_value,
+                can_approve_own_expenses=can_approve_own,
+                is_active=is_active,
+            )
+            db.commit()
+            return RedirectResponse(url="/expense/limits/approvers", status_code=303)
+        except Exception as e:
+            db.rollback()
+            errors["_form"] = str(e)
+            context = base_context(request, auth, "Edit Approver Limit", "limits")
+            context.update(
+                {
+                    "approver_limit": {
+                        "approver_limit_id": approver_limit_id,
+                        "scope_type": scope_type,
+                        "scope_id": scope_id,
+                        "max_approval_amount": max_approval_amount,
+                        "can_approve_own_expenses": can_approve_own,
+                        "is_active": is_active,
+                    },
+                    "scope_types": ["EMPLOYEE", "GRADE", "DESIGNATION", "ROLE"],
+                    "scope_options": scope_options,
+                    "scope_label": None,
+                    "errors": errors,
+                }
+            )
+            return templates.TemplateResponse(
+                request, "expense/limits/approver_form.html", context
+            )
+
     def delete_approver_limit_response(
         self,
         approver_limit_id: UUID,
@@ -623,7 +780,7 @@ class ExpenseLimitWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        employee_id: Optional[str] = None,
+        employee_id: str | None = None,
     ) -> HTMLResponse:
         """Employee expense usage dashboard."""
         org_id = coerce_uuid(auth.organization_id)
@@ -668,9 +825,9 @@ class ExpenseLimitWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        result: Optional[str] = None,
-        from_date: Optional[str] = None,
-        to_date: Optional[str] = None,
+        result: str | None = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """List expense limit evaluations (audit trail)."""
@@ -742,6 +899,7 @@ class ExpenseLimitWebService:
         from app.models.people.hr.employee import Employee, EmployeeStatus
         from app.models.people.hr.employee_grade import EmployeeGrade
         from app.models.person import Person
+        from app.models.rbac import Role
 
         grades = list(
             db.query(EmployeeGrade)
@@ -780,12 +938,72 @@ class ExpenseLimitWebService:
             .all()
         )
 
+        roles = list(
+            db.query(Role).filter(Role.is_active == True).order_by(Role.name).all()
+        )
+
         return {
             "grades": grades,
             "departments": departments,
             "designations": designations,
             "employees": employees,
+            "roles": roles,
         }
+
+    @staticmethod
+    def employee_typeahead(
+        db: Session,
+        organization_id: str,
+        query: str,
+        limit: int = 8,
+    ) -> dict:
+        """Search active employees for approver limit typeahead fields."""
+        from sqlalchemy import select as sa_select
+        from sqlalchemy.orm import joinedload as jl
+
+        from app.models.people.hr.employee import Employee, EmployeeStatus
+        from app.models.person import Person
+        from app.services.common import coerce_uuid
+
+        org_id = coerce_uuid(organization_id)
+        search_term = f"%{query.strip()}%"
+        stmt = (
+            sa_select(Employee)
+            .join(Person, Person.id == Employee.person_id)
+            .options(jl(Employee.person))
+            .where(
+                Employee.organization_id == org_id,
+                Employee.status == EmployeeStatus.ACTIVE,
+            )
+            .where(
+                (Person.first_name.ilike(search_term))
+                | (Person.last_name.ilike(search_term))
+                | (Person.email.ilike(search_term))
+                | (Employee.employee_code.ilike(search_term))
+            )
+            .order_by(Person.first_name.asc(), Person.last_name.asc())
+            .limit(limit)
+        )
+        employees = list(db.scalars(stmt).unique().all())
+        items = []
+        for employee in employees:
+            name = employee.person.name if employee.person else ""
+            label = name
+            if employee.employee_code:
+                label = (
+                    f"{name} ({employee.employee_code})"
+                    if name
+                    else employee.employee_code
+                )
+            items.append(
+                {
+                    "ref": str(employee.employee_id),
+                    "label": label,
+                    "name": name,
+                    "employee_code": employee.employee_code or "",
+                }
+            )
+        return {"items": items}
 
 
 expense_limit_web_service = ExpenseLimitWebService()

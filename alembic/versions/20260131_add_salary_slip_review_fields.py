@@ -5,10 +5,10 @@ Revises: 20260131_add_payroll_entry_bank_account
 Create Date: 2026-01-31
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
+from alembic import op
 
 revision = "20260131_add_salary_slip_review_fields"
 down_revision = "20260131_add_payroll_entry_bank_account"

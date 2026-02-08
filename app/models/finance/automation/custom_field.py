@@ -7,7 +7,7 @@ Allows organizations to define custom fields on entities.
 import enum
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -110,14 +110,14 @@ class CustomFieldDefinition(Base):
         nullable=False,
         comment="Display name for the field",
     )
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Field type and configuration
     field_type: Mapped[CustomFieldType] = mapped_column(
         Enum(CustomFieldType, name="custom_field_type"),
         nullable=False,
     )
-    field_options: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    field_options: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Options for SELECT/MULTISELECT: [{value, label}]",
@@ -129,31 +129,31 @@ class CustomFieldDefinition(Base):
         nullable=False,
         default=False,
     )
-    default_value: Mapped[Optional[str]] = mapped_column(
+    default_value: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
     )
-    validation_regex: Mapped[Optional[str]] = mapped_column(
+    validation_regex: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
         comment="Regex pattern for validation",
     )
-    validation_message: Mapped[Optional[str]] = mapped_column(
+    validation_message: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
         comment="Error message when validation fails",
     )
-    min_value: Mapped[Optional[str]] = mapped_column(
+    min_value: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Minimum value for NUMBER/DECIMAL/DATE",
     )
-    max_value: Mapped[Optional[str]] = mapped_column(
+    max_value: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Maximum value for NUMBER/DECIMAL/DATE",
     )
-    max_length: Mapped[Optional[int]] = mapped_column(
+    max_length: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Max length for TEXT/TEXTAREA",
@@ -165,20 +165,20 @@ class CustomFieldDefinition(Base):
         nullable=False,
         default=0,
     )
-    section_name: Mapped[Optional[str]] = mapped_column(
+    section_name: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Group fields into sections",
     )
-    placeholder: Mapped[Optional[str]] = mapped_column(
+    placeholder: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
     )
-    help_text: Mapped[Optional[str]] = mapped_column(
+    help_text: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
     )
-    css_class: Mapped[Optional[str]] = mapped_column(
+    css_class: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
@@ -226,17 +226,17 @@ class CustomFieldDefinition(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
     )
 
-    def validate_value(self, value: Any) -> tuple[bool, Optional[str]]:
+    def validate_value(self, value: Any) -> tuple[bool, str | None]:
         """Validate a value against this field's rules."""
         import re
         from decimal import Decimal, InvalidOperation

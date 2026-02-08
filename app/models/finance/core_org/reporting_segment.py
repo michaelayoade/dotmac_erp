@@ -6,7 +6,6 @@ IFRS 8 Operating Segments.
 import enum
 import uuid
 from datetime import date, datetime
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -63,12 +62,12 @@ class ReportingSegment(Base):
     )
 
     # IFRS 8 requirements
-    chief_operating_decision_maker: Mapped[Optional[str]] = mapped_column(
+    chief_operating_decision_maker: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
     is_reportable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    aggregation_criteria: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    aggregation_criteria: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Effective dating
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -77,14 +76,14 @@ class ReportingSegment(Base):
         nullable=False,
         server_default=func.current_date(),
     )
-    effective_to: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

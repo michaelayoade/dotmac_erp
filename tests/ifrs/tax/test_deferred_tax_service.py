@@ -4,19 +4,19 @@ Tests for DeferredTaxService.
 Tests IAS 12 deferred tax calculations, basis tracking, and movements.
 """
 
-import pytest
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+import pytest
 from fastapi import HTTPException
 
 from app.models.finance.tax.deferred_tax_basis import DifferenceType
 from app.services.finance.tax.deferred_tax import (
-    DeferredTaxService,
     DeferredTaxBasisInput,
     DeferredTaxCalculationResult,
     DeferredTaxMovementResult,
+    DeferredTaxService,
     DeferredTaxSummary,
 )
 
@@ -243,7 +243,7 @@ class TestCreateBasis:
         mock_db.query.return_value.filter.return_value.first.return_value = None
         mock_basis_class.return_value = MockDeferredTaxBasis(organization_id=org_id)
 
-        result = DeferredTaxService.create_basis(mock_db, org_id, sample_basis_input)
+        DeferredTaxService.create_basis(mock_db, org_id, sample_basis_input)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -283,7 +283,7 @@ class TestCreateBasis:
         mock_db.query.return_value.filter.return_value.first.return_value = None
         mock_basis_class.return_value = MockDeferredTaxBasis(organization_id=org_id)
 
-        result = DeferredTaxService.create_basis(mock_db, org_id, input_data)
+        DeferredTaxService.create_basis(mock_db, org_id, input_data)
 
         # Verify basis was created
         mock_db.add.assert_called_once()
@@ -308,7 +308,7 @@ class TestCreateBasis:
         mock_db.query.return_value.filter.return_value.first.return_value = None
         mock_basis_class.return_value = MockDeferredTaxBasis(organization_id=org_id)
 
-        result = DeferredTaxService.create_basis(mock_db, org_id, input_data)
+        DeferredTaxService.create_basis(mock_db, org_id, input_data)
 
         mock_db.add.assert_called_once()
 
@@ -380,7 +380,7 @@ class TestUpdateBasis:
         )
         mock_db.get.return_value = basis
 
-        result = DeferredTaxService.update_basis(
+        DeferredTaxService.update_basis(
             mock_db,
             org_id,
             basis.basis_id,
@@ -693,7 +693,7 @@ class TestList:
         mock_query.order_by.return_value.limit.return_value.offset.return_value.all.return_value = bases
         mock_db.query.return_value = mock_query
 
-        result = DeferredTaxService.list(mock_db, limit=10, offset=20)
+        DeferredTaxService.list(mock_db, limit=10, offset=20)
 
         mock_query.order_by.return_value.limit.assert_called_with(10)
         mock_query.order_by.return_value.limit.return_value.offset.assert_called_with(

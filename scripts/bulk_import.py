@@ -15,44 +15,44 @@ Options:
 import argparse
 import csv
 import sys
-from datetime import datetime, date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Any
 from uuid import UUID
 
 # Add app to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy.orm import Session
+
 from app.db import SessionLocal
-from app.models.finance.gl.account import Account, AccountType, NormalBalance
-from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
-from app.models.finance.gl.fiscal_year import FiscalYear
-from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
-from app.models.finance.gl.journal_entry import JournalEntry, JournalType, JournalStatus
-from app.models.finance.gl.journal_entry_line import JournalEntryLine
+from app.models.finance.ap.supplier import Supplier, SupplierType
+from app.models.finance.ap.supplier_invoice import (
+    SupplierInvoice,
+    SupplierInvoiceStatus,
+    SupplierInvoiceType,
+)
+from app.models.finance.ap.supplier_payment import (
+    APPaymentMethod,
+    APPaymentStatus,
+    SupplierPayment,
+)
 from app.models.finance.ar.customer import Customer, CustomerType, RiskCategory
-from app.models.finance.ar.invoice import Invoice, InvoiceType, InvoiceStatus
 from app.models.finance.ar.customer_payment import (
     CustomerPayment,
     PaymentMethod,
     PaymentStatus,
 )
-from app.models.finance.ap.supplier import Supplier, SupplierType
-from app.models.finance.ap.supplier_invoice import (
-    SupplierInvoice,
-    SupplierInvoiceType,
-    SupplierInvoiceStatus,
-)
-from app.models.finance.ap.supplier_payment import (
-    SupplierPayment,
-    APPaymentMethod,
-    APPaymentStatus,
-)
-from app.models.inventory.item import Item, ItemType, CostingMethod
+from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
+from app.models.finance.gl.account import Account, AccountType, NormalBalance
+from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
+from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
+from app.models.finance.gl.fiscal_year import FiscalYear
+from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
+from app.models.finance.gl.journal_entry_line import JournalEntryLine
+from app.models.inventory.item import CostingMethod, Item, ItemType
 from app.models.inventory.item_category import ItemCategory
-
 
 # Import paths
 IMPORT_PATH = Path(
@@ -73,24 +73,24 @@ class BulkImporter:
             "skipped": 0,
             "errors": 0,
         }
-        self.errors: List[str] = []
+        self.errors: list[str] = []
 
         # Cache for accounts
-        self._account_cache: Dict[str, UUID] = {}
-        self._account_code_cache: Dict[str, UUID] = {}
-        self._ar_account_id: Optional[UUID] = None
-        self._ap_account_id: Optional[UUID] = None
-        self._inventory_account_id: Optional[UUID] = None
-        self._cogs_account_id: Optional[UUID] = None
-        self._revenue_account_id: Optional[UUID] = None
-        self._expense_account_id: Optional[UUID] = None
-        self._default_item_category_id: Optional[UUID] = None
-        self._bank_account_id: Optional[UUID] = None
+        self._account_cache: dict[str, UUID] = {}
+        self._account_code_cache: dict[str, UUID] = {}
+        self._ar_account_id: UUID | None = None
+        self._ap_account_id: UUID | None = None
+        self._inventory_account_id: UUID | None = None
+        self._cogs_account_id: UUID | None = None
+        self._revenue_account_id: UUID | None = None
+        self._expense_account_id: UUID | None = None
+        self._default_item_category_id: UUID | None = None
+        self._bank_account_id: UUID | None = None
 
         # Cache for entities
-        self._customer_cache: Dict[str, UUID] = {}
-        self._supplier_cache: Dict[str, UUID] = {}
-        self._fiscal_period_cache: Dict[str, UUID] = {}
+        self._customer_cache: dict[str, UUID] = {}
+        self._supplier_cache: dict[str, UUID] = {}
+        self._fiscal_period_cache: dict[str, UUID] = {}
 
     def log(self, msg: str):
         print(f"  {msg}")
@@ -269,19 +269,19 @@ class BulkImporter:
         for s in suppliers:
             self._supplier_cache[s.legal_name.lower()] = s.supplier_id
 
-    def _get_customer_id(self, name: str) -> Optional[UUID]:
+    def _get_customer_id(self, name: str) -> UUID | None:
         """Look up customer by name"""
         if not self._customer_cache:
             self._build_customer_cache()
         return self._customer_cache.get(name.lower().strip())
 
-    def _get_supplier_id(self, name: str) -> Optional[UUID]:
+    def _get_supplier_id(self, name: str) -> UUID | None:
         """Look up supplier by name"""
         if not self._supplier_cache:
             self._build_supplier_cache()
         return self._supplier_cache.get(name.lower().strip())
 
-    def _get_account_id(self, name: str = None, code: str = None) -> Optional[UUID]:
+    def _get_account_id(self, name: str = None, code: str = None) -> UUID | None:
         """Look up account by name or code"""
         if code and code in self._account_code_cache:
             return self._account_code_cache[code]
@@ -355,7 +355,7 @@ class BulkImporter:
 
         self.db.commit()
 
-    def _get_fiscal_period_id(self, trans_date: date) -> Optional[UUID]:
+    def _get_fiscal_period_id(self, trans_date: date) -> UUID | None:
         """Get fiscal period ID for a date"""
         period_key = f"{trans_date.year}-{trans_date.month:02d}"
         if period_key in self._fiscal_period_cache:
@@ -376,7 +376,7 @@ class BulkImporter:
             return fp.fiscal_period_id
         return None
 
-    def _ensure_default_item_category(self) -> Optional[UUID]:
+    def _ensure_default_item_category(self) -> UUID | None:
         """Create or get default item category"""
         if self._default_item_category_id:
             return self._default_item_category_id
@@ -422,7 +422,7 @@ class BulkImporter:
 
         return self._default_item_category_id
 
-    def import_chart_of_accounts(self) -> Dict[str, Any]:
+    def import_chart_of_accounts(self) -> dict[str, Any]:
         """Import Chart of Accounts"""
         print("\n" + "=" * 60)
         print("IMPORTING CHART OF ACCOUNTS")
@@ -438,7 +438,7 @@ class BulkImporter:
         category_index = 1
         account_index = 1
 
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
@@ -536,7 +536,7 @@ class BulkImporter:
         )
         return stats
 
-    def import_customers(self) -> Dict[str, Any]:
+    def import_customers(self) -> dict[str, Any]:
         """Import Customers/Contacts into IFRS Customer model"""
         print("\n" + "=" * 60)
         print("IMPORTING CUSTOMERS")
@@ -559,7 +559,7 @@ class BulkImporter:
         stats = {"imported": 0, "skipped": 0, "errors": []}
         customer_index = 1
 
-        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
             reader = csv.DictReader(f)
             batch = []
             for row in reader:
@@ -673,7 +673,7 @@ class BulkImporter:
         )
         return stats
 
-    def import_vendors(self) -> Dict[str, Any]:
+    def import_vendors(self) -> dict[str, Any]:
         """Import Vendors/Suppliers into IFRS Supplier model"""
         print("\n" + "=" * 60)
         print("IMPORTING VENDORS")
@@ -696,7 +696,7 @@ class BulkImporter:
         stats = {"imported": 0, "skipped": 0, "errors": []}
         supplier_index = 1
 
-        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
             reader = csv.DictReader(f)
             batch = []
             for row in reader:
@@ -791,7 +791,7 @@ class BulkImporter:
         )
         return stats
 
-    def import_items(self) -> Dict[str, Any]:
+    def import_items(self) -> dict[str, Any]:
         """Import Inventory Items into IFRS Item model"""
         print("\n" + "=" * 60)
         print("IMPORTING ITEMS")
@@ -815,7 +815,7 @@ class BulkImporter:
         stats = {"imported": 0, "skipped": 0, "errors": []}
         item_index = 1
 
-        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
             reader = csv.DictReader(f)
             batch = []
             for row in reader:
@@ -902,7 +902,7 @@ class BulkImporter:
         )
         return stats
 
-    def import_invoices(self) -> Dict[str, Any]:
+    def import_invoices(self) -> dict[str, Any]:
         """Import Sales Invoices"""
         print("\n" + "=" * 60)
         print("IMPORTING INVOICES")
@@ -928,7 +928,7 @@ class BulkImporter:
         stats = {"imported": 0, "skipped": 0, "errors": [], "no_customer": 0}
         seen_invoices = set()
 
-        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
@@ -1017,7 +1017,7 @@ class BulkImporter:
         )
         return stats
 
-    def import_bills(self) -> Dict[str, Any]:
+    def import_bills(self) -> dict[str, Any]:
         """Import Bills (Supplier Invoices)"""
         print("\n" + "=" * 60)
         print("IMPORTING BILLS")
@@ -1043,7 +1043,7 @@ class BulkImporter:
         stats = {"imported": 0, "skipped": 0, "errors": [], "no_supplier": 0}
         seen_bills = set()
 
-        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
@@ -1129,7 +1129,7 @@ class BulkImporter:
         )
         return stats
 
-    def import_customer_payments(self) -> Dict[str, Any]:
+    def import_customer_payments(self) -> dict[str, Any]:
         """Import Customer Payments"""
         print("\n" + "=" * 60)
         print("IMPORTING CUSTOMER PAYMENTS")
@@ -1146,7 +1146,7 @@ class BulkImporter:
         stats = {"imported": 0, "skipped": 0, "errors": [], "no_customer": 0}
         seen_payments = set()
 
-        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
@@ -1225,7 +1225,7 @@ class BulkImporter:
         )
         return stats
 
-    def import_vendor_payments(self) -> Dict[str, Any]:
+    def import_vendor_payments(self) -> dict[str, Any]:
         """Import Vendor Payments"""
         print("\n" + "=" * 60)
         print("IMPORTING VENDOR PAYMENTS")
@@ -1251,7 +1251,7 @@ class BulkImporter:
         stats = {"imported": 0, "skipped": 0, "errors": [], "no_supplier": 0}
         seen_payments = set()
 
-        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 try:
@@ -1329,7 +1329,7 @@ class BulkImporter:
         )
         return stats
 
-    def import_journals(self) -> Dict[str, Any]:
+    def import_journals(self) -> dict[str, Any]:
         """Import Journal Entries"""
         print("\n" + "=" * 60)
         print("IMPORTING JOURNALS")
@@ -1346,7 +1346,7 @@ class BulkImporter:
         stats = {"imported": 0, "skipped": 0, "errors": [], "no_period": 0}
         journal_data = {}  # Group by journal number
 
-        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 journal_number = row.get("Journal Number", "").strip()
@@ -1555,16 +1555,16 @@ class BulkImporter:
         try:
             cleaned = str(value).replace(",", "").strip()
             return Decimal(cleaned)
-        except:
+        except Exception:
             return Decimal("0")
 
-    def _parse_date(self, value: str) -> Optional[date]:
+    def _parse_date(self, value: str) -> date | None:
         if not value:
             return None
         for fmt in ["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%Y/%m/%d"]:
             try:
                 return datetime.strptime(value.strip(), fmt).date()
-            except:
+            except Exception:
                 continue
         return None
 

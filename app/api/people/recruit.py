@@ -7,7 +7,6 @@ Thin API wrapper for Recruitment Management endpoints. All business logic is in 
 import csv
 import io
 from datetime import date, datetime
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -23,34 +22,34 @@ from app.models.people.recruit import (
     OfferStatus,
 )
 from app.schemas.people.recruit import (
-    # Job Opening
-    JobOpeningCreate,
-    JobOpeningUpdate,
-    JobOpeningRead,
-    JobOpeningListResponse,
-    JobOpeningStats,
-    # Job Applicant
-    JobApplicantCreate,
-    JobApplicantUpdate,
-    JobApplicantRead,
-    JobApplicantListResponse,
-    ApplicantStatusUpdateRequest,
     ApplicantStats,
+    ApplicantStatusUpdateRequest,
     # Interview
     InterviewCreate,
-    InterviewUpdate,
-    InterviewRead,
-    InterviewListResponse,
     InterviewFeedbackRequest,
+    InterviewListResponse,
+    InterviewRead,
+    InterviewUpdate,
+    # Job Applicant
+    JobApplicantCreate,
+    JobApplicantListResponse,
+    JobApplicantRead,
+    JobApplicantUpdate,
     # Job Offer
     JobOfferCreate,
-    JobOfferUpdate,
-    JobOfferRead,
     JobOfferListResponse,
+    JobOfferRead,
+    JobOfferUpdate,
+    # Job Opening
+    JobOpeningCreate,
+    JobOpeningListResponse,
+    JobOpeningRead,
+    JobOpeningStats,
+    JobOpeningUpdate,
 )
+from app.services.common import PaginationParams
 from app.services.people.recruit import RecruitmentService
 from app.services.people.recruit.recruit_service import JobOpeningNotFoundError
-from app.services.common import PaginationParams
 
 router = APIRouter(
     prefix="/recruit",
@@ -67,7 +66,7 @@ def get_db():
         db.close()
 
 
-def parse_enum(value: Optional[str], enum_type, field_name: str):
+def parse_enum(value: str | None, enum_type, field_name: str):
     if value is None:
         return None
     try:
@@ -105,10 +104,10 @@ def job_opening_new_redirect() -> Response:
 @router.get("/job-openings", response_model=JobOpeningListResponse)
 def list_job_openings(
     organization_id: UUID = Depends(require_organization_id),
-    search: Optional[str] = None,
-    status: Optional[str] = None,
-    department_id: Optional[UUID] = None,
-    designation_id: Optional[UUID] = None,
+    search: str | None = None,
+    status: str | None = None,
+    department_id: UUID | None = None,
+    designation_id: UUID | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -285,10 +284,10 @@ def job_opening_summary(
 @router.get("/applicants", response_model=JobApplicantListResponse)
 def list_applicants(
     organization_id: UUID = Depends(require_organization_id),
-    search: Optional[str] = None,
-    job_opening_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    source: Optional[str] = None,
+    search: str | None = None,
+    job_opening_id: UUID | None = None,
+    status: str | None = None,
+    source: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -411,7 +410,7 @@ def advance_applicant(
 def reject_applicant(
     applicant_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    reason: Optional[str] = None,
+    reason: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Reject a job applicant."""
@@ -433,12 +432,12 @@ def reject_applicant(
 @router.get("/interviews", response_model=InterviewListResponse)
 def list_interviews(
     organization_id: UUID = Depends(require_organization_id),
-    applicant_id: Optional[UUID] = None,
-    job_opening_id: Optional[UUID] = None,
-    interviewer_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    from_date: Optional[datetime] = None,
-    to_date: Optional[datetime] = None,
+    applicant_id: UUID | None = None,
+    job_opening_id: UUID | None = None,
+    interviewer_id: UUID | None = None,
+    status: str | None = None,
+    from_date: datetime | None = None,
+    to_date: datetime | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -572,11 +571,11 @@ def submit_interview_feedback(
 @router.get("/offers", response_model=JobOfferListResponse)
 def list_job_offers(
     organization_id: UUID = Depends(require_organization_id),
-    applicant_id: Optional[UUID] = None,
-    job_opening_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    applicant_id: UUID | None = None,
+    job_opening_id: UUID | None = None,
+    status: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -705,7 +704,7 @@ def delete_job_offer(
 def decline_offer(
     offer_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    reason: Optional[str] = None,
+    reason: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Decline a job offer."""
@@ -744,7 +743,7 @@ def convert_to_employee(
 @router.get("/pipeline/stats")
 def get_pipeline_stats(
     organization_id: UUID = Depends(require_organization_id),
-    job_opening_id: Optional[UUID] = None,
+    job_opening_id: UUID | None = None,
     db: Session = Depends(get_db),
 ):
     """Get recruitment pipeline statistics."""
@@ -759,7 +758,7 @@ def get_pipeline_stats(
 @router.get("/applicants/summary", response_model=ApplicantStats)
 def get_applicant_summary(
     organization_id: UUID = Depends(require_organization_id),
-    job_opening_id: Optional[UUID] = None,
+    job_opening_id: UUID | None = None,
     db: Session = Depends(get_db),
 ):
     """Get applicant summary statistics."""
@@ -784,10 +783,10 @@ def get_applicant_summary(
 @router.get("/applicants/export")
 def export_applicants(
     organization_id: UUID = Depends(require_organization_id),
-    search: Optional[str] = None,
-    job_opening_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    source: Optional[str] = None,
+    search: str | None = None,
+    job_opening_id: UUID | None = None,
+    status: str | None = None,
+    source: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Export job applicants to CSV."""

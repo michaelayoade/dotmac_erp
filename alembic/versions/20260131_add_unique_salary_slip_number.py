@@ -6,8 +6,9 @@ Create Date: 2026-01-31
 
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "20260131_add_unique_salary_slip_number"
 down_revision = "add_payroll_expense_account"

@@ -5,11 +5,12 @@ Revises: add_quote_and_sales_order
 Create Date: 2025-02-04
 """
 
-from alembic import op
-from app.alembic_utils import ensure_enum
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import UUID
+
+from alembic import op
+from app.alembic_utils import ensure_enum
 
 # revision identifiers, used by Alembic.
 revision = "add_numbering_sequences"

@@ -7,7 +7,7 @@ Used for validation before rendering templates.
 
 from datetime import date
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
@@ -25,66 +25,66 @@ class OfferLetterContext(BaseModel):
     candidate_name: str
     candidate_first_name: str
     candidate_last_name: str
-    candidate_email: Optional[str] = None
-    candidate_phone: Optional[str] = None
-    candidate_address: Optional[str] = None
+    candidate_email: str | None = None
+    candidate_phone: str | None = None
+    candidate_address: str | None = None
 
     # Position details
     job_title: str
     designation_name: str
-    department_name: Optional[str] = None
-    reporting_to: Optional[str] = None
-    location: Optional[str] = None
+    department_name: str | None = None
+    reporting_to: str | None = None
+    location: str | None = None
     employment_type: str = "FULL_TIME"  # FULL_TIME, PART_TIME, CONTRACT
 
     # Compensation
     base_salary: Decimal
     currency_code: str = "NGN"
     pay_frequency: str = "MONTHLY"  # MONTHLY, BI_WEEKLY, WEEKLY, ANNUAL
-    annual_salary: Optional[Decimal] = None  # Calculated from base_salary if monthly
+    annual_salary: Decimal | None = None  # Calculated from base_salary if monthly
 
     # Additional compensation
-    signing_bonus: Optional[Decimal] = None
-    relocation_allowance: Optional[Decimal] = None
-    benefits: Optional[list[str]] = None
-    other_benefits: Optional[str] = None
+    signing_bonus: Decimal | None = None
+    relocation_allowance: Decimal | None = None
+    benefits: list[str] | None = None
+    other_benefits: str | None = None
 
     # Dates
     offer_date: date
     offer_expiry_date: date
     proposed_start_date: date
-    document_date: Optional[date] = None
+    document_date: date | None = None
 
     # Terms
     probation_months: int = 3
     notice_period_days: int = 30
     work_hours_per_week: int = 40
-    work_days: Optional[str] = None  # e.g., "Monday to Friday"
+    work_days: str | None = None  # e.g., "Monday to Friday"
 
     # Organization
     organization_name: str
-    organization_legal_name: Optional[str] = None
-    organization_address: Optional[str] = None
-    organization_phone: Optional[str] = None
-    organization_email: Optional[str] = None
-    organization_website: Optional[str] = None
-    organization_logo_url: Optional[str] = None
+    organization_legal_name: str | None = None
+    organization_address: str | None = None
+    organization_phone: str | None = None
+    organization_email: str | None = None
+    organization_website: str | None = None
+    organization_logo_url: str | None = None
 
     # Signatory
     signatory_name: str
     signatory_title: str
-    signatory_department: Optional[str] = None
+    signatory_department: str | None = None
 
     # Additional terms
-    terms_and_conditions: Optional[str] = None
-    special_conditions: Optional[str] = None
+    terms_and_conditions: str | None = None
+    special_conditions: str | None = None
 
     # Reference
     offer_number: str
 
     @field_validator("annual_salary", mode="before")
     @classmethod
-    def calculate_annual_salary(cls, v: Any, info: Any) -> Optional[Decimal]:
+    def calculate_annual_salary(cls, v: Any, info: Any) -> Decimal | None:
         """Calculate annual salary from base salary if not provided."""
         if v is not None:
             if isinstance(v, Decimal):
@@ -103,20 +103,20 @@ class EmploymentContractContext(BaseModel):
     # Employee information
     employee_name: str
     employee_address: str
-    employee_id_type: Optional[str] = None  # e.g., "National ID", "Passport"
-    employee_id_number: Optional[str] = None
+    employee_id_type: str | None = None  # e.g., "National ID", "Passport"
+    employee_id_number: str | None = None
 
     # Position
     job_title: str
     designation_name: str
-    department_name: Optional[str] = None
-    reporting_to: Optional[str] = None
-    location: Optional[str] = None
+    department_name: str | None = None
+    reporting_to: str | None = None
+    location: str | None = None
 
     # Employment details
     start_date: date
     employment_type: str  # FULL_TIME, PART_TIME, CONTRACT
-    contract_end_date: Optional[date] = None  # For fixed-term contracts
+    contract_end_date: date | None = None  # For fixed-term contracts
     probation_period_months: int
 
     # Compensation
@@ -126,36 +126,36 @@ class EmploymentContractContext(BaseModel):
     payment_method: str = "BANK_TRANSFER"  # BANK_TRANSFER, CHEQUE, CASH
 
     # Allowances
-    allowances: Optional[list[dict[str, Any]]] = None  # [{name, amount, taxable}]
+    allowances: list[dict[str, Any]] | None = None  # [{name, amount, taxable}]
 
     # Working hours
     work_hours_per_week: int
     work_days: list[str]  # ['Monday', 'Tuesday', ...]
-    work_start_time: Optional[str] = None
-    work_end_time: Optional[str] = None
+    work_start_time: str | None = None
+    work_end_time: str | None = None
 
     # Leave entitlement
     annual_leave_days: int
     sick_leave_days: int
-    other_leave: Optional[list[dict[str, Any]]] = None  # [{type, days}]
+    other_leave: list[dict[str, Any]] | None = None  # [{type, days}]
 
     # Termination
     notice_period_days: int
 
     # Legal
     governing_law: str = "Laws of Nigeria"
-    arbitration_location: Optional[str] = None
+    arbitration_location: str | None = None
 
     # Confidentiality & Non-compete
     has_nda: bool = True
     has_non_compete: bool = False
-    non_compete_duration_months: Optional[int] = None
-    non_compete_territory: Optional[str] = None
+    non_compete_duration_months: int | None = None
+    non_compete_territory: str | None = None
 
     # Organization
     organization_name: str
     organization_legal_name: str
-    organization_registration_number: Optional[str] = None
+    organization_registration_number: str | None = None
     organization_address: str
 
     # Signatory
@@ -163,7 +163,7 @@ class EmploymentContractContext(BaseModel):
     signatory_title: str
 
     # Reference
-    contract_number: Optional[str] = None
+    contract_number: str | None = None
 
 
 class ConfirmationLetterContext(BaseModel):
@@ -174,11 +174,11 @@ class ConfirmationLetterContext(BaseModel):
     # Employee
     employee_name: str
     employee_code: str
-    employee_address: Optional[str] = None
+    employee_address: str | None = None
 
     # Position
     job_title: str
-    department_name: Optional[str] = None
+    department_name: str | None = None
 
     # Dates
     start_date: date
@@ -187,9 +187,9 @@ class ConfirmationLetterContext(BaseModel):
 
     # Salary (may be revised post-probation)
     current_salary: Decimal
-    new_salary: Optional[Decimal] = None
+    new_salary: Decimal | None = None
     currency_code: str = "NGN"
-    salary_effective_date: Optional[date] = None
+    salary_effective_date: date | None = None
 
     # Organization
     organization_name: str
@@ -207,11 +207,11 @@ class TerminationLetterContext(BaseModel):
     # Employee
     employee_name: str
     employee_code: str
-    employee_address: Optional[str] = None
+    employee_address: str | None = None
 
     # Position
     job_title: str
-    department_name: Optional[str] = None
+    department_name: str | None = None
 
     # Dates
     termination_date: date
@@ -225,10 +225,10 @@ class TerminationLetterContext(BaseModel):
     # Settlement
     notice_period_served: bool
     notice_period_days: int
-    payment_in_lieu_of_notice: Optional[Decimal] = None
-    severance_amount: Optional[Decimal] = None
+    payment_in_lieu_of_notice: Decimal | None = None
+    severance_amount: Decimal | None = None
     accrued_leave_days: int
-    leave_encashment_amount: Optional[Decimal] = None
+    leave_encashment_amount: Decimal | None = None
     total_settlement: Decimal
     currency_code: str = "NGN"
 
@@ -256,7 +256,7 @@ class SalaryRevisionLetterContext(BaseModel):
 
     # Position
     job_title: str
-    department_name: Optional[str] = None
+    department_name: str | None = None
 
     # Salary change
     current_salary: Decimal
@@ -301,26 +301,26 @@ class QueryLetterContext(BaseModel):
     # Employee information
     employee_name: str
     employee_code: str
-    employee_address: Optional[str] = None
-    job_title: Optional[str] = None
-    department_name: Optional[str] = None
+    employee_address: str | None = None
+    job_title: str | None = None
+    department_name: str | None = None
 
     # Violation details
     violation_type: str  # e.g., "MISCONDUCT", "ATTENDANCE", etc.
     violation_severity: str  # e.g., "MINOR", "MAJOR", "CRITICAL"
     incident_date: date
     incident_description: str
-    policy_violated: Optional[str] = None  # Specific policy reference
+    policy_violated: str | None = None  # Specific policy reference
 
     # Query details
     query_text: str  # The formal query/allegations
     response_due_date: date
-    response_instructions: Optional[str] = None
+    response_instructions: str | None = None
 
     # Organization
     organization_name: str
-    organization_address: Optional[str] = None
-    organization_logo_url: Optional[str] = None
+    organization_address: str | None = None
+    organization_logo_url: str | None = None
 
     # Signatory
     signatory_name: str
@@ -345,9 +345,9 @@ class WarningLetterContext(BaseModel):
     # Employee information
     employee_name: str
     employee_code: str
-    employee_address: Optional[str] = None
-    job_title: Optional[str] = None
-    department_name: Optional[str] = None
+    employee_address: str | None = None
+    job_title: str | None = None
+    department_name: str | None = None
 
     # Warning details
     warning_type: str  # "VERBAL_WARNING", "WRITTEN_WARNING", "FINAL_WARNING"
@@ -357,27 +357,27 @@ class WarningLetterContext(BaseModel):
     incident_summary: str
 
     # Previous warnings (if any)
-    previous_warnings: Optional[list[dict[str, Any]]] = None  # [{type, date, summary}]
+    previous_warnings: list[dict[str, Any]] | None = None  # [{type, date, summary}]
     total_warnings_count: int = 0
 
     # Expected improvement
     expected_improvement: str
-    improvement_deadline: Optional[date] = None
+    improvement_deadline: date | None = None
     consequences_if_repeated: str
 
     # Appeal rights
     appeal_period_days: int = 14
-    appeal_deadline: Optional[date] = None
-    appeal_instructions: Optional[str] = None
+    appeal_deadline: date | None = None
+    appeal_instructions: str | None = None
 
     # Effective dates
     effective_date: date
-    warning_expiry_date: Optional[date] = None  # When warning expires from record
+    warning_expiry_date: date | None = None  # When warning expires from record
 
     # Organization
     organization_name: str
-    organization_address: Optional[str] = None
-    organization_logo_url: Optional[str] = None
+    organization_address: str | None = None
+    organization_logo_url: str | None = None
 
     # Signatory
     signatory_name: str
@@ -402,14 +402,14 @@ class DecisionLetterContext(BaseModel):
     # Employee information
     employee_name: str
     employee_code: str
-    employee_address: Optional[str] = None
-    job_title: Optional[str] = None
-    department_name: Optional[str] = None
+    employee_address: str | None = None
+    job_title: str | None = None
+    department_name: str | None = None
 
     # Investigation summary
     investigation_summary: str
-    hearing_date: Optional[date] = None
-    hearing_outcome: Optional[str] = None
+    hearing_date: date | None = None
+    hearing_outcome: str | None = None
 
     # Decision
     decision_summary: str
@@ -421,12 +421,12 @@ class DecisionLetterContext(BaseModel):
     # Appeal rights
     appeal_period_days: int = 14
     appeal_deadline: date
-    appeal_instructions: Optional[str] = None
+    appeal_instructions: str | None = None
 
     # Organization
     organization_name: str
-    organization_address: Optional[str] = None
-    organization_logo_url: Optional[str] = None
+    organization_address: str | None = None
+    organization_logo_url: str | None = None
 
     # Signatory
     signatory_name: str
@@ -451,9 +451,9 @@ class DisciplineTerminationLetterContext(BaseModel):
     # Employee information
     employee_name: str
     employee_code: str
-    employee_address: Optional[str] = None
-    job_title: Optional[str] = None
-    department_name: Optional[str] = None
+    employee_address: str | None = None
+    job_title: str | None = None
+    department_name: str | None = None
 
     # Termination details
     termination_date: date
@@ -464,28 +464,28 @@ class DisciplineTerminationLetterContext(BaseModel):
 
     # Case history summary
     case_summary: str  # Brief history of the case
-    previous_actions: Optional[list[dict[str, Any]]] = (
+    previous_actions: list[dict[str, Any]] | None = (
         None  # Previous disciplinary actions
     )
 
     # Final settlement
-    final_settlement_items: Optional[list[dict[str, Any]]] = None  # [{item, amount}]
-    total_settlement: Optional[Decimal] = None
+    final_settlement_items: list[dict[str, Any]] | None = None  # [{item, amount}]
+    total_settlement: Decimal | None = None
     currency_code: str = "NGN"
 
     # Appeal rights
     appeal_period_days: int = 14
-    appeal_deadline: Optional[date] = None
-    appeal_instructions: Optional[str] = None
+    appeal_deadline: date | None = None
+    appeal_instructions: str | None = None
 
     # Return of company property
-    items_to_return: Optional[list[str]] = None
-    return_deadline: Optional[date] = None
+    items_to_return: list[str] | None = None
+    return_deadline: date | None = None
 
     # Organization
     organization_name: str
-    organization_address: Optional[str] = None
-    organization_logo_url: Optional[str] = None
+    organization_address: str | None = None
+    organization_logo_url: str | None = None
 
     # Signatory
     signatory_name: str

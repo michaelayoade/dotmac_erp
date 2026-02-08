@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Optional, cast
+from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 EMPLOYER_PENSION_COMPONENT_CODE = "PENSION_EMPLOYER"
 
 
-def _safe_coerce_uuid(value) -> Optional[UUID]:
+def _safe_coerce_uuid(value) -> UUID | None:
     """Safely coerce value to UUID, returning None if invalid."""
     if value is None:
         return None
@@ -84,7 +84,7 @@ class PayrollGLAdapter:
         slip_id: UUID,
         posting_date: date,
         posted_by_user_id: UUID,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> PayrollPostingResult:
         """
         Post a salary slip to the general ledger.
@@ -279,7 +279,7 @@ class PayrollGLAdapter:
         # Update salary slip with journal reference
         slip.journal_entry_id = journal.journal_entry_id
         slip.status = SalarySlipStatus.POSTED
-        slip.posted_at = datetime.now(timezone.utc)
+        slip.posted_at = datetime.now(UTC)
         slip.posted_by_id = user_id
 
         db.commit()
@@ -665,7 +665,7 @@ class PayrollGLAdapter:
         )
 
         # Add employer pension expense lines
-        for acc_id, (comp_name, amount, expense_acc) in deductions_by_account.items():
+        for _acc_id, (comp_name, amount, expense_acc) in deductions_by_account.items():
             if expense_acc and "PENSION_EMPLOYER" in comp_name.upper():
                 journal_lines.append(
                     JournalLineInput(
@@ -907,7 +907,7 @@ class PayrollGLAdapter:
         )
 
         # Credits: Each deduction type
-        for comp_id, (
+        for _comp_id, (
             comp_name,
             amount,
             liability_acc_id,
@@ -984,7 +984,7 @@ class PayrollGLAdapter:
             )
 
         # 8. Update all slips to POSTED
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for slip in slips:
             slip.status = SalarySlipStatus.POSTED
             slip.journal_entry_id = journal.journal_entry_id

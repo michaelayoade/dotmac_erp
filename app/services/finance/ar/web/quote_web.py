@@ -6,10 +6,8 @@ Provides view-focused data and operations for AR quote web routes.
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import date, datetime, timedelta
-from typing import Optional
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -26,7 +24,6 @@ from app.services.common import coerce_uuid
 from app.services.finance.ar.quote import quote_service
 from app.services.finance.common import format_currency, format_date
 from app.services.finance.platform.currency_context import get_currency_context
-from app.services.finance.platform.org_context import org_context_service
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -164,10 +161,10 @@ class QuoteWebService:
     def list_context(
         db: Session,
         organization_id: str,
-        status: Optional[str] = None,
-        customer_id: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        status: str | None = None,
+        customer_id: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict:
         """Get context for quote listing page."""
         logger.debug(
@@ -365,47 +362,36 @@ class QuoteWebService:
         quote_date: str,
         valid_until: str,
         lines_json: str,
-        currency_code: Optional[str] = None,
-        contact_name: Optional[str] = None,
-        contact_email: Optional[str] = None,
-        payment_terms_id: Optional[str] = None,
-        customer_notes: Optional[str] = None,
-        internal_notes: Optional[str] = None,
-        terms_and_conditions: Optional[str] = None,
-    ) -> tuple[Optional[Quote], Optional[str]]:
+        currency_code: str | None = None,
+        contact_name: str | None = None,
+        contact_email: str | None = None,
+        payment_terms_id: str | None = None,
+        customer_notes: str | None = None,
+        internal_notes: str | None = None,
+        terms_and_conditions: str | None = None,
+    ) -> tuple[Quote | None, str | None]:
         """Create a new quote. Returns (quote, error)."""
         logger.debug("create_quote: org=%s customer=%s", organization_id, customer_id)
         try:
-            lines = json.loads(lines_json) if lines_json else []
-
-            # Get default currency if not provided
-            if not currency_code:
-                currency_code = org_context_service.get_functional_currency(
-                    db,
-                    coerce_uuid(organization_id),
-                )
-
-            # Parse dates
-            quote_dt = datetime.strptime(quote_date, "%Y-%m-%d").date()
-            valid_dt = datetime.strptime(valid_until, "%Y-%m-%d").date()
-
-            quote = quote_service.create(
-                db,
+            payload = {
+                "customer_id": customer_id,
+                "quote_date": quote_date,
+                "valid_until": valid_until,
+                "lines": lines_json,
+                "currency_code": currency_code,
+                "contact_name": contact_name,
+                "contact_email": contact_email,
+                "payment_terms_id": payment_terms_id,
+                "customer_notes": customer_notes,
+                "internal_notes": internal_notes,
+                "terms_and_conditions": terms_and_conditions,
+            }
+            quote = quote_service.create_from_payload(
+                db=db,
                 organization_id=organization_id,
-                customer_id=customer_id,
-                quote_date=quote_dt,
-                valid_until=valid_dt,
                 created_by=user_id,
-                currency_code=currency_code,
-                contact_name=contact_name,
-                contact_email=contact_email,
-                payment_terms_id=payment_terms_id if payment_terms_id else None,
-                customer_notes=customer_notes,
-                internal_notes=internal_notes,
-                terms_and_conditions=terms_and_conditions,
-                lines=lines,
+                payload=payload,
             )
-            db.commit()
             logger.info(
                 "create_quote: created %s for org %s",
                 quote.quote_number,
@@ -414,7 +400,6 @@ class QuoteWebService:
             return quote, None
 
         except Exception as e:
-            db.rollback()
             logger.exception("create_quote: failed for org %s", organization_id)
             return None, str(e)
 
@@ -427,10 +412,10 @@ class QuoteWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        status: Optional[str],
-        customer_id: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        status: str | None,
+        customer_id: str | None,
+        start_date: str | None,
+        end_date: str | None,
     ) -> HTMLResponse:
         """Render quote list page."""
         context = base_context(request, auth, "Quotes", "quotes")
@@ -451,7 +436,7 @@ class QuoteWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        customer_id: Optional[str] = None,
+        customer_id: str | None = None,
     ) -> HTMLResponse:
         """Render new quote form page."""
         context = base_context(request, auth, "New Quote", "quotes")
@@ -471,13 +456,13 @@ class QuoteWebService:
         quote_date: str,
         valid_until: str,
         lines_json: str,
-        currency_code: Optional[str] = None,
-        contact_name: Optional[str] = None,
-        contact_email: Optional[str] = None,
-        payment_terms_id: Optional[str] = None,
-        customer_notes: Optional[str] = None,
-        internal_notes: Optional[str] = None,
-        terms_and_conditions: Optional[str] = None,
+        currency_code: str | None = None,
+        contact_name: str | None = None,
+        contact_email: str | None = None,
+        payment_terms_id: str | None = None,
+        customer_notes: str | None = None,
+        internal_notes: str | None = None,
+        terms_and_conditions: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Handle quote creation form submission."""
         quote, error = self.create_quote(
@@ -544,9 +529,8 @@ class QuoteWebService:
             quote_service.send(
                 db, str(auth.organization_id), quote_id, str(auth.user_id)
             )
-            db.commit()
         except Exception:
-            db.rollback()
+            logger.exception("send_response: failed")
         return RedirectResponse(url=f"/quotes/{quote_id}", status_code=303)
 
     def accept_response(
@@ -559,9 +543,8 @@ class QuoteWebService:
         """Handle accept quote action."""
         try:
             quote_service.accept(db, str(auth.organization_id), quote_id)
-            db.commit()
         except Exception:
-            db.rollback()
+            logger.exception("accept_response: failed")
         return RedirectResponse(url=f"/quotes/{quote_id}", status_code=303)
 
     def reject_response(
@@ -570,14 +553,13 @@ class QuoteWebService:
         auth: WebAuthContext,
         db: Session,
         quote_id: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> RedirectResponse:
         """Handle reject quote action."""
         try:
             quote_service.reject(db, str(auth.organization_id), quote_id, reason)
-            db.commit()
         except Exception:
-            db.rollback()
+            logger.exception("reject_response: failed")
         return RedirectResponse(url=f"/quotes/{quote_id}", status_code=303)
 
     def convert_to_invoice_response(
@@ -592,12 +574,11 @@ class QuoteWebService:
             invoice = quote_service.convert_to_invoice(
                 db, str(auth.organization_id), quote_id, str(auth.user_id)
             )
-            db.commit()
             return RedirectResponse(
                 url=f"/ar/invoices/{invoice.invoice_id}", status_code=303
             )
         except Exception:
-            db.rollback()
+            logger.exception("convert_to_invoice_response: failed")
             return RedirectResponse(url=f"/quotes/{quote_id}", status_code=303)
 
     def convert_to_sales_order_response(
@@ -606,7 +587,7 @@ class QuoteWebService:
         auth: WebAuthContext,
         db: Session,
         quote_id: str,
-        customer_po_number: Optional[str] = None,
+        customer_po_number: str | None = None,
     ) -> RedirectResponse:
         """Handle convert to sales order action."""
         try:
@@ -617,10 +598,9 @@ class QuoteWebService:
                 str(auth.user_id),
                 customer_po_number=customer_po_number,
             )
-            db.commit()
             return RedirectResponse(url=f"/sales-orders/{so.so_id}", status_code=303)
         except Exception:
-            db.rollback()
+            logger.exception("convert_to_sales_order_response: failed")
             return RedirectResponse(url=f"/quotes/{quote_id}", status_code=303)
 
     def void_response(
@@ -635,9 +615,8 @@ class QuoteWebService:
             quote_service.void(
                 db, str(auth.organization_id), quote_id, str(auth.user_id)
             )
-            db.commit()
         except Exception:
-            db.rollback()
+            logger.exception("void_response: failed")
         return RedirectResponse(url=f"/quotes/{quote_id}", status_code=303)
 
 

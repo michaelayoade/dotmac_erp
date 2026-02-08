@@ -13,19 +13,17 @@ import uuid
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
 
-
 from app.models.domain_settings import SettingDomain
 from app.models.scheduler import ScheduleType
 from app.services.scheduler_config import (
-    _env_value,
-    _env_int,
-    _get_setting_value,
     _effective_int,
     _effective_str,
-    get_celery_config,
+    _env_int,
+    _env_value,
+    _get_setting_value,
     build_beat_schedule,
+    get_celery_config,
 )
-
 
 # ============ TestEnvValue ============
 
@@ -413,14 +411,18 @@ class TestBuildBeatSchedule:
 
     @patch("app.services.scheduler_config.SessionLocal")
     def test_build_beat_schedule_empty(self, mock_session_local):
-        """Should return empty dict when no tasks."""
+        """Should return only builtin tasks when no DB tasks exist."""
         mock_session = MagicMock()
         mock_session_local.return_value = mock_session
         mock_session.query.return_value.filter.return_value.all.return_value = []
 
         schedule = build_beat_schedule()
 
-        assert schedule == {}
+        # Builtin tasks are always present
+        assert "expense-approval-reminders" in schedule
+        assert "expense-stuck-transfers" in schedule
+        # No DB-defined tasks
+        assert not any(k.startswith("scheduled_task_") for k in schedule)
         mock_session.close.assert_called_once()
 
     @patch("app.services.scheduler_config.SessionLocal")
@@ -444,8 +446,11 @@ class TestBuildBeatSchedule:
 
         schedule = build_beat_schedule()
 
-        # Should have one entry
-        assert len(schedule) == 1
+        # Should have 1 DB task plus builtin tasks
+        db_tasks = {
+            k: v for k, v in schedule.items() if k.startswith("scheduled_task_")
+        }
+        assert len(db_tasks) == 1
 
     @patch("app.services.scheduler_config.SessionLocal")
     def test_build_beat_schedule_interval_only(self, mock_session_local):
@@ -468,7 +473,10 @@ class TestBuildBeatSchedule:
 
         schedule = build_beat_schedule()
 
-        assert len(schedule) == 1
+        db_tasks = {
+            k: v for k, v in schedule.items() if k.startswith("scheduled_task_")
+        }
+        assert len(db_tasks) == 1
 
     @patch("app.services.scheduler_config.SessionLocal")
     def test_build_beat_schedule_task_format(self, mock_session_local):
@@ -625,14 +633,16 @@ class TestBuildBeatSchedule:
 
     @patch("app.services.scheduler_config.SessionLocal")
     def test_build_beat_schedule_db_exception(self, mock_session_local):
-        """Should return empty schedule when DB query fails."""
+        """Should return only builtin tasks when DB query fails."""
         mock_session = MagicMock()
         mock_session_local.return_value = mock_session
         mock_session.query.side_effect = Exception("DB Error")
 
         schedule = build_beat_schedule()
 
-        assert schedule == {}
+        # Builtin tasks still present, no DB tasks
+        assert "expense-approval-reminders" in schedule
+        assert not any(k.startswith("scheduled_task_") for k in schedule)
 
     @patch("app.services.scheduler_config.SessionLocal")
     def test_build_beat_schedule_closes_session(self, mock_session_local):
@@ -676,6 +686,9 @@ class TestBuildBeatSchedule:
 
         schedule = build_beat_schedule()
 
-        assert len(schedule) == 2
+        db_tasks = {
+            k: v for k, v in schedule.items() if k.startswith("scheduled_task_")
+        }
+        assert len(db_tasks) == 2
         assert f"scheduled_task_{task1.id}" in schedule
         assert f"scheduled_task_{task2.id}" in schedule

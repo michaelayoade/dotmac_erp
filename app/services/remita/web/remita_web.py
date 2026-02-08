@@ -6,7 +6,7 @@ Provides request/response formatting for Remita web UI routes.
 
 import logging
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -61,7 +61,7 @@ class RemitaWebService:
 
     def __init__(self, db: Session):
         self.db = db
-        self._service: Optional[RemitaRRRService] = None
+        self._service: RemitaRRRService | None = None
 
     @property
     def service(self) -> RemitaRRRService:
@@ -73,8 +73,8 @@ class RemitaWebService:
     def list_context(
         self,
         organization_id: UUID,
-        status_filter: Optional[str] = None,
-        biller_filter: Optional[str] = None,
+        status_filter: str | None = None,
+        biller_filter: str | None = None,
         page: int = 1,
         per_page: int = 20,
     ) -> dict:
@@ -216,9 +216,9 @@ class RemitaWebService:
         amount: Decimal,
         payer_name: str,
         payer_email: str,
-        payer_phone: Optional[str] = None,
+        payer_phone: str | None = None,
         description: str = "",
-        created_by_id: Optional[UUID] = None,
+        created_by_id: UUID | None = None,
     ) -> RemitaRRR:
         """
         Generate a new RRR.
@@ -340,9 +340,9 @@ class RemitaWebService:
         source_type: str,
         query: str,
         limit: int = 10,
-        status: Optional[str] = None,
-        date_from: Optional[str] = None,
-        date_to: Optional[str] = None,
+        status: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
         recent: bool = False,
     ) -> list[dict[str, str]]:
         """Search source entities for linking."""
@@ -362,8 +362,8 @@ class RemitaWebService:
             return results
 
         q_like = f"%{q}%"
-        date_from_val: Optional[date] = None
-        date_to_val: Optional[date] = None
+        date_from_val: date | None = None
+        date_to_val: date | None = None
         try:
             if date_from:
                 date_from_val = date.fromisoformat(date_from)

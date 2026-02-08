@@ -6,7 +6,6 @@ import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     DateTime,
@@ -67,19 +66,19 @@ class EliminationEntry(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Related entities (for intercompany eliminations)
-    entity_1_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    entity_1_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("cons.legal_entity.entity_id"),
         nullable=True,
     )
-    entity_2_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    entity_2_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("cons.legal_entity.entity_id"),
         nullable=True,
     )
 
     # Source reference
-    source_balance_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    source_balance_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -96,14 +95,14 @@ class EliminationEntry(Base):
     credit_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
 
     # NCI impact
-    nci_debit_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    nci_debit_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
     nci_debit_amount: Mapped[Decimal] = mapped_column(
         Numeric(20, 6), nullable=False, default=0
     )
-    nci_credit_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    nci_credit_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )

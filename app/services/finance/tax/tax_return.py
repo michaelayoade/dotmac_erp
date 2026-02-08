@@ -6,11 +6,12 @@ Manages VAT/GST/Sales tax return preparation, review, and filing.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any, List, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -37,6 +38,14 @@ class TaxReturnInput:
     tax_period_id: UUID
     jurisdiction_id: UUID
     return_type: TaxReturnType
+    adjustments: Decimal = Decimal("0")
+
+
+@dataclass
+class TaxReturnUpdateInput:
+    """Input for updating an existing tax return."""
+
+    return_type: TaxReturnType | None = None
     adjustments: Decimal = Decimal("0")
 
 
@@ -163,7 +172,7 @@ class TaxReturnService(ListResponseMixin):
             tax_return.final_amount = final_amount
             tax_return.box_values = box_values
             tax_return.prepared_by_user_id = user_id
-            tax_return.prepared_at = datetime.now(timezone.utc)
+            tax_return.prepared_at = datetime.now(UTC)
             tax_return.status = TaxReturnStatus.PREPARED
         else:
             tax_return = TaxReturn(
@@ -179,9 +188,117 @@ class TaxReturnService(ListResponseMixin):
                 box_values=box_values,
                 status=TaxReturnStatus.PREPARED,
                 prepared_by_user_id=user_id,
-                prepared_at=datetime.now(timezone.utc),
+                prepared_at=datetime.now(UTC),
             )
             db.add(tax_return)
+
+        db.commit()
+        db.refresh(tax_return)
+
+        return tax_return
+
+    @staticmethod
+    def update_return(
+        db: Session,
+        organization_id: UUID,
+        return_id: UUID,
+        input: TaxReturnUpdateInput,
+        updated_by_user_id: UUID,
+    ) -> TaxReturn:
+        """Update a draft/prepared tax return and recalculate totals."""
+        org_id = coerce_uuid(organization_id)
+        ret_id = coerce_uuid(return_id)
+        user_id = coerce_uuid(updated_by_user_id)
+
+        tax_return = (
+            db.query(TaxReturn)
+            .filter(TaxReturn.return_id == ret_id, TaxReturn.organization_id == org_id)
+            .first()
+        )
+        if not tax_return:
+            raise HTTPException(status_code=404, detail="Tax return not found")
+
+        if tax_return.status not in {TaxReturnStatus.DRAFT, TaxReturnStatus.PREPARED}:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot edit return in {tax_return.status.value} status",
+            )
+
+        period = (
+            db.query(TaxPeriod)
+            .filter(
+                TaxPeriod.period_id == tax_return.tax_period_id,
+                TaxPeriod.organization_id == org_id,
+            )
+            .first()
+        )
+        if not period:
+            raise HTTPException(status_code=404, detail="Tax period not found")
+        if period.status != TaxPeriodStatus.OPEN:
+            raise HTTPException(
+                status_code=400, detail=f"Tax period is in {period.status.value} status"
+            )
+
+        return_type = input.return_type or tax_return.return_type
+
+        existing = (
+            db.query(TaxReturn)
+            .filter(
+                TaxReturn.tax_period_id == tax_return.tax_period_id,
+                TaxReturn.organization_id == org_id,
+                TaxReturn.return_type == return_type,
+                TaxReturn.is_amendment == False,
+                TaxReturn.return_id != ret_id,
+            )
+            .first()
+        )
+        if existing and existing.status != TaxReturnStatus.DRAFT:
+            raise HTTPException(
+                status_code=400, detail="A return already exists for this period"
+            )
+
+        output_result = (
+            db.query(func.sum(TaxTransaction.functional_tax_amount))
+            .filter(
+                TaxTransaction.organization_id == org_id,
+                TaxTransaction.fiscal_period_id == period.fiscal_period_id,
+                TaxTransaction.transaction_type == TaxTransactionType.OUTPUT,
+            )
+            .scalar()
+        )
+        total_output = output_result or Decimal("0")
+
+        input_result = (
+            db.query(func.sum(TaxTransaction.recoverable_amount))
+            .filter(
+                TaxTransaction.organization_id == org_id,
+                TaxTransaction.fiscal_period_id == period.fiscal_period_id,
+                TaxTransaction.transaction_type == TaxTransactionType.INPUT,
+            )
+            .scalar()
+        )
+        total_input = input_result or Decimal("0")
+
+        net_payable = total_output - total_input
+        final_amount = net_payable + input.adjustments
+
+        if period.fiscal_period_id is None:
+            raise ValueError("Tax period is missing a fiscal period reference")
+
+        box_values = TaxReturnService._calculate_box_values(
+            db, org_id, period.fiscal_period_id, return_type
+        )
+
+        tax_return.return_type = return_type
+        tax_return.total_output_tax = total_output
+        tax_return.total_input_tax = total_input
+        tax_return.net_tax_payable = net_payable
+        tax_return.adjustments = input.adjustments
+        tax_return.final_amount = final_amount
+        tax_return.box_values = box_values
+        tax_return.prepared_by_user_id = user_id
+        tax_return.prepared_at = datetime.now(UTC)
+        tax_return.status = TaxReturnStatus.PREPARED
 
         db.commit()
         db.refresh(tax_return)
@@ -273,7 +390,7 @@ class TaxReturnService(ListResponseMixin):
 
         tax_return.status = TaxReturnStatus.REVIEWED
         tax_return.reviewed_by_user_id = user_id
-        tax_return.reviewed_at = datetime.now(timezone.utc)
+        tax_return.reviewed_at = datetime.now(UTC)
 
         db.commit()
         db.refresh(tax_return)
@@ -286,7 +403,7 @@ class TaxReturnService(ListResponseMixin):
         organization_id: UUID,
         return_id: UUID,
         filed_by_user_id: UUID,
-        filing_reference: Optional[str] = None,
+        filing_reference: str | None = None,
     ) -> TaxReturn:
         """
         File a tax return.
@@ -365,8 +482,8 @@ class TaxReturnService(ListResponseMixin):
         organization_id: UUID,
         return_id: UUID,
         payment_date: date,
-        payment_reference: Optional[str] = None,
-        journal_entry_id: Optional[UUID] = None,
+        payment_reference: str | None = None,
+        journal_entry_id: UUID | None = None,
     ) -> TaxReturn:
         """
         Record payment for a tax return.
@@ -486,7 +603,7 @@ class TaxReturnService(ListResponseMixin):
             original_return_id=original_id,
             amendment_reason=amendment_reason,
             prepared_by_user_id=user_id,
-            prepared_at=datetime.now(timezone.utc),
+            prepared_at=datetime.now(UTC),
         )
 
         db.add(amendment)
@@ -778,25 +895,36 @@ class TaxReturnService(ListResponseMixin):
         }
 
     @staticmethod
-    def get(db: Session, return_id: str) -> Optional[TaxReturn]:
+    def get(
+        db: Session,
+        return_id: str,
+        organization_id: UUID | None = None,
+    ) -> TaxReturn | None:
         """Get a tax return by ID."""
-        return (
+        tax_return = (
             db.query(TaxReturn)
             .filter(TaxReturn.return_id == coerce_uuid(return_id))
             .first()
         )
+        if not tax_return:
+            return None
+        if organization_id is not None and tax_return.organization_id != coerce_uuid(
+            organization_id
+        ):
+            return None
+        return tax_return
 
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        tax_period_id: Optional[str] = None,
-        jurisdiction_id: Optional[str] = None,
-        return_type: Optional[TaxReturnType] = None,
-        status: Optional[TaxReturnStatus] = None,
+        organization_id: str | None = None,
+        tax_period_id: str | None = None,
+        jurisdiction_id: str | None = None,
+        return_type: TaxReturnType | None = None,
+        status: TaxReturnStatus | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[TaxReturn]:
+    ) -> builtins.list[TaxReturn]:
         """
         List tax returns with filters.
 

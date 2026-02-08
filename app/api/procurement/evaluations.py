@@ -2,7 +2,6 @@
 Bid Evaluation API Endpoints.
 """
 
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -30,10 +29,10 @@ def get_db():
         db.close()
 
 
-@router.get("", response_model=List[EvaluationResponse])
+@router.get("", response_model=list[EvaluationResponse])
 def list_evaluations(
     organization_id: UUID = Depends(require_organization_id),
-    rfq_id: Optional[UUID] = None,
+    rfq_id: UUID | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     db: Session = Depends(get_db),

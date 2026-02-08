@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -37,9 +37,9 @@ class ProcurementAPIntegrationService:
         created_by_user_id: UUID,
         ap_control_account_id: UUID,
         expense_account_id: UUID,
-        invoice_date: Optional[date] = None,
+        invoice_date: date | None = None,
         payment_terms_days: int = 30,
-    ) -> "SupplierInvoice":
+    ) -> SupplierInvoice:
         """
         Create a DRAFT supplier invoice from a procurement contract.
 

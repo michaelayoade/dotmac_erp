@@ -6,11 +6,11 @@ Generates aging snapshots and provides aging analysis for AP management.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import and_, select
@@ -80,7 +80,7 @@ class APAgingService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         supplier_id: UUID,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
     ) -> SupplierAgingSummary:
         """
         Calculate aging for a single supplier.
@@ -144,7 +144,7 @@ class APAgingService(ListResponseMixin):
     def calculate_organization_aging(
         db: Session,
         organization_id: UUID,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
     ) -> OrganizationAgingSummary:
         """
         Calculate aging summary for entire organization.
@@ -203,8 +203,8 @@ class APAgingService(ListResponseMixin):
     def get_aging_by_supplier(
         db: Session,
         organization_id: UUID,
-        as_of_date: Optional[date] = None,
-        min_balance: Optional[Decimal] = None,
+        as_of_date: date | None = None,
+        min_balance: Decimal | None = None,
     ) -> list[SupplierAgingSummary]:
         """
         Get aging breakdown by supplier.
@@ -260,9 +260,9 @@ class APAgingService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         fiscal_period_id: UUID,
-        as_of_date: Optional[date] = None,
-        created_by_user_id: Optional[UUID] = None,
-    ) -> List[APAgingSnapshot]:
+        as_of_date: date | None = None,
+        created_by_user_id: UUID | None = None,
+    ) -> builtins.list[APAgingSnapshot]:
         """
         Create point-in-time aging snapshot for all suppliers.
 
@@ -314,9 +314,9 @@ class APAgingService(ListResponseMixin):
     def get_overdue_invoices(
         db: Session,
         organization_id: UUID,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
         min_days_overdue: int = 1,
-        supplier_id: Optional[UUID] = None,
+        supplier_id: UUID | None = None,
     ) -> list[SupplierInvoice]:
         """
         Get overdue invoices.
@@ -365,9 +365,9 @@ class APAgingService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        supplier_id: Optional[str] = None,
-        snapshot_date: Optional[date] = None,
+        organization_id: str | None = None,
+        supplier_id: str | None = None,
+        snapshot_date: date | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[APAgingSnapshot]:

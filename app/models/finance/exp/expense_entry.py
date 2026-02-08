@@ -8,7 +8,6 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Date,
@@ -91,7 +90,7 @@ class ExpenseEntry(Base):
     # Expense identification
     expense_number: Mapped[str] = mapped_column(String(30), nullable=False)
     description: Mapped[str] = mapped_column(String(500), nullable=False)
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Dates
     expense_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -103,7 +102,7 @@ class ExpenseEntry(Base):
         nullable=False,
         comment="Expense account (debit)",
     )
-    payment_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    payment_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,
@@ -122,7 +121,7 @@ class ExpenseEntry(Base):
     )
 
     # Tax
-    tax_code_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    tax_code_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("tax.tax_code.tax_code_id"),
         nullable=True,
@@ -134,19 +133,19 @@ class ExpenseEntry(Base):
     )
 
     # Cost allocation
-    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.project.project_id"),
         nullable=True,
         comment="Project for cost allocation",
     )
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.cost_center.cost_center_id"),
         nullable=True,
         comment="Cost center for departmental allocation",
     )
-    business_unit_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    business_unit_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.business_unit.business_unit_id"),
         nullable=True,
@@ -159,8 +158,8 @@ class ExpenseEntry(Base):
         nullable=False,
         default=PaymentMethod.CASH,
     )
-    payee: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    receipt_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    payee: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    receipt_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Status
     status: Mapped[ExpenseStatus] = mapped_column(
@@ -170,29 +169,29 @@ class ExpenseEntry(Base):
     )
 
     # Journal reference (when posted)
-    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.journal_entry.journal_entry_id"),
         nullable=True,
     )
 
     # Approval
-    submitted_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    submitted_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    submitted_at: Mapped[Optional[datetime]] = mapped_column(
+    submitted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    approved_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    posted_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    posted_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    posted_at: Mapped[Optional[datetime]] = mapped_column(
+    posted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
@@ -203,10 +202,10 @@ class ExpenseEntry(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

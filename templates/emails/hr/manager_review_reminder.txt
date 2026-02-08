@@ -1,0 +1,10 @@
+{% extends "emails/base_email.txt" %}
+{% block content %}Hi {{ manager_first }},
+
+This is a reminder that your review for {{ employee_name }} in the {{ cycle_name }} cycle is due in {{ days_remaining }} day(s).
+
+Review Deadline: {{ review_deadline }}
+
+Please complete the review to ensure a timely appraisal process.
+
+Complete Review: {{ appraisal_url }}{% endblock %}

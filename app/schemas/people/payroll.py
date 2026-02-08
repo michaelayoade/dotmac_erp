@@ -10,7 +10,6 @@ Pydantic schemas for Payroll APIs including:
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -18,7 +17,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.people.payroll.salary_component import SalaryComponentType
 from app.models.people.payroll.salary_slip import SalarySlipStatus
 from app.models.people.payroll.salary_structure import PayrollFrequency
-
 
 # =============================================================================
 # Salary Component Schemas
@@ -30,11 +28,11 @@ class SalaryComponentBase(BaseModel):
 
     component_code: str = Field(max_length=30)
     component_name: str = Field(max_length=100)
-    abbr: Optional[str] = Field(default=None, max_length=20)
+    abbr: str | None = Field(default=None, max_length=20)
     component_type: SalaryComponentType
-    description: Optional[str] = None
-    expense_account_id: Optional[UUID] = None
-    liability_account_id: Optional[UUID] = None
+    description: str | None = None
+    expense_account_id: UUID | None = None
+    liability_account_id: UUID | None = None
     is_tax_applicable: bool = False
     is_statutory: bool = False
     depends_on_payment_days: bool = True
@@ -49,16 +47,16 @@ class SalaryComponentCreate(SalaryComponentBase):
 class SalaryComponentUpdate(BaseModel):
     """Update salary component request."""
 
-    component_code: Optional[str] = Field(default=None, max_length=30)
-    component_name: Optional[str] = Field(default=None, max_length=100)
-    abbr: Optional[str] = Field(default=None, max_length=20)
-    description: Optional[str] = None
-    expense_account_id: Optional[UUID] = None
-    liability_account_id: Optional[UUID] = None
-    is_tax_applicable: Optional[bool] = None
-    is_statutory: Optional[bool] = None
-    depends_on_payment_days: Optional[bool] = None
-    is_active: Optional[bool] = None
+    component_code: str | None = Field(default=None, max_length=30)
+    component_name: str | None = Field(default=None, max_length=100)
+    abbr: str | None = Field(default=None, max_length=20)
+    description: str | None = None
+    expense_account_id: UUID | None = None
+    liability_account_id: UUID | None = None
+    is_tax_applicable: bool | None = None
+    is_statutory: bool | None = None
+    depends_on_payment_days: bool | None = None
+    is_active: bool | None = None
 
 
 class SalaryComponentRead(SalaryComponentBase):
@@ -71,13 +69,13 @@ class SalaryComponentRead(SalaryComponentBase):
     is_active: bool
     display_order: int
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class SalaryComponentListResponse(BaseModel):
     """Paginated salary component list response."""
 
-    items: List[SalaryComponentRead]
+    items: list[SalaryComponentRead]
     total: int
     offset: int
     limit: int
@@ -93,7 +91,7 @@ class SalaryStructureBase(BaseModel):
 
     structure_code: str = Field(max_length=30)
     structure_name: str = Field(max_length=100)
-    description: Optional[str] = None
+    description: str | None = None
     payroll_frequency: PayrollFrequency = PayrollFrequency.MONTHLY
     currency_code: str = Field(default="NGN", max_length=3)
 
@@ -104,8 +102,8 @@ class SalaryStructureComponentBase(BaseModel):
     component_id: UUID
     amount: Decimal = Decimal("0")
     amount_based_on_formula: bool = False
-    formula: Optional[str] = None
-    condition: Optional[str] = None
+    formula: str | None = None
+    condition: str | None = None
     display_order: int = 0
 
 
@@ -120,29 +118,29 @@ class SalaryStructureComponentRead(SalaryStructureComponentBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-    component_name: Optional[str] = None
-    abbr: Optional[str] = None
+    component_name: str | None = None
+    abbr: str | None = None
 
 
 class SalaryStructureCreate(SalaryStructureBase):
     """Create salary structure request."""
 
     organization_id: UUID
-    earnings: List[SalaryStructureComponentCreate] = []
-    deductions: List[SalaryStructureComponentCreate] = []
+    earnings: list[SalaryStructureComponentCreate] = []
+    deductions: list[SalaryStructureComponentCreate] = []
 
 
 class SalaryStructureUpdate(BaseModel):
     """Update salary structure request."""
 
-    structure_code: Optional[str] = Field(default=None, max_length=30)
-    structure_name: Optional[str] = Field(default=None, max_length=100)
-    description: Optional[str] = None
-    payroll_frequency: Optional[PayrollFrequency] = None
-    currency_code: Optional[str] = Field(default=None, max_length=3)
-    is_active: Optional[bool] = None
-    earnings: Optional[List[SalaryStructureComponentCreate]] = None
-    deductions: Optional[List[SalaryStructureComponentCreate]] = None
+    structure_code: str | None = Field(default=None, max_length=30)
+    structure_name: str | None = Field(default=None, max_length=100)
+    description: str | None = None
+    payroll_frequency: PayrollFrequency | None = None
+    currency_code: str | None = Field(default=None, max_length=3)
+    is_active: bool | None = None
+    earnings: list[SalaryStructureComponentCreate] | None = None
+    deductions: list[SalaryStructureComponentCreate] | None = None
 
 
 class SalaryStructureRead(SalaryStructureBase):
@@ -154,15 +152,15 @@ class SalaryStructureRead(SalaryStructureBase):
     organization_id: UUID
     is_active: bool
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    earnings: List[SalaryStructureComponentRead] = []
-    deductions: List[SalaryStructureComponentRead] = []
+    updated_at: datetime | None = None
+    earnings: list[SalaryStructureComponentRead] = []
+    deductions: list[SalaryStructureComponentRead] = []
 
 
 class SalaryStructureListResponse(BaseModel):
     """Paginated salary structure list response."""
 
-    items: List[SalaryStructureRead]
+    items: list[SalaryStructureRead]
     total: int
     offset: int
     limit: int
@@ -181,7 +179,7 @@ class SalarySlipEarningRead(BaseModel):
     line_id: UUID
     component_id: UUID
     component_name: str
-    abbr: Optional[str] = None
+    abbr: str | None = None
     amount: Decimal
     default_amount: Decimal
     additional_amount: Decimal
@@ -198,7 +196,7 @@ class SalarySlipDeductionRead(BaseModel):
     line_id: UUID
     component_id: UUID
     component_name: str
-    abbr: Optional[str] = None
+    abbr: str | None = None
     amount: Decimal
     default_amount: Decimal
     additional_amount: Decimal
@@ -213,8 +211,8 @@ class SalarySlipBase(BaseModel):
     employee_id: UUID
     start_date: date
     end_date: date
-    posting_date: Optional[date] = None
-    total_working_days: Optional[Decimal] = None
+    posting_date: date | None = None
+    total_working_days: Decimal | None = None
     absent_days: Decimal = Decimal("0")
     leave_without_pay: Decimal = Decimal("0")
 
@@ -234,8 +232,8 @@ class SalarySlipRead(BaseModel):
     organization_id: UUID
     slip_number: str
     employee_id: UUID
-    employee_name: Optional[str] = None
-    structure_id: Optional[UUID] = None
+    employee_name: str | None = None
+    structure_id: UUID | None = None
     posting_date: date
     start_date: date
     end_date: date
@@ -249,25 +247,25 @@ class SalarySlipRead(BaseModel):
     total_deduction: Decimal
     net_pay: Decimal
     status: SalarySlipStatus
-    cost_center_id: Optional[UUID] = None
-    journal_entry_id: Optional[UUID] = None
-    posted_at: Optional[datetime] = None
-    bank_name: Optional[str] = None
-    bank_account_number: Optional[str] = None
-    bank_account_name: Optional[str] = None
-    bank_branch_code: Optional[str] = None
+    cost_center_id: UUID | None = None
+    journal_entry_id: UUID | None = None
+    posted_at: datetime | None = None
+    bank_name: str | None = None
+    bank_account_number: str | None = None
+    bank_account_name: str | None = None
+    bank_branch_code: str | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
     # Include earnings and deductions
-    earnings: List[SalarySlipEarningRead] = []
-    deductions: List[SalarySlipDeductionRead] = []
+    earnings: list[SalarySlipEarningRead] = []
+    deductions: list[SalarySlipDeductionRead] = []
 
 
 class SalarySlipListResponse(BaseModel):
     """Paginated salary slip list response."""
 
-    items: List[SalarySlipRead]
+    items: list[SalarySlipRead]
     total: int
     offset: int
     limit: int
@@ -286,16 +284,16 @@ class SalarySlipPostResponse(BaseModel):
 
     success: bool
     message: str
-    journal_entry_id: Optional[UUID] = None
+    journal_entry_id: UUID | None = None
 
 
 class SalarySlipExportRequest(BaseModel):
     """Export salary slips request."""
 
-    employee_id: Optional[UUID] = None
-    status: Optional[SalarySlipStatus] = None
-    from_date: Optional[date] = None
-    to_date: Optional[date] = None
+    employee_id: UUID | None = None
+    status: SalarySlipStatus | None = None
+    from_date: date | None = None
+    to_date: date | None = None
 
 
 # =============================================================================
@@ -311,10 +309,10 @@ class PayrollEntryBase(BaseModel):
     end_date: date
     payroll_frequency: PayrollFrequency = PayrollFrequency.MONTHLY
     currency_code: str = Field(default="NGN", max_length=3)
-    department_id: Optional[UUID] = None
-    designation_id: Optional[UUID] = None
-    bank_account_id: Optional[UUID] = None
-    notes: Optional[str] = None
+    department_id: UUID | None = None
+    designation_id: UUID | None = None
+    bank_account_id: UUID | None = None
+    notes: str | None = None
 
 
 class PayrollEntryCreate(PayrollEntryBase):
@@ -339,27 +337,27 @@ class PayrollEntryRead(PayrollEntryBase):
     salary_slips_created: bool
     salary_slips_submitted: bool
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class PayrollEntryUpdate(BaseModel):
     """Update payroll entry request."""
 
-    posting_date: Optional[date] = None
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    payroll_frequency: Optional[PayrollFrequency] = None
-    currency_code: Optional[str] = Field(default=None, max_length=3)
-    department_id: Optional[UUID] = None
-    designation_id: Optional[UUID] = None
-    bank_account_id: Optional[UUID] = None
-    notes: Optional[str] = None
+    posting_date: date | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    payroll_frequency: PayrollFrequency | None = None
+    currency_code: str | None = Field(default=None, max_length=3)
+    department_id: UUID | None = None
+    designation_id: UUID | None = None
+    bank_account_id: UUID | None = None
+    notes: str | None = None
 
 
 class PayrollEntryListResponse(BaseModel):
     """Paginated payroll entry list response."""
 
-    items: List[PayrollEntryRead]
+    items: list[PayrollEntryRead]
     total: int
     offset: int
     limit: int
@@ -370,14 +368,14 @@ class PayrollSlipGenerationResult(BaseModel):
 
     created_count: int
     skipped_count: int
-    errors: List[dict] = []
+    errors: list[dict] = []
 
 
 class PayrollPayoutRequest(BaseModel):
     """Payroll payout request."""
 
-    slip_ids: Optional[List[UUID]] = None
-    payment_reference: Optional[str] = None
+    slip_ids: list[UUID] | None = None
+    payment_reference: str | None = None
 
 
 class PayrollPayoutResult(BaseModel):
@@ -385,7 +383,7 @@ class PayrollPayoutResult(BaseModel):
 
     updated: int
     requested: int
-    errors: List[dict] = []
+    errors: list[dict] = []
 
 
 class SalaryStructureAssignmentBase(BaseModel):
@@ -394,10 +392,10 @@ class SalaryStructureAssignmentBase(BaseModel):
     employee_id: UUID
     structure_id: UUID
     from_date: date
-    to_date: Optional[date] = None
+    to_date: date | None = None
     base: Decimal = Decimal("0")
     variable: Decimal = Decimal("0")
-    income_tax_slab: Optional[str] = None
+    income_tax_slab: str | None = None
 
 
 class SalaryStructureAssignmentCreate(SalaryStructureAssignmentBase):
@@ -409,12 +407,12 @@ class SalaryStructureAssignmentCreate(SalaryStructureAssignmentBase):
 class SalaryStructureAssignmentUpdate(BaseModel):
     """Update salary structure assignment request."""
 
-    structure_id: Optional[UUID] = None
-    from_date: Optional[date] = None
-    to_date: Optional[date] = None
-    base: Optional[Decimal] = None
-    variable: Optional[Decimal] = None
-    income_tax_slab: Optional[str] = None
+    structure_id: UUID | None = None
+    from_date: date | None = None
+    to_date: date | None = None
+    base: Decimal | None = None
+    variable: Decimal | None = None
+    income_tax_slab: str | None = None
 
 
 class SalaryStructureAssignmentRead(SalaryStructureAssignmentBase):
@@ -425,13 +423,13 @@ class SalaryStructureAssignmentRead(SalaryStructureAssignmentBase):
     assignment_id: UUID
     organization_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class SalaryStructureAssignmentListResponse(BaseModel):
     """Paginated salary structure assignment list response."""
 
-    items: List[SalaryStructureAssignmentRead]
+    items: list[SalaryStructureAssignmentRead]
     total: int
     offset: int
     limit: int

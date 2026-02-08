@@ -7,7 +7,7 @@ need to generically load and manipulate entities.
 """
 
 import logging
-from typing import Any, Dict, Optional, Tuple, Type
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 # Each entry: (import_path, model_class_name, pk_field_name)
-_ENTITY_REGISTRY: Dict[str, Tuple[str, str, str]] = {
+_ENTITY_REGISTRY: dict[str, tuple[str, str, str]] = {
     "INVOICE": (
         "app.models.finance.ar.invoice",
         "Invoice",
@@ -168,10 +168,10 @@ _ENTITY_REGISTRY: Dict[str, Tuple[str, str, str]] = {
 }
 
 # Cache resolved model classes to avoid repeated imports
-_resolved_models: Dict[str, Optional[Type[Any]]] = {}
+_resolved_models: dict[str, type[Any] | None] = {}
 
 
-def _get_model_class(entity_type: str) -> Optional[Type[Any]]:
+def _get_model_class(entity_type: str) -> type[Any] | None:
     """Resolve entity type to its SQLAlchemy model class (cached)."""
     if entity_type in _resolved_models:
         return _resolved_models[entity_type]
@@ -201,7 +201,7 @@ def _get_model_class(entity_type: str) -> Optional[Type[Any]]:
         return None
 
 
-def get_pk_field(entity_type: str) -> Optional[str]:
+def get_pk_field(entity_type: str) -> str | None:
     """Return the primary key field name for an entity type."""
     entry = _ENTITY_REGISTRY.get(entity_type)
     return entry[2] if entry else None
@@ -211,7 +211,7 @@ def resolve_entity(
     db: Session,
     entity_type: str,
     entity_id: UUID,
-) -> Optional[Any]:
+) -> Any | None:
     """Load an entity by type and ID.
 
     Returns:

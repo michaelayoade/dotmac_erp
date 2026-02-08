@@ -6,9 +6,8 @@ Provides view-focused data and operations for interview web routes.
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import Request, UploadFile
@@ -33,8 +32,6 @@ from .base import (
     parse_uuid,
 )
 
-logger = logging.getLogger(__name__)
-
 
 def _get_form_str(form: Any, key: str, default: str = "") -> str:
     value = form.get(key, default) if form is not None else default
@@ -54,11 +51,11 @@ class InterviewWebService:
     def list_interviews_context(
         db: Session,
         organization_id: UUID,
-        status: Optional[str] = None,
-        job_opening_id: Optional[str] = None,
-        applicant_id: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        status: str | None = None,
+        job_opening_id: str | None = None,
+        applicant_id: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
         page: int = 1,
     ) -> dict:
         """Build context for interviews list page."""
@@ -107,8 +104,8 @@ class InterviewWebService:
     def interview_form_context(
         db: Session,
         organization_id: UUID,
-        interview_id: Optional[str] = None,
-        applicant_id: Optional[str] = None,
+        interview_id: str | None = None,
+        applicant_id: str | None = None,
     ) -> dict:
         """Build context for interview create/edit form."""
         svc = RecruitmentService(db)
@@ -203,11 +200,11 @@ class InterviewWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        status: Optional[str] = None,
-        job_opening_id: Optional[str] = None,
-        applicant_id: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        status: str | None = None,
+        job_opening_id: str | None = None,
+        applicant_id: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Render interviews list page."""
@@ -234,7 +231,7 @@ class InterviewWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        applicant_id: Optional[str] = None,
+        applicant_id: str | None = None,
     ) -> HTMLResponse:
         """Render new interview form."""
         context = base_context(request, auth, "Schedule Interview", "recruit", db=db)

@@ -5,7 +5,6 @@ Asset Impairment Model - FA Schema.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -30,12 +29,12 @@ class AssetImpairment(Base):
     )
 
     # Can be at asset level or CGU level
-    asset_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    asset_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("fa.asset.asset_id"),
         nullable=True,
     )
-    cgu_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cgu_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("fa.cash_generating_unit.cgu_id"),
         nullable=True,
@@ -52,11 +51,11 @@ class AssetImpairment(Base):
     carrying_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
 
     # Recoverable amount determination
-    fair_value_less_costs_to_sell: Mapped[Optional[Decimal]] = mapped_column(
+    fair_value_less_costs_to_sell: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
-    value_in_use: Mapped[Optional[Decimal]] = mapped_column(
+    value_in_use: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
@@ -79,27 +78,23 @@ class AssetImpairment(Base):
     )
 
     # Value in use assumptions
-    discount_rate: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(10, 4), nullable=True
-    )
-    growth_rate: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(10, 4), nullable=True
-    )
-    projection_period_years: Mapped[Optional[int]] = mapped_column(
+    discount_rate: Mapped[Decimal | None] = mapped_column(Numeric(10, 4), nullable=True)
+    growth_rate: Mapped[Decimal | None] = mapped_column(Numeric(10, 4), nullable=True)
+    projection_period_years: Mapped[int | None] = mapped_column(
         Numeric(5, 0), nullable=True
     )
-    assumptions_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    assumptions_description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Reversal tracking
     is_reversal: Mapped[bool] = mapped_column(default=False)
-    original_impairment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    original_impairment_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("fa.asset_impairment.impairment_id"),
         nullable=True,
     )
 
     # Accounting
-    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -109,11 +104,11 @@ class AssetImpairment(Base):
         UUID(as_uuid=True),
         nullable=False,
     )
-    approved_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )

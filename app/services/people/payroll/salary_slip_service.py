@@ -9,9 +9,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -65,8 +64,8 @@ class SalarySlipInput:
     employee_id: UUID
     start_date: date
     end_date: date
-    posting_date: Optional[date] = None
-    total_working_days: Optional[Decimal] = None
+    posting_date: date | None = None
+    total_working_days: Decimal | None = None
     absent_days: Decimal = Decimal("0")
     leave_without_pay: Decimal = Decimal("0")
 
@@ -109,7 +108,7 @@ class SalarySlipService:
         component_name: str,
         abbr: str,
         display_order: int = 100,
-        created_by_id: Optional[UUID] = None,
+        created_by_id: UUID | None = None,
     ) -> SalaryComponent:
         """
         Get an existing statutory component or create it if it doesn't exist.
@@ -163,7 +162,7 @@ class SalarySlipService:
     def get_statutory_components(
         db: Session,
         organization_id: UUID,
-        created_by_id: Optional[UUID] = None,
+        created_by_id: UUID | None = None,
         include_employer_contributions: bool = False,
     ) -> dict[str, SalaryComponent]:
         """
@@ -211,11 +210,16 @@ class SalarySlipService:
 
     @staticmethod
     def generate_slip_number(db: Session, organization_id: UUID) -> str:
-        """Generate a unique slip number."""
-        from app.services.people.payroll.numbering import PayrollNumberingService
+        """Generate a unique slip number.
 
-        service = PayrollNumberingService(db)
-        return service.generate_slip_number(organization_id)
+        Delegates to SyncNumberingService for unified numbering.
+        """
+        from app.models.finance.core_config.numbering_sequence import SequenceType
+        from app.services.finance.common.numbering import SyncNumberingService
+
+        return SyncNumberingService(db).generate_next_number(
+            organization_id, SequenceType.SALARY_SLIP
+        )
 
     @staticmethod
     def get_active_assignment(
@@ -223,7 +227,7 @@ class SalarySlipService:
         organization_id: UUID,
         employee_id: UUID,
         as_of_date: date,
-    ) -> Optional[SalaryStructureAssignment]:
+    ) -> SalaryStructureAssignment | None:
         """Get the active salary structure assignment for an employee."""
         return (
             db.query(SalaryStructureAssignment)
@@ -245,7 +249,7 @@ class SalarySlipService:
         db: Session,
         organization_id: UUID,
         input: SalarySlipInput,
-        created_by_user_id: Optional[UUID],
+        created_by_user_id: UUID | None,
     ) -> SalarySlip:
         """
         Create a new salary slip and calculate amounts from structure.
@@ -418,7 +422,7 @@ class SalarySlipService:
 
         # Calculate PAYE and statutory deductions
         total_deduction = Decimal("0")
-        paye_breakdown: Optional[PAYEBreakdown] = None
+        paye_breakdown: PAYEBreakdown | None = None
 
         # Calculate PAYE tax and statutory deductions using NTA 2025 rules
         if not skip_deductions and gross_pay > 0:
@@ -460,7 +464,7 @@ class SalarySlipService:
                 ),
             ]
 
-            for code, amount, description, is_statistical in statutory_deductions:
+            for code, amount, _description, is_statistical in statutory_deductions:
                 if amount > 0:
                     component = statutory_components[code]
                     deduction_line = SalarySlipDeduction(
@@ -894,7 +898,7 @@ class SalarySlipService:
         """
         try:
             # Create safe context
-            context = {
+            {
                 "base": float(base),
                 "variable": float(variable),
                 "gross": float(gross),
@@ -969,7 +973,7 @@ class SalarySlipService:
             )
 
         slip.status = SalarySlipStatus.SUBMITTED
-        slip.status_changed_at = datetime.now(timezone.utc)
+        slip.status_changed_at = datetime.now(UTC)
         slip.status_changed_by_id = user_id
 
         db.commit()
@@ -1007,7 +1011,7 @@ class SalarySlipService:
             )
 
         slip.status = SalarySlipStatus.APPROVED
-        slip.status_changed_at = datetime.now(timezone.utc)
+        slip.status_changed_at = datetime.now(UTC)
         slip.status_changed_by_id = user_id
 
         try:
@@ -1048,10 +1052,10 @@ class SalarySlipService:
     def list(
         db: Session,
         organization_id: UUID,
-        employee_id: Optional[UUID] = None,
-        status: Optional[SalarySlipStatus] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
+        employee_id: UUID | None = None,
+        status: SalarySlipStatus | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[SalarySlip]:
@@ -1083,10 +1087,10 @@ class SalarySlipService:
     def count(
         db: Session,
         organization_id: UUID,
-        employee_id: Optional[UUID] = None,
-        status: Optional[SalarySlipStatus] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
+        employee_id: UUID | None = None,
+        status: SalarySlipStatus | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
     ) -> int:
         """Count salary slips with filters."""
         org_id = coerce_uuid(organization_id)

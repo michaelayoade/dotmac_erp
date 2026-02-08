@@ -6,11 +6,12 @@ Manages payment batch creation, approval, processing, and bank file generation.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any, List, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -38,7 +39,7 @@ class BatchPaymentItem:
     supplier_id: UUID
     amount: Decimal
     invoice_ids: list[UUID] = field(default_factory=list)
-    reference: Optional[str] = None
+    reference: str | None = None
 
 
 @dataclass
@@ -48,7 +49,7 @@ class PaymentBatchInput:
     batch_date: date
     payment_method: str
     bank_account_id: UUID
-    currency_code: Optional[str] = None
+    currency_code: str | None = None
     payments: list[BatchPaymentItem] = field(default_factory=list)
 
 
@@ -328,7 +329,7 @@ class PaymentBatchService(ListResponseMixin):
 
         batch.status = APBatchStatus.APPROVED
         batch.approved_by_user_id = user_id
-        batch.approved_at = datetime.now(timezone.utc)
+        batch.approved_at = datetime.now(UTC)
 
         # Also approve all payments in the batch
         payments = list(
@@ -343,7 +344,7 @@ class PaymentBatchService(ListResponseMixin):
             if payment.status == APPaymentStatus.DRAFT:
                 payment.status = APPaymentStatus.APPROVED
                 payment.approved_by_user_id = user_id
-                payment.approved_at = datetime.now(timezone.utc)
+                payment.approved_at = datetime.now(UTC)
 
         db.commit()
         db.refresh(batch)
@@ -499,7 +500,7 @@ class PaymentBatchService(ListResponseMixin):
         # Update batch
         batch.bank_file_generated = True
         batch.bank_file_reference = file_reference
-        batch.bank_file_generated_at = datetime.now(timezone.utc)
+        batch.bank_file_generated_at = datetime.now(UTC)
 
         db.commit()
 
@@ -516,7 +517,7 @@ class PaymentBatchService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         batch_id: UUID,
-    ) -> List[SupplierPayment]:
+    ) -> builtins.list[SupplierPayment]:
         """
         Get all payments in a batch.
 
@@ -553,8 +554,8 @@ class PaymentBatchService(ListResponseMixin):
     def get(
         db: Session,
         batch_id: str,
-        organization_id: Optional[UUID] = None,
-    ) -> Optional[APPaymentBatch]:
+        organization_id: UUID | None = None,
+    ) -> APPaymentBatch | None:
         """Get a payment batch by ID with optional org_id isolation."""
         batch = db.get(APPaymentBatch, coerce_uuid(batch_id))
         if batch is None:
@@ -566,13 +567,13 @@ class PaymentBatchService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        status: Optional[APBatchStatus] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
+        organization_id: str | None = None,
+        status: APBatchStatus | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[APPaymentBatch]:
+    ) -> builtins.list[APPaymentBatch]:
         """
         List payment batches with filters.
 

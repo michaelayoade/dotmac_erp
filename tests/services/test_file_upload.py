@@ -5,9 +5,9 @@ Tests for the unified FileUploadService.
 import pytest
 
 from app.services.file_upload import (
+    FileTooLargeError,
     FileUploadConfig,
     FileUploadService,
-    FileTooLargeError,
     InvalidContentTypeError,
     InvalidExtensionError,
     InvalidMagicBytesError,

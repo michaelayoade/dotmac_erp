@@ -7,7 +7,7 @@ Tracks execution history of workflow rules.
 import enum
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import (
     DateTime,
@@ -74,7 +74,7 @@ class WorkflowExecution(Base):
 
     # Trigger details
     trigger_event: Mapped[str] = mapped_column(String(50), nullable=False)
-    trigger_data: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    trigger_data: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Data at time of trigger: old values, new values, etc.",
@@ -86,15 +86,15 @@ class WorkflowExecution(Base):
         nullable=False,
         server_default=func.now(),
     )
-    started_at: Mapped[Optional[datetime]] = mapped_column(
+    started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    duration_ms: Mapped[Optional[int]] = mapped_column(
+    duration_ms: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Execution duration in milliseconds",
@@ -108,15 +108,15 @@ class WorkflowExecution(Base):
     )
 
     # Result
-    result: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    result: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Result of action: email sent to, task created, etc.",
     )
 
     # Error details
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    error_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_details: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Retry tracking
     retry_count: Mapped[int] = mapped_column(
@@ -131,7 +131,7 @@ class WorkflowExecution(Base):
     )
 
     # User context
-    triggered_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    triggered_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="User who triggered the event (if applicable)",

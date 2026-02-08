@@ -112,7 +112,7 @@ class TestOnboardingService:
     def test_calculate_progress_all_pending(self, mock_onboarding):
         """Test progress calculation with all pending activities."""
         activities = []
-        for i in range(5):
+        for _i in range(5):
             activity = MagicMock(spec=EmployeeOnboardingActivity)
             activity.activity_status = ActivityStatus.PENDING.value
             activity.status = None
@@ -126,12 +126,12 @@ class TestOnboardingService:
         """Test progress calculation with some completed activities."""
         activities = []
         # 3 completed, 2 pending = 60% complete
-        for i in range(3):
+        for _i in range(3):
             activity = MagicMock(spec=EmployeeOnboardingActivity)
             activity.activity_status = ActivityStatus.COMPLETED.value
             activity.status = "completed"
             activities.append(activity)
-        for i in range(2):
+        for _i in range(2):
             activity = MagicMock(spec=EmployeeOnboardingActivity)
             activity.activity_status = ActivityStatus.PENDING.value
             activity.status = None
@@ -145,7 +145,7 @@ class TestOnboardingService:
         """Test that skipped activities count toward progress."""
         activities = []
         # 2 completed, 1 skipped, 2 pending = 60% complete
-        for i in range(2):
+        for _i in range(2):
             activity = MagicMock(spec=EmployeeOnboardingActivity)
             activity.activity_status = ActivityStatus.COMPLETED.value
             activity.status = "completed"
@@ -156,7 +156,7 @@ class TestOnboardingService:
         activity.status = "skipped"
         activities.append(activity)
         # Pending
-        for i in range(2):
+        for _i in range(2):
             activity = MagicMock(spec=EmployeeOnboardingActivity)
             activity.activity_status = ActivityStatus.PENDING.value
             activity.status = None
@@ -169,7 +169,7 @@ class TestOnboardingService:
     def test_calculate_progress_all_complete(self, mock_onboarding):
         """Test progress calculation with all activities completed."""
         activities = []
-        for i in range(5):
+        for _i in range(5):
             activity = MagicMock(spec=EmployeeOnboardingActivity)
             activity.activity_status = ActivityStatus.COMPLETED.value
             activity.status = "completed"

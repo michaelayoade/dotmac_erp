@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Optional, TypedDict
+from datetime import UTC, datetime, timedelta
+from typing import TypedDict
 from urllib.parse import urlencode
 from uuid import UUID
 
@@ -23,12 +23,12 @@ from app.models.audit import AuditActorType, AuditEvent
 from app.models.auth import AuthProvider, SessionStatus, UserCredential
 from app.models.auth import Session as AuthSession
 from app.models.domain_settings import DomainSetting, SettingDomain, SettingValueType
+from app.models.finance.audit.audit_log import AuditAction, AuditLog
 from app.models.finance.core_org.organization import Organization
 from app.models.people.hr.employee import Employee
 from app.models.person import Person, PersonStatus
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 from app.models.scheduler import ScheduledTask, ScheduleType
-from app.models.finance.audit.audit_log import AuditAction, AuditLog
 from app.services.audit_dispatcher import fire_audit_event
 from app.services.auth_flow import hash_password
 from app.services.common import coerce_uuid
@@ -115,7 +115,7 @@ def _build_pagination(
     }
 
 
-def _parse_status_filter(value: Optional[str]) -> Optional[bool]:
+def _parse_status_filter(value: str | None) -> bool | None:
     if value == "active":
         return True
     if value == "inactive":
@@ -123,7 +123,7 @@ def _parse_status_filter(value: Optional[str]) -> Optional[bool]:
     return None
 
 
-def _parse_domain(value: Optional[str]) -> Optional[SettingDomain]:
+def _parse_domain(value: str | None) -> SettingDomain | None:
     if not value:
         return None
     try:
@@ -132,7 +132,7 @@ def _parse_domain(value: Optional[str]) -> Optional[SettingDomain]:
         return None
 
 
-def _parse_actor_type(value: Optional[str]) -> Optional[AuditActorType]:
+def _parse_actor_type(value: str | None) -> AuditActorType | None:
     if not value:
         return None
     try:
@@ -141,7 +141,7 @@ def _parse_actor_type(value: Optional[str]) -> Optional[AuditActorType]:
         return None
 
 
-def _parse_success_filter(value: Optional[str]) -> Optional[bool]:
+def _parse_success_filter(value: str | None) -> bool | None:
     if value == "success":
         return True
     if value == "failed":
@@ -161,7 +161,7 @@ def _setting_value_display(setting: DomainSetting) -> str:
     return _truncate(str(setting.value_text))
 
 
-def _format_interval(seconds: Optional[int]) -> str:
+def _format_interval(seconds: int | None) -> str:
     if not seconds:
         return "-"
     units = [
@@ -180,9 +180,9 @@ def _format_interval(seconds: Optional[int]) -> str:
 
 def _format_relative_time(dt: datetime) -> str:
     """Format datetime as relative time string."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
 
     diff = now - dt
     seconds = diff.total_seconds()
@@ -225,7 +225,7 @@ def _derive_display_name(
     return base_name or None
 
 
-def _parse_person_status(value: Optional[str]) -> Optional[PersonStatus]:
+def _parse_person_status(value: str | None) -> PersonStatus | None:
     if not value:
         return None
     try:
@@ -240,7 +240,7 @@ class AdminWebService:
     @staticmethod
     def dashboard_context(db: Session) -> dict:
         """Get context for admin dashboard."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
         week_start = now - timedelta(days=7)
 
@@ -320,8 +320,8 @@ class AdminWebService:
     @staticmethod
     def users_context(
         db: Session,
-        search: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        status: str | None,
         page: int,
         limit: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
@@ -420,7 +420,7 @@ class AdminWebService:
         }
 
     @staticmethod
-    def user_form_context(db: Session, user_id: Optional[str] = None) -> dict:
+    def user_form_context(db: Session, user_id: str | None = None) -> dict:
         """Get context for user create/edit form."""
         # Get organizations
         organizations = (
@@ -491,7 +491,7 @@ class AdminWebService:
         }
 
     @staticmethod
-    def user_data_from_payload(payload: dict, user_id: Optional[str] = None) -> dict:
+    def user_data_from_payload(payload: dict, user_id: str | None = None) -> dict:
         role_ids = payload.get("role_ids") or payload.get("roles") or []
         if isinstance(role_ids, str):
             role_ids = [role_ids]
@@ -526,7 +526,7 @@ class AdminWebService:
         status: str = "active",
         must_change_password: bool | str = False,
         role_ids: list[str] = None,
-    ) -> tuple[Optional[Person], Optional[str]]:
+    ) -> tuple[Person | None, str | None]:
         """Create a new user. Returns (person, error)."""
         role_ids = role_ids or []
         if isinstance(role_ids, str):
@@ -628,7 +628,7 @@ class AdminWebService:
         must_change_password: bool | str = False,
         email_verified: bool | str = False,
         role_ids: list[str] = None,
-    ) -> tuple[Optional[Person], Optional[str]]:
+    ) -> tuple[Person | None, str | None]:
         """Update an existing user. Returns (person, error)."""
         role_ids = role_ids or []
         if isinstance(role_ids, str):
@@ -700,7 +700,7 @@ class AdminWebService:
                 credential.must_change_password = must_change_password
                 if password:
                     credential.password_hash = hash_password(password)
-                    credential.password_updated_at = datetime.now(timezone.utc)
+                    credential.password_updated_at = datetime.now(UTC)
             elif password:
                 credential = UserCredential(
                     person_id=person.id,
@@ -736,7 +736,7 @@ class AdminWebService:
                 session_ids_to_invalidate = [session.id for session in active_sessions]
                 for session in active_sessions:
                     session.status = SessionStatus.revoked
-                    session.revoked_at = datetime.now(timezone.utc)
+                    session.revoked_at = datetime.now(UTC)
 
             db.commit()
 
@@ -775,7 +775,7 @@ class AdminWebService:
             return None, f"Failed to update user: {str(e)}"
 
     @staticmethod
-    def delete_user(db: Session, user_id: str) -> Optional[str]:
+    def delete_user(db: Session, user_id: str) -> str | None:
         """Delete a user. Returns error message or None on success."""
         person = db.get(Person, coerce_uuid(user_id))
         if not person:
@@ -812,8 +812,8 @@ class AdminWebService:
     @staticmethod
     def roles_context(
         db: Session,
-        search: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        status: str | None,
         page: int,
         limit: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
@@ -905,7 +905,7 @@ class AdminWebService:
     @staticmethod
     def role_form_context(
         db: Session,
-        role_id: Optional[str] = None,
+        role_id: str | None = None,
     ) -> dict:
         """Get context for role create/edit form."""
         from app.services.common import coerce_uuid
@@ -1094,7 +1094,6 @@ class AdminWebService:
             "fleet": "Fleet Management",
             "procurement": "Procurement",
             "projects": "Projects",
-            "settings": "Settings",
             "support": "Support & Ticketing",
             "tasks": "Task Management",
         }
@@ -1122,7 +1121,7 @@ class AdminWebService:
         description: str,
         is_active: bool,
         permission_ids: list[str],
-    ) -> tuple[Optional[Role], Optional[str]]:
+    ) -> tuple[Role | None, str | None]:
         """Create a new role. Returns (role, error)."""
         from app.services.common import coerce_uuid
 
@@ -1164,7 +1163,7 @@ class AdminWebService:
         description: str,
         is_active: bool,
         permission_ids: list[str],
-    ) -> tuple[Optional[Role], Optional[str]]:
+    ) -> tuple[Role | None, str | None]:
         """Update an existing role. Returns (role, error)."""
         from app.services.common import coerce_uuid
 
@@ -1206,7 +1205,7 @@ class AdminWebService:
     def delete_role(
         db: Session,
         role_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete a role. Returns error message or None on success."""
         from app.services.common import coerce_uuid
 
@@ -1233,8 +1232,8 @@ class AdminWebService:
     @staticmethod
     def permissions_context(
         db: Session,
-        search: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        status: str | None,
         page: int,
         limit: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
@@ -1317,7 +1316,7 @@ class AdminWebService:
     @staticmethod
     def permission_form_context(
         db: Session,
-        permission_id: Optional[str] = None,
+        permission_id: str | None = None,
     ) -> dict:
         """Get context for permission create/edit form."""
         permission_data = None
@@ -1350,7 +1349,7 @@ class AdminWebService:
         key: str,
         description: str,
         is_active: bool,
-    ) -> tuple[Optional[Permission], Optional[str]]:
+    ) -> tuple[Permission | None, str | None]:
         """Create a new permission. Returns (permission, error)."""
         # Check if key already exists
         existing = db.query(Permission).filter(Permission.key == key).first()
@@ -1378,7 +1377,7 @@ class AdminWebService:
         key: str,
         description: str,
         is_active: bool,
-    ) -> tuple[Optional[Permission], Optional[str]]:
+    ) -> tuple[Permission | None, str | None]:
         """Update an existing permission. Returns (permission, error)."""
         permission = db.get(Permission, coerce_uuid(permission_id))
         if not permission:
@@ -1410,7 +1409,7 @@ class AdminWebService:
     def delete_permission(
         db: Session,
         permission_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete a permission. Returns error message or None on success."""
         permission = db.get(Permission, coerce_uuid(permission_id))
         if not permission:
@@ -1433,8 +1432,8 @@ class AdminWebService:
     @staticmethod
     def organizations_context(
         db: Session,
-        search: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        status: str | None,
         page: int,
         limit: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
@@ -1539,8 +1538,8 @@ class AdminWebService:
     @staticmethod
     def organization_form_context(
         db: Session,
-        organization_id: Optional[str] = None,
-        default_currency_org_id: Optional[str] = None,
+        organization_id: str | None = None,
+        default_currency_org_id: str | None = None,
     ) -> dict:
         """Get context for organization create/edit form."""
         from app.models.finance.core_org.organization import ConsolidationMethod
@@ -1746,7 +1745,7 @@ class AdminWebService:
         consolidation_method: str = "",
         ownership_percentage: str = "",
         is_active: bool = True,
-    ) -> tuple[Optional[Organization], Optional[str]]:
+    ) -> tuple[Organization | None, str | None]:
         """Create a new organization. Returns (organization, error)."""
         from datetime import date as date_type
 
@@ -1836,7 +1835,7 @@ class AdminWebService:
         is_active: bool = True,
         salaries_expense_account_id: str = "",
         salary_payable_account_id: str = "",
-    ) -> tuple[Optional[Organization], Optional[str]]:
+    ) -> tuple[Organization | None, str | None]:
         """Update an existing organization. Returns (organization, error)."""
         from datetime import date as date_type
 
@@ -1930,7 +1929,7 @@ class AdminWebService:
     def delete_organization(
         db: Session,
         organization_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete an organization. Returns error message or None on success."""
         org = db.get(Organization, coerce_uuid(organization_id))
         if not org:
@@ -1968,9 +1967,9 @@ class AdminWebService:
     @staticmethod
     def settings_context(
         db: Session,
-        search: Optional[str],
-        domain: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        domain: str | None,
+        status: str | None,
         page: int,
         limit: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
@@ -2049,7 +2048,7 @@ class AdminWebService:
     @staticmethod
     def setting_form_context(
         db: Session,
-        setting_id: Optional[str] = None,
+        setting_id: str | None = None,
     ) -> dict:
         """Get context for setting create/edit form."""
         setting_data = None
@@ -2091,7 +2090,7 @@ class AdminWebService:
         value: str,
         is_secret: bool = False,
         is_active: bool = True,
-    ) -> tuple[Optional[DomainSetting], Optional[str]]:
+    ) -> tuple[DomainSetting | None, str | None]:
         """Create a new setting. Returns (setting, error)."""
         # Validate domain
         try:
@@ -2168,7 +2167,7 @@ class AdminWebService:
         value: str,
         is_secret: bool = False,
         is_active: bool = True,
-    ) -> tuple[Optional[DomainSetting], Optional[str]]:
+    ) -> tuple[DomainSetting | None, str | None]:
         """Update an existing setting. Returns (setting, error)."""
         setting = db.get(DomainSetting, coerce_uuid(setting_id))
         if not setting:
@@ -2242,7 +2241,7 @@ class AdminWebService:
     def delete_setting(
         db: Session,
         setting_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete a setting. Returns error message or None on success."""
         setting = db.get(DomainSetting, coerce_uuid(setting_id))
         if not setting:
@@ -2260,9 +2259,9 @@ class AdminWebService:
     @staticmethod
     def audit_logs_context(
         db: Session,
-        search: Optional[str],
-        actor_type: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        actor_type: str | None,
+        status: str | None,
         page: int,
         limit: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
@@ -2331,8 +2330,8 @@ class AdminWebService:
     @staticmethod
     def tasks_context(
         db: Session,
-        search: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        status: str | None,
         page: int,
         limit: int = DEFAULT_PAGE_SIZE,
     ) -> dict:
@@ -2399,7 +2398,7 @@ class AdminWebService:
     @staticmethod
     def task_form_context(
         db: Session,
-        task_id: Optional[str] = None,
+        task_id: str | None = None,
     ) -> dict:
         """Get context for task create/edit form."""
         task_data = None
@@ -2451,7 +2450,7 @@ class AdminWebService:
         args_json: str = "",
         kwargs_json: str = "",
         enabled: bool = True,
-    ) -> tuple[Optional[ScheduledTask], Optional[str]]:
+    ) -> tuple[ScheduledTask | None, str | None]:
         """Create a new scheduled task. Returns (task, error)."""
         # Validate schedule type
         try:
@@ -2513,7 +2512,7 @@ class AdminWebService:
         args_json: str = "",
         kwargs_json: str = "",
         enabled: bool = True,
-    ) -> tuple[Optional[ScheduledTask], Optional[str]]:
+    ) -> tuple[ScheduledTask | None, str | None]:
         """Update an existing scheduled task. Returns (task, error)."""
         task = db.get(ScheduledTask, coerce_uuid(task_id))
         if not task:
@@ -2575,7 +2574,7 @@ class AdminWebService:
     def delete_task(
         db: Session,
         task_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete a scheduled task. Returns error message or None on success."""
         task = db.get(ScheduledTask, coerce_uuid(task_id))
         if not task:
@@ -2625,8 +2624,8 @@ class AdminWebService:
         title: str,
         page_title: str,
         active_page: str,
-        context: Optional[dict] = None,
-        status_code: Optional[int] = None,
+        context: dict | None = None,
+        status_code: int | None = None,
     ) -> HTMLResponse:
         if status_code is None:
             status_code = 200
@@ -3631,7 +3630,7 @@ class AdminWebService:
             key=key,
             value_type=value_type,
             value=value,
-            is_secret=is_secret == "1",
+            is_secret=is_secret == "1",  # noqa: S105
             is_active=is_active == "1",
         )
 
@@ -3708,7 +3707,7 @@ class AdminWebService:
             key=key,
             value_type=value_type,
             value=value,
-            is_secret=is_secret == "1",
+            is_secret=is_secret == "1",  # noqa: S105
             is_active=is_active == "1",
         )
 
@@ -3979,11 +3978,11 @@ class AdminWebService:
     @staticmethod
     def data_changes_context(
         db: Session,
-        organization_id: Optional[UUID],
-        module: Optional[str],
-        entity: Optional[str],
-        action: Optional[str],
-        search: Optional[str],
+        organization_id: UUID | None,
+        module: str | None,
+        entity: str | None,
+        action: str | None,
+        search: str | None,
         page: int,
         limit: int = DEFAULT_PAGE_SIZE,
     ) -> dict:

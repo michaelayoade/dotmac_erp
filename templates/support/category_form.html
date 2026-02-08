@@ -34,8 +34,9 @@
     {% endif %}
 
     <form method="post" action="/support/categories{{ '/' + category.category_id if category else '' }}" class="card">
+        {{ request.state.csrf_form | safe }}
         <div class="p-6 space-y-6">
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <label for="category_code" class="form-label">Category Code <span class="text-rose-500">*</span></label>
                     <input type="text" name="category_code" id="category_code"
@@ -63,7 +64,7 @@
                           class="form-input w-full">{{ category.description if category else '' }}</textarea>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <label for="color" class="form-label">Color</label>
                     <select name="color" id="color" class="form-input w-full">
@@ -101,7 +102,7 @@
                 <p class="text-xs text-slate-500 mt-1">Priority automatically assigned to new tickets in this category</p>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <label for="response_hours" class="form-label">Response SLA (hours)</label>
                     <input type="number" name="response_hours" id="response_hours"
@@ -123,7 +124,7 @@
             </div>
         </div>
 
-        <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <div class="px-6 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-3 pt-6">
             <a href="/support/categories" class="btn btn-secondary">
                 Cancel
             </a>

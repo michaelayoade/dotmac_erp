@@ -7,9 +7,8 @@ appraisals, feedback, goals/KPIs, cycles, KRAs, templates, scorecards, and repor
 
 from __future__ import annotations
 
-import logging
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -26,18 +25,9 @@ from app.services.people.perf import PerformanceService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
-
-def _get_form_str(form: Any, key: str, default: str = "") -> str:
-    value = form.get(key, default) if form is not None else default
-    if isinstance(value, UploadFile) or value is None:
-        return default
-    return str(value).strip()
-
-
 from .base import (
     FEEDBACK_TYPES,
     KPI_MEASUREMENT_TYPES,
-    logger,
     parse_appraisal_status,
     parse_bool,
     parse_date,
@@ -47,7 +37,12 @@ from .base import (
     parse_uuid,
 )
 
-logger = logging.getLogger(__name__)
+
+def _get_form_str(form: Any, key: str, default: str = "") -> str:
+    value = form.get(key, default) if form is not None else default
+    if isinstance(value, UploadFile) or value is None:
+        return default
+    return str(value).strip()
 
 
 class PerfWebService:
@@ -62,10 +57,10 @@ class PerfWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        status: Optional[str] = None,
-        employee_id: Optional[str] = None,
-        cycle_id: Optional[str] = None,
-        manager_id: Optional[str] = None,
+        status: str | None = None,
+        employee_id: str | None = None,
+        cycle_id: str | None = None,
+        manager_id: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Render appraisals list page."""
@@ -199,7 +194,7 @@ class PerfWebService:
         auth: WebAuthContext,
         db: Session,
         appraisal_id: str,
-        success: Optional[str] = None,
+        success: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Render appraisal detail page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -615,9 +610,9 @@ class PerfWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        appraisal_id: Optional[str] = None,
-        feedback_type: Optional[str] = None,
-        submitted: Optional[str] = None,
+        appraisal_id: str | None = None,
+        feedback_type: str | None = None,
+        submitted: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Render feedback list page."""
@@ -751,8 +746,8 @@ class PerfWebService:
         auth: WebAuthContext,
         db: Session,
         feedback_id: str,
-        success: Optional[str] = None,
-        error: Optional[str] = None,
+        success: str | None = None,
+        error: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Render feedback detail page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -886,11 +881,11 @@ class PerfWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        status: Optional[str] = None,
-        search: Optional[str] = None,
-        employee_id: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        status: str | None = None,
+        search: str | None = None,
+        employee_id: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Render KPIs list page."""
@@ -933,7 +928,7 @@ class PerfWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        employee_id: Optional[str] = None,
+        employee_id: str | None = None,
     ) -> HTMLResponse:
         """Render new KPI form."""
         org_id = coerce_uuid(auth.organization_id)
@@ -1048,7 +1043,7 @@ class PerfWebService:
         auth: WebAuthContext,
         db: Session,
         kpi_id: str,
-        success: Optional[str] = None,
+        success: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Render KPI detail page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -1232,7 +1227,7 @@ class PerfWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        cycle_id: Optional[str] = None,
+        cycle_id: str | None = None,
     ) -> HTMLResponse:
         """Render ratings distribution report."""
         org_id = coerce_uuid(auth.organization_id)
@@ -1262,7 +1257,7 @@ class PerfWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        cycle_id: Optional[str] = None,
+        cycle_id: str | None = None,
     ) -> HTMLResponse:
         """Render by-department report."""
         org_id = coerce_uuid(auth.organization_id)
@@ -1294,9 +1289,9 @@ class PerfWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        department_id: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        department_id: str | None = None,
     ) -> HTMLResponse:
         """Render KPI achievement report."""
         org_id = coerce_uuid(auth.organization_id)
@@ -1334,7 +1329,7 @@ class PerfWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        department_id: Optional[str] = None,
+        department_id: str | None = None,
     ) -> HTMLResponse:
         """Render performance trends report."""
         org_id = coerce_uuid(auth.organization_id)

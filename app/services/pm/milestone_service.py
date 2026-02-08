@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import date, timedelta
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -42,7 +42,7 @@ class MilestoneService:
         self,
         db: Session,
         organization_id: uuid.UUID,
-        principal: Optional["Principal"] = None,
+        principal: Principal | None = None,
     ) -> None:
         self.db = db
         self.organization_id = organization_id
@@ -52,7 +52,7 @@ class MilestoneService:
     # Read Operations
     # =========================================================================
 
-    def get_milestone(self, milestone_id: uuid.UUID) -> Optional[Milestone]:
+    def get_milestone(self, milestone_id: uuid.UUID) -> Milestone | None:
         """Fetch a single milestone by ID."""
         stmt = (
             select(Milestone)
@@ -76,9 +76,9 @@ class MilestoneService:
 
     def list_milestones(
         self,
-        project_id: Optional[uuid.UUID] = None,
-        status: Optional[MilestoneStatus] = None,
-        params: Optional[PaginationParams] = None,
+        project_id: uuid.UUID | None = None,
+        status: MilestoneStatus | None = None,
+        params: PaginationParams | None = None,
     ) -> PaginatedResult[Milestone]:
         """List milestones with filtering and pagination."""
         stmt = (
@@ -98,8 +98,8 @@ class MilestoneService:
     def get_upcoming_milestones(
         self,
         days: int = 30,
-        project_id: Optional[uuid.UUID] = None,
-    ) -> List[Milestone]:
+        project_id: uuid.UUID | None = None,
+    ) -> list[Milestone]:
         """Get milestones due within the specified number of days."""
         today = date.today()
         end_date = today + timedelta(days=days)
@@ -122,8 +122,8 @@ class MilestoneService:
         return list(self.db.scalars(stmt).all())
 
     def get_overdue_milestones(
-        self, project_id: Optional[uuid.UUID] = None
-    ) -> List[Milestone]:
+        self, project_id: uuid.UUID | None = None
+    ) -> list[Milestone]:
         """Get milestones that are past target date and not achieved."""
         stmt = (
             select(Milestone)
@@ -141,7 +141,7 @@ class MilestoneService:
 
         return list(self.db.scalars(stmt).all())
 
-    def get_project_milestones(self, project_id: uuid.UUID) -> List[Milestone]:
+    def get_project_milestones(self, project_id: uuid.UUID) -> list[Milestone]:
         """Get all milestones for a project."""
         stmt = (
             select(Milestone)
@@ -157,7 +157,7 @@ class MilestoneService:
     # Write Operations
     # =========================================================================
 
-    def create_milestone(self, data: Dict) -> Milestone:
+    def create_milestone(self, data: dict) -> Milestone:
         """Create a new milestone."""
         milestone = Milestone(
             organization_id=self.organization_id,
@@ -176,7 +176,7 @@ class MilestoneService:
         self.db.flush()
         return milestone
 
-    def update_milestone(self, milestone_id: uuid.UUID, data: Dict) -> Milestone:
+    def update_milestone(self, milestone_id: uuid.UUID, data: dict) -> Milestone:
         """Update an existing milestone."""
         milestone = self.get_milestone_or_raise(milestone_id)
 
@@ -210,7 +210,7 @@ class MilestoneService:
     def achieve_milestone(
         self,
         milestone_id: uuid.UUID,
-        actual_date: Optional[date] = None,
+        actual_date: date | None = None,
     ) -> Milestone:
         """Mark a milestone as achieved."""
         milestone = self.get_milestone_or_raise(milestone_id)
@@ -263,8 +263,8 @@ class MilestoneService:
     # =========================================================================
 
     def get_milestone_counts_by_status(
-        self, project_id: Optional[uuid.UUID] = None
-    ) -> Dict[MilestoneStatus, int]:
+        self, project_id: uuid.UUID | None = None
+    ) -> dict[MilestoneStatus, int]:
         """Get count of milestones grouped by status."""
         from sqlalchemy import func
 

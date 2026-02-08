@@ -8,9 +8,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -35,9 +34,9 @@ class RevaluationInput:
     revaluation_date: date
     fair_value: Decimal
     valuation_method: str
-    valuer_name: Optional[str] = None
-    valuer_reference: Optional[str] = None
-    valuation_basis: Optional[str] = None
+    valuer_name: str | None = None
+    valuer_reference: str | None = None
+    valuation_basis: str | None = None
 
 
 class AssetRevaluationService(ListResponseMixin):
@@ -230,7 +229,7 @@ class AssetRevaluationService(ListResponseMixin):
 
         # Update revaluation
         revaluation.approved_by_user_id = user_id
-        revaluation.approved_at = datetime.now(timezone.utc)
+        revaluation.approved_at = datetime.now(UTC)
 
         # Update asset values
         asset.revalued_amount = revaluation.fair_value
@@ -248,7 +247,7 @@ class AssetRevaluationService(ListResponseMixin):
         organization_id: UUID,
         revaluation_id: UUID,
         posted_by_user_id: UUID,
-        posting_date: Optional[date] = None,
+        posting_date: date | None = None,
     ) -> AssetRevaluation:
         """
         Post an approved revaluation to the GL.
@@ -311,11 +310,16 @@ class AssetRevaluationService(ListResponseMixin):
     def get(
         db: Session,
         revaluation_id: str,
+        organization_id: UUID | None = None,
     ) -> AssetRevaluation:
         """Get a revaluation by ID."""
         revaluation = db.get(AssetRevaluation, coerce_uuid(revaluation_id))
         if not revaluation:
             raise HTTPException(status_code=404, detail="Revaluation not found")
+        if organization_id is not None:
+            asset = db.get(Asset, revaluation.asset_id)
+            if not asset or asset.organization_id != coerce_uuid(organization_id):
+                raise HTTPException(status_code=404, detail="Revaluation not found")
         return revaluation
 
     @staticmethod
@@ -342,9 +346,9 @@ class AssetRevaluationService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        asset_id: Optional[str] = None,
-        fiscal_period_id: Optional[str] = None,
+        organization_id: str | None = None,
+        asset_id: str | None = None,
+        fiscal_period_id: str | None = None,
         pending_approval: bool = False,
         limit: int = 50,
         offset: int = 0,

@@ -19,7 +19,7 @@
 {% block content %}
 <div class="space-y-6">
     {# Summary Cards #}
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         {% for bucket in aging_buckets %}
         <div class="card p-5 relative overflow-hidden group hover:shadow-lg transition-shadow">
             <div class="absolute top-0 right-0 w-20 h-20 -mr-6 -mt-6 rounded-full {% if loop.last %}bg-gradient-to-br from-rose-500/10 to-rose-500/5{% elif loop.index == 3 %}bg-gradient-to-br from-amber-500/10 to-amber-500/5{% elif loop.index == 2 %}bg-gradient-to-br from-sky-500/10 to-sky-500/5{% else %}bg-gradient-to-br from-emerald-500/10 to-emerald-500/5{% endif %} group-hover:scale-110 transition-transform"></div>
@@ -48,7 +48,7 @@
             </h3>
         </div>
         {% if bucket.tickets %}
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="w-full">
                 <thead>
                     <tr class="border-b border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
@@ -101,7 +101,7 @@
                         </td>
                         <td class="px-4 py-3">
                             {% if ticket.category %}
-                            <span class="text-sm text-slate-700 dark:text-slate-300">{{ ticket.category }}</span>
+                            <span class="text-sm text-slate-700 dark:text-slate-300">{{ ticket.category | replace('_', ' ') | title }}</span>
                             {% else %}
                             <span class="text-sm text-slate-400 dark:text-slate-500 italic">-</span>
                             {% endif %}

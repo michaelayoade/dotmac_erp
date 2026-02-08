@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime
-from typing import Optional
 from urllib.parse import quote
 from uuid import UUID, uuid4
 
@@ -47,7 +46,7 @@ from app.web.deps import WebAuthContext, base_context
 logger = logging.getLogger(__name__)
 
 
-def parse_uuid(value: Optional[str]) -> Optional[UUID]:
+def parse_uuid(value: str | None) -> UUID | None:
     """Parse string to UUID, returning None if invalid."""
     if not value or value.strip() == "":
         return None
@@ -69,10 +68,10 @@ class DisciplineWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        status: Optional[str] = None,
-        violation_type: Optional[str] = None,
-        severity: Optional[str] = None,
-        employee_id: Optional[str] = None,
+        status: str | None = None,
+        violation_type: str | None = None,
+        severity: str | None = None,
+        employee_id: str | None = None,
         include_closed: bool = False,
         page: int = 1,
     ) -> HTMLResponse:
@@ -176,8 +175,8 @@ class DisciplineWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        error: Optional[str] = None,
-        form_data: Optional[dict] = None,
+        error: str | None = None,
+        form_data: dict | None = None,
     ) -> HTMLResponse:
         """Render new case form."""
         org_id = coerce_uuid(auth.organization_id)
@@ -289,9 +288,9 @@ class DisciplineWebService:
         violation_type: str,
         severity: str,
         subject: str,
-        description: Optional[str] = None,
-        incident_date: Optional[str] = None,
-        reported_by_id: Optional[str] = None,
+        description: str | None = None,
+        incident_date: str | None = None,
+        reported_by_id: str | None = None,
     ) -> RedirectResponse:
         """Create a new disciplinary case."""
         org_id = coerce_uuid(auth.organization_id)
@@ -407,8 +406,8 @@ class DisciplineWebService:
         db: Session,
         case_id: UUID,
         hearing_date: str,
-        hearing_location: Optional[str] = None,
-        panel_chair_id: Optional[str] = None,
+        hearing_location: str | None = None,
+        panel_chair_id: str | None = None,
     ) -> RedirectResponse:
         """Schedule a hearing."""
         org_id = coerce_uuid(auth.organization_id)
@@ -478,10 +477,10 @@ class DisciplineWebService:
         db: Session,
         case_id: UUID,
         decision_summary: str,
-        action_type: Optional[str] = None,
-        action_description: Optional[str] = None,
-        effective_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        action_type: str | None = None,
+        action_description: str | None = None,
+        effective_date: str | None = None,
+        end_date: str | None = None,
     ) -> RedirectResponse:
         """Record decision and actions."""
         org_id = coerce_uuid(auth.organization_id)
@@ -589,9 +588,9 @@ class DisciplineWebService:
         auth: WebAuthContext,
         db: Session,
         case_id: UUID,
-        employee_id: Optional[str] = None,
-        external_name: Optional[str] = None,
-        external_contact: Optional[str] = None,
+        employee_id: str | None = None,
+        external_name: str | None = None,
+        external_contact: str | None = None,
     ) -> RedirectResponse:
         """Add a witness to a case."""
         org_id = coerce_uuid(auth.organization_id)

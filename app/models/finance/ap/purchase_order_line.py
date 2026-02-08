@@ -5,7 +5,6 @@ Purchase Order Line Model - AP Schema.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Date,
@@ -48,9 +47,7 @@ class PurchaseOrderLine(Base):
     )
     line_number: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    item_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True
-    )
+    item_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     description: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Quantities
@@ -67,7 +64,7 @@ class PurchaseOrderLine(Base):
     line_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
 
     # Tax
-    tax_code_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    tax_code_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
     tax_amount: Mapped[Decimal] = mapped_column(
@@ -75,29 +72,29 @@ class PurchaseOrderLine(Base):
     )
 
     # Accounting
-    expense_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    expense_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    asset_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    asset_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="For capitalized items",
     )
 
     # Dimensions
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    segment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    segment_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
 
-    delivery_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    delivery_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

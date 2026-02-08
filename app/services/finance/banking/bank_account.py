@@ -8,7 +8,6 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -37,17 +36,17 @@ class BankAccountInput:
     gl_account_id: UUID
     currency_code: str = settings.default_functional_currency_code
     account_type: BankAccountType = BankAccountType.checking
-    bank_code: Optional[str] = None
-    branch_code: Optional[str] = None
-    branch_name: Optional[str] = None
-    iban: Optional[str] = None
-    contact_name: Optional[str] = None
-    contact_phone: Optional[str] = None
-    contact_email: Optional[str] = None
-    notes: Optional[str] = None
+    bank_code: str | None = None
+    branch_code: str | None = None
+    branch_name: str | None = None
+    iban: str | None = None
+    contact_name: str | None = None
+    contact_phone: str | None = None
+    contact_email: str | None = None
+    notes: str | None = None
     is_primary: bool = False
     allow_overdraft: bool = False
-    overdraft_limit: Optional[Decimal] = None
+    overdraft_limit: Decimal | None = None
 
 
 class BankAccountService:
@@ -58,7 +57,7 @@ class BankAccountService:
         db: Session,
         organization_id: UUID,
         input: BankAccountInput,
-        created_by: Optional[UUID] = None,
+        created_by: UUID | None = None,
     ) -> BankAccount:
         """Create a new bank account."""
         org_id = coerce_uuid(organization_id)
@@ -126,6 +125,8 @@ class BankAccountService:
 
         db.add(bank_account)
         db.flush()
+        db.commit()
+        db.refresh(bank_account)
 
         return bank_account
 
@@ -134,7 +135,7 @@ class BankAccountService:
         db: Session,
         organization_id: UUID,
         bank_account_id: UUID,
-    ) -> Optional[BankAccount]:
+    ) -> BankAccount | None:
         """Get a bank account by ID."""
         org_id = coerce_uuid(organization_id)
         account = db.get(BankAccount, bank_account_id)
@@ -147,8 +148,8 @@ class BankAccountService:
         db: Session,
         organization_id: UUID,
         account_number: str,
-        bank_code: Optional[str] = None,
-    ) -> Optional[BankAccount]:
+        bank_code: str | None = None,
+    ) -> BankAccount | None:
         """Get a bank account by account number."""
         query = select(BankAccount).where(
             and_(
@@ -165,12 +166,12 @@ class BankAccountService:
         self,
         db: Session,
         organization_id: UUID,
-        status: Optional[BankAccountStatus] = None,
-        currency_code: Optional[str] = None,
-        account_type: Optional[BankAccountType] = None,
+        status: BankAccountStatus | None = None,
+        currency_code: str | None = None,
+        account_type: BankAccountType | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[BankAccount]:
+    ) -> list[BankAccount]:
         """List bank accounts with optional filters."""
         query = select(BankAccount).where(
             BankAccount.organization_id == organization_id
@@ -192,9 +193,9 @@ class BankAccountService:
         self,
         db: Session,
         organization_id: UUID,
-        status: Optional[BankAccountStatus] = None,
-        currency_code: Optional[str] = None,
-        account_type: Optional[BankAccountType] = None,
+        status: BankAccountStatus | None = None,
+        currency_code: str | None = None,
+        account_type: BankAccountType | None = None,
     ) -> int:
         """Count bank accounts matching filters (for pagination)."""
         from sqlalchemy import func as sqla_func
@@ -218,7 +219,7 @@ class BankAccountService:
         organization_id: UUID,
         bank_account_id: UUID,
         input: BankAccountInput,
-        updated_by: Optional[UUID] = None,
+        updated_by: UUID | None = None,
     ) -> BankAccount:
         """Update a bank account."""
         org_id = coerce_uuid(organization_id)
@@ -273,6 +274,8 @@ class BankAccountService:
             bank_account.is_primary = False
 
         db.flush()
+        db.commit()
+        db.refresh(bank_account)
         return bank_account
 
     def update_status(
@@ -281,7 +284,7 @@ class BankAccountService:
         organization_id: UUID,
         bank_account_id: UUID,
         status: BankAccountStatus,
-        updated_by: Optional[UUID] = None,
+        updated_by: UUID | None = None,
     ) -> BankAccount:
         """Update bank account status."""
         org_id = coerce_uuid(organization_id)
@@ -294,6 +297,8 @@ class BankAccountService:
         bank_account.status = status
         bank_account.updated_by = updated_by
         db.flush()
+        db.commit()
+        db.refresh(bank_account)
 
         return bank_account
 
@@ -316,6 +321,8 @@ class BankAccountService:
         bank_account.last_reconciled_date = reconciled_date
         bank_account.last_reconciled_balance = reconciled_balance
         db.flush()
+        db.commit()
+        db.refresh(bank_account)
 
         return bank_account
 
@@ -324,7 +331,7 @@ class BankAccountService:
         db: Session,
         organization_id: UUID,
         bank_account_id: UUID,
-        updated_by: Optional[UUID] = None,
+        updated_by: UUID | None = None,
     ) -> BankAccount:
         """
         Deactivate a bank account (soft delete).
@@ -367,6 +374,8 @@ class BankAccountService:
         bank_account.status = BankAccountStatus.closed
         bank_account.updated_by = updated_by
         db.flush()
+        db.commit()
+        db.refresh(bank_account)
 
         return bank_account
 
@@ -375,7 +384,7 @@ class BankAccountService:
         db: Session,
         organization_id: UUID,
         bank_account_id: UUID,
-        as_of_date: Optional[datetime] = None,
+        as_of_date: datetime | None = None,
     ) -> Decimal:
         """Get current GL balance for the bank account."""
         org_id = coerce_uuid(organization_id)

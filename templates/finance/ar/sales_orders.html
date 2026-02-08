@@ -1,5 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}Sales Orders{% endblock %}
 
 {% block breadcrumbs %}
@@ -140,25 +141,7 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if so.status == 'DRAFT' %}
-                            <span class="badge badge-neutral">Draft</span>
-                            {% elif so.status == 'SUBMITTED' %}
-                            <span class="badge badge-info">Submitted</span>
-                            {% elif so.status == 'APPROVED' %}
-                            <span class="badge badge-info">Approved</span>
-                            {% elif so.status == 'CONFIRMED' %}
-                            <span class="badge badge-teal">Confirmed</span>
-                            {% elif so.status == 'IN_PROGRESS' %}
-                            <span class="badge badge-purple">In Progress</span>
-                            {% elif so.status == 'SHIPPED' %}
-                            <span class="badge badge-indigo">Shipped</span>
-                            {% elif so.status == 'COMPLETED' %}
-                            <span class="badge badge-success">Completed</span>
-                            {% elif so.status == 'ON_HOLD' %}
-                            <span class="badge badge-warning">On Hold</span>
-                            {% elif so.status == 'CANCELLED' %}
-                            <span class="badge badge-danger">Cancelled</span>
-                            {% endif %}
+                            {{ status_badge(so.status) }}
                         </td>
                         <td>
                             <div class="table-actions">

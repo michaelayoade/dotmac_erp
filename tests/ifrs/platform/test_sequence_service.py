@@ -3,30 +3,12 @@ Tests for SequenceService.
 """
 
 import uuid
-from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
 
-from tests.ifrs.platform.conftest import MockColumn, MockNumberingSequence
-
-
-@contextmanager
-def patch_sequence_service():
-    """Helper context manager that sets up all required patches for SequenceService."""
-    with patch("app.services.finance.platform.sequence.NumberingSequence") as mock_seq:
-        mock_seq.organization_id = MockColumn()
-        mock_seq.sequence_type = MockColumn()
-        mock_seq.fiscal_year_id = MockColumn()
-        with patch(
-            "app.services.finance.platform.sequence.and_", return_value=MagicMock()
-        ):
-            with patch(
-                "app.services.finance.platform.sequence.coerce_uuid",
-                side_effect=lambda x: x,
-            ):
-                yield mock_seq
+from tests.ifrs.platform.conftest import MockNumberingSequence
 
 
 class TestSequenceService:
@@ -35,15 +17,9 @@ class TestSequenceService:
     @pytest.fixture
     def service(self):
         """Import the service with mocked dependencies."""
-        with patch.dict(
-            "sys.modules",
-            {
-                "app.models.ifrs.core_config.numbering_sequence": MagicMock(),
-            },
-        ):
-            from app.services.finance.platform.sequence import SequenceService
+        from app.services.finance.platform.sequence import SequenceService
 
-            return SequenceService
+        return SequenceService
 
     @pytest.fixture
     def mock_sequence_type(self):
@@ -52,110 +28,78 @@ class TestSequenceService:
         mock_type.value = "INVOICE"
         return mock_type
 
-    def test_get_next_number_returns_formatted_number(
+    def test_get_next_number_delegates_to_sync_numbering_service(
         self, service, mock_db_session, organization_id, mock_sequence_type
     ):
-        """get_next_number should return formatted sequence number."""
-        mock_sequence = MockNumberingSequence(
-            organization_id=organization_id,
-            sequence_type="INVOICE",
-            prefix="INV-",
-            current_number=5,
-            min_digits=6,
+        """get_next_number should delegate to SyncNumberingService."""
+        with patch(
+            "app.services.finance.common.numbering.SyncNumberingService"
+        ) as MockSyncSvc:
+            mock_instance = MockSyncSvc.return_value
+            mock_instance.generate_next_number.return_value = "INV202602-0006"
+
+            result = service.get_next_number(
+                mock_db_session,
+                organization_id=organization_id,
+                sequence_type=mock_sequence_type,
+            )
+
+        assert result == "INV202602-0006"
+        MockSyncSvc.assert_called_once_with(mock_db_session)
+        mock_instance.generate_next_number.assert_called_once_with(
+            organization_id, mock_sequence_type
         )
-        mock_db_session.query.return_value.filter.return_value.filter.return_value.with_for_update.return_value.first.return_value = mock_sequence
-
-        with patch("app.services.finance.platform.sequence.NumberingSequence"):
-            with patch(
-                "app.services.finance.platform.sequence.coerce_uuid",
-                side_effect=lambda x: x,
-            ):
-                result = service.get_next_number(
-                    mock_db_session,
-                    organization_id=organization_id,
-                    sequence_type=mock_sequence_type,
-                )
-
-        assert result == "INV-000006"
-        assert mock_sequence.current_number == 6
-        mock_db_session.flush.assert_called_once()
         mock_db_session.commit.assert_not_called()
 
-    def test_get_next_number_raises_404_when_not_configured(
+    def test_get_next_number_ignores_fiscal_year_id(
         self, service, mock_db_session, organization_id, mock_sequence_type
     ):
-        """get_next_number should raise 404 for unconfigured sequence."""
-        mock_db_session.query.return_value.filter.return_value.filter.return_value.with_for_update.return_value.first.return_value = None
+        """get_next_number should accept but ignore fiscal_year_id."""
+        with patch(
+            "app.services.finance.common.numbering.SyncNumberingService"
+        ) as MockSyncSvc:
+            mock_instance = MockSyncSvc.return_value
+            mock_instance.generate_next_number.return_value = "INV202602-0001"
 
-        with patch("app.services.finance.platform.sequence.NumberingSequence"):
-            with patch(
-                "app.services.finance.platform.sequence.coerce_uuid",
-                side_effect=lambda x: x,
-            ):
-                with pytest.raises(HTTPException) as exc_info:
-                    service.get_next_number(
-                        mock_db_session,
-                        organization_id=organization_id,
-                        sequence_type=mock_sequence_type,
-                    )
+            result = service.get_next_number(
+                mock_db_session,
+                organization_id=organization_id,
+                sequence_type=mock_sequence_type,
+                fiscal_year_id=uuid.uuid4(),
+            )
 
-        assert exc_info.value.status_code == 404
-        assert "not configured" in exc_info.value.detail
-
-    def test_get_next_number_with_suffix(
-        self, service, mock_db_session, organization_id, mock_sequence_type
-    ):
-        """get_next_number should include suffix in formatted number."""
-        mock_sequence = MockNumberingSequence(
-            organization_id=organization_id,
-            sequence_type="INVOICE",
-            prefix="JRN-",
-            suffix="-2024",
-            current_number=99,
-            min_digits=4,
-        )
-        mock_db_session.query.return_value.filter.return_value.filter.return_value.with_for_update.return_value.first.return_value = mock_sequence
-
-        with patch("app.services.finance.platform.sequence.NumberingSequence"):
-            with patch(
-                "app.services.finance.platform.sequence.coerce_uuid",
-                side_effect=lambda x: x,
-            ):
-                result = service.get_next_number(
-                    mock_db_session,
-                    organization_id=organization_id,
-                    sequence_type=mock_sequence_type,
-                )
-
-        assert result == "JRN-0100-2024"
-        mock_db_session.flush.assert_called_once()
+        assert result == "INV202602-0001"
+        # Should still be called without fiscal_year_id
+        mock_instance.generate_next_number.assert_called_once()
 
     def test_configure_sequence_creates_new(
         self, service, mock_db_session, organization_id, mock_sequence_type
     ):
-        """configure_sequence should create new sequence."""
-        mock_db_session.query.return_value.filter.return_value.filter.return_value.first.return_value = None
+        """configure_sequence should create new sequence when none exists."""
+        mock_db_session.scalar.return_value = None
 
-        with patch(
-            "app.services.finance.platform.sequence.NumberingSequence"
-        ) as MockModel:
+        with (
+            patch(
+                "app.services.finance.platform.sequence.NumberingSequence"
+            ) as MockModel,
+            patch("app.services.finance.platform.sequence.select") as mock_select,
+        ):
             mock_instance = MagicMock()
             MockModel.return_value = mock_instance
-            with patch(
-                "app.services.finance.platform.sequence.coerce_uuid",
-                side_effect=lambda x: x,
-            ):
-                result = service.configure_sequence(
-                    mock_db_session,
-                    organization_id=organization_id,
-                    sequence_type=mock_sequence_type,
-                    prefix="INV-",
-                    min_digits=6,
-                    start_number=100,
-                )
+            mock_select.return_value = MagicMock()
+
+            service.configure_sequence(
+                mock_db_session,
+                organization_id=organization_id,
+                sequence_type=mock_sequence_type,
+                prefix="INV-",
+                min_digits=6,
+                start_number=100,
+            )
 
         mock_db_session.add.assert_called_once()
-        mock_db_session.commit.assert_called_once()
+        mock_db_session.flush.assert_called_once()
+        mock_db_session.commit.assert_not_called()
 
     def test_configure_sequence_updates_existing(
         self, service, mock_db_session, organization_id, mock_sequence_type
@@ -166,27 +110,26 @@ class TestSequenceService:
             sequence_type="INVOICE",
             prefix="OLD-",
         )
-        mock_db_session.query.return_value.filter.return_value.filter.return_value.first.return_value = existing_sequence
+        mock_db_session.scalar.return_value = existing_sequence
 
-        with patch("app.services.finance.platform.sequence.NumberingSequence"):
-            with patch(
-                "app.services.finance.platform.sequence.coerce_uuid",
-                side_effect=lambda x: x,
-            ):
-                result = service.configure_sequence(
-                    mock_db_session,
-                    organization_id=organization_id,
-                    sequence_type=mock_sequence_type,
-                    prefix="NEW-",
-                    suffix="-2024",
-                    min_digits=8,
-                )
+        with patch("app.services.finance.platform.sequence.select") as mock_select:
+            mock_select.return_value = MagicMock()
+
+            service.configure_sequence(
+                mock_db_session,
+                organization_id=organization_id,
+                sequence_type=mock_sequence_type,
+                prefix="NEW-",
+                suffix="-2024",
+                min_digits=8,
+            )
 
         assert existing_sequence.prefix == "NEW-"
         assert existing_sequence.suffix == "-2024"
         assert existing_sequence.min_digits == 8
         mock_db_session.add.assert_not_called()
-        mock_db_session.commit.assert_called_once()
+        mock_db_session.flush.assert_called_once()
+        mock_db_session.commit.assert_not_called()
 
     def test_reset_sequence_resets_existing(
         self, service, mock_db_session, organization_id, mock_sequence_type
@@ -200,15 +143,13 @@ class TestSequenceService:
             current_number=500,
         )
 
-        # First query for base sequence returns None
-        # Second query for FY sequence returns the existing sequence
-        mock_db_session.query.return_value.filter.return_value.first.side_effect = [
-            None,  # base_sequence
-            fy_sequence,  # fy_sequence
-        ]
+        # First call returns None (base), second returns fy_sequence
+        mock_db_session.scalar.side_effect = [None, fy_sequence]
 
-        with patch_sequence_service():
-            result = service.reset_sequence(
+        with patch("app.services.finance.platform.sequence.select") as mock_select:
+            mock_select.return_value = MagicMock()
+
+            service.reset_sequence(
                 mock_db_session,
                 organization_id=organization_id,
                 sequence_type=mock_sequence_type,
@@ -217,7 +158,8 @@ class TestSequenceService:
             )
 
         assert fy_sequence.current_number == 0
-        mock_db_session.commit.assert_called_once()
+        mock_db_session.flush.assert_called_once()
+        mock_db_session.commit.assert_not_called()
 
     def test_reset_sequence_creates_from_base(
         self, service, mock_db_session, organization_id, mock_sequence_type
@@ -232,35 +174,29 @@ class TestSequenceService:
             min_digits=8,
         )
 
-        mock_db_session.query.return_value.filter.return_value.first.side_effect = [
-            base_sequence,  # base_sequence
-            None,  # fy_sequence
-        ]
+        # First call returns base, second returns None (no fy sequence)
+        mock_db_session.scalar.side_effect = [base_sequence, None]
 
-        with patch(
-            "app.services.finance.platform.sequence.NumberingSequence"
-        ) as MockModel:
+        with (
+            patch(
+                "app.services.finance.platform.sequence.NumberingSequence"
+            ) as MockModel,
+            patch("app.services.finance.platform.sequence.select") as mock_select,
+        ):
             mock_instance = MagicMock()
             MockModel.return_value = mock_instance
-            MockModel.organization_id = MockColumn()
-            MockModel.sequence_type = MockColumn()
-            MockModel.fiscal_year_id = MockColumn()
-            with patch(
-                "app.services.finance.platform.sequence.and_", return_value=MagicMock()
-            ):
-                with patch(
-                    "app.services.finance.platform.sequence.coerce_uuid",
-                    side_effect=lambda x: x,
-                ):
-                    result = service.reset_sequence(
-                        mock_db_session,
-                        organization_id=organization_id,
-                        sequence_type=mock_sequence_type,
-                        fiscal_year_id=fiscal_year_id,
-                    )
+            mock_select.return_value = MagicMock()
+
+            service.reset_sequence(
+                mock_db_session,
+                organization_id=organization_id,
+                sequence_type=mock_sequence_type,
+                fiscal_year_id=fiscal_year_id,
+            )
 
         mock_db_session.add.assert_called_once()
-        mock_db_session.commit.assert_called_once()
+        mock_db_session.flush.assert_called_once()
+        mock_db_session.commit.assert_not_called()
 
     def test_get_current_number_returns_value(
         self, service, mock_db_session, organization_id, mock_sequence_type
@@ -270,18 +206,16 @@ class TestSequenceService:
             organization_id=organization_id,
             current_number=42,
         )
-        mock_db_session.query.return_value.filter.return_value.filter.return_value.first.return_value = mock_sequence
+        mock_db_session.scalar.return_value = mock_sequence
 
-        with patch("app.services.finance.platform.sequence.NumberingSequence"):
-            with patch(
-                "app.services.finance.platform.sequence.coerce_uuid",
-                side_effect=lambda x: x,
-            ):
-                result = service.get_current_number(
-                    mock_db_session,
-                    organization_id=organization_id,
-                    sequence_type=mock_sequence_type,
-                )
+        with patch("app.services.finance.platform.sequence.select") as mock_select:
+            mock_select.return_value = MagicMock()
+
+            result = service.get_current_number(
+                mock_db_session,
+                organization_id=organization_id,
+                sequence_type=mock_sequence_type,
+            )
 
         assert result == 42
         assert mock_sequence.current_number == 42  # Unchanged
@@ -290,19 +224,18 @@ class TestSequenceService:
         self, service, mock_db_session, organization_id, mock_sequence_type
     ):
         """get_current_number should raise 404 for missing sequence."""
-        mock_db_session.query.return_value.filter.return_value.filter.return_value.first.return_value = None
+        mock_db_session.scalar.return_value = None
 
-        with patch("app.services.finance.platform.sequence.NumberingSequence"):
-            with patch(
-                "app.services.finance.platform.sequence.coerce_uuid",
-                side_effect=lambda x: x,
-            ):
-                with pytest.raises(HTTPException) as exc_info:
-                    service.get_current_number(
-                        mock_db_session,
-                        organization_id=organization_id,
-                        sequence_type=mock_sequence_type,
-                    )
+        with (
+            patch("app.services.finance.platform.sequence.select") as mock_select,
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            mock_select.return_value = MagicMock()
+            service.get_current_number(
+                mock_db_session,
+                organization_id=organization_id,
+                sequence_type=mock_sequence_type,
+            )
 
         assert exc_info.value.status_code == 404
 
@@ -310,13 +243,8 @@ class TestSequenceService:
         """get should raise 404 for non-existent sequence ID."""
         mock_db_session.get.return_value = None
 
-        with patch("app.services.finance.platform.sequence.NumberingSequence"):
-            with patch(
-                "app.services.finance.platform.sequence.coerce_uuid",
-                side_effect=lambda x: x,
-            ):
-                with pytest.raises(HTTPException) as exc_info:
-                    service.get(mock_db_session, str(uuid.uuid4()))
+        with pytest.raises(HTTPException) as exc_info:
+            service.get(mock_db_session, str(uuid.uuid4()))
 
         assert exc_info.value.status_code == 404
 
@@ -326,19 +254,20 @@ class TestSequenceService:
             MockNumberingSequence(organization_id=organization_id),
             MockNumberingSequence(organization_id=organization_id),
         ]
-        mock_db_session.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_sequences
+        # db.scalars(stmt).all() returns the list
+        mock_scalars = MagicMock()
+        mock_scalars.all.return_value = mock_sequences
+        mock_db_session.scalars.return_value = mock_scalars
 
-        with patch("app.services.finance.platform.sequence.NumberingSequence"):
-            with patch(
-                "app.services.finance.platform.sequence.coerce_uuid",
-                side_effect=lambda x: x,
-            ):
-                result = service.list(
-                    mock_db_session,
-                    organization_id=str(organization_id),
-                    limit=50,
-                    offset=0,
-                )
+        with patch("app.services.finance.platform.sequence.select") as mock_select:
+            mock_select.return_value = MagicMock()
+
+            result = service.list(
+                mock_db_session,
+                organization_id=str(organization_id),
+                limit=50,
+                offset=0,
+            )
 
         assert len(result) == 2
 
@@ -352,18 +281,16 @@ class TestSequenceService:
             current_number=10,
             min_digits=4,
         )
-        mock_db_session.query.return_value.filter.return_value.filter.return_value.first.return_value = mock_sequence
+        mock_db_session.scalar.return_value = mock_sequence
 
-        with patch("app.services.finance.platform.sequence.NumberingSequence"):
-            with patch(
-                "app.services.finance.platform.sequence.coerce_uuid",
-                side_effect=lambda x: x,
-            ):
-                result = service.preview_next_number(
-                    mock_db_session,
-                    organization_id=organization_id,
-                    sequence_type=mock_sequence_type,
-                )
+        with patch("app.services.finance.platform.sequence.select") as mock_select:
+            mock_select.return_value = MagicMock()
+
+            result = service.preview_next_number(
+                mock_db_session,
+                organization_id=organization_id,
+                sequence_type=mock_sequence_type,
+            )
 
         assert result == "PRV-0011"
         assert mock_sequence.current_number == 10  # Still unchanged
@@ -373,18 +300,17 @@ class TestSequenceService:
         self, service, mock_db_session, organization_id, mock_sequence_type
     ):
         """preview_next_number should raise 404 for missing sequence."""
-        mock_db_session.query.return_value.filter.return_value.filter.return_value.first.return_value = None
+        mock_db_session.scalar.return_value = None
 
-        with patch("app.services.finance.platform.sequence.NumberingSequence"):
-            with patch(
-                "app.services.finance.platform.sequence.coerce_uuid",
-                side_effect=lambda x: x,
-            ):
-                with pytest.raises(HTTPException) as exc_info:
-                    service.preview_next_number(
-                        mock_db_session,
-                        organization_id=organization_id,
-                        sequence_type=mock_sequence_type,
-                    )
+        with (
+            patch("app.services.finance.platform.sequence.select") as mock_select,
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            mock_select.return_value = MagicMock()
+            service.preview_next_number(
+                mock_db_session,
+                organization_id=organization_id,
+                sequence_type=mock_sequence_type,
+            )
 
         assert exc_info.value.status_code == 404

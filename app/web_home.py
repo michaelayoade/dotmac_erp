@@ -4,14 +4,14 @@ from sqlalchemy.orm import Session
 
 from app.templates import templates
 from app.web.deps import (
-    base_context,
-    get_db,
-    optional_web_auth,
-    require_web_auth,
-    require_finance_access,
     WebAuthContext,
+    base_context,
     brand_context,
+    get_db,
     landing_content,
+    optional_web_auth,
+    require_finance_access,
+    require_web_auth,
 )
 
 router = APIRouter()

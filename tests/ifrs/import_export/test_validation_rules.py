@@ -10,9 +10,7 @@ Tests for all 13 validation rule types:
 import re
 from decimal import Decimal
 
-
 from app.services.finance.import_export.base import ValidationRule
-
 
 # ============ TestRequiredRule ============
 

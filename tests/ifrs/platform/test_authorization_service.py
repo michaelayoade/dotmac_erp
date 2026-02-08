@@ -38,15 +38,17 @@ def patch_authorization_service():
                     ) as mock_person:
                         mock_person.id = MockColumn()
                         mock_person.organization_id = MockColumn()
-                        with patch(
-                            "app.services.finance.platform.authorization.and_",
-                            return_value=MagicMock(),
-                        ):
-                            with patch(
+                        with (
+                            patch(
+                                "app.services.finance.platform.authorization.and_",
+                                return_value=MagicMock(),
+                            ),
+                            patch(
                                 "app.services.finance.platform.authorization.coerce_uuid",
                                 side_effect=lambda x: x,
-                            ):
-                                yield mock_perm, mock_role, mock_pr, mock_rp
+                            ),
+                        ):
+                            yield mock_perm, mock_role, mock_pr, mock_rp
 
 
 class MockPersonRole:

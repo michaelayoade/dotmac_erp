@@ -10,7 +10,6 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -38,9 +37,9 @@ class CONSPostingResult:
     """Result of posting a consolidation entry."""
 
     success: bool
-    journal_entry_id: Optional[UUID] = None
-    entry_number: Optional[str] = None
-    message: Optional[str] = None
+    journal_entry_id: UUID | None = None
+    entry_number: str | None = None
+    message: str | None = None
 
 
 class CONSPostingAdapter:
@@ -62,7 +61,7 @@ class CONSPostingAdapter:
         entry_id: UUID,
         posting_date: date,
         posted_by_user_id: UUID,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> CONSPostingResult:
         """
         Post an elimination entry to the GL.
@@ -268,7 +267,7 @@ class CONSPostingAdapter:
         adjustment_amount: Decimal,
         currency_code: str,
         posted_by_user_id: UUID,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> CONSPostingResult:
         """
         Post currency translation adjustment (CTA).
@@ -398,7 +397,7 @@ class CONSPostingAdapter:
         nci_amount: Decimal,
         currency_code: str,
         posted_by_user_id: UUID,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> CONSPostingResult:
         """
         Post NCI allocation entry.

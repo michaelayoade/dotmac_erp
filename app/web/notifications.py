@@ -5,7 +5,6 @@ HTML template routes for the notification center.
 """
 
 from datetime import datetime, timedelta
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -14,14 +13,13 @@ from sqlalchemy.orm import Session
 
 from app.models.notification import EntityType, NotificationType
 from app.services.notification import notification_service
+from app.templates import templates
 from app.web.deps import (
     WebAuthContext,
     base_context,
     get_db,
     require_web_auth,
 )
-from app.templates import templates
-
 
 router = APIRouter(tags=["notifications-web"])
 
@@ -102,9 +100,7 @@ async def notifications_list(
     request: Request,
     auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db),
-    filter: Optional[str] = Query(
-        None, description="Filter: all, unread, or entity type"
-    ),
+    filter: str | None = Query(None, description="Filter: all, unread, or entity type"),
     page: int = Query(1, ge=1),
 ):
     """Display notification center with all notifications."""
@@ -220,7 +216,7 @@ async def mark_all_notifications_read(
     if not auth.is_authenticated:
         return RedirectResponse(url="/login", status_code=302)
 
-    count = notification_service.mark_all_read(db, auth.person_id, auth.organization_id)
+    notification_service.mark_all_read(db, auth.person_id, auth.organization_id)
     db.commit()
 
     # Redirect back to notifications page
@@ -230,7 +226,7 @@ async def mark_all_notifications_read(
 def get_notifications_for_context(
     db: Session,
     person_id: UUID,
-    organization_id: Optional[UUID] = None,
+    organization_id: UUID | None = None,
     limit: int = 5,
 ) -> tuple[list[dict], int]:
     """

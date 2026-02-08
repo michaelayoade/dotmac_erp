@@ -3,12 +3,10 @@ Fixtures for Reporting (RPT) Module Tests.
 """
 
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
-
 
 # ============ Mock Enums ============
 
@@ -56,26 +54,26 @@ class MockReportDefinition:
         organization_id: uuid.UUID = None,
         report_code: str = "RPT-001",
         report_name: str = "Test Report",
-        description: Optional[str] = None,
+        description: str | None = None,
         report_type: str = "BALANCE_SHEET",
-        category: Optional[str] = "Financial",
-        subcategory: Optional[str] = "Balance Sheet",
+        category: str | None = "Financial",
+        subcategory: str | None = "Balance Sheet",
         default_format: str = "PDF",
         supported_formats: list = None,
-        report_structure: Optional[dict] = None,
-        column_definitions: Optional[dict] = None,
-        row_definitions: Optional[dict] = None,
-        filter_definitions: Optional[dict] = None,
+        report_structure: dict | None = None,
+        column_definitions: dict | None = None,
+        row_definitions: dict | None = None,
+        filter_definitions: dict | None = None,
         data_source_type: str = "SQL",
-        data_source_config: Optional[dict] = None,
-        template_file_path: Optional[str] = None,
+        data_source_config: dict | None = None,
+        template_file_path: str | None = None,
         template_version: int = 1,
-        required_permissions: Optional[list] = None,
+        required_permissions: list | None = None,
         is_system_report: bool = False,
         is_active: bool = True,
         created_by_user_id: uuid.UUID = None,
         created_at: datetime = None,
-        updated_at: Optional[datetime] = None,
+        updated_at: datetime | None = None,
         **kwargs,
     ):
         self.report_def_id = report_def_id or uuid.uuid4()
@@ -100,7 +98,7 @@ class MockReportDefinition:
         self.is_system_report = is_system_report
         self.is_active = is_active
         self.created_by_user_id = created_by_user_id or uuid.uuid4()
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -117,17 +115,17 @@ class MockReportInstance:
         schedule_id: uuid.UUID = None,
         fiscal_period_id: uuid.UUID = None,
         instance_name: str = "Report Instance",
-        parameters_used: Optional[dict] = None,
+        parameters_used: dict | None = None,
         output_format: str = "PDF",
-        output_file_path: Optional[str] = None,
-        output_size_bytes: Optional[int] = None,
+        output_file_path: str | None = None,
+        output_size_bytes: int | None = None,
         status: str = "QUEUED",
-        error_message: Optional[str] = None,
-        queued_at: Optional[datetime] = None,
-        started_at: Optional[datetime] = None,
-        completed_at: Optional[datetime] = None,
-        generation_time_ms: Optional[int] = None,
-        generated_at: Optional[datetime] = None,
+        error_message: str | None = None,
+        queued_at: datetime | None = None,
+        started_at: datetime | None = None,
+        completed_at: datetime | None = None,
+        generation_time_ms: int | None = None,
+        generated_at: datetime | None = None,
         generated_by_user_id: uuid.UUID = None,
         **kwargs,
     ):
@@ -143,11 +141,11 @@ class MockReportInstance:
         self.output_size_bytes = output_size_bytes
         self.status = status
         self.error_message = error_message
-        self.queued_at = queued_at or datetime.now(timezone.utc)
+        self.queued_at = queued_at or datetime.now(UTC)
         self.started_at = started_at
         self.completed_at = completed_at
         self.generation_time_ms = generation_time_ms
-        self.generated_at = generated_at or datetime.now(timezone.utc)
+        self.generated_at = generated_at or datetime.now(UTC)
         self.generated_by_user_id = generated_by_user_id or uuid.uuid4()
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -162,21 +160,21 @@ class MockReportSchedule:
         organization_id: uuid.UUID = None,
         report_def_id: uuid.UUID = None,
         schedule_name: str = "Monthly Report",
-        description: Optional[str] = None,
+        description: str | None = None,
         frequency: str = "MONTHLY",
-        cron_expression: Optional[str] = "0 8 1 * *",
-        day_of_week: Optional[int] = None,
-        day_of_month: Optional[int] = 1,
-        time_of_day: Optional[str] = "08:00",
+        cron_expression: str | None = "0 8 1 * *",
+        day_of_week: int | None = None,
+        day_of_month: int | None = 1,
+        time_of_day: str | None = "08:00",
         tz: str = "UTC",
-        report_parameters: Optional[dict] = None,
+        report_parameters: dict | None = None,
         output_format: str = "PDF",
-        email_recipients: Optional[list] = None,
-        storage_path: Optional[str] = None,
-        retention_days: Optional[int] = None,
+        email_recipients: list | None = None,
+        storage_path: str | None = None,
+        retention_days: int | None = None,
         is_active: bool = True,
-        next_run_at: Optional[datetime] = None,
-        last_run_at: Optional[datetime] = None,
+        next_run_at: datetime | None = None,
+        last_run_at: datetime | None = None,
         created_by_user_id: uuid.UUID = None,
         created_at: datetime = None,
         **kwargs,
@@ -201,7 +199,7 @@ class MockReportSchedule:
         self.next_run_at = next_run_at
         self.last_run_at = last_run_at
         self.created_by_user_id = created_by_user_id or uuid.uuid4()
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         for k, v in kwargs.items():
             setattr(self, k, v)
 

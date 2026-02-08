@@ -6,37 +6,31 @@ All endpoints are tenant-scoped via require_tenant_auth.
 """
 
 from datetime import date, datetime
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.services.auth_dependencies import require_tenant_permission
 from app.models.finance.banking.bank_account import BankAccountStatus, BankAccountType
-from app.models.finance.banking.bank_statement import BankStatementStatus
 from app.models.finance.banking.bank_reconciliation import ReconciliationStatus
-from pydantic import ValidationError
-
+from app.models.finance.banking.bank_statement import BankStatementStatus
 from app.schemas.finance.banking import (
+    # Bank Reconciliation
+    AutoMatchRequest,
+    AutoMatchResult,
     # Bank Account
     BankAccountCreate,
     BankAccountRead,
     BankAccountStatusUpdate,
     BankAccountUpdate,
+    BankReconciliationRead,
+    BankReconciliationWithLines,
     # Bank Statement
     BankStatementImport,
     BankStatementRead,
     BankStatementWithLines,
-    StatementImportResult,
-    StatementLineRead,
-    StatementSummary,
-    # Bank Reconciliation
-    AutoMatchRequest,
-    AutoMatchResult,
-    BankReconciliationRead,
-    BankReconciliationWithLines,
     ReconciliationAdjustmentCreate,
     ReconciliationApproval,
     ReconciliationCreate,
@@ -45,18 +39,20 @@ from app.schemas.finance.banking import (
     ReconciliationOutstandingCreate,
     ReconciliationRejection,
     ReconciliationReport,
+    StatementImportResult,
+    StatementLineRead,
+    StatementSummary,
 )
 from app.schemas.finance.common import ListResponse
+from app.services.auth_dependencies import require_tenant_permission
 from app.services.finance.banking import (
     BankAccountInput,
     ReconciliationInput,
     ReconciliationMatchInput,
-    StatementLineInput,
     bank_account_service,
     bank_reconciliation_service,
     bank_statement_service,
 )
-
 
 router = APIRouter(prefix="/banking", tags=["banking"])
 
@@ -159,7 +155,6 @@ async def create_bank_account(
         overdraft_limit=payload.overdraft_limit,
     )
     result = bank_account_service.create(db, organization_id, input_data, user_id)
-    db.commit()
     return result
 
 
@@ -181,9 +176,9 @@ def get_bank_account(
 
 @router.get("/accounts", response_model=ListResponse[BankAccountRead])
 def list_bank_accounts(
-    status: Optional[BankAccountStatus] = None,
-    currency_code: Optional[str] = None,
-    account_type: Optional[BankAccountType] = None,
+    status: BankAccountStatus | None = None,
+    currency_code: str | None = None,
+    account_type: BankAccountType | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("banking:accounts:read")),
@@ -268,7 +263,6 @@ async def _update_bank_account(
     result = bank_account_service.update(
         db, organization_id, bank_account_id, input_data, user_id
     )
-    db.commit()
     return BankAccountRead.model_validate(result)
 
 
@@ -316,14 +310,13 @@ def update_bank_account_status(
         payload.status,
         user_id,
     )
-    db.commit()
     return result
 
 
 @router.get("/accounts/{bank_account_id}/balance")
 def get_bank_account_gl_balance(
     bank_account_id: UUID,
-    as_of_date: Optional[date] = None,
+    as_of_date: date | None = None,
     auth: dict = Depends(require_tenant_permission("banking:accounts:read")),
     db: Session = Depends(get_db),
 ):
@@ -366,31 +359,9 @@ def import_bank_statement(
     organization_id = _get_org_id(auth)
     user_id = _get_user_id(auth)
 
-    # Verify bank account belongs to org
-    account = bank_account_service.get(db, _get_org_id(auth), payload.bank_account_id)
-    if not account or account.organization_id != organization_id:
-        raise HTTPException(status_code=404, detail="Bank account not found")
-
-    lines = [
-        StatementLineInput(
-            line_number=line.line_number,
-            transaction_date=line.transaction_date,
-            transaction_type=line.transaction_type,
-            amount=line.amount,
-            description=line.description,
-            reference=line.reference,
-            payee_payer=line.payee_payer,
-            bank_reference=line.bank_reference,
-            check_number=line.check_number,
-            bank_category=line.bank_category,
-            bank_code=line.bank_code,
-            value_date=line.value_date,
-            running_balance=line.running_balance,
-            transaction_id=line.transaction_id,
-            raw_data=line.raw_data,
-        )
-        for line in payload.lines
-    ]
+    lines, errors = bank_statement_service.build_line_inputs(payload.lines)
+    if errors:
+        raise HTTPException(status_code=422, detail=errors)
 
     result = bank_statement_service.import_statement(
         db=db,
@@ -407,7 +378,6 @@ def import_bank_statement(
         import_filename=payload.import_filename,
         imported_by=user_id,
     )
-    db.commit()
     return result
 
 
@@ -443,10 +413,10 @@ def get_bank_statement_with_lines(
 
 @router.get("/statements", response_model=ListResponse[BankStatementRead])
 def list_bank_statements(
-    bank_account_id: Optional[UUID] = None,
-    status: Optional[BankStatementStatus] = None,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
+    bank_account_id: UUID | None = None,
+    status: BankStatementStatus | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("banking:statements:read")),
@@ -478,7 +448,7 @@ def list_bank_statements(
 
 @router.get(
     "/statements/{statement_id}/unmatched",
-    response_model=List[StatementLineRead],
+    response_model=list[StatementLineRead],
 )
 def get_unmatched_statement_lines(
     statement_id: UUID,
@@ -510,7 +480,6 @@ def delete_bank_statement(
 
     if not bank_statement_service.delete(db, statement_id):
         raise HTTPException(status_code=404, detail="Statement not found")
-    db.commit()
 
 
 @router.get(
@@ -523,12 +492,9 @@ def get_statement_summary(
 ):
     """Get statement summary statistics for a bank account."""
     organization_id = _get_org_id(auth)
-
-    account = bank_account_service.get(db, _get_org_id(auth), bank_account_id)
-    if not account or account.organization_id != organization_id:
-        raise HTTPException(status_code=404, detail="Bank account not found")
-
-    return bank_statement_service.get_statement_summary(db, bank_account_id)
+    return bank_statement_service.get_statement_summary(
+        db, organization_id, bank_account_id
+    )
 
 
 # =============================================================================
@@ -550,11 +516,6 @@ def create_reconciliation(
     organization_id = _get_org_id(auth)
     user_id = _get_user_id(auth)
 
-    # Verify bank account belongs to org
-    account = bank_account_service.get(db, _get_org_id(auth), payload.bank_account_id)
-    if not account or account.organization_id != organization_id:
-        raise HTTPException(status_code=404, detail="Bank account not found")
-
     input_data = ReconciliationInput(
         reconciliation_date=payload.reconciliation_date,
         period_start=payload.period_start,
@@ -570,7 +531,6 @@ def create_reconciliation(
         input=input_data,
         prepared_by=user_id,
     )
-    db.commit()
     return result
 
 
@@ -584,11 +544,8 @@ def get_reconciliation(
 ):
     """Get a reconciliation by ID."""
     organization_id = _get_org_id(auth)
-
-    result = bank_reconciliation_service.get(db, reconciliation_id)
+    result = bank_reconciliation_service.get(db, organization_id, reconciliation_id)
     if not result:
-        raise HTTPException(status_code=404, detail="Reconciliation not found")
-    if result.organization_id != organization_id:
         raise HTTPException(status_code=404, detail="Reconciliation not found")
     return result
 
@@ -604,21 +561,20 @@ def get_reconciliation_with_lines(
 ):
     """Get a reconciliation with all lines."""
     organization_id = _get_org_id(auth)
-
-    result = bank_reconciliation_service.get_with_lines(db, reconciliation_id)
+    result = bank_reconciliation_service.get_with_lines(
+        db, organization_id, reconciliation_id
+    )
     if not result:
-        raise HTTPException(status_code=404, detail="Reconciliation not found")
-    if result.organization_id != organization_id:
         raise HTTPException(status_code=404, detail="Reconciliation not found")
     return result
 
 
 @router.get("/reconciliations", response_model=ListResponse[BankReconciliationRead])
 def list_reconciliations(
-    bank_account_id: Optional[UUID] = None,
-    status: Optional[ReconciliationStatus] = None,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
+    bank_account_id: UUID | None = None,
+    status: ReconciliationStatus | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("banking:reconciliation:read")),
@@ -665,10 +621,6 @@ def add_reconciliation_match(
     organization_id = _get_org_id(auth)
     user_id = _get_user_id(auth)
 
-    recon = bank_reconciliation_service.get(db, reconciliation_id)
-    if not recon or recon.organization_id != organization_id:
-        raise HTTPException(status_code=404, detail="Reconciliation not found")
-
     input_data = ReconciliationMatchInput(
         statement_line_id=payload.statement_line_id,
         journal_line_id=payload.journal_line_id,
@@ -677,11 +629,11 @@ def add_reconciliation_match(
     )
     result = bank_reconciliation_service.add_match(
         db=db,
+        organization_id=organization_id,
         reconciliation_id=reconciliation_id,
         input=input_data,
         created_by=user_id,
     )
-    db.commit()
     return result
 
 
@@ -700,12 +652,9 @@ def add_reconciliation_adjustment(
     organization_id = _get_org_id(auth)
     user_id = _get_user_id(auth)
 
-    recon = bank_reconciliation_service.get(db, reconciliation_id)
-    if not recon or recon.organization_id != organization_id:
-        raise HTTPException(status_code=404, detail="Reconciliation not found")
-
     result = bank_reconciliation_service.add_adjustment(
         db=db,
+        organization_id=organization_id,
         reconciliation_id=reconciliation_id,
         transaction_date=payload.transaction_date,
         amount=payload.amount,
@@ -714,7 +663,6 @@ def add_reconciliation_adjustment(
         adjustment_account_id=payload.adjustment_account_id,
         created_by=user_id,
     )
-    db.commit()
     return result
 
 
@@ -733,12 +681,9 @@ def add_outstanding_item(
     organization_id = _get_org_id(auth)
     user_id = _get_user_id(auth)
 
-    recon = bank_reconciliation_service.get(db, reconciliation_id)
-    if not recon or recon.organization_id != organization_id:
-        raise HTTPException(status_code=404, detail="Reconciliation not found")
-
     result = bank_reconciliation_service.add_outstanding_item(
         db=db,
+        organization_id=organization_id,
         reconciliation_id=reconciliation_id,
         transaction_date=payload.transaction_date,
         amount=payload.amount,
@@ -748,7 +693,6 @@ def add_outstanding_item(
         journal_line_id=payload.journal_line_id,
         created_by=user_id,
     )
-    db.commit()
     return result
 
 
@@ -766,17 +710,13 @@ def auto_match_reconciliation(
     organization_id = _get_org_id(auth)
     user_id = _get_user_id(auth)
 
-    recon = bank_reconciliation_service.get(db, reconciliation_id)
-    if not recon or recon.organization_id != organization_id:
-        raise HTTPException(status_code=404, detail="Reconciliation not found")
-
     result = bank_reconciliation_service.auto_match(
         db=db,
+        organization_id=organization_id,
         reconciliation_id=reconciliation_id,
         tolerance=payload.tolerance,
         created_by=user_id,
     )
-    db.commit()
     return result
 
 
@@ -791,13 +731,9 @@ def submit_reconciliation_for_review(
 ):
     """Submit reconciliation for review."""
     organization_id = _get_org_id(auth)
-
-    recon = bank_reconciliation_service.get(db, reconciliation_id)
-    if not recon or recon.organization_id != organization_id:
-        raise HTTPException(status_code=404, detail="Reconciliation not found")
-
-    result = bank_reconciliation_service.submit_for_review(db, reconciliation_id)
-    db.commit()
+    result = bank_reconciliation_service.submit_for_review(
+        db, organization_id, reconciliation_id
+    )
     return result
 
 
@@ -814,18 +750,13 @@ def approve_reconciliation(
     """Approve a reconciliation."""
     organization_id = _get_org_id(auth)
     user_id = _get_user_id(auth)
-
-    recon = bank_reconciliation_service.get(db, reconciliation_id)
-    if not recon or recon.organization_id != organization_id:
-        raise HTTPException(status_code=404, detail="Reconciliation not found")
-
     result = bank_reconciliation_service.approve(
         db=db,
+        organization_id=organization_id,
         reconciliation_id=reconciliation_id,
         approved_by=user_id,
         notes=payload.notes,
     )
-    db.commit()
     return result
 
 
@@ -842,18 +773,13 @@ def reject_reconciliation(
     """Reject a reconciliation."""
     organization_id = _get_org_id(auth)
     user_id = _get_user_id(auth)
-
-    recon = bank_reconciliation_service.get(db, reconciliation_id)
-    if not recon or recon.organization_id != organization_id:
-        raise HTTPException(status_code=404, detail="Reconciliation not found")
-
     result = bank_reconciliation_service.reject(
         db=db,
+        organization_id=organization_id,
         reconciliation_id=reconciliation_id,
         rejected_by=user_id,
         notes=payload.notes,
     )
-    db.commit()
     return result
 
 
@@ -868,13 +794,8 @@ def get_reconciliation_report(
 ):
     """Get full reconciliation report."""
     organization_id = _get_org_id(auth)
-
-    recon = bank_reconciliation_service.get(db, reconciliation_id)
-    if not recon or recon.organization_id != organization_id:
-        raise HTTPException(status_code=404, detail="Reconciliation not found")
-
     report_data = bank_reconciliation_service.get_reconciliation_report(
-        db, reconciliation_id
+        db, organization_id, reconciliation_id
     )
 
     # Convert to schema format

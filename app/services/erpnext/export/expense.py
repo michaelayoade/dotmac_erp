@@ -8,7 +8,7 @@ need to sync back to ERPNext for approval workflows.
 import logging
 import uuid
 from datetime import date, datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -62,7 +62,7 @@ class ExpenseCategoryExportService(BaseExportService[ExpenseCategory]):
     def get_entity_id(self, entity: ExpenseCategory) -> uuid.UUID:
         return entity.category_id
 
-    def get_erpnext_id(self, entity: ExpenseCategory) -> Optional[str]:
+    def get_erpnext_id(self, entity: ExpenseCategory) -> str | None:
         return entity.erpnext_id
 
     def set_erpnext_id(self, entity: ExpenseCategory, erpnext_id: str) -> None:
@@ -115,7 +115,7 @@ class ExpenseClaimExportService(BaseExportService[ExpenseClaim]):
         }
 
         # Status (ERPNext uses approval_status and status differently)
-        erpnext_status = EXPENSE_STATUS_EXPORT_MAP.get(entity.status, "Draft")
+        EXPENSE_STATUS_EXPORT_MAP.get(entity.status, "Draft")
         data["approval_status"] = (
             "Approved"
             if entity.status
@@ -183,14 +183,14 @@ class ExpenseClaimExportService(BaseExportService[ExpenseClaim]):
     def get_entity_id(self, entity: ExpenseClaim) -> uuid.UUID:
         return entity.claim_id
 
-    def get_erpnext_id(self, entity: ExpenseClaim) -> Optional[str]:
+    def get_erpnext_id(self, entity: ExpenseClaim) -> str | None:
         return entity.erpnext_id
 
     def set_erpnext_id(self, entity: ExpenseClaim, erpnext_id: str) -> None:
         entity.erpnext_id = erpnext_id
         entity.last_synced_at = datetime.utcnow()
 
-    def submit_claim(self, entity: ExpenseClaim) -> tuple[bool, Optional[str]]:
+    def submit_claim(self, entity: ExpenseClaim) -> tuple[bool, str | None]:
         """
         Submit expense claim in ERPNext for approval workflow.
 
@@ -205,6 +205,6 @@ class ExpenseClaimExportService(BaseExportService[ExpenseClaim]):
         return self.submit_document(entity)
 
 
-def _format_date(d: Optional[date]) -> Optional[str]:
+def _format_date(d: date | None) -> str | None:
     """Format date for ERPNext API (YYYY-MM-DD)."""
     return _base_format_date(d) or None

@@ -5,10 +5,11 @@ Revises: add_numbering_sequence_separator
 Create Date: 2025-02-12
 """
 
-from alembic import op
-from app.alembic_utils import ensure_enum
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
+from app.alembic_utils import ensure_enum
 
 # revision identifiers, used by Alembic.
 revision = "add_numbering_sequence_columns"

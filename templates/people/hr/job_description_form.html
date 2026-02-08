@@ -35,7 +35,7 @@
                 <h3 class="font-medium text-slate-900 dark:text-white">Basic Information</h3>
             </div>
             <div class="card-body space-y-4">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="jd_code" class="form-label required">JD Code</label>
                         <input type="text" name="jd_code" id="jd_code" required
@@ -64,7 +64,7 @@
                            placeholder="e.g., Senior Software Engineer">
                 </div>
 
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="designation_id" class="form-label required">Designation</label>
                         <select name="designation_id" id="designation_id" required class="form-select w-full">
@@ -120,7 +120,7 @@
                               placeholder="- Design and develop...&#10;- Collaborate with...&#10;- Mentor junior...">{{ form_data.key_responsibilities or (jd.key_responsibilities if jd else '') }}</textarea>
                 </div>
 
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="education_requirements" class="form-label">Education Requirements</label>
                         <textarea name="education_requirements" id="education_requirements" rows="3"
@@ -135,7 +135,7 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="min_years_experience" class="form-label">Min Years Experience</label>
                         <input type="number" name="min_years_experience" id="min_years_experience"
@@ -157,7 +157,7 @@
                               placeholder="Python, PostgreSQL, AWS...">{{ form_data.technical_skills or (jd.technical_skills if jd else '') }}</textarea>
                 </div>
 
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="certifications_required" class="form-label">Required Certifications</label>
                         <textarea name="certifications_required" id="certifications_required" rows="2"
@@ -179,7 +179,7 @@
                 <h3 class="font-medium text-slate-900 dark:text-white">Working Conditions & Reporting</h3>
             </div>
             <div class="card-body space-y-4">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="work_location" class="form-label">Work Location</label>
                         <input type="text" name="work_location" id="work_location"
@@ -196,7 +196,7 @@
                     </div>
                 </div>
 
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="reports_to" class="form-label">Reports To</label>
                         <input type="text" name="reports_to" id="reports_to"
@@ -215,7 +215,7 @@
             </div>
         </div>
 
-        <div class="flex justify-end gap-3">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/people/hr/job-descriptions" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">{% if jd %}Save Changes{% else %}Create Job Description{% endif %}</button>
         </div>

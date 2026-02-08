@@ -7,7 +7,7 @@ Represents a bank account linked to a GL cash/bank account for reconciliation.
 import enum
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -85,11 +85,11 @@ class BankAccount(Base):
 
     # Bank details
     bank_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    bank_code: Mapped[Optional[str]] = mapped_column(
+    bank_code: Mapped[str | None] = mapped_column(
         String(20), nullable=True
     )  # SWIFT/BIC
-    branch_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    branch_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    branch_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    branch_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     # Account details
     account_number: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -99,7 +99,7 @@ class BankAccount(Base):
         nullable=False,
         default=BankAccountType.checking,
     )
-    iban: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    iban: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Currency
     currency_code: Mapped[str] = mapped_column(
@@ -141,10 +141,10 @@ class BankAccount(Base):
     )
 
     # Contact/Notes
-    contact_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    contact_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    contact_email: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    contact_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    contact_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    contact_email: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Flags
     is_primary: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -166,12 +166,8 @@ class BankAccount(Base):
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
     )
-    created_by: Mapped[Optional[UUID]] = mapped_column(
-        SAUUID(as_uuid=True), nullable=True
-    )
-    updated_by: Mapped[Optional[UUID]] = mapped_column(
-        SAUUID(as_uuid=True), nullable=True
-    )
+    created_by: Mapped[UUID | None] = mapped_column(SAUUID(as_uuid=True), nullable=True)
+    updated_by: Mapped[UUID | None] = mapped_column(SAUUID(as_uuid=True), nullable=True)
 
     # Relationships
     gl_account: Mapped["Account"] = relationship(

@@ -39,7 +39,7 @@ def test_chart_of_accounts(file_path: str) -> None:
     print(f"{'=' * 60}")
     print(f"\nFile: {file_path}\n")
 
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
 

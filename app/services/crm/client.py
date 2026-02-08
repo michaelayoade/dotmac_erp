@@ -7,9 +7,10 @@ Supports fetching tickets, projects, tasks, and field services.
 
 import logging
 import time
+from collections.abc import Generator
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Generator, Optional, cast
+from typing import Any, cast
 
 import httpx
 
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 class CRMError(Exception):
     """CRM API error."""
 
-    def __init__(self, message: str, status_code: Optional[int] = None):
+    def __init__(self, message: str, status_code: int | None = None):
         self.message = message
         self.status_code = status_code
         super().__init__(message)
@@ -50,7 +51,7 @@ class CRMConfig:
     """CRM connection configuration."""
 
     url: str
-    api_token: Optional[str] = None
+    api_token: str | None = None
     timeout: float = 30.0
     max_retries: int = 3
     retry_delay: float = 1.0
@@ -92,9 +93,9 @@ class CRMClient:
     DEFAULT_PAGE_SIZE = 50
     MAX_PAGE_SIZE = 200
 
-    def __init__(self, config: Optional[CRMConfig] = None):
+    def __init__(self, config: CRMConfig | None = None):
         self.config = config or CRMConfig.from_settings()
-        self._client: Optional[httpx.Client] = None
+        self._client: httpx.Client | None = None
 
     @property
     def client(self) -> httpx.Client:
@@ -130,8 +131,8 @@ class CRMClient:
         self,
         method: str,
         path: str,
-        params: Optional[dict[str, Any]] = None,
-        json: Optional[dict[str, Any]] = None,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """
         Make HTTP request with retry logic.
@@ -148,7 +149,7 @@ class CRMClient:
         Raises:
             CRMError: On API error
         """
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
 
         for attempt in range(self.config.max_retries):
             try:
@@ -216,7 +217,7 @@ class CRMClient:
     def _paginate(
         self,
         path: str,
-        params: Optional[dict[str, Any]] = None,
+        params: dict[str, Any] | None = None,
         page_size: int = DEFAULT_PAGE_SIZE,
     ) -> Generator[dict[str, Any], None, None]:
         """
@@ -249,8 +250,7 @@ class CRMClient:
             if not items:
                 break
 
-            for item in items:
-                yield item
+            yield from items
 
             if len(items) < page_size:
                 break
@@ -263,9 +263,9 @@ class CRMClient:
 
     def get_tickets(
         self,
-        subscriber_id: Optional[str] = None,
-        status: Optional[str] = None,
-        since: Optional[datetime] = None,
+        subscriber_id: str | None = None,
+        status: str | None = None,
+        since: datetime | None = None,
         page_size: int = DEFAULT_PAGE_SIZE,
     ) -> Generator[dict[str, Any], None, None]:
         """
@@ -297,8 +297,8 @@ class CRMClient:
 
     def get_ticket_comments(
         self,
-        ticket_id: Optional[str] = None,
-        since: Optional[datetime] = None,
+        ticket_id: str | None = None,
+        since: datetime | None = None,
         page_size: int = DEFAULT_PAGE_SIZE,
     ) -> Generator[dict[str, Any], None, None]:
         """
@@ -323,7 +323,7 @@ class CRMClient:
 
     def get_ticket_sla_events(
         self,
-        ticket_id: Optional[str] = None,
+        ticket_id: str | None = None,
         page_size: int = DEFAULT_PAGE_SIZE,
     ) -> Generator[dict[str, Any], None, None]:
         """Fetch SLA events for tickets."""
@@ -341,9 +341,9 @@ class CRMClient:
 
     def get_projects(
         self,
-        subscriber_id: Optional[str] = None,
-        status: Optional[str] = None,
-        since: Optional[datetime] = None,
+        subscriber_id: str | None = None,
+        status: str | None = None,
+        since: datetime | None = None,
         page_size: int = DEFAULT_PAGE_SIZE,
     ) -> Generator[dict[str, Any], None, None]:
         """

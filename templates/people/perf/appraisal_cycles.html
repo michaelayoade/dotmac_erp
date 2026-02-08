@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import live_search %}
+{% from "components/macros.html" import live_search, empty_state %}
 
 {% block page_title %}Appraisal Cycles{% endblock %}
 
@@ -55,7 +55,7 @@
     <div id="results-container">
     {% if cycles %}
     <div class="card overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
@@ -64,7 +64,7 @@
                         <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Review Period</th>
                         <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Process Dates</th>
                         <th scope="col" class="px-4 py-3 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider">Status</th>
-                        <th scope="col" class="px-4 py-3 w-12"></th>
+                        <th scope="col" class="px-4 py-3 w-12 text-xs font-semibold uppercase tracking-wider"></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
@@ -106,6 +106,12 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                                 </svg>
                             </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No cycles found", "There are no cycles to display.") }}
                         </td>
                     </tr>
                     {% endfor %}

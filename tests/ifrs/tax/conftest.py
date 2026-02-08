@@ -3,9 +3,8 @@ Fixtures for Tax module tests.
 """
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -61,7 +60,7 @@ class MockTaxJurisdiction:
             deferred_tax_expense_account_id or uuid.uuid4()
         )
         self.is_active = is_active
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -79,7 +78,7 @@ class MockTaxCode:
         jurisdiction_id: uuid.UUID = None,
         tax_rate: Decimal = Decimal("0.20"),
         effective_from: date = None,
-        effective_to: Optional[date] = None,
+        effective_to: date | None = None,
         is_compound: bool = False,
         is_inclusive: bool = False,
         is_recoverable: bool = True,
@@ -105,7 +104,7 @@ class MockTaxCode:
         self.applies_to_purchases = applies_to_purchases
         self.applies_to_sales = applies_to_sales
         self.is_active = is_active
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -137,7 +136,7 @@ class MockTaxPeriod:
         self.filing_due_date = filing_due_date or date(2024, 4, 30)
         self.status = status
         self.is_closed = is_closed
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -175,7 +174,7 @@ class MockTaxTransaction:
         self.source_document_type = source_document_type
         self.source_document_id = source_document_id or uuid.uuid4()
         self.is_posted = is_posted
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -190,7 +189,7 @@ class MockTaxReturn:
         jurisdiction_id: uuid.UUID = None,
         tax_period_id: uuid.UUID = None,
         return_type: str = "VAT_RETURN",
-        filing_date: Optional[date] = None,
+        filing_date: date | None = None,
         due_date: date = None,
         status: str = "DRAFT",
         total_output_tax: Decimal = Decimal("0"),
@@ -209,7 +208,7 @@ class MockTaxReturn:
         self.total_output_tax = total_output_tax
         self.total_input_tax = total_input_tax
         self.net_tax_payable = net_tax_payable
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = datetime.now(UTC)
         for k, v in kwargs.items():
             setattr(self, k, v)
 

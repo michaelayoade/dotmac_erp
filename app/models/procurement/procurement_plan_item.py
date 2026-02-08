@@ -6,7 +6,7 @@ Line items within a procurement plan.
 
 import uuid
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     ForeignKey,
@@ -68,12 +68,12 @@ class ProcurementPlanItem(Base):
         Text,
         nullable=False,
     )
-    budget_line_code: Mapped[Optional[str]] = mapped_column(
+    budget_line_code: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Economic code",
     )
-    budget_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    budget_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="Link to budget",
@@ -90,12 +90,12 @@ class ProcurementPlanItem(Base):
         nullable=False,
         comment="1-4",
     )
-    approving_authority: Mapped[Optional[str]] = mapped_column(
+    approving_authority: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Auto-set from PPA 2007 thresholds",
     )
-    category: Mapped[Optional[str]] = mapped_column(
+    category: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Goods, Works, Services, Consulting",

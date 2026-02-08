@@ -11,9 +11,9 @@ Handles:
 """
 
 import logging
+import uuid
 from datetime import date, timedelta
 from typing import Any
-import uuid
 
 from celery import shared_task
 from sqlalchemy import func, select
@@ -823,9 +823,9 @@ def process_onboarding_reminders() -> dict:
         NotificationChannel,
         NotificationType,
     )
+    from app.models.people.hr.lifecycle import EmployeeOnboarding
     from app.services.notification import NotificationService
     from app.services.people.hr.onboarding import OnboardingService
-    from app.models.people.hr.lifecycle import EmployeeOnboarding
 
     logger.info("Processing onboarding reminders")
 
@@ -987,10 +987,11 @@ def send_welcome_email(onboarding_id: str) -> dict:
         Dict with result status
     """
     import os
+
     from app.models.email_profile import EmailModule
+    from app.models.people.hr.lifecycle import EmployeeOnboarding
     from app.services.email import send_email
     from app.services.people.hr.onboarding import OnboardingService
-    from app.models.people.hr.lifecycle import EmployeeOnboarding
 
     logger.info("Sending welcome email for onboarding %s", onboarding_id)
 

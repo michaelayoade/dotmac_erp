@@ -5,8 +5,7 @@ Handles reservation requests, approvals, and vehicle checkouts.
 """
 
 import logging
-from datetime import date, datetime, timezone
-from typing import Dict, List, Optional
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -35,7 +34,7 @@ logger = logging.getLogger(__name__)
 
 
 # Valid reservation status transitions
-RESERVATION_STATUS_TRANSITIONS: Dict[ReservationStatus, set] = {
+RESERVATION_STATUS_TRANSITIONS: dict[ReservationStatus, set] = {
     ReservationStatus.PENDING: {
         ReservationStatus.APPROVED,
         ReservationStatus.REJECTED,
@@ -64,7 +63,7 @@ class ReservationService:
         self.db = db
         self.organization_id = organization_id
 
-    def get_by_id(self, reservation_id: UUID) -> Optional[VehicleReservation]:
+    def get_by_id(self, reservation_id: UUID) -> VehicleReservation | None:
         """Get reservation by ID."""
         return self.db.get(VehicleReservation, reservation_id)
 
@@ -78,12 +77,12 @@ class ReservationService:
     def list_reservations(
         self,
         *,
-        vehicle_id: Optional[UUID] = None,
-        employee_id: Optional[UUID] = None,
-        status: Optional[ReservationStatus] = None,
-        from_date: Optional[datetime] = None,
-        to_date: Optional[datetime] = None,
-        params: Optional[PaginationParams] = None,
+        vehicle_id: UUID | None = None,
+        employee_id: UUID | None = None,
+        status: ReservationStatus | None = None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+        params: PaginationParams | None = None,
     ) -> PaginatedResult[VehicleReservation]:
         """List reservations with filtering."""
         stmt = (
@@ -114,8 +113,8 @@ class ReservationService:
         return paginate(self.db, stmt, params)
 
     def get_pending_reservations(
-        self, *, limit: Optional[int] = None
-    ) -> List[VehicleReservation]:
+        self, *, limit: int | None = None
+    ) -> list[VehicleReservation]:
         """Get all pending reservations awaiting approval."""
         stmt = (
             select(VehicleReservation)
@@ -134,8 +133,8 @@ class ReservationService:
         return list(self.db.scalars(stmt).all())
 
     def get_active_reservations(
-        self, *, limit: Optional[int] = None
-    ) -> List[VehicleReservation]:
+        self, *, limit: int | None = None
+    ) -> list[VehicleReservation]:
         """Get all currently active reservations."""
         stmt = (
             select(VehicleReservation)
@@ -155,7 +154,7 @@ class ReservationService:
         vehicle_id: UUID,
         start_datetime: datetime,
         end_datetime: datetime,
-        exclude_reservation_id: Optional[UUID] = None,
+        exclude_reservation_id: UUID | None = None,
     ) -> bool:
         """Check if vehicle is available for the given time period."""
         stmt = select(VehicleReservation).where(
@@ -192,7 +191,7 @@ class ReservationService:
         if data.start_datetime >= data.end_datetime:
             raise ValidationError("End time must be after start time")
 
-        if data.start_datetime < datetime.now(timezone.utc):
+        if data.start_datetime < datetime.now(UTC):
             raise ValidationError("Cannot create reservation in the past")
 
         # Check availability
@@ -276,7 +275,7 @@ class ReservationService:
 
         reservation.status = ReservationStatus.APPROVED
         reservation.approved_by_id = approved_by_id
-        reservation.approved_at = datetime.now(timezone.utc)
+        reservation.approved_at = datetime.now(UTC)
 
         logger.info("Approved reservation %s", reservation_id)
         return reservation
@@ -307,7 +306,7 @@ class ReservationService:
 
         reservation.status = ReservationStatus.ACTIVE
         reservation.actual_start_datetime = data.actual_start_datetime or datetime.now(
-            timezone.utc
+            UTC
         )
         reservation.start_odometer = data.start_odometer
 
@@ -329,9 +328,7 @@ class ReservationService:
         self._validate_transition(reservation.status, ReservationStatus.COMPLETED)
 
         reservation.status = ReservationStatus.COMPLETED
-        reservation.actual_end_datetime = data.actual_end_datetime or datetime.now(
-            timezone.utc
-        )
+        reservation.actual_end_datetime = data.actual_end_datetime or datetime.now(UTC)
         reservation.end_odometer = data.end_odometer
 
         if data.notes:

@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import live_search %}
+{% from "components/macros.html" import live_search, empty_state %}
 
 {% block page_title %}Salary Slips{% endblock %}
 
@@ -43,7 +43,7 @@
 {% block content %}
 <div class="space-y-6">
     {# Stats Cards #}
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <div class="card p-4">
             <div class="flex items-center gap-3">
                 <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-800">
@@ -115,7 +115,7 @@
     {# Salary Slips Table #}
     {% if slips %}
     <div class="card overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
@@ -200,6 +200,12 @@
                                 </form>
                                 {% endif %}
                             </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No slips found", "There are no slips to display.") }}
                         </td>
                     </tr>
                     {% endfor %}

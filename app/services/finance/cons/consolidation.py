@@ -6,11 +6,11 @@ Manages consolidation runs, eliminations, and consolidated balances (IFRS 10).
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -44,7 +44,7 @@ class ConsolidationRunInput:
 
     fiscal_period_id: UUID
     reporting_currency_code: str
-    run_description: Optional[str] = None
+    run_description: str | None = None
 
 
 @dataclass
@@ -58,12 +58,12 @@ class EliminationInput:
     debit_amount: Decimal
     credit_account_id: UUID
     credit_amount: Decimal
-    entity_1_id: Optional[UUID] = None
-    entity_2_id: Optional[UUID] = None
-    source_balance_id: Optional[UUID] = None
-    nci_debit_account_id: Optional[UUID] = None
+    entity_1_id: UUID | None = None
+    entity_2_id: UUID | None = None
+    source_balance_id: UUID | None = None
+    nci_debit_account_id: UUID | None = None
     nci_debit_amount: Decimal = Decimal("0")
-    nci_credit_account_id: Optional[UUID] = None
+    nci_credit_account_id: UUID | None = None
     nci_credit_amount: Decimal = Decimal("0")
     is_automatic: bool = True
 
@@ -200,7 +200,7 @@ class ConsolidationService(ListResponseMixin):
             )
 
         run.status = ConsolidationStatus.IN_PROGRESS
-        run.started_at = datetime.now(timezone.utc)
+        run.started_at = datetime.now(UTC)
 
         db.commit()
         db.refresh(run)
@@ -285,7 +285,7 @@ class ConsolidationService(ListResponseMixin):
         group_id: UUID,
         run_id: UUID,
         intercompany_elimination_account_id: UUID,
-    ) -> List[EliminationEntry]:
+    ) -> builtins.list[EliminationEntry]:
         """
         Generate elimination entries for intercompany balances.
 
@@ -510,7 +510,7 @@ class ConsolidationService(ListResponseMixin):
             )
 
         run.status = ConsolidationStatus.COMPLETED
-        run.completed_at = datetime.now(timezone.utc)
+        run.completed_at = datetime.now(UTC)
 
         db.commit()
         db.refresh(run)
@@ -559,7 +559,7 @@ class ConsolidationService(ListResponseMixin):
 
         run.status = ConsolidationStatus.APPROVED
         run.approved_by_user_id = user_id
-        run.approved_at = datetime.now(timezone.utc)
+        run.approved_at = datetime.now(UTC)
 
         db.commit()
         db.refresh(run)
@@ -573,7 +573,7 @@ class ConsolidationService(ListResponseMixin):
         account_id: UUID,
         currency_code: str,
         subsidiary_balance_sum: Decimal,
-        segment_id: Optional[UUID] = None,
+        segment_id: UUID | None = None,
         equity_method_balance: Decimal = Decimal("0"),
         intercompany_eliminations: Decimal = Decimal("0"),
         investment_eliminations: Decimal = Decimal("0"),
@@ -684,7 +684,7 @@ class ConsolidationService(ListResponseMixin):
     def get_elimination_entries(
         db: Session,
         run_id: UUID,
-        elimination_type: Optional[EliminationType] = None,
+        elimination_type: EliminationType | None = None,
     ) -> list[EliminationEntry]:
         """Get elimination entries for a run."""
         r_id = coerce_uuid(run_id)
@@ -702,8 +702,8 @@ class ConsolidationService(ListResponseMixin):
     def get_consolidated_balances(
         db: Session,
         run_id: UUID,
-        segment_id: Optional[UUID] = None,
-    ) -> List[ConsolidatedBalance]:
+        segment_id: UUID | None = None,
+    ) -> builtins.list[ConsolidatedBalance]:
         """Get consolidated balances for a run."""
         r_id = coerce_uuid(run_id)
 
@@ -722,22 +722,25 @@ class ConsolidationService(ListResponseMixin):
     def get(
         db: Session,
         run_id: str,
+        group_id: UUID | None = None,
     ) -> ConsolidationRun:
         """Get a consolidation run by ID."""
         run = db.get(ConsolidationRun, coerce_uuid(run_id))
         if not run:
+            raise HTTPException(status_code=404, detail="Consolidation run not found")
+        if group_id is not None and run.group_id != coerce_uuid(group_id):
             raise HTTPException(status_code=404, detail="Consolidation run not found")
         return run
 
     @staticmethod
     def list(
         db: Session,
-        group_id: Optional[str] = None,
-        fiscal_period_id: Optional[str] = None,
-        status: Optional[ConsolidationStatus] = None,
+        group_id: str | None = None,
+        fiscal_period_id: str | None = None,
+        status: ConsolidationStatus | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[ConsolidationRun]:
+    ) -> builtins.list[ConsolidationRun]:
         """List consolidation runs with optional filters."""
         query = db.query(ConsolidationRun)
 

@@ -26,11 +26,11 @@ from app.models.fleet.enums import (
     VehicleStatus,
     VehicleType,
 )
+from app.models.fleet.fuel_log import FuelLogEntry
+from app.models.fleet.maintenance import MaintenanceRecord
 from app.models.fleet.vehicle import Vehicle
 from app.models.fleet.vehicle_assignment import VehicleAssignment
 from app.models.fleet.vehicle_document import VehicleDocument
-from app.models.fleet.maintenance import MaintenanceRecord
-from app.models.fleet.fuel_log import FuelLogEntry
 from app.models.fleet.vehicle_incident import VehicleIncident
 from app.models.fleet.vehicle_reservation import VehicleReservation
 

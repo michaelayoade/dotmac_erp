@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 from uuid import UUID
 
+from fastapi import Response
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.supplier_invoice import (
@@ -36,6 +37,8 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
     model = SupplierInvoice
     id_field = "invoice_id"
     org_field = "organization_id"
+    search_fields = ["invoice_number", "supplier_invoice_number"]
+    date_field = "invoice_date"
 
     # Fields to export in CSV
     export_fields = [
@@ -55,6 +58,39 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
         ("status", "Status"),
         ("three_way_match_status", "Match Status"),
     ]
+
+    async def export_all(
+        self,
+        search: str = "",
+        status: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        extra_filters: dict[str, object] | None = None,
+        format: str = "csv",
+    ) -> Response:
+        """
+        Export all supplier invoices matching filters to CSV.
+
+        Uses the shared query builder to match list-page filtering.
+        """
+        from app.services.finance.ap.invoice_query import build_invoice_query
+
+        supplier_id = ""
+        if extra_filters:
+            supplier_id = str(extra_filters.get("supplier_id") or "")
+
+        query = build_invoice_query(
+            db=self.db,
+            organization_id=str(self.organization_id),
+            search=search,
+            supplier_id=supplier_id or None,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        entities = query.all()
+        return self._build_csv(entities)
 
     def can_delete(self, entity: SupplierInvoice) -> tuple[bool, str]:
         """
@@ -88,6 +124,25 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
 
         return (True, "")
 
+    _supplier_names: dict[str, str] | None = None
+
+    def _resolve_supplier_name(self, supplier_id: object) -> str:
+        """Batch-resolve supplier names on first call, then use cache."""
+        if self._supplier_names is None:
+            from app.models.finance.ap.supplier import Supplier
+
+            rows = (
+                self.db.query(
+                    Supplier.supplier_id,
+                    Supplier.trading_name,
+                    Supplier.legal_name,
+                )
+                .filter(Supplier.organization_id == self.organization_id)
+                .all()
+            )
+            self._supplier_names = {str(r[0]): r[1] or r[2] or "" for r in rows}
+        return self._supplier_names.get(str(supplier_id), "")
+
     def _get_export_value(self, entity: SupplierInvoice, field_name: str) -> str:
         """Handle special field formatting for supplier invoice export."""
         if field_name == "status":
@@ -100,8 +155,7 @@ class APInvoiceBulkService(BulkActionService[SupplierInvoice]):
         if field_name == "balance_due":
             return str(entity.balance_due)
         if field_name == "supplier_name":
-            # This would need a join - for now return supplier_id
-            return str(entity.supplier_id) if entity.supplier_id else ""
+            return self._resolve_supplier_name(entity.supplier_id)
 
         return super()._get_export_value(entity, field_name)
 

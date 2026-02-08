@@ -1,0 +1,8 @@
+{% extends "emails/base_email.txt" %}
+{% block content %}Hi {{ manager_first }},
+
+{{ employee_name }} will be celebrating {{ years_of_service }} year(s) with the organization this week!
+{% if is_milestone %}
+This is a significant milestone! Consider recognizing {{ employee_name }}'s dedication and contributions.
+{% endif %}
+This is a great opportunity to acknowledge their contribution to the team.{% endblock %}

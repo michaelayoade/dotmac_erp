@@ -20,9 +20,10 @@ import hashlib
 import logging
 import re
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Sequence, Union
+from typing import Union
 
 from app.config import settings
 
@@ -151,7 +152,7 @@ class UploadResult:
     relative_path: str
     filename: str
     file_size: int
-    checksum: Optional[str] = None
+    checksum: str | None = None
 
 
 class FileUploadError(Exception):
@@ -208,10 +209,10 @@ class FileUploadService:
 
     def validate(
         self,
-        content_type: Optional[str],
-        filename: Optional[str],
+        content_type: str | None,
+        filename: str | None,
         file_size: int,
-        file_data: Optional[bytes] = None,
+        file_data: bytes | None = None,
     ) -> None:
         """
         Run all validation checks BEFORE writing to disk.
@@ -263,9 +264,9 @@ class FileUploadService:
 
     def _generate_filename(
         self,
-        content_type: Optional[str],
-        original_filename: Optional[str],
-        prefix: Optional[str] = None,
+        content_type: str | None,
+        original_filename: str | None,
+        prefix: str | None = None,
     ) -> str:
         """Generate a unique filename preserving the original extension."""
         ext = ""
@@ -282,10 +283,10 @@ class FileUploadService:
     def save(
         self,
         file_data: bytes,
-        content_type: Optional[str] = None,
-        subdirs: Optional[Sequence[str]] = None,
-        prefix: Optional[str] = None,
-        original_filename: Optional[str] = None,
+        content_type: str | None = None,
+        subdirs: Sequence[str] | None = None,
+        prefix: str | None = None,
+        original_filename: str | None = None,
     ) -> UploadResult:
         """
         Validate and save a file.
@@ -333,7 +334,7 @@ class FileUploadService:
         relative = str(resolved.relative_to(self.base_path))
 
         # Optional checksum
-        checksum: Optional[str] = None
+        checksum: str | None = None
         if self.config.compute_checksum:
             checksum = hashlib.sha256(file_data).hexdigest()
 

@@ -44,6 +44,7 @@
             </div>
             {% if reservation.can_be_cancelled %}
             <form method="POST" action="/api/v1/fleet/reservations/{{ reservation.reservation_id }}/cancel" class="inline">
+                {{ request.state.csrf_form | safe }}
                 <button type="submit" class="btn btn-secondary text-rose-600 hover:text-rose-700 dark:text-rose-400"
                         onclick="return confirm('Cancel this reservation?')">
                     Cancel Reservation

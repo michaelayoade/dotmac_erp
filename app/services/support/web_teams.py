@@ -5,7 +5,7 @@ Handles team management template responses.
 """
 
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 from fastapi import Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -84,8 +84,8 @@ class TeamWebService:
         request: Request,
         auth: "WebAuthContext",
         db: Session,
-        team_id: Optional[str] = None,
-        error: Optional[str] = None,
+        team_id: str | None = None,
+        error: str | None = None,
     ) -> HTMLResponse:
         """Render the team create/edit form."""
         from app.web.deps import base_context
@@ -121,8 +121,8 @@ class TeamWebService:
         *,
         team_code: str,
         team_name: str,
-        description: Optional[str] = None,
-        lead_id: Optional[str] = None,
+        description: str | None = None,
+        lead_id: str | None = None,
         auto_assign: bool = False,
     ) -> Response:
         """Create a new team."""
@@ -166,9 +166,9 @@ class TeamWebService:
         db: Session,
         team_id: str,
         *,
-        team_name: Optional[str] = None,
-        description: Optional[str] = None,
-        lead_id: Optional[str] = None,
+        team_name: str | None = None,
+        description: str | None = None,
+        lead_id: str | None = None,
         auto_assign: bool = False,
         is_active: bool = True,
     ) -> Response:
@@ -316,7 +316,7 @@ class TeamWebService:
         db: Session,
         team_id: str,
         employee_id: str,
-        role: Optional[str] = None,
+        role: str | None = None,
     ) -> RedirectResponse:
         """Add a member to a team."""
         tid = coerce_uuid(team_id)
@@ -434,7 +434,7 @@ class TeamWebService:
         self,
         db: Session,
         organization_id,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get employees for dropdown selection."""
         results = db.execute(
             select(Employee, Person)
@@ -460,7 +460,7 @@ class TeamWebService:
         db: Session,
         organization_id,
         team_id,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get employees not already in a team."""
         from app.models.support.team import SupportTeamMember
 

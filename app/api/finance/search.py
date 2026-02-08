@@ -4,7 +4,7 @@ Search API endpoints for auto-suggestions.
 Provides unified search endpoint for auto-complete functionality across entity types.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -13,7 +13,6 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_organization_id, require_tenant_auth
 from app.db import get_db_session
 from app.services.finance.platform.search_suggestions import search_suggestions_service
-
 
 router = APIRouter(
     prefix="/search",
@@ -30,18 +29,16 @@ def get_suggestions(
     ),
     q: str = Query(..., min_length=1, description="Search query"),
     limit: int = Query(default=10, ge=1, le=20, description="Maximum results"),
-    account_type: Optional[str] = Query(
+    account_type: str | None = Query(
         default=None, description="Filter accounts by type"
     ),
-    category_id: Optional[str] = Query(
+    category_id: str | None = Query(
         default=None, description="Filter items by category"
     ),
-    tax_type: Optional[str] = Query(
-        default=None, description="Filter tax codes by type"
-    ),
+    tax_type: str | None = Query(default=None, description="Filter tax codes by type"),
     org_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_session),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Get search suggestions for auto-complete.
 
@@ -84,7 +81,7 @@ def global_search(
     ),
     org_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db_session),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Global search across multiple entity types.
 

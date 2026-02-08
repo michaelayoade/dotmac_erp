@@ -6,7 +6,6 @@ Chart of accounts.
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -72,8 +71,8 @@ class Account(Base):
     # Identity
     account_code: Mapped[str] = mapped_column(String(20), nullable=False)
     account_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    search_terms: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    search_terms: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Space-separated keywords",
@@ -94,9 +93,7 @@ class Account(Base):
     is_multi_currency: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
-    default_currency_code: Mapped[Optional[str]] = mapped_column(
-        String(3), nullable=True
-    )
+    default_currency_code: Mapped[str | None] = mapped_column(String(3), nullable=True)
 
     # Control flags
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -111,7 +108,7 @@ class Account(Base):
     )
 
     # Subledger linking
-    subledger_type: Mapped[Optional[str]] = mapped_column(
+    subledger_type: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="AR, AP, INVENTORY, ASSET, BANK",
@@ -129,7 +126,7 @@ class Account(Base):
     )
 
     # Audit fields
-    created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="User who created/imported this account",
@@ -139,12 +136,12 @@ class Account(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    updated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="User who last updated this account",
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

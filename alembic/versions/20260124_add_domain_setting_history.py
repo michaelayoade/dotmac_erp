@@ -8,9 +8,10 @@ Merges current heads and adds a history table for tracking all domain
 setting changes with user, timestamp, old/new values for audit and rollback.
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260124_setting_history"

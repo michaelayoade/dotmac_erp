@@ -5,11 +5,11 @@ Revises: 4f4e6f737d70
 Create Date: 2025-02-12 00:00:00.000000
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
-from app.alembic_utils import ensure_enum
 
+from alembic import op
+from app.alembic_utils import ensure_enum
 
 # revision identifiers, used by Alembic.
 revision = "20250212_add_hr_lifecycle_tables"

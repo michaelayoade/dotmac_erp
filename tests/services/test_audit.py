@@ -6,7 +6,7 @@ and request logging functionality.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -14,7 +14,6 @@ from fastapi import HTTPException
 
 from app.models.audit import AuditActorType
 from app.services.audit import AuditEvents
-
 
 # ============ TestParseActorType ============
 
@@ -73,7 +72,7 @@ class TestAuditEventsCreate:
     def test_create_basic_event(self, mock_db):
         """Should create a basic audit event."""
         payload = MagicMock()
-        payload.occurred_at = datetime.now(timezone.utc)
+        payload.occurred_at = datetime.now(UTC)
         payload.model_dump.return_value = {
             "actor_type": AuditActorType.user,
             "actor_id": str(uuid.uuid4()),
@@ -81,14 +80,14 @@ class TestAuditEventsCreate:
             "entity_type": "test_entity",
             "status_code": 200,
             "is_success": True,
-            "occurred_at": datetime.now(timezone.utc),
+            "occurred_at": datetime.now(UTC),
         }
 
         with patch("app.services.audit.AuditEvent") as MockEvent:
             mock_event = MagicMock()
             MockEvent.return_value = mock_event
 
-            result = AuditEvents.create(mock_db, payload)
+            AuditEvents.create(mock_db, payload)
 
             mock_db.add.assert_called_once_with(mock_event)
             mock_db.commit.assert_called_once()
@@ -96,7 +95,7 @@ class TestAuditEventsCreate:
 
     def test_create_with_occurred_at(self, mock_db):
         """Should use provided occurred_at timestamp."""
-        specific_time = datetime(2024, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+        specific_time = datetime(2024, 1, 15, 10, 30, 0, tzinfo=UTC)
         payload = MagicMock()
         payload.occurred_at = specific_time
         payload.model_dump.return_value = {
@@ -142,13 +141,13 @@ class TestAuditEventsCreate:
     def test_create_refreshes_from_db(self, mock_db):
         """Created event should be refreshed from database."""
         payload = MagicMock()
-        payload.occurred_at = datetime.now(timezone.utc)
+        payload.occurred_at = datetime.now(UTC)
         payload.model_dump.return_value = {
             "actor_type": AuditActorType.user,
             "action": "test",
             "entity_type": "test",
             "status_code": 200,
-            "occurred_at": datetime.now(timezone.utc),
+            "occurred_at": datetime.now(UTC),
         }
 
         with patch("app.services.audit.AuditEvent") as MockEvent:

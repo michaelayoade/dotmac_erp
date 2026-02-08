@@ -5,14 +5,14 @@ ERPNext Timesheet mapping for project time tracking sync.
 import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Any, Optional
+from typing import Any
 
 from .base import DocTypeMapping, FieldMapping, parse_decimal
 
 logger = logging.getLogger(__name__)
 
 
-def parse_date_from_datetime(value: Any) -> Optional[date]:
+def parse_date_from_datetime(value: Any) -> date | None:
     """Extract date from datetime field."""
     if value is None:
         return None

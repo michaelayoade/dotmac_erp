@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 from uuid import UUID
 
+from fastapi import Response
 from sqlalchemy.orm import Session
 
 from app.models.fixed_assets.asset import Asset, AssetStatus
@@ -32,6 +33,7 @@ class AssetBulkService(BulkActionService[Asset]):
     model = Asset
     id_field = "asset_id"
     org_field = "organization_id"
+    search_fields = ["asset_code", "asset_name", "description"]
 
     # Fields to export in CSV
     export_fields = [
@@ -94,6 +96,37 @@ class AssetBulkService(BulkActionService[Asset]):
         """Get asset export filename."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return f"assets_export_{timestamp}.csv"
+
+    async def export_all(
+        self,
+        search: str = "",
+        status: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        extra_filters: dict[str, object] | None = None,
+        format: str = "csv",
+    ) -> Response:
+        """
+        Export all assets matching filters to CSV.
+        """
+        from app.services.fixed_assets.asset_query import build_asset_query
+
+        category = ""
+        if extra_filters:
+            category = str(
+                extra_filters.get("category") or extra_filters.get("category_id") or ""
+            )
+
+        query = build_asset_query(
+            db=self.db,
+            organization_id=str(self.organization_id),
+            search=search,
+            category=category or None,
+            status=status,
+        )
+
+        entities = query.all()
+        return self._build_csv(entities)
 
 
 def get_asset_bulk_service(

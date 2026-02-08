@@ -852,12 +852,10 @@ def resolve_value(
 
     service = DOMAIN_SETTINGS_SERVICE.get(domain)
     setting = None
-    db_error = None
     if service:
         try:
             setting = service.get_by_key(db, key)
-        except HTTPException as e:
-            db_error = e
+        except HTTPException:
             setting = None
 
     raw = extract_db_value(setting)

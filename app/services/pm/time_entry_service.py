@@ -10,7 +10,7 @@ import logging
 import uuid
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session, selectinload
@@ -43,7 +43,7 @@ class TimeEntryService:
         self,
         db: Session,
         organization_id: uuid.UUID,
-        principal: Optional["Principal"] = None,
+        principal: Principal | None = None,
     ) -> None:
         self.db = db
         self.organization_id = organization_id
@@ -53,7 +53,7 @@ class TimeEntryService:
     # Read Operations
     # =========================================================================
 
-    def get_entry(self, entry_id: uuid.UUID) -> Optional[TimeEntry]:
+    def get_entry(self, entry_id: uuid.UUID) -> TimeEntry | None:
         """Fetch a single time entry by ID."""
         stmt = (
             select(TimeEntry)
@@ -78,14 +78,14 @@ class TimeEntryService:
 
     def list_entries(
         self,
-        project_id: Optional[uuid.UUID] = None,
-        task_id: Optional[uuid.UUID] = None,
-        employee_id: Optional[uuid.UUID] = None,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-        is_billable: Optional[bool] = None,
-        billing_status: Optional[BillingStatus] = None,
-        params: Optional[PaginationParams] = None,
+        project_id: uuid.UUID | None = None,
+        task_id: uuid.UUID | None = None,
+        employee_id: uuid.UUID | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        is_billable: bool | None = None,
+        billing_status: BillingStatus | None = None,
+        params: PaginationParams | None = None,
     ) -> PaginatedResult[TimeEntry]:
         """List time entries with filtering and pagination."""
         stmt = (
@@ -120,7 +120,7 @@ class TimeEntryService:
         self,
         employee_id: uuid.UUID,
         week_start: date,
-    ) -> List[TimeEntry]:
+    ) -> list[TimeEntry]:
         """Get time entries for an employee for a specific week."""
         week_end = week_start + timedelta(days=6)
         stmt = (
@@ -142,9 +142,9 @@ class TimeEntryService:
     def get_project_time_entries(
         self,
         project_id: uuid.UUID,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-    ) -> List[TimeEntry]:
+        start_date: date | None = None,
+        end_date: date | None = None,
+    ) -> list[TimeEntry]:
         """Get all time entries for a project."""
         stmt = (
             select(TimeEntry)
@@ -170,7 +170,7 @@ class TimeEntryService:
     # Write Operations
     # =========================================================================
 
-    def log_time(self, data: Dict) -> TimeEntry:
+    def log_time(self, data: dict) -> TimeEntry:
         """Log a new time entry."""
         # Validate hours
         hours = data["hours"]
@@ -218,7 +218,7 @@ class TimeEntryService:
 
         return entry
 
-    def update_entry(self, entry_id: uuid.UUID, data: Dict) -> TimeEntry:
+    def update_entry(self, entry_id: uuid.UUID, data: dict) -> TimeEntry:
         """Update an existing time entry."""
         entry = self.get_entry_or_raise(entry_id)
 
@@ -276,7 +276,7 @@ class TimeEntryService:
 
         return True
 
-    def mark_billed(self, entry_ids: List[uuid.UUID]) -> int:
+    def mark_billed(self, entry_ids: list[uuid.UUID]) -> int:
         """Mark multiple time entries as billed."""
         count = 0
         for entry_id in entry_ids:
@@ -294,7 +294,7 @@ class TimeEntryService:
     # Summaries
     # =========================================================================
 
-    def get_project_time_summary(self, project_id: uuid.UUID) -> Dict:
+    def get_project_time_summary(self, project_id: uuid.UUID) -> dict:
         """Get time summary for a project."""
         base_where = and_(
             TimeEntry.project_id == project_id,
@@ -360,7 +360,7 @@ class TimeEntryService:
         employee_id: uuid.UUID,
         start_date: date,
         end_date: date,
-    ) -> Dict:
+    ) -> dict:
         """Get time summary for an employee over a period."""
         base_where = and_(
             TimeEntry.employee_id == employee_id,

@@ -34,7 +34,7 @@ def process_file(filepath: str) -> int:
 
     Returns the number of <th> elements modified.
     """
-    with open(filepath, "r", encoding="utf-8") as f:
+    with open(filepath, encoding="utf-8") as f:
         content = f.read()
 
     # Quick check: skip files with no <thead

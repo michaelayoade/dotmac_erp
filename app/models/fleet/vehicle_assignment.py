@@ -59,12 +59,12 @@ class VehicleAssignment(Base, FleetBaseMixin, AuditMixin):
         ForeignKey("fleet.vehicle.vehicle_id"),
         nullable=False,
     )
-    employee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    employee_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
     )
-    department_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    department_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.department.department_id"),
         nullable=True,
@@ -78,31 +78,31 @@ class VehicleAssignment(Base, FleetBaseMixin, AuditMixin):
         Date,
         nullable=False,
     )
-    end_date: Mapped[Optional[date]] = mapped_column(
+    end_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="NULL means assignment is still active",
     )
 
     # Odometer tracking
-    start_odometer: Mapped[Optional[int]] = mapped_column(
+    start_odometer: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Odometer reading at start of assignment",
     )
-    end_odometer: Mapped[Optional[int]] = mapped_column(
+    end_odometer: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Odometer reading at end of assignment",
     )
 
     # Metadata
-    reason: Mapped[Optional[str]] = mapped_column(
+    reason: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
         comment="Reason for assignment/change",
     )
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -123,14 +123,14 @@ class VehicleAssignment(Base, FleetBaseMixin, AuditMixin):
     )
 
     @property
-    def distance_traveled(self) -> Optional[int]:
+    def distance_traveled(self) -> int | None:
         """Calculate distance traveled during assignment."""
         if self.start_odometer is not None and self.end_odometer is not None:
             return self.end_odometer - self.start_odometer
         return None
 
     @property
-    def duration_days(self) -> Optional[int]:
+    def duration_days(self) -> int | None:
         """Calculate duration of assignment in days."""
         end = self.end_date or date.today()
         return (end - self.start_date).days

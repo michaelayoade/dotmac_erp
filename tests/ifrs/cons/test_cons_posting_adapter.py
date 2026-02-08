@@ -23,7 +23,6 @@ from app.services.finance.cons.cons_posting_adapter import (
     CONSPostingResult,
 )
 
-
 # ============ Mock Classes ============
 
 

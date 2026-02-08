@@ -5,7 +5,6 @@ Report Definition Model - Reporting Schema.
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -65,7 +64,7 @@ class ReportDefinition(Base):
 
     report_code: Mapped[str] = mapped_column(String(50), nullable=False)
     report_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     report_type: Mapped[ReportType] = mapped_column(
         Enum(ReportType, name="report_type"),
@@ -73,33 +72,31 @@ class ReportDefinition(Base):
     )
 
     # Report category/grouping
-    category: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    subcategory: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    subcategory: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Output formats
     default_format: Mapped[str] = mapped_column(
         String(20), nullable=False, default="PDF"
     )
-    supported_formats: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    supported_formats: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
     # Report structure
-    report_structure: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
-    column_definitions: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
-    row_definitions: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
-    filter_definitions: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    report_structure: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    column_definitions: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    row_definitions: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    filter_definitions: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     # Data source
     data_source_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    data_source_config: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    data_source_config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     # Template
-    template_file_path: Mapped[Optional[str]] = mapped_column(
-        String(500), nullable=True
-    )
+    template_file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     template_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     # Security
-    required_permissions: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    required_permissions: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
     is_system_report: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
@@ -115,7 +112,7 @@ class ReportDefinition(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

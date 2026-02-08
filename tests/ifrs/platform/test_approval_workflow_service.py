@@ -4,7 +4,7 @@ Tests for ApprovalWorkflowService.
 
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -24,15 +24,17 @@ def patch_approval_workflow_service():
         mock_workflow.document_type = MockColumn()
         mock_workflow.is_active = MockColumn()
         mock_workflow.threshold_amount = MockColumn()
-        with patch(
-            "app.services.finance.platform.approval_workflow.and_",
-            return_value=MagicMock(),
-        ):
-            with patch(
+        with (
+            patch(
+                "app.services.finance.platform.approval_workflow.and_",
+                return_value=MagicMock(),
+            ),
+            patch(
                 "app.services.finance.platform.approval_workflow.coerce_uuid",
                 side_effect=lambda x: x,
-            ):
-                yield mock_workflow
+            ),
+        ):
+            yield mock_workflow
 
 
 class MockApprovalWorkflow:
@@ -98,7 +100,7 @@ class MockApprovalRequest:
         self.document_amount = document_amount
         self.document_currency_code = document_currency_code
         self.requested_by_user_id = requested_by_user_id or uuid.uuid4()
-        self.requested_at = requested_at or datetime.now(timezone.utc)
+        self.requested_at = requested_at or datetime.now(UTC)
         self.current_level = current_level
         self.status = status
         self.decisions = decisions or []
@@ -126,7 +128,7 @@ class MockApprovalDecision:
         self.level = level
         self.approver_user_id = approver_user_id or uuid.uuid4()
         self.action = action or MagicMock(value="APPROVE")
-        self.decided_at = decided_at or datetime.now(timezone.utc)
+        self.decided_at = decided_at or datetime.now(UTC)
         self.comments = comments
         self.mfa_verified = mfa_verified
 
@@ -181,29 +183,31 @@ class TestApprovalWorkflowService:
         mock_request = MagicMock()
         mock_request.request_id = uuid.uuid4()
 
-        with patch(
-            "app.services.finance.platform.approval_workflow.ApprovalRequest",
-            return_value=mock_request,
-        ):
-            with patch(
+        with (
+            patch(
+                "app.services.finance.platform.approval_workflow.ApprovalRequest",
+                return_value=mock_request,
+            ),
+            patch(
                 "app.services.finance.platform.approval_workflow.ApprovalRequestStatus"
-            ) as MockStatus:
-                MockStatus.PENDING = "PENDING"
-                with patch(
-                    "app.services.finance.platform.approval_workflow.coerce_uuid",
-                    side_effect=lambda x: x,
-                ):
-                    result = service.submit_for_approval(
-                        mock_db_session,
-                        organization_id=organization_id,
-                        workflow_id=workflow.workflow_id,
-                        document_type="JOURNAL",
-                        document_id=uuid.uuid4(),
-                        document_reference="DOC-001",
-                        document_amount=Decimal("10.00"),
-                        document_currency_code="USD",
-                        requested_by_user_id=user_id,
-                    )
+            ) as MockStatus,
+        ):
+            MockStatus.PENDING = "PENDING"
+            with patch(
+                "app.services.finance.platform.approval_workflow.coerce_uuid",
+                side_effect=lambda x: x,
+            ):
+                result = service.submit_for_approval(
+                    mock_db_session,
+                    organization_id=organization_id,
+                    workflow_id=workflow.workflow_id,
+                    document_type="JOURNAL",
+                    document_id=uuid.uuid4(),
+                    document_reference="DOC-001",
+                    document_amount=Decimal("10.00"),
+                    document_currency_code="USD",
+                    requested_by_user_id=user_id,
+                )
 
         mock_db_session.add.assert_called_once()
         mock_db_session.commit.assert_called_once()
@@ -215,22 +219,24 @@ class TestApprovalWorkflowService:
         """submit_for_approval should raise when workflow is missing."""
         mock_db_session.get.return_value = None
 
-        with patch(
-            "app.services.finance.platform.approval_workflow.coerce_uuid",
-            side_effect=lambda x: x,
+        with (
+            patch(
+                "app.services.finance.platform.approval_workflow.coerce_uuid",
+                side_effect=lambda x: x,
+            ),
+            pytest.raises(HTTPException) as exc_info,
         ):
-            with pytest.raises(HTTPException) as exc_info:
-                service.submit_for_approval(
-                    mock_db_session,
-                    organization_id=organization_id,
-                    workflow_id=uuid.uuid4(),
-                    document_type="JOURNAL",
-                    document_id=uuid.uuid4(),
-                    document_reference="DOC-001",
-                    document_amount=Decimal("10.00"),
-                    document_currency_code="USD",
-                    requested_by_user_id=user_id,
-                )
+            service.submit_for_approval(
+                mock_db_session,
+                organization_id=organization_id,
+                workflow_id=uuid.uuid4(),
+                document_type="JOURNAL",
+                document_id=uuid.uuid4(),
+                document_reference="DOC-001",
+                document_amount=Decimal("10.00"),
+                document_currency_code="USD",
+                requested_by_user_id=user_id,
+            )
 
         assert exc_info.value.status_code == 404
 
@@ -306,16 +312,18 @@ class TestApprovalWorkflowService:
             "app.services.finance.platform.approval_workflow.ApprovalRequestStatus"
         ) as MockStatus:
             MockStatus.PENDING = "PENDING"
-            with patch(
-                "app.services.finance.platform.approval_workflow.coerce_uuid",
-                side_effect=lambda x: x,
+            with (
+                patch(
+                    "app.services.finance.platform.approval_workflow.coerce_uuid",
+                    side_effect=lambda x: x,
+                ),
+                pytest.raises(HTTPException) as exc_info,
             ):
-                with pytest.raises(HTTPException) as exc_info:
-                    service.approve(
-                        mock_db_session,
-                        request_id=request.request_id,
-                        approver_user_id=user_id,
-                    )
+                service.approve(
+                    mock_db_session,
+                    request_id=request.request_id,
+                    approver_user_id=user_id,
+                )
 
         assert exc_info.value.status_code == 403
 
@@ -375,17 +383,19 @@ class TestApprovalWorkflowService:
             "app.services.finance.platform.approval_workflow.ApprovalRequestStatus"
         ) as MockStatus:
             MockStatus.PENDING = "PENDING"
-            with patch(
-                "app.services.finance.platform.approval_workflow.coerce_uuid",
-                side_effect=lambda x: x,
+            with (
+                patch(
+                    "app.services.finance.platform.approval_workflow.coerce_uuid",
+                    side_effect=lambda x: x,
+                ),
+                pytest.raises(HTTPException) as exc_info,
             ):
-                with pytest.raises(HTTPException) as exc_info:
-                    service.cancel_request(
-                        mock_db_session,
-                        request_id=request.request_id,
-                        cancelled_by_user_id=user_id,
-                        reason="No longer needed",
-                    )
+                service.cancel_request(
+                    mock_db_session,
+                    request_id=request.request_id,
+                    cancelled_by_user_id=user_id,
+                    reason="No longer needed",
+                )
 
         assert exc_info.value.status_code == 403
 
@@ -404,20 +414,22 @@ class TestApprovalWorkflowService:
             "app.services.finance.platform.approval_workflow.ApprovalRequestStatus"
         ) as MockStatus:
             MockStatus.PENDING = "PENDING"
-            with patch.object(
-                service,
-                "_is_user_allowed_for_request",
-                side_effect=[(True, None), (False, "no")],
-            ):
-                with patch(
+            with (
+                patch.object(
+                    service,
+                    "_is_user_allowed_for_request",
+                    side_effect=[(True, None), (False, "no")],
+                ),
+                patch(
                     "app.services.finance.platform.approval_workflow.coerce_uuid",
                     side_effect=lambda x: x,
-                ):
-                    result = service.get_pending_approvals(
-                        mock_db_session,
-                        organization_id=organization_id,
-                        approver_user_id=user_id,
-                    )
+                ),
+            ):
+                result = service.get_pending_approvals(
+                    mock_db_session,
+                    organization_id=organization_id,
+                    approver_user_id=user_id,
+                )
 
         assert len(result) == 1
 

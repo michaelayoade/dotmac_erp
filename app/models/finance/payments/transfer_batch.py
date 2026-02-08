@@ -8,7 +8,7 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     Date,
@@ -90,7 +90,7 @@ class TransferBatch(Base):
         Date,
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
     )
@@ -155,31 +155,31 @@ class TransferBatch(Base):
         UUID(as_uuid=True),
         nullable=False,
     )
-    approved_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    processed_at: Mapped[Optional[datetime]] = mapped_column(
+    processed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
     # Paystack batch reference (if using bulk API)
-    paystack_batch_reference: Mapped[Optional[str]] = mapped_column(
+    paystack_batch_reference: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
 
     # Notes
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -190,7 +190,7 @@ class TransferBatch(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -291,22 +291,22 @@ class TransferBatchItem(Base):
     )
 
     # Transfer details (after processing)
-    transfer_recipient_code: Mapped[Optional[str]] = mapped_column(
+    transfer_recipient_code: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Paystack recipient code",
     )
-    transfer_reference: Mapped[Optional[str]] = mapped_column(
+    transfer_reference: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
-    transfer_code: Mapped[Optional[str]] = mapped_column(
+    transfer_code: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
 
     # Payment intent linkage
-    payment_intent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    payment_intent_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("payments.payment_intent.intent_id"),
         nullable=True,
@@ -324,23 +324,23 @@ class TransferBatchItem(Base):
         nullable=False,
         default=TransferBatchItemStatus.PENDING,
     )
-    error_message: Mapped[Optional[str]] = mapped_column(
+    error_message: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
     )
 
     # Fee tracking
-    fee_amount: Mapped[Optional[Decimal]] = mapped_column(
+    fee_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(19, 4),
         nullable=True,
     )
 
     # Timestamps
-    processed_at: Mapped[Optional[datetime]] = mapped_column(
+    processed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )

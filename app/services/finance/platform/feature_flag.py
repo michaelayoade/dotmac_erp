@@ -6,7 +6,6 @@ and A/B testing capabilities.
 """
 
 import logging
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -293,7 +292,7 @@ class FeatureFlagService(ListResponseMixin):
     @staticmethod
     def delete_feature(
         db: Session,
-        organization_id: Optional[UUID],
+        organization_id: UUID | None,
         feature_code: str,
     ) -> bool:
         """
@@ -332,11 +331,11 @@ class FeatureFlagService(ListResponseMixin):
     @staticmethod
     def list_all_flags(
         db: Session,
-        organization_id: Optional[str] = None,
+        organization_id: str | None = None,
         include_system_defaults: bool = True,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[SystemConfiguration]:
+    ) -> list[SystemConfiguration]:
         """
         List all feature flags.
 
@@ -374,10 +373,10 @@ class FeatureFlagService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
+        organization_id: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[SystemConfiguration]:
+    ) -> list[SystemConfiguration]:
         """
         List feature flags (for ListResponseMixin compatibility).
 

@@ -7,7 +7,7 @@ Provides API-focused handlers for auth flow routes.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
@@ -106,7 +106,7 @@ class AuthFlowApiService:
 
     def list_sessions(self, auth: dict, db: Session) -> SessionListResponse:
         person_id = coerce_uuid(auth["person_id"])
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         sessions = (
             db.query(AuthSession)
             .filter(AuthSession.person_id == person_id)
@@ -139,7 +139,7 @@ class AuthFlowApiService:
     def revoke_session(
         self, session_id: str, auth: dict, db: Session
     ) -> SessionRevokeResponse:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         session = (
             db.query(AuthSession)
             .filter(AuthSession.id == coerce_uuid(session_id))
@@ -166,7 +166,7 @@ class AuthFlowApiService:
         if current_session_id:
             current_session_id = coerce_uuid(current_session_id)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         sessions = (
             db.query(AuthSession)
             .filter(AuthSession.person_id == coerce_uuid(auth["person_id"]))
@@ -206,7 +206,7 @@ class AuthFlowApiService:
                 status_code=400, detail="New password must be different"
             )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         credential.password_hash = hash_password(payload.new_password)
         credential.password_updated_at = now
         credential.must_change_password = False
@@ -231,7 +231,7 @@ class AuthFlowApiService:
         if not credential:
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if credential.locked_until and credential.locked_until > now:
             raise HTTPException(status_code=403, detail="Account locked")
 

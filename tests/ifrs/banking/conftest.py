@@ -6,16 +6,13 @@ while still testing the service logic.
 """
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Dict, Optional
 from unittest.mock import MagicMock
 
 import pytest
 
-
 # ============ Mock Enums ============
-
 from app.models.finance.banking.bank_account import BankAccountStatus, BankAccountType
 from app.models.finance.banking.bank_reconciliation import (
     ReconciliationMatchType,
@@ -45,29 +42,29 @@ class MockBankAccount:
         bank_account_id: uuid.UUID = None,
         organization_id: uuid.UUID = None,
         bank_name: str = "Test Bank",
-        bank_code: Optional[str] = "TESTBANK",
-        branch_code: Optional[str] = None,
-        branch_name: Optional[str] = None,
+        bank_code: str | None = "TESTBANK",
+        branch_code: str | None = None,
+        branch_name: str | None = None,
         account_number: str = "1234567890",
         account_name: str = "Main Checking",
         account_type: BankAccountType = BankAccountType.checking,
-        iban: Optional[str] = None,
+        iban: str | None = None,
         currency_code: str = "USD",
         gl_account_id: uuid.UUID = None,
         status: BankAccountStatus = BankAccountStatus.active,
         is_primary: bool = False,
         allow_overdraft: bool = False,
-        overdraft_limit: Optional[Decimal] = None,
-        last_statement_date: Optional[date] = None,
-        last_statement_balance: Optional[Decimal] = None,
-        last_reconciled_date: Optional[date] = None,
-        last_reconciled_balance: Optional[Decimal] = None,
-        contact_name: Optional[str] = None,
-        contact_phone: Optional[str] = None,
-        contact_email: Optional[str] = None,
-        notes: Optional[str] = None,
-        created_by: Optional[uuid.UUID] = None,
-        updated_by: Optional[uuid.UUID] = None,
+        overdraft_limit: Decimal | None = None,
+        last_statement_date: date | None = None,
+        last_statement_balance: Decimal | None = None,
+        last_reconciled_date: date | None = None,
+        last_reconciled_balance: Decimal | None = None,
+        contact_name: str | None = None,
+        contact_phone: str | None = None,
+        contact_email: str | None = None,
+        notes: str | None = None,
+        created_by: uuid.UUID | None = None,
+        updated_by: uuid.UUID | None = None,
         created_at: datetime = None,
         updated_at: datetime = None,
     ):
@@ -97,7 +94,7 @@ class MockBankAccount:
         self.notes = notes
         self.created_by = created_by
         self.updated_by = updated_by
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
 
 
@@ -142,9 +139,9 @@ class MockBankStatement:
         total_lines: int = 5,
         matched_lines: int = 0,
         unmatched_lines: int = 5,
-        import_source: Optional[str] = None,
-        import_filename: Optional[str] = None,
-        imported_by: Optional[uuid.UUID] = None,
+        import_source: str | None = None,
+        import_filename: str | None = None,
+        imported_by: uuid.UUID | None = None,
         created_at: datetime = None,
     ):
         self.statement_id = statement_id or uuid.uuid4()
@@ -166,7 +163,7 @@ class MockBankStatement:
         self.import_source = import_source
         self.import_filename = import_filename
         self.imported_by = imported_by
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.lines = []
 
     @property
@@ -185,24 +182,24 @@ class MockBankStatementLine:
         line_id: uuid.UUID = None,
         statement_id: uuid.UUID = None,
         line_number: int = 1,
-        transaction_id: Optional[str] = None,
+        transaction_id: str | None = None,
         transaction_date: date = None,
-        value_date: Optional[date] = None,
+        value_date: date | None = None,
         transaction_type: StatementLineType = StatementLineType.credit,
         amount: Decimal = Decimal("100.00"),
-        running_balance: Optional[Decimal] = None,
-        description: Optional[str] = "Test transaction",
-        reference: Optional[str] = None,
-        payee_payer: Optional[str] = None,
-        bank_reference: Optional[str] = None,
-        check_number: Optional[str] = None,
-        bank_category: Optional[str] = None,
-        bank_code: Optional[str] = None,
+        running_balance: Decimal | None = None,
+        description: str | None = "Test transaction",
+        reference: str | None = None,
+        payee_payer: str | None = None,
+        bank_reference: str | None = None,
+        check_number: str | None = None,
+        bank_category: str | None = None,
+        bank_code: str | None = None,
         is_matched: bool = False,
-        matched_at: Optional[datetime] = None,
-        matched_by: Optional[uuid.UUID] = None,
-        matched_journal_line_id: Optional[uuid.UUID] = None,
-        raw_data: Optional[Dict] = None,
+        matched_at: datetime | None = None,
+        matched_by: uuid.UUID | None = None,
+        matched_journal_line_id: uuid.UUID | None = None,
+        raw_data: dict | None = None,
     ):
         self.line_id = line_id or uuid.uuid4()
         self.statement_id = statement_id or uuid.uuid4()
@@ -258,14 +255,14 @@ class MockBankReconciliation:
         reconciliation_difference: Decimal = Decimal("0"),
         prior_outstanding_deposits: Decimal = Decimal("0"),
         prior_outstanding_payments: Decimal = Decimal("0"),
-        notes: Optional[str] = None,
-        prepared_by: Optional[uuid.UUID] = None,
-        prepared_at: Optional[datetime] = None,
-        approved_by: Optional[uuid.UUID] = None,
-        approved_at: Optional[datetime] = None,
-        reviewed_by: Optional[uuid.UUID] = None,
-        reviewed_at: Optional[datetime] = None,
-        review_notes: Optional[str] = None,
+        notes: str | None = None,
+        prepared_by: uuid.UUID | None = None,
+        prepared_at: datetime | None = None,
+        approved_by: uuid.UUID | None = None,
+        approved_at: datetime | None = None,
+        reviewed_by: uuid.UUID | None = None,
+        reviewed_at: datetime | None = None,
+        review_notes: str | None = None,
     ):
         self.reconciliation_id = reconciliation_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -329,24 +326,24 @@ class MockBankReconciliationLine:
         line_id: uuid.UUID = None,
         reconciliation_id: uuid.UUID = None,
         match_type: ReconciliationMatchType = ReconciliationMatchType.manual,
-        statement_line_id: Optional[uuid.UUID] = None,
-        journal_line_id: Optional[uuid.UUID] = None,
+        statement_line_id: uuid.UUID | None = None,
+        journal_line_id: uuid.UUID | None = None,
         transaction_date: date = None,
-        description: Optional[str] = None,
-        reference: Optional[str] = None,
-        statement_amount: Optional[Decimal] = None,
-        gl_amount: Optional[Decimal] = None,
+        description: str | None = None,
+        reference: str | None = None,
+        statement_amount: Decimal | None = None,
+        gl_amount: Decimal | None = None,
         difference: Decimal = Decimal("0"),
         is_cleared: bool = False,
-        cleared_at: Optional[datetime] = None,
+        cleared_at: datetime | None = None,
         is_adjustment: bool = False,
-        adjustment_type: Optional[str] = None,
-        adjustment_account_id: Optional[uuid.UUID] = None,
+        adjustment_type: str | None = None,
+        adjustment_account_id: uuid.UUID | None = None,
         is_outstanding: bool = False,
-        outstanding_type: Optional[str] = None,
-        notes: Optional[str] = None,
-        match_confidence: Optional[Decimal] = None,
-        created_by: Optional[uuid.UUID] = None,
+        outstanding_type: str | None = None,
+        notes: str | None = None,
+        match_confidence: Decimal | None = None,
+        created_by: uuid.UUID | None = None,
     ):
         self.line_id = line_id or uuid.uuid4()
         self.reconciliation_id = reconciliation_id or uuid.uuid4()
@@ -381,7 +378,7 @@ class MockJournalEntry:
         entry_number: str = "JE-0001",
         entry_date: date = None,
         status: str = "posted",
-        description: Optional[str] = None,
+        description: str | None = None,
     ):
         self.entry_id = entry_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -399,9 +396,9 @@ class MockJournalEntryLine:
         line_id: uuid.UUID = None,
         entry_id: uuid.UUID = None,
         account_id: uuid.UUID = None,
-        debit_amount: Optional[Decimal] = None,
-        credit_amount: Optional[Decimal] = None,
-        description: Optional[str] = None,
+        debit_amount: Decimal | None = None,
+        credit_amount: Decimal | None = None,
+        description: str | None = None,
     ):
         self.line_id = line_id or uuid.uuid4()
         self.entry_id = entry_id or uuid.uuid4()

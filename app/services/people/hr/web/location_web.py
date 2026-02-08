@@ -6,7 +6,7 @@ import json
 import logging
 from decimal import Decimal, InvalidOperation
 from types import SimpleNamespace
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -33,7 +33,7 @@ def _parse_bool(value: Any, default: bool = False) -> bool:
     return bool(value)
 
 
-def _parse_location_type(value: Any) -> Optional[LocationType]:
+def _parse_location_type(value: Any) -> LocationType | None:
     """Parse a form value to LocationType."""
     if value is None or value == "":
         return None
@@ -60,7 +60,7 @@ class LocationWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str],
+        search: str | None,
         page: int,
     ) -> HTMLResponse:
         org_id = coerce_uuid(auth.organization_id)
@@ -165,8 +165,8 @@ class LocationWebService:
         if not location_name:
             errors["location_name"] = "Required"
 
-        latitude: Optional[float] = None
-        longitude: Optional[float] = None
+        latitude: float | None = None
+        longitude: float | None = None
         geofence_radius_m = 500
 
         if latitude_value:
@@ -269,8 +269,8 @@ class LocationWebService:
         if not location_name:
             errors["location_name"] = "Required"
 
-        latitude: Optional[float] = None
-        longitude: Optional[float] = None
+        latitude: float | None = None
+        longitude: float | None = None
         geofence_radius_m = 500
 
         if latitude_value:

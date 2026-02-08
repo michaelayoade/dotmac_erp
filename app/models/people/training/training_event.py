@@ -30,8 +30,8 @@ from app.db import Base
 from app.models.people.base import AuditMixin, ERPNextSyncMixin
 
 if TYPE_CHECKING:
-    from app.models.people.training.training_program import TrainingProgram
     from app.models.people.hr.employee import Employee
+    from app.models.people.training.training_program import TrainingProgram
 
 
 class TrainingEventStatus(str, enum.Enum):
@@ -94,7 +94,7 @@ class TrainingEvent(Base, AuditMixin, ERPNextSyncMixin):
         String(200),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -108,11 +108,11 @@ class TrainingEvent(Base, AuditMixin, ERPNextSyncMixin):
         Date,
         nullable=False,
     )
-    start_time: Mapped[Optional[time]] = mapped_column(
+    start_time: Mapped[time | None] = mapped_column(
         Time,
         nullable=True,
     )
-    end_time: Mapped[Optional[time]] = mapped_column(
+    end_time: Mapped[time | None] = mapped_column(
         Time,
         nullable=True,
     )
@@ -123,25 +123,25 @@ class TrainingEvent(Base, AuditMixin, ERPNextSyncMixin):
         default="IN_PERSON",
         comment="IN_PERSON, ONLINE, HYBRID",
     )
-    location: Mapped[Optional[str]] = mapped_column(
+    location: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
     )
-    meeting_link: Mapped[Optional[str]] = mapped_column(
+    meeting_link: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
     )
 
     # Trainer
-    trainer_name: Mapped[Optional[str]] = mapped_column(
+    trainer_name: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
     )
-    trainer_email: Mapped[Optional[str]] = mapped_column(
+    trainer_email: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
     )
-    trainer_employee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    trainer_employee_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
@@ -149,13 +149,13 @@ class TrainingEvent(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # Capacity
-    max_attendees: Mapped[Optional[int]] = mapped_column(
+    max_attendees: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
     )
 
     # Cost tracking
-    total_cost: Mapped[Optional[Decimal]] = mapped_column(
+    total_cost: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
     )
@@ -171,12 +171,12 @@ class TrainingEvent(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # Feedback (post-event)
-    average_rating: Mapped[Optional[Decimal]] = mapped_column(
+    average_rating: Mapped[Decimal | None] = mapped_column(
         Numeric(3, 2),
         nullable=True,
         comment="Average feedback rating 1.00-5.00",
     )
-    feedback_notes: Mapped[Optional[str]] = mapped_column(
+    feedback_notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -186,7 +186,7 @@ class TrainingEvent(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )
@@ -212,7 +212,7 @@ class TrainingEvent(Base, AuditMixin, ERPNextSyncMixin):
         )
 
     @property
-    def spots_remaining(self) -> Optional[int]:
+    def spots_remaining(self) -> int | None:
         """Calculate remaining spots."""
         if self.max_attendees is None:
             return None
@@ -268,27 +268,27 @@ class TrainingAttendee(Base, AuditMixin):
     )
 
     # Attendance tracking
-    invited_on: Mapped[Optional[date]] = mapped_column(
+    invited_on: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    confirmed_on: Mapped[Optional[date]] = mapped_column(
+    confirmed_on: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    attended_on: Mapped[Optional[date]] = mapped_column(
+    attended_on: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="Date marked as attended",
     )
 
     # Feedback
-    rating: Mapped[Optional[int]] = mapped_column(
+    rating: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="1-5 rating",
     )
-    feedback: Mapped[Optional[str]] = mapped_column(
+    feedback: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -297,13 +297,13 @@ class TrainingAttendee(Base, AuditMixin):
     certificate_issued: Mapped[bool] = mapped_column(
         default=False,
     )
-    certificate_number: Mapped[Optional[str]] = mapped_column(
+    certificate_number: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
     )
 
     # Notes
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -313,7 +313,7 @@ class TrainingAttendee(Base, AuditMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

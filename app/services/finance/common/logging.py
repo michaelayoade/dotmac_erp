@@ -10,26 +10,25 @@ from __future__ import annotations
 import functools
 import logging
 import time
+from collections.abc import Callable
 from contextvars import ContextVar
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, TypeVar
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
 # Context variables for request-scoped logging context
-_log_context_org_id: ContextVar[Optional[str]] = ContextVar("log_org_id", default=None)
-_log_context_user_id: ContextVar[Optional[str]] = ContextVar(
-    "log_user_id", default=None
-)
-_log_context_correlation_id: ContextVar[Optional[str]] = ContextVar(
+_log_context_org_id: ContextVar[str | None] = ContextVar("log_org_id", default=None)
+_log_context_user_id: ContextVar[str | None] = ContextVar("log_user_id", default=None)
+_log_context_correlation_id: ContextVar[str | None] = ContextVar(
     "log_correlation_id", default=None
 )
 
 
 def set_log_context(
-    organization_id: Optional[UUID | str] = None,
-    user_id: Optional[UUID | str] = None,
-    correlation_id: Optional[str] = None,
+    organization_id: UUID | str | None = None,
+    user_id: UUID | str | None = None,
+    correlation_id: str | None = None,
 ) -> None:
     """
     Set logging context for the current request.
@@ -54,7 +53,7 @@ def clear_log_context() -> None:
     _log_context_correlation_id.set(None)
 
 
-def get_log_context() -> dict[str, Optional[str]]:
+def get_log_context() -> dict[str, str | None]:
     """Get current logging context."""
     return {
         "org_id": _log_context_org_id.get(),
@@ -140,7 +139,7 @@ F = TypeVar("F", bound=Callable[..., Any])
 
 def log_slow_operation(
     threshold_ms: int = 500,
-    logger: Optional[logging.Logger] = None,
+    logger: logging.Logger | None = None,
 ) -> Callable[[F], F]:
     """
     Decorator to log slow operations.
@@ -182,7 +181,7 @@ def log_slow_operation(
 
 
 def log_service_call(
-    logger: Optional[logging.Logger] = None,
+    logger: logging.Logger | None = None,
     log_args: bool = False,
     log_result: bool = False,
 ) -> Callable[[F], F]:
@@ -262,7 +261,7 @@ def log_service_call(
 
 
 def log_db_error(
-    logger: Optional[logging.Logger] = None,
+    logger: logging.Logger | None = None,
     operation: str = "database operation",
 ) -> Callable[[F], F]:
     """

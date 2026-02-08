@@ -75,7 +75,7 @@ class TimeEntry(Base, AuditMixin):
         nullable=False,
         index=True,
     )
-    task_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    task_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("pm.task.task_id"),
         nullable=True,
@@ -93,7 +93,7 @@ class TimeEntry(Base, AuditMixin):
     # Time entry details
     entry_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
     hours: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Billing
     is_billable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -104,13 +104,13 @@ class TimeEntry(Base, AuditMixin):
     )
 
     # ERPNext sync fields
-    erpnext_timesheet_id: Mapped[Optional[str]] = mapped_column(
+    erpnext_timesheet_id: Mapped[str | None] = mapped_column(
         String(255), nullable=True, index=True
     )
-    erpnext_timesheet_detail_id: Mapped[Optional[str]] = mapped_column(
+    erpnext_timesheet_detail_id: Mapped[str | None] = mapped_column(
         String(255), nullable=True
     )
-    last_synced_at: Mapped[Optional[datetime]] = mapped_column(
+    last_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
@@ -120,7 +120,7 @@ class TimeEntry(Base, AuditMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

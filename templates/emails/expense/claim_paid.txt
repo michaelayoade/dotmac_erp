@@ -1,0 +1,13 @@
+{% extends "emails/base_email.txt" %}
+{% block content %}Hi {{ first_name }},
+
+Your expense claim has been paid!
+
+Claim Number: {{ claim_number }}
+Amount Paid: {{ currency }} {{ amount }}
+{% if payment_reference %}Payment Reference: {{ payment_reference }}
+{% endif %}{% if payment_date %}Payment Date: {{ payment_date }}
+{% endif %}
+The reimbursement has been processed. Please allow time for the payment to reflect in your account.
+
+View details at: {{ claim_url }}{% endblock %}

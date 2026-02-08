@@ -6,27 +6,19 @@ Provides view-focused data and operations for AR receipt and aging web routes.
 
 from __future__ import annotations
 
-import json
 import logging
-from datetime import date
-from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
-from fastapi import Request, UploadFile
+from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.customer_payment import (
     CustomerPayment,
-    PaymentMethod,
-    PaymentStatus,
 )
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus
-from app.models.finance.ar.payment_allocation import PaymentAllocation
 from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
 from app.services.common import coerce_uuid
@@ -34,7 +26,6 @@ from app.services.finance.ar.ar_aging import ar_aging_service
 from app.services.finance.ar.customer import customer_service
 from app.services.finance.ar.customer_payment import (
     CustomerPaymentInput,
-    PaymentAllocationInput,
     customer_payment_service,
 )
 from app.services.finance.ar.web.base import (
@@ -47,7 +38,6 @@ from app.services.finance.ar.web.base import (
     format_file_size,
     get_accounts,
     parse_date,
-    parse_receipt_status,
     receipt_detail_view,
     receipt_status_label,
 )
@@ -63,83 +53,26 @@ class ReceiptWebService:
     """Web service methods for AR receipts/payments and aging reports."""
 
     @staticmethod
-    def build_receipt_input(data: dict) -> CustomerPaymentInput:
+    def build_receipt_input(
+        db: Session, data: dict, organization_id: UUID
+    ) -> CustomerPaymentInput:
         """Build CustomerPaymentInput from form data."""
-        payment_date = parse_date(data.get("payment_date")) or date.today()
-
-        # Parse payment method
-        method_str = data.get("payment_method", "BANK_TRANSFER")
-        try:
-            payment_method = PaymentMethod(method_str)
-        except ValueError:
-            payment_method = PaymentMethod.BANK_TRANSFER
-
-        # Parse allocations if provided
-        allocations = []
-        allocations_data = data.get("allocations", [])
-        if isinstance(allocations_data, str):
-            try:
-                allocations_data = json.loads(allocations_data)
-            except json.JSONDecodeError:
-                allocations_data = []
-
-        for alloc in allocations_data:
-            if alloc.get("invoice_id") and alloc.get("amount"):
-                allocations.append(
-                    PaymentAllocationInput(
-                        invoice_id=UUID(alloc["invoice_id"]),
-                        amount=Decimal(str(alloc["amount"])),
-                    )
-                )
-
-        # Parse WHT fields
-        wht_code_id = None
-        wht_amount = Decimal("0")
-        gross_amount = None
-        wht_certificate_number = None
-
-        # Check if WHT is applied
-        has_wht = data.get("has_wht") in ("true", "1", True, "on")
-        if has_wht:
-            if data.get("wht_code_id"):
-                wht_code_id = UUID(data["wht_code_id"])
-            if data.get("wht_amount"):
-                wht_amount = Decimal(str(data["wht_amount"]))
-            if data.get("gross_amount"):
-                gross_amount = Decimal(str(data["gross_amount"]))
-            wht_certificate_number = data.get("wht_certificate_number") or None
-
-        return CustomerPaymentInput(
-            customer_id=UUID(data["customer_id"]),
-            payment_date=payment_date,
-            payment_method=payment_method,
-            currency_code=data.get(
-                "currency_code",
-                settings.default_functional_currency_code,
-            ),
-            amount=Decimal(str(data.get("amount", 0))),
-            bank_account_id=UUID(data["bank_account_id"])
-            if data.get("bank_account_id")
-            else None,
-            reference=data.get("reference"),
-            description=data.get("description"),
-            allocations=allocations,
-            # WHT fields
-            gross_amount=gross_amount,
-            wht_code_id=wht_code_id,
-            wht_amount=wht_amount,
-            wht_certificate_number=wht_certificate_number,
+        payload = dict(data)
+        return customer_payment_service.build_input_from_payload(
+            db=db,
+            organization_id=organization_id,
+            payload=payload,
         )
 
     @staticmethod
     def list_receipts_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        customer_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        customer_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -152,44 +85,26 @@ class ReceiptWebService:
             status,
             page,
         )
-        org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
+        org_id = coerce_uuid(organization_id)
+        from app.services.finance.ar.receipt_query import build_receipt_query
 
-        status_value = parse_receipt_status(status)
-        from_date = parse_date(start_date)
-        to_date = parse_date(end_date)
-
-        query = (
-            db.query(CustomerPayment, Customer)
-            .join(Customer, CustomerPayment.customer_id == Customer.customer_id)
-            .filter(CustomerPayment.organization_id == org_id)
+        query = build_receipt_query(
+            db=db,
+            organization_id=organization_id,
+            search=search,
+            customer_id=customer_id,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
         )
-
-        if customer_id:
-            query = query.filter(
-                CustomerPayment.customer_id == coerce_uuid(customer_id)
-            )
-        if status_value:
-            query = query.filter(CustomerPayment.status == status_value)
-        if from_date:
-            query = query.filter(CustomerPayment.payment_date >= from_date)
-        if to_date:
-            query = query.filter(CustomerPayment.payment_date <= to_date)
-        if search:
-            search_pattern = f"%{search}%"
-            query = query.filter(
-                or_(
-                    CustomerPayment.payment_number.ilike(search_pattern),
-                    CustomerPayment.reference.ilike(search_pattern),
-                    CustomerPayment.description.ilike(search_pattern),
-                )
-            )
 
         total_count = (
             query.with_entities(func.count(CustomerPayment.payment_id)).scalar() or 0
         )
         receipts = (
-            query.order_by(CustomerPayment.payment_date.desc())
+            query.with_entities(CustomerPayment, Customer)
+            .order_by(CustomerPayment.payment_date.desc())
             .limit(limit)
             .offset(offset)
             .all()
@@ -243,9 +158,9 @@ class ReceiptWebService:
     def receipt_form_context(
         db: Session,
         organization_id: str,
-        invoice_id: Optional[str] = None,
-        receipt_id: Optional[str] = None,
-        customer_id: Optional[str] = None,
+        invoice_id: str | None = None,
+        receipt_id: str | None = None,
+        customer_id: str | None = None,
     ) -> dict:
         """Get context for receipt create/edit form."""
         logger.debug(
@@ -511,7 +426,7 @@ class ReceiptWebService:
         db: Session,
         organization_id: str,
         receipt_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete a receipt. Returns error message or None on success."""
         logger.debug(
             "delete_receipt: org=%s receipt_id=%s", organization_id, receipt_id
@@ -519,25 +434,13 @@ class ReceiptWebService:
         org_id = coerce_uuid(organization_id)
         pay_id = coerce_uuid(receipt_id)
 
-        payment = db.get(CustomerPayment, pay_id)
-        if not payment or payment.organization_id != org_id:
-            return "Receipt not found"
-
-        # Only PENDING (DRAFT) receipts can be deleted
-        if payment.status != PaymentStatus.PENDING:
-            return f"Cannot delete receipt with status '{payment.status.value}'. Only draft receipts can be deleted."
-
         try:
-            # Delete allocations first
-            db.query(PaymentAllocation).filter(
-                PaymentAllocation.payment_id == pay_id
-            ).delete()
-            db.delete(payment)
-            db.commit()
+            customer_payment_service.delete_receipt(db, org_id, pay_id)
             logger.info("delete_receipt: deleted receipt %s for org %s", pay_id, org_id)
             return None
+        except HTTPException as exc:
+            return exc.detail
         except Exception as e:
-            db.rollback()
             logger.exception("delete_receipt: failed for org %s", org_id)
             return f"Failed to delete receipt: {str(e)}"
 
@@ -545,8 +448,8 @@ class ReceiptWebService:
     def aging_context(
         db: Session,
         organization_id: str,
-        as_of_date: Optional[str],
-        customer_id: Optional[str],
+        as_of_date: str | None,
+        customer_id: str | None,
     ) -> dict:
         """Get context for AR aging report."""
         logger.debug(
@@ -594,11 +497,11 @@ class ReceiptWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str],
-        customer_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        customer_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
     ) -> HTMLResponse:
         """Render receipt list page."""
@@ -622,8 +525,8 @@ class ReceiptWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        invoice_id: Optional[str],
-        customer_id: Optional[str] = None,
+        invoice_id: str | None,
+        customer_id: str | None = None,
     ) -> HTMLResponse:
         """Render new receipt form."""
         context = base_context(request, auth, "New AR Receipt", "ar")
@@ -679,7 +582,7 @@ class ReceiptWebService:
             data = dict(form_data)
 
         try:
-            input_data = self.build_receipt_input(data)
+            input_data = self.build_receipt_input(db, data, org_id)
 
             receipt = customer_payment_service.create_payment(
                 db=db,
@@ -779,7 +682,7 @@ class ReceiptWebService:
             data = dict(form_data)
 
         try:
-            input_data = self.build_receipt_input(data)
+            input_data = self.build_receipt_input(db, data, org_id)
 
             customer_payment_service.update_payment(
                 db=db,
@@ -824,8 +727,8 @@ class ReceiptWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        as_of_date: Optional[str],
-        customer_id: Optional[str],
+        as_of_date: str | None,
+        customer_id: str | None,
     ) -> HTMLResponse:
         """Render AR aging report page."""
         context = base_context(request, auth, "AR Aging Report", "ar")
@@ -843,7 +746,7 @@ class ReceiptWebService:
         self,
         receipt_id: str,
         file: UploadFile,
-        description: Optional[str],
+        description: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:

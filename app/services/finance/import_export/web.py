@@ -6,9 +6,8 @@ Both API and Web routes can use this service layer.
 """
 
 import logging
-import tempfile
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import UploadFile
@@ -17,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.models.finance.banking.bank_account import BankAccount
 from app.models.finance.gl.account import Account
+from app.services.upload_utils import get_env_max_bytes, write_upload_to_temp
 
 from . import (
     AccountImporter,
@@ -59,7 +59,7 @@ class ImportWebService:
     @staticmethod
     def _find_account_by_type(
         db: Session, org_id: UUID, subledger_type: str
-    ) -> Optional[UUID]:
+    ) -> UUID | None:
         """Find account by subledger type."""
         result = db.execute(
             select(Account).where(
@@ -72,7 +72,7 @@ class ImportWebService:
     @staticmethod
     def _find_account_by_name_pattern(
         db: Session, org_id: UUID, pattern: str
-    ) -> Optional[UUID]:
+    ) -> UUID | None:
         """Find account by name pattern."""
         result = db.execute(
             select(Account).where(
@@ -184,7 +184,7 @@ class ImportWebService:
         user_id: UUID,
         entity_type: str,
         file: UploadFile,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Preview import with validation and column mapping.
 
@@ -196,12 +196,13 @@ class ImportWebService:
         if not file.filename or not file.filename.endswith(".csv"):
             raise ValueError("Only CSV files are supported")
 
-        content = await file.read()
-
-        # Save to temp file for processing
-        with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp:
-            tmp.write(content)
-            tmp_path = tmp.name
+        max_bytes = get_env_max_bytes("MAX_IMPORT_FILE_SIZE", 50 * 1024 * 1024)
+        tmp_path = await write_upload_to_temp(
+            file,
+            suffix=".csv",
+            max_bytes=max_bytes,
+            error_detail=f"File too large. Maximum size: {max_bytes // 1024 // 1024}MB",
+        )
 
         try:
             config = ImportConfig(
@@ -260,7 +261,7 @@ class ImportWebService:
         skip_duplicates: bool = True,
         dry_run: bool = False,
         batch_size: int = 100,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Execute the import operation.
 
@@ -272,12 +273,13 @@ class ImportWebService:
         if not file.filename or not file.filename.endswith(".csv"):
             raise ValueError("Only CSV files are supported")
 
-        content = await file.read()
-
-        # Save to temp file for processing
-        with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp:
-            tmp.write(content)
-            tmp_path = tmp.name
+        max_bytes = get_env_max_bytes("MAX_IMPORT_FILE_SIZE", 50 * 1024 * 1024)
+        tmp_path = await write_upload_to_temp(
+            file,
+            suffix=".csv",
+            max_bytes=max_bytes,
+            error_detail=f"File too large. Maximum size: {max_bytes // 1024 // 1024}MB",
+        )
 
         try:
             config = ImportConfig(

@@ -9,12 +9,12 @@ from uuid import uuid4
 import pytest
 from fastapi import HTTPException
 
-from app.models.finance.ap.supplier_payment import APPaymentMethod, APPaymentStatus
 from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus
+from app.models.finance.ap.supplier_payment import APPaymentMethod, APPaymentStatus
 from app.services.finance.ap.supplier_payment import (
+    PaymentAllocationInput,
     SupplierPaymentInput,
     SupplierPaymentService,
-    PaymentAllocationInput,
 )
 
 

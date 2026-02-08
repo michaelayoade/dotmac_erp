@@ -5,7 +5,7 @@ Imports accounts from Zoho Books CSV export into the IFRS-based chart of account
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -69,17 +69,17 @@ class AccountCategoryImporter(BaseImporter[AccountCategory]):
 
     def __init__(self, db: Session, config: ImportConfig):
         super().__init__(db, config)
-        self._category_cache: Dict[str, UUID] = {}
+        self._category_cache: dict[str, UUID] = {}
 
-    def get_field_mappings(self) -> List[FieldMapping]:
+    def get_field_mappings(self) -> list[FieldMapping]:
         """Categories are derived from account types, not direct mappings."""
         return []
 
-    def get_unique_key(self, row: Dict[str, Any]) -> str:
+    def get_unique_key(self, row: dict[str, Any]) -> str:
         """Unique key is the Zoho account type."""
         return str(row.get("Account Type", "") or "").strip()
 
-    def check_duplicate(self, row: Dict[str, Any]) -> Optional[AccountCategory]:
+    def check_duplicate(self, row: dict[str, Any]) -> AccountCategory | None:
         """Check if category already exists."""
         account_type = self.get_unique_key(row)
         if not account_type:
@@ -105,7 +105,7 @@ class AccountCategoryImporter(BaseImporter[AccountCategory]):
 
         return existing
 
-    def create_entity(self, row: Dict[str, Any]) -> AccountCategory:
+    def create_entity(self, row: dict[str, Any]) -> AccountCategory:
         """Create a new account category from Zoho account type."""
         account_type = str(row.get("Account Type", "") or "").strip()
         category_code = self._make_category_code(account_type)
@@ -145,12 +145,12 @@ class AccountCategoryImporter(BaseImporter[AccountCategory]):
         }
         return order_map.get(ifrs_category, 999)
 
-    def get_category_id(self, account_type: str) -> Optional[UUID]:
+    def get_category_id(self, account_type: str) -> UUID | None:
         """Get the category ID for a given Zoho account type."""
         category_code = self._make_category_code(account_type)
         return self._category_cache.get(category_code)
 
-    def ensure_categories(self, rows: List[Dict[str, Any]]) -> None:
+    def ensure_categories(self, rows: list[dict[str, Any]]) -> None:
         """Ensure all required categories exist before importing accounts."""
         unique_types = set()
         for row in rows:
@@ -188,9 +188,9 @@ class AccountImporter(BaseImporter[Account]):
         super().__init__(db, config)
         self._category_importer = AccountCategoryImporter(db, config)
         self._account_code_counter = 0
-        self._parent_cache: Dict[str, UUID] = {}
+        self._parent_cache: dict[str, UUID] = {}
 
-    def get_field_mappings(self) -> List[FieldMapping]:
+    def get_field_mappings(self) -> list[FieldMapping]:
         """Define field mappings from Zoho CSV to Account model."""
         return [
             FieldMapping("Account Name", "account_name", required=True),
@@ -208,14 +208,14 @@ class AccountImporter(BaseImporter[Account]):
             FieldMapping("Parent Account", "parent_account_name", required=False),
         ]
 
-    def get_unique_key(self, row: Dict[str, Any]) -> str:
+    def get_unique_key(self, row: dict[str, Any]) -> str:
         """Unique key is account code or account name."""
         code = str(row.get("Account Code", "") or "").strip()
         if code:
             return code
         return str(row.get("Account Name", "") or "").strip()
 
-    def check_duplicate(self, row: Dict[str, Any]) -> Optional[Account]:
+    def check_duplicate(self, row: dict[str, Any]) -> Account | None:
         """Check if account already exists by code or name."""
         code = str(row.get("Account Code", "") or "").strip()
         name = str(row.get("Account Name", "") or "").strip()
@@ -244,7 +244,7 @@ class AccountImporter(BaseImporter[Account]):
 
         return None
 
-    def create_entity(self, row: Dict[str, Any]) -> Account:
+    def create_entity(self, row: dict[str, Any]) -> Account:
         """Create a new account from transformed row data."""
         zoho_type = row.get("zoho_account_type", "Expense")
         ifrs_category, normal_balance = ZOHO_ACCOUNT_TYPE_MAPPING.get(
@@ -325,7 +325,7 @@ class AccountImporter(BaseImporter[Account]):
             return self.result
 
         # Read all rows first
-        with open(file_path, "r", encoding=self.config.encoding) as f:
+        with open(file_path, encoding=self.config.encoding) as f:
             reader = csv.DictReader(f)
             rows = list(reader)
 

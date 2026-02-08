@@ -5,9 +5,10 @@ Revises: 20260124_add_hr_lifecycle_erpnext_fields
 Create Date: 2026-01-24
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
+
+from alembic import op
 
 revision = "20260124_department_head"
 down_revision = "20260124_add_hr_lifecycle_erpnext_fields"

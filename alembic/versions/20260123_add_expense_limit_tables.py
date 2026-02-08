@@ -11,12 +11,14 @@ This migration creates tables for multi-dimensional expense limit enforcement:
 - expense_period_usage: Usage cache for period-based limits
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
+
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 from app.alembic_utils import ensure_enum
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "20260123_add_expense_limit_tables"

@@ -7,7 +7,6 @@ Generic attachment storage for any document type across IFRS modules.
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     BigInteger,
@@ -113,7 +112,7 @@ class Attachment(Base):
         nullable=False,
         default=AttachmentCategory.OTHER,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="User-provided description",
@@ -126,7 +125,7 @@ class Attachment(Base):
         default="LOCAL",
         comment="Storage backend: LOCAL, S3, AZURE_BLOB, GCS",
     )
-    checksum: Mapped[Optional[str]] = mapped_column(
+    checksum: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,
         comment="SHA-256 hash for integrity verification",

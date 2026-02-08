@@ -142,7 +142,7 @@ class TestDepreciationRunService:
         fiscal_period_id = uuid.uuid4()
         mock_db.query.return_value.filter.return_value.scalar.return_value = 0
 
-        result = DepreciationService.create_depreciation_run(
+        DepreciationService.create_depreciation_run(
             mock_db,
             org_id,
             fiscal_period_id,
@@ -167,8 +167,9 @@ class TestDepreciationRunService:
 
     def test_get_depreciation_run_not_found(self, mock_db):
         """Test getting non-existent depreciation run."""
-        from app.services.fixed_assets.depreciation import DepreciationService
         from fastapi import HTTPException
+
+        from app.services.fixed_assets.depreciation import DepreciationService
 
         mock_db.get.return_value = None
 

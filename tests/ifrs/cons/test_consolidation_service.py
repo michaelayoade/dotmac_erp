@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import HTTPException
 
+from app.models.finance.cons.consolidated_balance import ConsolidatedBalance
 from app.models.finance.cons.consolidation_run import (
     ConsolidationRun,
     ConsolidationStatus,
@@ -19,21 +20,19 @@ from app.models.finance.cons.elimination_entry import (
     EliminationEntry,
     EliminationType,
 )
-from app.models.finance.cons.consolidated_balance import ConsolidatedBalance
+from app.models.finance.cons.intercompany_balance import IntercompanyBalance
 from app.models.finance.cons.legal_entity import (
-    LegalEntity,
     ConsolidationMethod,
     EntityType,
+    LegalEntity,
 )
-from app.models.finance.cons.intercompany_balance import IntercompanyBalance
 from app.models.finance.cons.ownership_interest import OwnershipInterest
 from app.services.finance.cons.consolidation import (
-    ConsolidationService,
     ConsolidationRunInput,
-    EliminationInput,
+    ConsolidationService,
     ConsolidationSummary,
+    EliminationInput,
 )
-
 
 # -----------------------------------------------------------------------------
 # Fixtures
@@ -180,7 +179,7 @@ class TestCreateRun:
         ]
         mock_db.query.return_value.filter.return_value.all.return_value = mock_entities
 
-        result = ConsolidationService.create_run(
+        ConsolidationService.create_run(
             db=mock_db,
             group_id=group_id,
             input=run_input,
@@ -250,7 +249,7 @@ class TestStartRun:
         mock_consolidation_run.status = ConsolidationStatus.DRAFT
         mock_db.get.return_value = mock_consolidation_run
 
-        result = ConsolidationService.start_run(
+        ConsolidationService.start_run(
             db=mock_db,
             group_id=group_id,
             run_id=mock_consolidation_run.run_id,
@@ -329,7 +328,7 @@ class TestCreateEliminationEntry:
             credit_amount=Decimal("100000"),
         )
 
-        result = ConsolidationService.create_elimination_entry(
+        ConsolidationService.create_elimination_entry(
             db=mock_db,
             group_id=group_id,
             run_id=mock_consolidation_run.run_id,
@@ -367,7 +366,7 @@ class TestCreateEliminationEntry:
             nci_debit_amount=Decimal("200000"),
         )
 
-        result = ConsolidationService.create_elimination_entry(
+        ConsolidationService.create_elimination_entry(
             db=mock_db,
             group_id=group_id,
             run_id=mock_consolidation_run.run_id,
@@ -479,7 +478,7 @@ class TestGenerateIntercompanyEliminations:
             "0"
         )
 
-        result = ConsolidationService.generate_intercompany_eliminations(
+        ConsolidationService.generate_intercompany_eliminations(
             db=mock_db,
             group_id=group_id,
             run_id=mock_consolidation_run.run_id,
@@ -556,7 +555,7 @@ class TestGenerateInvestmentEliminations:
             mock_ownership_interest
         )
 
-        result = ConsolidationService.generate_investment_eliminations(
+        ConsolidationService.generate_investment_eliminations(
             db=mock_db,
             group_id=group_id,
             run_id=mock_consolidation_run.run_id,
@@ -609,7 +608,7 @@ class TestCompleteRun:
         mock_consolidation_run.status = ConsolidationStatus.IN_PROGRESS
         mock_db.get.return_value = mock_consolidation_run
 
-        result = ConsolidationService.complete_run(
+        ConsolidationService.complete_run(
             db=mock_db,
             group_id=group_id,
             run_id=mock_consolidation_run.run_id,
@@ -663,7 +662,7 @@ class TestApproveRun:
         mock_consolidation_run.status = ConsolidationStatus.COMPLETED
         mock_db.get.return_value = mock_consolidation_run
 
-        result = ConsolidationService.approve_run(
+        ConsolidationService.approve_run(
             db=mock_db,
             group_id=group_id,
             run_id=mock_consolidation_run.run_id,
@@ -740,7 +739,7 @@ class TestCreateConsolidatedBalance:
         run_id = uuid.uuid4()
         account_id = uuid.uuid4()
 
-        result = ConsolidationService.create_consolidated_balance(
+        ConsolidationService.create_consolidated_balance(
             db=mock_db,
             run_id=run_id,
             account_id=account_id,
@@ -778,7 +777,7 @@ class TestCreateConsolidatedBalance:
         account_id = uuid.uuid4()
         segment_id = uuid.uuid4()
 
-        result = ConsolidationService.create_consolidated_balance(
+        ConsolidationService.create_consolidated_balance(
             db=mock_db,
             run_id=run_id,
             account_id=account_id,
@@ -795,7 +794,7 @@ class TestCreateConsolidatedBalance:
         run_id = uuid.uuid4()
         account_id = uuid.uuid4()
 
-        result = ConsolidationService.create_consolidated_balance(
+        ConsolidationService.create_consolidated_balance(
             db=mock_db,
             run_id=run_id,
             account_id=account_id,
@@ -1011,7 +1010,7 @@ class TestList:
         mock_runs = [MagicMock(spec=ConsolidationRun)]
         mock_db.query.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_runs
 
-        result = ConsolidationService.list(
+        ConsolidationService.list(
             db=mock_db,
             limit=10,
             offset=20,

@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import date
-from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -32,8 +31,8 @@ class ReversalResult:
     """Result of a reversal operation."""
 
     success: bool
-    reversal_journal_id: Optional[UUID] = None
-    reversal_journal_number: Optional[str] = None
+    reversal_journal_id: UUID | None = None
+    reversal_journal_number: str | None = None
     message: str = ""
 
 
@@ -54,9 +53,9 @@ class ReversalService(ListResponseMixin):
         created_by_user_id: UUID,
         reason: str,
         auto_post: bool = False,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
         allow_adjustment: bool = False,
-        reopen_session_id: Optional[UUID] = None,
+        reopen_session_id: UUID | None = None,
     ) -> ReversalResult:
         """
         Create a reversal entry for a posted journal.
@@ -229,7 +228,7 @@ class ReversalService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         original_journal_id: UUID,
-    ) -> Optional[JournalEntry]:
+    ) -> JournalEntry | None:
         """
         Get the reversal journal for an original journal.
 
@@ -291,8 +290,8 @@ class ReversalService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        original_journal_id: Optional[str] = None,
+        organization_id: str | None = None,
+        original_journal_id: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[JournalEntry]:

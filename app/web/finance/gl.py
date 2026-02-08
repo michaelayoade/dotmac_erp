@@ -4,15 +4,12 @@ GL (General Ledger) Web Routes.
 HTML template routes for Chart of Accounts, Journal Entries, and Fiscal Periods.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.gl.web import gl_web_service
-from app.web.deps import get_db, require_finance_access, WebAuthContext
-
+from app.web.deps import WebAuthContext, get_db, require_finance_access
 
 router = APIRouter(prefix="/gl", tags=["gl-web"])
 
@@ -20,9 +17,9 @@ router = APIRouter(prefix="/gl", tags=["gl-web"])
 @router.get("/accounts", response_class=HTMLResponse)
 def list_accounts(
     request: Request,
-    search: Optional[str] = None,
-    category: Optional[str] = None,
-    status: Optional[str] = None,
+    search: str | None = None,
+    category: str | None = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -69,6 +66,21 @@ def suggest_account_code(
     )
 
 
+@router.get("/accounts/export")
+async def export_all_accounts(
+    request: Request,
+    search: str = "",
+    status: str = "",
+    category: str = "",
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Export all accounts matching filters to CSV."""
+    return await gl_web_service.export_all_accounts_response(
+        auth, db, search, status, category=category
+    )
+
+
 @router.get("/accounts/{account_id}", response_class=HTMLResponse)
 def view_account(
     request: Request,
@@ -101,15 +113,15 @@ def create_account(
     normal_balance: str = Form(...),
     description: str = Form(""),
     search_terms: str = Form(""),
-    is_multi_currency: Optional[str] = Form(None),
-    default_currency_code: Optional[str] = Form(None),
-    is_active: Optional[str] = Form(None),
-    is_posting_allowed: Optional[str] = Form(None),
-    is_budgetable: Optional[str] = Form(None),
-    is_reconciliation_required: Optional[str] = Form(None),
-    subledger_type: Optional[str] = Form(None),
-    is_cash_equivalent: Optional[str] = Form(None),
-    is_financial_instrument: Optional[str] = Form(None),
+    is_multi_currency: str | None = Form(None),
+    default_currency_code: str | None = Form(None),
+    is_active: str | None = Form(None),
+    is_posting_allowed: str | None = Form(None),
+    is_budgetable: str | None = Form(None),
+    is_reconciliation_required: str | None = Form(None),
+    subledger_type: str | None = Form(None),
+    is_cash_equivalent: str | None = Form(None),
+    is_financial_instrument: str | None = Form(None),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -149,15 +161,15 @@ def update_account(
     normal_balance: str = Form(...),
     description: str = Form(""),
     search_terms: str = Form(""),
-    is_multi_currency: Optional[str] = Form(None),
-    default_currency_code: Optional[str] = Form(None),
-    is_active: Optional[str] = Form(None),
-    is_posting_allowed: Optional[str] = Form(None),
-    is_budgetable: Optional[str] = Form(None),
-    is_reconciliation_required: Optional[str] = Form(None),
-    subledger_type: Optional[str] = Form(None),
-    is_cash_equivalent: Optional[str] = Form(None),
-    is_financial_instrument: Optional[str] = Form(None),
+    is_multi_currency: str | None = Form(None),
+    default_currency_code: str | None = Form(None),
+    is_active: str | None = Form(None),
+    is_posting_allowed: str | None = Form(None),
+    is_budgetable: str | None = Form(None),
+    is_reconciliation_required: str | None = Form(None),
+    subledger_type: str | None = Form(None),
+    is_cash_equivalent: str | None = Form(None),
+    is_financial_instrument: str | None = Form(None),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -251,10 +263,10 @@ async def bulk_deactivate_accounts(
 @router.get("/ledger", response_class=HTMLResponse)
 def list_ledger(
     request: Request,
-    account_id: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    search: Optional[str] = None,
+    account_id: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    search: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -275,10 +287,10 @@ def list_ledger(
 @router.get("/journals", response_class=HTMLResponse)
 def list_journals(
     request: Request,
-    search: Optional[str] = None,
-    status: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -304,6 +316,22 @@ def new_journal_form(
 ):
     """New journal entry form page."""
     return gl_web_service.journal_new_form_response(request, auth, db)
+
+
+@router.get("/journals/export")
+async def export_all_journals(
+    request: Request,
+    search: str = "",
+    status: str = "",
+    start_date: str = "",
+    end_date: str = "",
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Export all journal entries matching filters to CSV."""
+    return await gl_web_service.export_all_journals_response(
+        auth, db, search, status, start_date, end_date
+    )
 
 
 @router.get("/journals/{entry_id}", response_class=HTMLResponse)
@@ -337,7 +365,7 @@ def create_journal(
     posting_date: str = Form(...),
     description: str = Form(...),
     reference: str = Form(""),
-    currency_code: Optional[str] = Form(None),
+    currency_code: str | None = Form(None),
     exchange_rate: str = Form("1.0"),
     lines_json: str = Form("[]"),
     auth: WebAuthContext = Depends(require_finance_access),
@@ -370,7 +398,7 @@ def update_journal(
     posting_date: str = Form(...),
     description: str = Form(...),
     reference: str = Form(""),
-    currency_code: Optional[str] = Form(None),
+    currency_code: str | None = Form(None),
     exchange_rate: str = Form("1.0"),
     lines_json: str = Form("[]"),
     auth: WebAuthContext = Depends(require_finance_access),
@@ -504,7 +532,7 @@ def new_period_form(
 @router.get("/trial-balance", response_class=HTMLResponse)
 def trial_balance(
     request: Request,
-    as_of_date: Optional[str] = None,
+    as_of_date: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):

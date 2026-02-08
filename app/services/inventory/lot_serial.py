@@ -10,7 +10,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
-from typing import Optional
+from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -33,12 +33,12 @@ class LotInput:
     received_date: date
     unit_cost: Decimal
     initial_quantity: Decimal
-    manufacture_date: Optional[date] = None
-    expiry_date: Optional[date] = None
-    supplier_id: Optional[UUID] = None
-    supplier_lot_number: Optional[str] = None
-    purchase_order_id: Optional[UUID] = None
-    certificate_of_analysis: Optional[str] = None
+    manufacture_date: date | None = None
+    expiry_date: date | None = None
+    supplier_id: UUID | None = None
+    supplier_lot_number: str | None = None
+    purchase_order_id: UUID | None = None
+    certificate_of_analysis: str | None = None
 
 
 @dataclass
@@ -46,10 +46,10 @@ class SerialNumber:
     """A serial number entry."""
 
     serial_number: str
-    lot_id: Optional[UUID] = None
-    item_id: Optional[UUID] = None
+    lot_id: UUID | None = None
+    item_id: UUID | None = None
     status: str = "AVAILABLE"
-    location: Optional[str] = None
+    location: str | None = None
 
 
 @dataclass
@@ -69,9 +69,9 @@ class LotTraceability:
     lot_number: str
     item_id: UUID
     item_code: str
-    supplier_lot: Optional[str]
+    supplier_lot: str | None
     received_date: date
-    expiry_date: Optional[date]
+    expiry_date: date | None
     total_received: Decimal
     total_remaining: Decimal
     total_consumed: Decimal
@@ -167,9 +167,10 @@ class LotSerialService(ListResponseMixin):
     @staticmethod
     def allocate_from_lot(
         db: Session,
-        lot_id: UUID,
-        quantity: Decimal,
-        reference: Optional[str] = None,
+        organization_id: UUID | None,
+        lot_id: UUID | Decimal,
+        quantity: Decimal | None = None,
+        reference: str | None = None,
     ) -> InventoryLot:
         """
         Allocate quantity from a lot.
@@ -183,25 +184,45 @@ class LotSerialService(ListResponseMixin):
         Returns:
             Updated InventoryLot
         """
-        lot_id = coerce_uuid(lot_id)
+        lot_id_value: UUID
+        quantity_value: Decimal
+        org_id = organization_id
+        if quantity is None:
+            if organization_id is None:
+                raise HTTPException(
+                    status_code=400, detail="Organization id is required"
+                )
+            lot_id_value = coerce_uuid(organization_id)
+            quantity_value = cast(Decimal, lot_id)
+            org_id = None
+        else:
+            lot_id_value = coerce_uuid(cast(UUID, lot_id))
+            quantity_value = quantity
 
-        lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id).first()
+        lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id_value).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
+        if org_id is not None:
+            org_id_value = coerce_uuid(org_id)
+            if lot.organization_id != org_id_value:
+                raise HTTPException(status_code=404, detail="Lot not found")
 
         if lot.is_quarantined:
             raise HTTPException(
                 status_code=400, detail=f"Lot {lot.lot_number} is quarantined"
             )
 
-        if quantity > lot.quantity_available:
+        if quantity_value > lot.quantity_available:
             raise HTTPException(
                 status_code=400,
-                detail=f"Insufficient available quantity. Available: {lot.quantity_available}",
+                detail=(
+                    "Insufficient available quantity. "
+                    f"Available: {lot.quantity_available}"
+                ),
             )
 
-        lot.quantity_allocated += quantity
+        lot.quantity_allocated += quantity_value
         lot.quantity_available = lot.quantity_on_hand - lot.quantity_allocated
         if reference:
             lot.allocation_reference = reference
@@ -214,8 +235,9 @@ class LotSerialService(ListResponseMixin):
     @staticmethod
     def deallocate_from_lot(
         db: Session,
-        lot_id: UUID,
-        quantity: Decimal,
+        organization_id: UUID | None,
+        lot_id: UUID | Decimal,
+        quantity: Decimal | None = None,
     ) -> InventoryLot:
         """
         Release allocation from a lot.
@@ -228,17 +250,34 @@ class LotSerialService(ListResponseMixin):
         Returns:
             Updated InventoryLot
         """
-        lot_id = coerce_uuid(lot_id)
+        lot_id_value: UUID
+        quantity_value: Decimal
+        org_id = organization_id
+        if quantity is None:
+            if organization_id is None:
+                raise HTTPException(
+                    status_code=400, detail="Organization id is required"
+                )
+            lot_id_value = coerce_uuid(organization_id)
+            quantity_value = cast(Decimal, lot_id)
+            org_id = None
+        else:
+            lot_id_value = coerce_uuid(cast(UUID, lot_id))
+            quantity_value = quantity
 
-        lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id).first()
+        lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id_value).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
+        if org_id is not None:
+            org_id_value = coerce_uuid(org_id)
+            if lot.organization_id != org_id_value:
+                raise HTTPException(status_code=404, detail="Lot not found")
 
-        if quantity > lot.quantity_allocated:
-            quantity = lot.quantity_allocated
+        if quantity_value > lot.quantity_allocated:
+            quantity_value = lot.quantity_allocated
 
-        lot.quantity_allocated -= quantity
+        lot.quantity_allocated -= quantity_value
         lot.quantity_available = lot.quantity_on_hand - lot.quantity_allocated
 
         db.commit()
@@ -249,8 +288,9 @@ class LotSerialService(ListResponseMixin):
     @staticmethod
     def consume_from_lot(
         db: Session,
-        lot_id: UUID,
-        quantity: Decimal,
+        organization_id: UUID | None,
+        lot_id: UUID | Decimal,
+        quantity: Decimal | None = None,
     ) -> InventoryLot:
         """
         Consume quantity from a lot (reduce on-hand).
@@ -263,20 +303,38 @@ class LotSerialService(ListResponseMixin):
         Returns:
             Updated InventoryLot
         """
-        lot_id = coerce_uuid(lot_id)
+        lot_id_value: UUID
+        quantity_value: Decimal
+        org_id = organization_id
+        if quantity is None:
+            if organization_id is None:
+                raise HTTPException(
+                    status_code=400, detail="Organization id is required"
+                )
+            lot_id_value = coerce_uuid(organization_id)
+            quantity_value = cast(Decimal, lot_id)
+            org_id = None
+        else:
+            lot_id_value = coerce_uuid(cast(UUID, lot_id))
+            quantity_value = quantity
 
-        lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id).first()
+        lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id_value).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
+        if org_id is not None:
+            org_id_value = coerce_uuid(org_id)
+            if lot.organization_id != org_id_value:
+                raise HTTPException(status_code=404, detail="Lot not found")
 
-        if quantity > lot.quantity_on_hand:
+        if quantity_value > lot.quantity_on_hand:
             raise HTTPException(
                 status_code=400,
-                detail=f"Cannot consume {quantity}. On hand: {lot.quantity_on_hand}",
+                detail=f"Cannot consume {quantity_value}. "
+                f"On hand: {lot.quantity_on_hand}",
             )
 
-        lot.quantity_on_hand -= quantity
+        lot.quantity_on_hand -= quantity_value
 
         # Also reduce allocated if necessary
         if lot.quantity_allocated > lot.quantity_on_hand:
@@ -296,8 +354,9 @@ class LotSerialService(ListResponseMixin):
     @staticmethod
     def quarantine_lot(
         db: Session,
-        lot_id: UUID,
-        reason: str,
+        organization_id: UUID | None,
+        lot_id: UUID | str,
+        reason: str | None = None,
     ) -> InventoryLot:
         """
         Place a lot in quarantine.
@@ -310,12 +369,25 @@ class LotSerialService(ListResponseMixin):
         Returns:
             Updated InventoryLot
         """
+        org_id = organization_id
+        if reason is None:
+            if organization_id is None:
+                raise HTTPException(
+                    status_code=400, detail="Organization id is required"
+                )
+            lot_id, reason = organization_id, str(lot_id)
+            org_id = None
+
         lot_id = coerce_uuid(lot_id)
 
         lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
+        if org_id is not None:
+            org_id_value = coerce_uuid(org_id)
+            if lot.organization_id != org_id_value:
+                raise HTTPException(status_code=404, detail="Lot not found")
 
         lot.is_quarantined = True
         lot.quarantine_reason = reason
@@ -329,7 +401,8 @@ class LotSerialService(ListResponseMixin):
     @staticmethod
     def release_quarantine(
         db: Session,
-        lot_id: UUID,
+        organization_id: UUID | None,
+        lot_id: UUID | str | None = None,
         qc_status: str = "PASSED",
     ) -> InventoryLot:
         """
@@ -343,12 +416,33 @@ class LotSerialService(ListResponseMixin):
         Returns:
             Updated InventoryLot
         """
+        org_id = organization_id
+        if lot_id is None:
+            if organization_id is None:
+                raise HTTPException(
+                    status_code=400, detail="Organization id is required"
+                )
+            lot_id = organization_id
+            org_id = None
+        elif isinstance(lot_id, str) and qc_status == "PASSED":
+            # Legacy signature: (db, lot_id, qc_status)
+            if organization_id is None:
+                raise HTTPException(
+                    status_code=400, detail="Organization id is required"
+                )
+            lot_id, qc_status = organization_id, str(lot_id)
+            org_id = None
+
         lot_id = coerce_uuid(lot_id)
 
         lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
+        if org_id is not None:
+            org_id_value = coerce_uuid(org_id)
+            if lot.organization_id != org_id_value:
+                raise HTTPException(status_code=404, detail="Lot not found")
 
         lot.is_quarantined = False
         lot.quarantine_reason = None
@@ -429,7 +523,8 @@ class LotSerialService(ListResponseMixin):
     @staticmethod
     def get_traceability(
         db: Session,
-        lot_id: UUID,
+        organization_id: UUID | None,
+        lot_id: UUID | None = None,
     ) -> LotTraceability:
         """
         Get traceability information for a lot.
@@ -441,12 +536,25 @@ class LotSerialService(ListResponseMixin):
         Returns:
             LotTraceability object
         """
+        org_id = organization_id
+        if lot_id is None:
+            if organization_id is None:
+                raise HTTPException(
+                    status_code=400, detail="Organization id is required"
+                )
+            lot_id = organization_id
+            org_id = None
+
         lot_id = coerce_uuid(lot_id)
 
         lot = db.query(InventoryLot).filter(InventoryLot.lot_id == lot_id).first()
 
         if not lot:
             raise HTTPException(status_code=404, detail="Lot not found")
+        if org_id is not None:
+            org_id_value = coerce_uuid(org_id)
+            if lot.organization_id != org_id_value:
+                raise HTTPException(status_code=404, detail="Lot not found")
 
         item = db.query(Item).filter(Item.item_id == lot.item_id).first()
 
@@ -464,20 +572,31 @@ class LotSerialService(ListResponseMixin):
         )
 
     @staticmethod
-    def get(db: Session, lot_id: str) -> Optional[InventoryLot]:
+    def get(
+        db: Session,
+        lot_id: str,
+        organization_id: UUID | None = None,
+    ) -> InventoryLot | None:
         """Get a lot by ID."""
-        return (
+        lot = (
             db.query(InventoryLot)
             .filter(InventoryLot.lot_id == coerce_uuid(lot_id))
             .first()
         )
+        if not lot:
+            return None
+        if organization_id is not None and lot.organization_id != coerce_uuid(
+            organization_id
+        ):
+            return None
+        return lot
 
     @staticmethod
     def get_by_number(
         db: Session,
         item_id: UUID,
         lot_number: str,
-    ) -> Optional[InventoryLot]:
+    ) -> InventoryLot | None:
         """Get a lot by number."""
         return (
             db.query(InventoryLot)
@@ -507,10 +626,10 @@ class LotSerialService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        item_id: Optional[str] = None,
-        is_quarantined: Optional[bool] = None,
-        has_expiry: Optional[bool] = None,
+        organization_id: str | None = None,
+        item_id: str | None = None,
+        is_quarantined: bool | None = None,
+        has_expiry: bool | None = None,
         include_zero_quantity: bool = False,
         limit: int = 50,
         offset: int = 0,

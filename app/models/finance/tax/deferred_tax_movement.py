@@ -5,7 +5,6 @@ Deferred Tax Movement Model - Tax Schema.
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -112,11 +111,11 @@ class DeferredTaxMovement(Base):
         Numeric(20, 6), nullable=False, default=0
     )
 
-    movement_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    movement_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     movement_category: Mapped[str] = mapped_column(String(50), nullable=False)
 
     # Journal entry
-    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
 

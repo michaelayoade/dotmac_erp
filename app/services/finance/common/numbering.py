@@ -7,7 +7,6 @@ Generates document numbers based on configurable sequences.
 import logging
 import uuid
 from datetime import date, datetime
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,7 +41,13 @@ DEFAULT_PREFIXES = {
     SequenceType.SUPPORT_TICKET: "",
     SequenceType.PROJECT: "PROJ",
     SequenceType.TASK: "TASK-",
-    SequenceType.MATERIAL_REQUEST: "MR",
+    SequenceType.MATERIAL_REQUEST: "MAT-MR",
+    SequenceType.CUSTOMER: "CUST",
+    SequenceType.EMPLOYEE: "EMP",
+    SequenceType.LEAVE_APPLICATION: "LV",
+    SequenceType.SALARY_SLIP: "SLIP",
+    SequenceType.PAYROLL_ENTRY: "PAY",
+    SequenceType.EXPENSE_INVOICE: "EXP-INV",
 }
 
 DEFAULT_SEQUENCE_CONFIGS = {
@@ -66,6 +71,78 @@ DEFAULT_SEQUENCE_CONFIGS = {
     },
     SequenceType.TASK: {
         "prefix": "TASK-",
+        "separator": "-",
+        "min_digits": 5,
+        "include_year": True,
+        "include_month": False,
+        "year_format": 4,
+        "reset_frequency": ResetFrequency.YEARLY,
+    },
+    SequenceType.CUSTOMER: {
+        "prefix": "CUST",
+        "separator": "-",
+        "min_digits": 5,
+        "include_year": False,
+        "include_month": False,
+        "year_format": 4,
+        "reset_frequency": ResetFrequency.NEVER,
+    },
+    SequenceType.EMPLOYEE: {
+        "prefix": "EMP-",
+        "separator": "-",
+        "min_digits": 4,
+        "include_year": True,
+        "include_month": False,
+        "year_format": 4,
+        "reset_frequency": ResetFrequency.YEARLY,
+    },
+    SequenceType.LEAVE_APPLICATION: {
+        "prefix": "LV-",
+        "separator": "-",
+        "min_digits": 5,
+        "include_year": True,
+        "include_month": False,
+        "year_format": 4,
+        "reset_frequency": ResetFrequency.YEARLY,
+    },
+    SequenceType.SALARY_SLIP: {
+        "prefix": "SLIP-",
+        "separator": "-",
+        "min_digits": 5,
+        "include_year": True,
+        "include_month": False,
+        "year_format": 4,
+        "reset_frequency": ResetFrequency.YEARLY,
+    },
+    SequenceType.PAYROLL_ENTRY: {
+        "prefix": "PAY-",
+        "separator": "-",
+        "min_digits": 4,
+        "include_year": True,
+        "include_month": False,
+        "year_format": 4,
+        "reset_frequency": ResetFrequency.YEARLY,
+    },
+    SequenceType.EXPENSE: {
+        "prefix": "EXP-",
+        "separator": "-",
+        "min_digits": 5,
+        "include_year": True,
+        "include_month": False,
+        "year_format": 4,
+        "reset_frequency": ResetFrequency.YEARLY,
+    },
+    SequenceType.EXPENSE_INVOICE: {
+        "prefix": "EXP-INV-",
+        "separator": "-",
+        "min_digits": 5,
+        "include_year": True,
+        "include_month": False,
+        "year_format": 4,
+        "reset_frequency": ResetFrequency.YEARLY,
+    },
+    SequenceType.MATERIAL_REQUEST: {
+        "prefix": "MAT-MR-",
         "separator": "-",
         "min_digits": 5,
         "include_year": True,
@@ -113,7 +190,7 @@ class NumberingService:
         self,
         organization_id: uuid.UUID,
         sequence_type: SequenceType,
-    ) -> Optional[NumberingSequence]:
+    ) -> NumberingSequence | None:
         """Get sequence configuration for an organization and type."""
         result = await self.db.execute(
             select(NumberingSequence).where(
@@ -172,7 +249,7 @@ class NumberingService:
     async def get_sequence_by_id(
         self,
         sequence_id: uuid.UUID,
-    ) -> Optional[NumberingSequence]:
+    ) -> NumberingSequence | None:
         """Get sequence configuration by ID."""
         result = await self.db.execute(
             select(NumberingSequence).where(
@@ -185,7 +262,7 @@ class NumberingService:
         self,
         organization_id: uuid.UUID,
         sequence_type: SequenceType,
-        reference_date: Optional[date] = None,
+        reference_date: date | None = None,
     ) -> str:
         """
         Generate the next document number.
@@ -273,15 +350,15 @@ class NumberingService:
     async def update_sequence(
         self,
         sequence_id: uuid.UUID,
-        prefix: Optional[str] = None,
-        suffix: Optional[str] = None,
-        separator: Optional[str] = None,
-        min_digits: Optional[int] = None,
-        include_year: Optional[bool] = None,
-        include_month: Optional[bool] = None,
-        year_format: Optional[int] = None,
-        reset_frequency: Optional[ResetFrequency] = None,
-    ) -> Optional[NumberingSequence]:
+        prefix: str | None = None,
+        suffix: str | None = None,
+        separator: str | None = None,
+        min_digits: int | None = None,
+        include_year: bool | None = None,
+        include_month: bool | None = None,
+        year_format: int | None = None,
+        reset_frequency: ResetFrequency | None = None,
+    ) -> NumberingSequence | None:
         """Update a sequence configuration."""
         result = await self.db.execute(
             select(NumberingSequence).where(
@@ -317,7 +394,7 @@ class NumberingService:
         self,
         sequence_id: uuid.UUID,
         new_value: int = 0,
-    ) -> Optional[NumberingSequence]:
+    ) -> NumberingSequence | None:
         """Reset a sequence counter to a specific value."""
         result = await self.db.execute(
             select(NumberingSequence).where(
@@ -358,16 +435,13 @@ class SyncNumberingService:
         self,
         organization_id: uuid.UUID,
         sequence_type: SequenceType,
-    ) -> Optional[NumberingSequence]:
+    ) -> NumberingSequence | None:
         """Get sequence configuration for an organization and type."""
-        return (
-            self.db.query(NumberingSequence)
-            .filter(
-                NumberingSequence.organization_id == organization_id,
-                NumberingSequence.sequence_type == sequence_type,
-            )
-            .first()
+        stmt = select(NumberingSequence).where(
+            NumberingSequence.organization_id == organization_id,
+            NumberingSequence.sequence_type == sequence_type,
         )
+        return self.db.scalar(stmt)
 
     def get_or_create_sequence(
         self,
@@ -393,7 +467,7 @@ class SyncNumberingService:
         self,
         organization_id: uuid.UUID,
         sequence_type: SequenceType,
-        reference_date: Optional[date] = None,
+        reference_date: date | None = None,
     ) -> str:
         """
         Generate the next document number.
@@ -409,15 +483,15 @@ class SyncNumberingService:
         if reference_date is None:
             reference_date = date.today()
 
-        sequence = (
-            self.db.query(NumberingSequence)
-            .filter(
+        stmt = (
+            select(NumberingSequence)
+            .where(
                 NumberingSequence.organization_id == organization_id,
                 NumberingSequence.sequence_type == sequence_type,
             )
             .with_for_update()
-            .first()
         )
+        sequence = self.db.scalar(stmt)
         if not sequence:
             sequence = NumberingSequence(
                 organization_id=organization_id,

@@ -9,8 +9,8 @@ from uuid import uuid4
 import pytest
 
 from app.services.finance.ap.supplier import (
-    SupplierService,
     SupplierInput,
+    SupplierService,
 )
 from tests.ifrs.ap.conftest import (
     MockSupplier,
@@ -72,9 +72,7 @@ class TestCreateSupplier:
             )
             MockSupplierClass.return_value = mock_supplier
 
-            result = SupplierService.create_supplier(
-                mock_db, org_id, sample_supplier_input
-            )
+            SupplierService.create_supplier(mock_db, org_id, sample_supplier_input)
 
             mock_db.add.assert_called_once()
             mock_db.commit.assert_called_once()

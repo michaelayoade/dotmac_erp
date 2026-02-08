@@ -1,5 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
+{% from "components/macros.html" import empty_state %}
 {% block page_title %}{{ "Edit AR Invoice" if invoice else "New AR Invoice" }}{% endblock %}
 
 {% block page_styles %}
@@ -514,7 +515,7 @@
 <div class="grain-overlay"></div>
 
 <div x-data="invoiceForm()" class="max-w-5xl mx-auto space-y-8">
-    <form @submit.prevent="submitForm" class="space-y-8">
+    <form @submit.prevent="submitForm" class="space-y-6">
 
         <!-- Page Header -->
         <div class="fade-up">
@@ -662,11 +663,11 @@
                             <th scope="col" style="width: 20%">Item</th>
                             <th scope="col" style="width: 20%">Revenue Account</th>
                             <th scope="col" style="width: 22%">Description</th>
-                            <th scope="col" class="text-right" style="width: 8%">Qty</th>
-                            <th scope="col" class="text-right" style="width: 12%">Unit Price</th>
+                            <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider" style="width: 8%">Qty</th>
+                            <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider" style="width: 12%">Unit Price</th>
                             <th scope="col" style="width: 14%">Tax Code</th>
-                            <th scope="col" class="text-right" style="width: 14%">Amount</th>
-                            <th scope="col" class="text-right" style="width: 10%"></th>
+                            <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider" style="width: 14%">Amount</th>
+                            <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider" style="width: 10%"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -679,6 +680,12 @@
                                         <option value="">Select item</option>
                                         {% for item in items %}
                                         <option value="{{ item.item_id }}">{{ item.item_code }} - {{ item.item_name }}</option>
+                                        {% else %}
+                                        <tr>
+                                            <td colspan="99" class="p-0">
+                                                {{ empty_state("No items found", "There are no items to display.") }}
+                                            </td>
+                                        </tr>
                                         {% endfor %}
                                     </select>
                                 </td>
@@ -689,6 +696,12 @@
                                         <option value="">Select account</option>
                                         {% for account in revenue_accounts %}
                                         <option value="{{ account.account_id }}">{{ account.account_name }} ({{ account.account_code }})</option>
+                                        {% else %}
+                                        <tr>
+                                            <td colspan="99" class="p-0">
+                                                {{ empty_state("No revenue_accounts found", "There are no revenue_accounts to display.") }}
+                                            </td>
+                                        </tr>
                                         {% endfor %}
                                     </select>
                                 </td>
@@ -740,6 +753,12 @@
                                                        class="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500">
                                                 <span class="ml-2 text-sm text-[var(--ink)] dark:text-white">{{ tax.tax_code }} ({{ tax.tax_rate }}{% if tax.tax_rate < 1 %}%{% endif %})</span>
                                             </label>
+                                            {% else %}
+                                            <tr>
+                                                <td colspan="99" class="p-0">
+                                                    {{ empty_state("No tax_codes found", "There are no tax_codes to display.") }}
+                                                </td>
+                                            </tr>
                                             {% endfor %}
                                         </div>
                                     </div>

@@ -4,7 +4,6 @@ Exchange Rate Type Model - Core FX.
 
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -48,7 +47,7 @@ class ExchangeRateType(Base):
 
     type_code: Mapped[str] = mapped_column(String(20), nullable=False)
     type_name: Mapped[str] = mapped_column(String(50), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     created_at: Mapped[datetime] = mapped_column(

@@ -31,8 +31,8 @@ from app.db import Base
 from app.models.people.base import AuditMixin, ERPNextSyncMixin
 
 if TYPE_CHECKING:
-    from app.models.people.hr.employee import Employee
     from app.models.people.attendance.shift_type import ShiftType
+    from app.models.people.hr.employee import Employee
     from app.models.people.leave.leave_application import LeaveApplication
 
 
@@ -84,7 +84,7 @@ class Attendance(Base, AuditMixin, ERPNextSyncMixin):
         ForeignKey("hr.employee.employee_id"),
         nullable=False,
     )
-    shift_type_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    shift_type_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("attendance.shift_type.shift_type_id"),
         nullable=True,
@@ -97,17 +97,17 @@ class Attendance(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # Check-in/out times
-    check_in: Mapped[Optional[datetime]] = mapped_column(
+    check_in: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    check_out: Mapped[Optional[datetime]] = mapped_column(
+    check_out: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
     # Calculated fields
-    working_hours: Mapped[Optional[Decimal]] = mapped_column(
+    working_hours: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
         comment="Actual hours worked",
@@ -140,14 +140,14 @@ class Attendance(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # Leave reference (if status is ON_LEAVE)
-    leave_application_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    leave_application_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("leave.leave_application.application_id"),
         nullable=True,
     )
 
     # Notes
-    remarks: Mapped[Optional[str]] = mapped_column(
+    remarks: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -164,7 +164,7 @@ class Attendance(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

@@ -6,26 +6,29 @@ Manages creation, editing, submission, approval, and posting of journal entries.
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.models.finance.audit.audit_log import AuditAction
 from app.models.finance.core_config.numbering_sequence import SequenceType
+from app.models.finance.gl.account import Account
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
-from app.models.finance.audit.audit_log import AuditAction
 from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import coerce_uuid
 from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
 from app.services.finance.gl.period_guard import PeriodGuardService
+from app.services.finance.platform.org_context import org_context_service
 from app.services.finance.platform.sequence import SequenceService
+from app.services.formatters import parse_date
 from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
@@ -38,18 +41,18 @@ class JournalLineInput:
     account_id: UUID
     debit_amount: Decimal = Decimal("0")
     credit_amount: Decimal = Decimal("0")
-    description: Optional[str] = None
+    description: str | None = None
     # Functional amounts (calculated if not provided)
-    debit_amount_functional: Optional[Decimal] = None
-    credit_amount_functional: Optional[Decimal] = None
+    debit_amount_functional: Decimal | None = None
+    credit_amount_functional: Decimal | None = None
     # Multi-currency
-    currency_code: Optional[str] = None
-    exchange_rate: Optional[Decimal] = None
+    currency_code: str | None = None
+    exchange_rate: Decimal | None = None
     # Dimensions
-    business_unit_id: Optional[UUID] = None
-    cost_center_id: Optional[UUID] = None
-    project_id: Optional[UUID] = None
-    segment_id: Optional[UUID] = None
+    business_unit_id: UUID | None = None
+    cost_center_id: UUID | None = None
+    project_id: UUID | None = None
+    segment_id: UUID | None = None
 
 
 @dataclass
@@ -61,15 +64,15 @@ class JournalInput:
     posting_date: date
     description: str
     lines: list[JournalLineInput] = field(default_factory=list)
-    reference: Optional[str] = None
+    reference: str | None = None
     currency_code: str = settings.default_functional_currency_code
     exchange_rate: Decimal = Decimal("1.0")
-    exchange_rate_type_id: Optional[UUID] = None
-    source_module: Optional[str] = None
-    source_document_type: Optional[str] = None
-    source_document_id: Optional[UUID] = None
-    auto_reverse_date: Optional[date] = None
-    correlation_id: Optional[str] = None
+    exchange_rate_type_id: UUID | None = None
+    source_module: str | None = None
+    source_document_type: str | None = None
+    source_document_id: UUID | None = None
+    auto_reverse_date: date | None = None
+    correlation_id: str | None = None
 
 
 class JournalService(ListResponseMixin):
@@ -78,6 +81,126 @@ class JournalService(ListResponseMixin):
 
     Manages creation, editing, submission, approval, and posting.
     """
+
+    @staticmethod
+    def build_input_from_payload(
+        db: Session,
+        organization_id: UUID,
+        payload: dict,
+    ) -> JournalInput:
+        """Build JournalInput from raw payload (strings or JSON)."""
+        org_id = coerce_uuid(organization_id)
+
+        journal_type_raw = payload.get("journal_type")
+        try:
+            journal_type = JournalType(journal_type_raw)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid journal type: {journal_type_raw}",
+            ) from exc
+
+        entry_date = parse_date(payload.get("entry_date"))
+        posting_date = parse_date(payload.get("posting_date"))
+        if not entry_date:
+            raise HTTPException(status_code=400, detail="Invalid entry date")
+        if not posting_date:
+            raise HTTPException(status_code=400, detail="Invalid posting date")
+
+        exchange_rate_raw = payload.get("exchange_rate", "1.0")
+        try:
+            exchange_rate = Decimal(str(exchange_rate_raw))
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(
+                status_code=400, detail="Invalid exchange rate"
+            ) from exc
+
+        currency_code = payload.get(
+            "currency_code"
+        ) or org_context_service.get_functional_currency(db, org_id)
+
+        lines_value = payload.get("lines", [])
+        if isinstance(lines_value, str):
+            try:
+                lines_data = json.loads(lines_value)
+            except json.JSONDecodeError as exc:
+                raise HTTPException(
+                    status_code=400, detail="Invalid journal lines format"
+                ) from exc
+        else:
+            lines_data = lines_value
+
+        if not isinstance(lines_data, list) or not lines_data:
+            raise HTTPException(
+                status_code=400, detail="Journal entry must have at least one line"
+            )
+
+        lines: list[JournalLineInput] = []
+        for idx, line_data in enumerate(lines_data, start=1):
+            account_id = line_data.get("account_id")
+            if not account_id:
+                raise HTTPException(
+                    status_code=400, detail=f"Line {idx}: Account is required"
+                )
+
+            account = db.get(Account, coerce_uuid(account_id))
+            if not account or account.organization_id != org_id:
+                raise HTTPException(
+                    status_code=400, detail=f"Line {idx}: Invalid account"
+                )
+
+            try:
+                debit = Decimal(str(line_data.get("debit", "0") or "0"))
+                credit = Decimal(str(line_data.get("credit", "0") or "0"))
+            except (ValueError, TypeError) as exc:
+                raise HTTPException(
+                    status_code=400, detail=f"Line {idx}: Invalid amount"
+                ) from exc
+
+            if debit == 0 and credit == 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Line {idx}: Either debit or credit must be non-zero",
+                )
+            if debit != 0 and credit != 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Line {idx}: Cannot have both debit and credit on same line",
+                )
+
+            lines.append(
+                JournalLineInput(
+                    account_id=coerce_uuid(account_id),
+                    description=line_data.get("description"),
+                    debit_amount=debit,
+                    credit_amount=credit,
+                )
+            )
+
+        fiscal_period_id = payload.get("fiscal_period_id")
+        if fiscal_period_id:
+            period = PeriodGuardService.get_period_for_date(db, org_id, posting_date)
+            if not period:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No fiscal period found for posting date {posting_date}",
+                )
+            if period.fiscal_period_id != coerce_uuid(fiscal_period_id):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Posting date does not match selected fiscal period",
+                )
+
+        return JournalInput(
+            journal_type=journal_type,
+            entry_date=entry_date,
+            posting_date=posting_date,
+            description=payload.get("description") or "",
+            reference=payload.get("reference") or None,
+            currency_code=currency_code,
+            exchange_rate=exchange_rate,
+            lines=lines,
+        )
 
     @staticmethod
     def create_journal(
@@ -381,6 +504,29 @@ class JournalService(ListResponseMixin):
         return journal
 
     @staticmethod
+    def delete_journal(
+        db: Session,
+        organization_id: UUID,
+        journal_entry_id: UUID,
+    ) -> None:
+        """Delete a DRAFT journal entry."""
+        org_id = coerce_uuid(organization_id)
+        journal_id = coerce_uuid(journal_entry_id)
+
+        journal = db.get(JournalEntry, journal_id)
+        if not journal or journal.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Journal entry not found")
+
+        if journal.status != JournalStatus.DRAFT:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot delete journal with status '{journal.status.value}'",
+            )
+
+        db.delete(journal)
+        db.commit()
+
+    @staticmethod
     def submit_journal(
         db: Session,
         organization_id: UUID,
@@ -419,7 +565,7 @@ class JournalService(ListResponseMixin):
 
         journal.status = JournalStatus.SUBMITTED
         journal.submitted_by_user_id = user_id
-        journal.submitted_at = datetime.now(timezone.utc)
+        journal.submitted_at = datetime.now(UTC)
 
         fire_audit_event(
             db=db,
@@ -485,7 +631,7 @@ class JournalService(ListResponseMixin):
 
         journal.status = JournalStatus.APPROVED
         journal.approved_by_user_id = user_id
-        journal.approved_at = datetime.now(timezone.utc)
+        journal.approved_at = datetime.now(UTC)
 
         fire_audit_event(
             db=db,
@@ -510,9 +656,9 @@ class JournalService(ListResponseMixin):
         organization_id: UUID,
         journal_entry_id: UUID,
         posted_by_user_id: UUID,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
         allow_adjustment: bool = False,
-        reopen_session_id: Optional[UUID] = None,
+        reopen_session_id: UUID | None = None,
     ) -> JournalEntry:
         """
         Post an APPROVED journal to the ledger.
@@ -652,6 +798,7 @@ class JournalService(ListResponseMixin):
     def get(
         db: Session,
         journal_entry_id: str,
+        organization_id: UUID | None = None,
     ) -> JournalEntry:
         """
         Get a journal entry by ID.
@@ -668,6 +815,10 @@ class JournalService(ListResponseMixin):
         """
         journal = db.get(JournalEntry, coerce_uuid(journal_entry_id))
         if not journal:
+            raise HTTPException(status_code=404, detail="Journal entry not found")
+        if organization_id is not None and journal.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Journal entry not found")
         return journal
 
@@ -698,12 +849,12 @@ class JournalService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        status: Optional[JournalStatus] = None,
-        journal_type: Optional[JournalType] = None,
-        fiscal_period_id: Optional[str] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
+        organization_id: str | None = None,
+        status: JournalStatus | None = None,
+        journal_type: JournalType | None = None,
+        fiscal_period_id: str | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[JournalEntry]:

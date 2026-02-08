@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -124,7 +124,7 @@ def _recurring_list_view(template: RecurringTemplate, generated_count: int) -> d
 
 
 def _recurring_detail_view(
-    template: RecurringTemplate, logs: List[RecurringLog]
+    template: RecurringTemplate, logs: list[RecurringLog]
 ) -> dict:
     return {
         "template_id": str(template.template_id),
@@ -292,7 +292,7 @@ def _workflow_list_view(rule: WorkflowRule) -> dict:
 
 
 def _workflow_detail_view(
-    rule: WorkflowRule, executions: List[WorkflowExecution]
+    rule: WorkflowRule, executions: list[WorkflowExecution]
 ) -> dict:
     return {
         "rule_id": str(rule.rule_id),
@@ -527,8 +527,8 @@ class AutomationWebService:
         self,
         db: Session,
         organization_id: str,
-        entity_type: Optional[str] = None,
-        status: Optional[str] = None,
+        entity_type: str | None = None,
+        status: str | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> dict:
@@ -612,7 +612,7 @@ class AutomationWebService:
         self,
         db: Session,
         organization_id: str,
-        template_id: Optional[str] = None,
+        template_id: str | None = None,
     ) -> dict:
         """Get context for recurring template form."""
         context: dict[str, Any] = {
@@ -689,9 +689,9 @@ class AutomationWebService:
         self,
         db: Session,
         organization_id: str,
-        entity_type: Optional[str] = None,
-        trigger_event: Optional[str] = None,
-        is_active: Optional[bool] = None,
+        entity_type: str | None = None,
+        trigger_event: str | None = None,
+        is_active: bool | None = None,
         page: int = 1,
         page_size: int = 20,
     ) -> dict:
@@ -750,7 +750,7 @@ class AutomationWebService:
         self,
         db: Session,
         organization_id: str,
-        rule_id: Optional[str] = None,
+        rule_id: str | None = None,
     ) -> dict:
         """Get context for workflow rule form."""
         context: dict[str, Any] = {
@@ -801,7 +801,7 @@ class AutomationWebService:
     def build_workflow_input(self, form_data: dict) -> WorkflowRuleInput:
         """Build WorkflowRuleInput from form data."""
 
-        def _parse_json_field(value: Any, default: Optional[dict]) -> Optional[dict]:
+        def _parse_json_field(value: Any, default: dict | None) -> dict | None:
             if value in (None, "", {}):
                 return default
             if isinstance(value, dict):
@@ -857,8 +857,8 @@ class AutomationWebService:
         self,
         db: Session,
         organization_id: str,
-        entity_type: Optional[str] = None,
-        is_active: Optional[bool] = None,
+        entity_type: str | None = None,
+        is_active: bool | None = None,
         page: int = 1,
         page_size: int = 50,
     ) -> dict:
@@ -884,7 +884,7 @@ class AutomationWebService:
         items = [_custom_field_list_view(f) for f in fields]
 
         # Group by entity type
-        grouped: Dict[str, List[dict]] = {}
+        grouped: dict[str, list[dict]] = {}
         for item in items:
             key = item["entity_type"]
             if key not in grouped:
@@ -913,7 +913,7 @@ class AutomationWebService:
         self,
         db: Session,
         organization_id: str,
-        field_id: Optional[str] = None,
+        field_id: str | None = None,
     ) -> dict:
         """Get context for custom field form."""
         context: dict[str, Any] = {
@@ -995,8 +995,8 @@ class AutomationWebService:
         self,
         db: Session,
         organization_id: str,
-        template_type: Optional[str] = None,
-        is_active: Optional[bool] = None,
+        template_type: str | None = None,
+        is_active: bool | None = None,
         page: int = 1,
         page_size: int = 50,
     ) -> dict:
@@ -1048,7 +1048,7 @@ class AutomationWebService:
         self,
         db: Session,
         organization_id: str,
-        template_id: Optional[str] = None,
+        template_id: str | None = None,
     ) -> dict:
         """Get context for document template form."""
         context: dict[str, Any] = {

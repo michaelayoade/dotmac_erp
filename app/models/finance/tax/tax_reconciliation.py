@@ -5,7 +5,6 @@ Tax Reconciliation Model - Tax Schema.
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import DateTime, ForeignKey, Numeric, Text, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -103,7 +102,7 @@ class TaxReconciliation(Base):
         nullable=False,
         default=0,
     )
-    other_items_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    other_items_description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Totals
     total_tax_expense: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
@@ -117,18 +116,18 @@ class TaxReconciliation(Base):
     rate_variance: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False)
 
     # Notes
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Audit
     prepared_by_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         nullable=False,
     )
-    reviewed_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    reviewed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+    reviewed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -138,7 +137,7 @@ class TaxReconciliation(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

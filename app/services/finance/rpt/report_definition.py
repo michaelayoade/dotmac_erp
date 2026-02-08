@@ -6,9 +6,9 @@ Manages report definitions/templates for financial and operational reporting.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -29,18 +29,18 @@ class ReportDefinitionInput:
     report_name: str
     report_type: ReportType
     data_source_type: str
-    description: Optional[str] = None
-    category: Optional[str] = None
-    subcategory: Optional[str] = None
+    description: str | None = None
+    category: str | None = None
+    subcategory: str | None = None
     default_format: str = "PDF"
-    supported_formats: Optional[list] = None
-    report_structure: Optional[dict] = None
-    column_definitions: Optional[dict] = None
-    row_definitions: Optional[dict] = None
-    filter_definitions: Optional[dict] = None
-    data_source_config: Optional[dict] = None
-    template_file_path: Optional[str] = None
-    required_permissions: Optional[list] = None
+    supported_formats: list | None = None
+    report_structure: dict | None = None
+    column_definitions: dict | None = None
+    row_definitions: dict | None = None
+    filter_definitions: dict | None = None
+    data_source_config: dict | None = None
+    template_file_path: str | None = None
+    required_permissions: list | None = None
     is_system_report: bool = False
 
 
@@ -51,9 +51,9 @@ class ReportColumn:
     column_code: str
     column_name: str
     data_type: str
-    width: Optional[int] = None
+    width: int | None = None
     alignment: str = "LEFT"
-    format_string: Optional[str] = None
+    format_string: str | None = None
 
 
 @dataclass
@@ -64,8 +64,8 @@ class ReportFilter:
     filter_name: str
     data_type: str
     is_required: bool = False
-    default_value: Optional[str] = None
-    options: Optional[list] = None
+    default_value: str | None = None
+    options: list | None = None
 
 
 class ReportDefinitionService(ListResponseMixin):
@@ -149,12 +149,12 @@ class ReportDefinitionService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         report_def_id: UUID,
-        report_name: Optional[str] = None,
-        description: Optional[str] = None,
-        category: Optional[str] = None,
-        subcategory: Optional[str] = None,
-        default_format: Optional[str] = None,
-        supported_formats: Optional[list] = None,
+        report_name: str | None = None,
+        description: str | None = None,
+        category: str | None = None,
+        subcategory: str | None = None,
+        default_format: str | None = None,
+        supported_formats: list | None = None,
     ) -> ReportDefinition:
         """
         Update a report definition.
@@ -209,10 +209,10 @@ class ReportDefinitionService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         report_def_id: UUID,
-        report_structure: Optional[dict] = None,
-        column_definitions: Optional[dict] = None,
-        row_definitions: Optional[dict] = None,
-        filter_definitions: Optional[dict] = None,
+        report_structure: dict | None = None,
+        column_definitions: dict | None = None,
+        row_definitions: dict | None = None,
+        filter_definitions: dict | None = None,
     ) -> ReportDefinition:
         """
         Update report structure definitions.
@@ -259,7 +259,7 @@ class ReportDefinitionService(ListResponseMixin):
         organization_id: UUID,
         report_def_id: UUID,
         data_source_type: str,
-        data_source_config: Optional[dict] = None,
+        data_source_config: dict | None = None,
     ) -> ReportDefinition:
         """
         Update report data source configuration.
@@ -404,7 +404,7 @@ class ReportDefinitionService(ListResponseMixin):
         db: Session,
         organization_id: str,
         report_code: str,
-    ) -> Optional[ReportDefinition]:
+    ) -> ReportDefinition | None:
         """Get report definition by code."""
         return (
             db.query(ReportDefinition)
@@ -420,7 +420,7 @@ class ReportDefinitionService(ListResponseMixin):
         db: Session,
         organization_id: str,
         report_type: ReportType,
-    ) -> List[ReportDefinition]:
+    ) -> builtins.list[ReportDefinition]:
         """Get report definitions by type."""
         return (
             db.query(ReportDefinition)
@@ -437,24 +437,29 @@ class ReportDefinitionService(ListResponseMixin):
     def get(
         db: Session,
         report_def_id: str,
+        organization_id: UUID | None = None,
     ) -> ReportDefinition:
         """Get a report definition by ID."""
         definition = db.get(ReportDefinition, coerce_uuid(report_def_id))
         if not definition:
+            raise HTTPException(status_code=404, detail="Report definition not found")
+        if organization_id is not None and definition.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Report definition not found")
         return definition
 
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        report_type: Optional[ReportType] = None,
-        category: Optional[str] = None,
-        is_active: Optional[bool] = None,
-        is_system_report: Optional[bool] = None,
+        organization_id: str | None = None,
+        report_type: ReportType | None = None,
+        category: str | None = None,
+        is_active: bool | None = None,
+        is_system_report: bool | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[ReportDefinition]:
+    ) -> builtins.list[ReportDefinition]:
         """List report definitions with optional filters."""
         query = db.query(ReportDefinition)
 

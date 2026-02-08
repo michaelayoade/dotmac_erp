@@ -6,6 +6,7 @@ report settings, feature flags, and numbering sequences.
 """
 
 import re
+
 import pytest
 from playwright.sync_api import expect
 

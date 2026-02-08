@@ -1,3 +1,7 @@
+from collections.abc import Callable
+from typing import Any, ClassVar
+
+
 def list_response(
     items: list, limit: int, offset: int, total: int | None = None
 ) -> dict:
@@ -17,9 +21,6 @@ def list_response(
     # which may not be accurate for pagination. Services should provide total.
     actual_total = total if total is not None else len(items)
     return {"items": items, "total": actual_total, "limit": limit, "offset": offset}
-
-
-from typing import Any, Callable, ClassVar
 
 
 class ListResponseMixin:

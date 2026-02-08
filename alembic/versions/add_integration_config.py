@@ -8,7 +8,8 @@ This migration adds:
 - sync.integration_config table for per-organization external system credentials
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
 from alembic import op
 

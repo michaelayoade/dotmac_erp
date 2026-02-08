@@ -11,9 +11,10 @@ This migration adds:
 - WHT fields to ar.customer_payment (WHT on receipts)
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "add_flexible_tax_support"

@@ -16,6 +16,7 @@
 
     <form method="post" action="/projects/{{ project.project_code }}/time{% if entry %}/{{ entry.entry_id }}{% endif %}"
           class="rounded-lg border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800 space-y-6">
+        {{ request.state.csrf_form | safe }}
 
         <!-- Date and Hours -->
         <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">

@@ -5,14 +5,14 @@ Tests sales order creation, workflow, shipment, and invoicing.
 """
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.models.finance.ar.sales_order import FulfillmentStatus, SOStatus
 from app.services.finance.ar.sales_order import SalesOrderService
-from app.models.finance.ar.sales_order import SOStatus, FulfillmentStatus
 
 
 class MockSalesOrder:
@@ -205,7 +205,7 @@ class TestCreate:
         mock_so.lines = []
         mock_so_class.return_value = mock_so
 
-        result = SalesOrderService.create(
+        SalesOrderService.create(
             db=mock_db,
             organization_id=org_id,
             customer_id=customer_id,
@@ -243,7 +243,7 @@ class TestCreate:
             }
         ]
 
-        result = SalesOrderService.create(
+        SalesOrderService.create(
             db=mock_db,
             organization_id=org_id,
             customer_id=customer_id,
@@ -269,7 +269,7 @@ class TestCreate:
         mock_so.lines = []
         mock_so_class.return_value = mock_so
 
-        result = SalesOrderService.create(
+        SalesOrderService.create(
             db=mock_db,
             organization_id=org_id,
             customer_id=customer_id,
@@ -487,7 +487,7 @@ class TestCreateShipment:
 
         mock_db.get.side_effect = mock_get
 
-        result = SalesOrderService.create_shipment(
+        SalesOrderService.create_shipment(
             db=mock_db,
             so_id=str(so_id),
             shipment_date=date.today(),
@@ -663,7 +663,7 @@ class TestCreateInvoiceFromSO:
 
         mock_db.get.return_value = mock_so
 
-        result = SalesOrderService.create_invoice_from_so(
+        SalesOrderService.create_invoice_from_so(
             db=mock_db,
             so_id=str(so_id),
             created_by=str(user_id),
@@ -920,7 +920,7 @@ class TestReleaseHold:
             status=SOStatus.ON_HOLD,
             lines=[mock_so_line],
             confirmed_at=None,
-            approved_at=datetime.now(timezone.utc),
+            approved_at=datetime.now(UTC),
         )
         mock_db.get.return_value = mock_so
 

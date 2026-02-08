@@ -10,13 +10,10 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
-
-logger = logging.getLogger(__name__)
 
 from app.models.finance.banking.bank_statement import (
     BankStatement,
@@ -31,22 +28,24 @@ from app.models.finance.banking.transaction_rule import (
 )
 from app.services.common import coerce_uuid
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class CategorizationSuggestion:
     """A suggested categorization for a transaction."""
 
-    account_id: Optional[UUID] = None
-    account_name: Optional[str] = None
-    tax_code_id: Optional[UUID] = None
-    payee_id: Optional[UUID] = None
-    payee_name: Optional[str] = None
-    rule_id: Optional[UUID] = None
-    rule_name: Optional[str] = None
+    account_id: UUID | None = None
+    account_name: str | None = None
+    tax_code_id: UUID | None = None
+    payee_id: UUID | None = None
+    payee_name: str | None = None
+    rule_id: UUID | None = None
+    rule_name: str | None = None
     confidence: int = 0  # 0-100
     match_reason: str = ""
     action: RuleAction = RuleAction.CATEGORIZE
-    split_config: Optional[dict] = None
+    split_config: dict | None = None
 
 
 @dataclass
@@ -54,12 +53,12 @@ class CategorizationResult:
     """Result of categorizing a single transaction."""
 
     line_id: UUID
-    suggestions: List[CategorizationSuggestion] = field(default_factory=list)
+    suggestions: list[CategorizationSuggestion] = field(default_factory=list)
     is_duplicate: bool = False
-    duplicate_of: Optional[UUID] = None
+    duplicate_of: UUID | None = None
 
     @property
-    def best_suggestion(self) -> Optional[CategorizationSuggestion]:
+    def best_suggestion(self) -> CategorizationSuggestion | None:
         """Get the highest confidence suggestion."""
         if not self.suggestions:
             return None
@@ -81,7 +80,7 @@ class BatchCategorizationResult:
     low_confidence_count: int = 0
     no_match_count: int = 0
     duplicate_count: int = 0
-    results: List[CategorizationResult] = field(default_factory=list)
+    results: list[CategorizationResult] = field(default_factory=list)
 
 
 class TransactionCategorizationService:
@@ -187,7 +186,7 @@ class TransactionCategorizationService:
         db: Session,
         organization_id: UUID,
         line: BankStatementLine,
-    ) -> Optional[BankStatementLine]:
+    ) -> BankStatementLine | None:
         """Check if a transaction is a duplicate."""
         # Look for same amount, date, and similar description in recent statements
         statement = db.get(BankStatement, line.statement_id)
@@ -233,7 +232,7 @@ class TransactionCategorizationService:
         db: Session,
         organization_id: UUID,
         line: BankStatementLine,
-    ) -> Optional[CategorizationSuggestion]:
+    ) -> CategorizationSuggestion | None:
         """Try to match the transaction to a known payee."""
         if not line.description and not line.payee_payer:
             return None
@@ -254,7 +253,7 @@ class TransactionCategorizationService:
             .all()
         )
 
-        best_match: Optional[Tuple[Payee, int]] = None
+        best_match: tuple[Payee, int] | None = None
 
         for payee in payees:
             if payee.matches_name(search_text):
@@ -281,7 +280,7 @@ class TransactionCategorizationService:
         db: Session,
         organization_id: UUID,
         line: BankStatementLine,
-    ) -> List[CategorizationSuggestion]:
+    ) -> list[CategorizationSuggestion]:
         """Match the transaction against categorization rules."""
         suggestions = []
 
@@ -342,7 +341,7 @@ class TransactionCategorizationService:
         self,
         rule: TransactionRule,
         line: BankStatementLine,
-    ) -> Optional[Tuple[int, str]]:
+    ) -> tuple[int, str] | None:
         """
         Evaluate if a rule matches a transaction line.
 
@@ -370,9 +369,13 @@ class TransactionCategorizationService:
         self,
         conditions: dict,
         line: BankStatementLine,
-    ) -> Optional[Tuple[int, str]]:
+    ) -> tuple[int, str] | None:
         """Evaluate payee pattern match."""
         patterns = conditions.get("patterns", [])
+        # Also support legacy single "payee_name" field
+        legacy_name = conditions.get("payee_name", "")
+        if legacy_name and not patterns:
+            patterns = [legacy_name]
         case_sensitive = conditions.get("case_sensitive", False)
 
         search_text = f"{line.payee_payer or ''} {line.description or ''}"
@@ -380,6 +383,8 @@ class TransactionCategorizationService:
             search_text = search_text.upper()
 
         for pattern in patterns:
+            if not pattern:
+                continue
             check_pattern = pattern if case_sensitive else pattern.upper()
             if check_pattern in search_text:
                 return (90, f"Payee pattern matched: {pattern}")
@@ -390,19 +395,31 @@ class TransactionCategorizationService:
         self,
         conditions: dict,
         line: BankStatementLine,
-    ) -> Optional[Tuple[int, str]]:
+    ) -> tuple[int, str] | None:
         """Evaluate description contains match."""
         text = conditions.get("text", "")
+        # Also support legacy "keywords" array format
+        keywords = conditions.get("keywords", [])
         case_sensitive = conditions.get("case_sensitive", False)
 
         if not line.description:
             return None
 
         description = line.description if case_sensitive else line.description.upper()
-        check_text = text if case_sensitive else text.upper()
 
-        if check_text in description:
-            return (85, f"Description contains: {text}")
+        # Check single text field first
+        if text:
+            check_text = text if case_sensitive else text.upper()
+            if check_text in description:
+                return (85, f"Description contains: {text}")
+
+        # Check keywords array (legacy format)
+        for kw in keywords:
+            if not kw:
+                continue
+            check_kw = kw if case_sensitive else kw.upper()
+            if check_kw in description:
+                return (85, f"Description contains: {kw}")
 
         return None
 
@@ -410,7 +427,7 @@ class TransactionCategorizationService:
         self,
         conditions: dict,
         line: BankStatementLine,
-    ) -> Optional[Tuple[int, str]]:
+    ) -> tuple[int, str] | None:
         """Evaluate regex pattern match."""
         pattern = conditions.get("pattern", "")
 
@@ -433,7 +450,7 @@ class TransactionCategorizationService:
         self,
         conditions: dict,
         line: BankStatementLine,
-    ) -> Optional[Tuple[int, str]]:
+    ) -> tuple[int, str] | None:
         """Evaluate amount range match."""
         min_amount = Decimal(str(conditions.get("min", 0)))
         max_amount = Decimal(str(conditions.get("max", float("inf"))))
@@ -461,7 +478,7 @@ class TransactionCategorizationService:
         self,
         conditions: dict,
         line: BankStatementLine,
-    ) -> Optional[Tuple[int, str]]:
+    ) -> tuple[int, str] | None:
         """Evaluate reference pattern match."""
         pattern = conditions.get("pattern", "")
 
@@ -489,7 +506,7 @@ class TransactionCategorizationService:
         self,
         conditions: dict,
         line: BankStatementLine,
-    ) -> Optional[Tuple[int, str]]:
+    ) -> tuple[int, str] | None:
         """Evaluate combined conditions."""
         operator = conditions.get("operator", "AND")
         sub_rules = conditions.get("rules", [])
@@ -509,6 +526,10 @@ class TransactionCategorizationService:
                 result = self._eval_description_contains(sub_conditions, line)
             elif sub_type == "AMOUNT_RANGE":
                 result = self._eval_amount_range(sub_conditions, line)
+            elif sub_type == "DESCRIPTION_REGEX":
+                result = self._eval_description_regex(sub_conditions, line)
+            elif sub_type == "REFERENCE_MATCH":
+                result = self._eval_reference_match(sub_conditions, line)
 
             if result:
                 results.append(result)
@@ -570,6 +591,203 @@ class TransactionCategorizationService:
 
         return len(intersection) / len(union)
 
+    # ------------------------------------------------------------------
+    # Apply / Accept / Reject methods
+    # ------------------------------------------------------------------
+
+    def apply_rules_to_statement(
+        self,
+        db: Session,
+        organization_id: UUID,
+        statement_id: UUID,
+        applied_by: UUID | None = None,
+    ) -> BatchCategorizationResult:
+        """
+        Run categorization rules against unprocessed statement lines.
+
+        Lines that already have a categorization_status or are matched are
+        skipped.  For each match the best suggestion is persisted on the
+        line.  Rules with ``auto_apply=True`` whose confidence meets the
+        rule's ``min_confidence`` are applied immediately.
+
+        Returns:
+            BatchCategorizationResult with processing counts.
+        """
+        from app.models.finance.banking.bank_statement import CategorizationStatus
+
+        # Fetch lines that haven't been categorized yet and aren't matched
+        lines = list(
+            db.execute(
+                select(BankStatementLine)
+                .where(
+                    BankStatementLine.statement_id == statement_id,
+                    BankStatementLine.is_matched.is_(False),
+                    BankStatementLine.categorization_status.is_(None),
+                )
+                .order_by(BankStatementLine.line_number)
+            )
+            .scalars()
+            .all()
+        )
+
+        batch = BatchCategorizationResult(total_lines=len(lines))
+
+        for line in lines:
+            result = self.categorize_line(db, organization_id, line)
+            batch.results.append(result)
+
+            if result.is_duplicate:
+                batch.duplicate_count += 1
+                continue
+
+            best = result.best_suggestion
+            if not best:
+                batch.no_match_count += 1
+                continue
+
+            # Persist suggestion on the line
+            line.suggested_account_id = best.account_id
+            line.suggested_rule_id = best.rule_id
+            line.suggested_confidence = best.confidence
+            line.suggested_match_reason = (best.match_reason or "")[:200]
+
+            # Determine categorization status
+            if best.rule_id:
+                rule = db.get(TransactionRule, best.rule_id)
+                if rule and rule.auto_apply and best.confidence >= rule.min_confidence:
+                    line.categorization_status = CategorizationStatus.AUTO_APPLIED
+                    self.record_rule_feedback(
+                        db, organization_id, best.rule_id, accepted=True
+                    )
+                    batch.categorized_count += 1
+                    batch.high_confidence_count += 1
+                    continue
+
+            if best.action == RuleAction.FLAG_REVIEW:
+                line.categorization_status = CategorizationStatus.FLAGGED
+            else:
+                line.categorization_status = CategorizationStatus.SUGGESTED
+
+            batch.categorized_count += 1
+            if best.confidence >= 80:
+                batch.high_confidence_count += 1
+            else:
+                batch.low_confidence_count += 1
+
+        db.flush()
+        logger.info(
+            "Applied rules to statement %s: %d lines, %d categorized, "
+            "%d auto-applied, %d no match",
+            statement_id,
+            batch.total_lines,
+            batch.categorized_count,
+            batch.high_confidence_count,
+            batch.no_match_count,
+        )
+        return batch
+
+    def accept_suggestion(
+        self,
+        db: Session,
+        organization_id: UUID,
+        line_id: UUID,
+        accepted_by: UUID | None = None,
+    ) -> BankStatementLine:
+        """
+        Accept a categorization suggestion on a statement line.
+
+        Raises ValueError if the line is not found or not in a reviewable
+        state.
+        """
+        from app.models.finance.banking.bank_statement import CategorizationStatus
+
+        line = (
+            db.execute(
+                select(BankStatementLine)
+                .join(BankStatement)
+                .where(
+                    BankStatementLine.line_id == line_id,
+                    BankStatement.organization_id == organization_id,
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if not line:
+            raise ValueError("Statement line not found")
+
+        reviewable = {CategorizationStatus.SUGGESTED, CategorizationStatus.FLAGGED}
+        if line.categorization_status not in reviewable:
+            raise ValueError(
+                f"Line is not in a reviewable state "
+                f"(current: {line.categorization_status})"
+            )
+
+        line.categorization_status = CategorizationStatus.ACCEPTED
+
+        if line.suggested_rule_id:
+            self.record_rule_feedback(
+                db, organization_id, line.suggested_rule_id, accepted=True
+            )
+
+        db.flush()
+        logger.info("Accepted suggestion for line %s", line_id)
+        return line
+
+    def reject_suggestion(
+        self,
+        db: Session,
+        organization_id: UUID,
+        line_id: UUID,
+    ) -> BankStatementLine:
+        """
+        Reject a categorization suggestion on a statement line.
+
+        Clears all suggestion fields and records negative feedback on the
+        matched rule.
+
+        Raises ValueError if the line is not found or not in a reviewable
+        state.
+        """
+        from app.models.finance.banking.bank_statement import CategorizationStatus
+
+        line = (
+            db.execute(
+                select(BankStatementLine)
+                .join(BankStatement)
+                .where(
+                    BankStatementLine.line_id == line_id,
+                    BankStatement.organization_id == organization_id,
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if not line:
+            raise ValueError("Statement line not found")
+
+        reviewable = {CategorizationStatus.SUGGESTED, CategorizationStatus.FLAGGED}
+        if line.categorization_status not in reviewable:
+            raise ValueError(
+                f"Line is not in a reviewable state "
+                f"(current: {line.categorization_status})"
+            )
+
+        # Record feedback before clearing
+        rule_id = line.suggested_rule_id
+        if rule_id:
+            self.record_rule_feedback(db, organization_id, rule_id, accepted=False)
+
+        line.categorization_status = CategorizationStatus.REJECTED
+        line.suggested_account_id = None
+        line.suggested_rule_id = None
+        line.suggested_confidence = None
+        line.suggested_match_reason = None
+
+        db.flush()
+        logger.info("Rejected suggestion for line %s", line_id)
+        return line
+
     # Payee management methods
 
     def create_payee(
@@ -578,13 +796,13 @@ class TransactionCategorizationService:
         organization_id: UUID,
         payee_name: str,
         payee_type: PayeeType = PayeeType.OTHER,
-        name_patterns: Optional[str] = None,
-        default_account_id: Optional[UUID] = None,
-        default_tax_code_id: Optional[UUID] = None,
-        supplier_id: Optional[UUID] = None,
-        customer_id: Optional[UUID] = None,
-        notes: Optional[str] = None,
-        created_by: Optional[UUID] = None,
+        name_patterns: str | None = None,
+        default_account_id: UUID | None = None,
+        default_tax_code_id: UUID | None = None,
+        supplier_id: UUID | None = None,
+        customer_id: UUID | None = None,
+        notes: str | None = None,
+        created_by: UUID | None = None,
     ) -> Payee:
         """Create a new payee."""
         payee = Payee(
@@ -609,7 +827,7 @@ class TransactionCategorizationService:
         organization_id: UUID,
         payee_id: UUID,
         **kwargs,
-    ) -> Optional[Payee]:
+    ) -> Payee | None:
         """Update a payee."""
         org_id = coerce_uuid(organization_id)
         payee = (
@@ -648,12 +866,12 @@ class TransactionCategorizationService:
         self,
         db: Session,
         organization_id: UUID,
-        payee_type: Optional[PayeeType] = None,
-        is_active: Optional[bool] = True,
-        search: Optional[str] = None,
+        payee_type: PayeeType | None = None,
+        is_active: bool | None = True,
+        search: str | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[Payee]:
+    ) -> list[Payee]:
         """List payees with filters."""
         stmt = select(Payee).where(Payee.organization_id == organization_id)
 
@@ -709,18 +927,18 @@ class TransactionCategorizationService:
         rule_type: RuleType,
         conditions: dict,
         action: RuleAction = RuleAction.CATEGORIZE,
-        target_account_id: Optional[UUID] = None,
-        tax_code_id: Optional[UUID] = None,
-        bank_account_id: Optional[UUID] = None,
-        payee_id: Optional[UUID] = None,
+        target_account_id: UUID | None = None,
+        tax_code_id: UUID | None = None,
+        bank_account_id: UUID | None = None,
+        payee_id: UUID | None = None,
         priority: int = 100,
         auto_apply: bool = False,
         min_confidence: int = 80,
         applies_to_credits: bool = True,
         applies_to_debits: bool = True,
-        split_config: Optional[dict] = None,
-        description: Optional[str] = None,
-        created_by: Optional[UUID] = None,
+        split_config: dict | None = None,
+        description: str | None = None,
+        created_by: UUID | None = None,
     ) -> TransactionRule:
         """Create a new categorization rule."""
         rule = TransactionRule(
@@ -752,7 +970,7 @@ class TransactionCategorizationService:
         organization_id: UUID,
         rule_id: UUID,
         **kwargs,
-    ) -> Optional[TransactionRule]:
+    ) -> TransactionRule | None:
         """Update a rule."""
         org_id = coerce_uuid(organization_id)
         rule = (
@@ -798,12 +1016,12 @@ class TransactionCategorizationService:
         self,
         db: Session,
         organization_id: UUID,
-        rule_type: Optional[RuleType] = None,
-        is_active: Optional[bool] = True,
-        bank_account_id: Optional[UUID] = None,
+        rule_type: RuleType | None = None,
+        is_active: bool | None = True,
+        bank_account_id: UUID | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[TransactionRule]:
+    ) -> list[TransactionRule]:
         """List rules with filters."""
         stmt = select(TransactionRule).where(
             TransactionRule.organization_id == organization_id
@@ -867,8 +1085,8 @@ class TransactionCategorizationService:
         organization_id: UUID,
         line: BankStatementLine,
         account_id: UUID,
-        created_by: Optional[UUID] = None,
-    ) -> Optional[Payee]:
+        created_by: UUID | None = None,
+    ) -> Payee | None:
         """
         Learn from a manual categorization to create/update payee.
 

@@ -12,15 +12,14 @@ Usage:
     python scripts/erpnext_sync.py --entity items     # Sync specific entity
 """
 
-import sys
-import os
 import argparse
+import os
+import sys
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.services.erpnext.client import ERPNextClient, ERPNextConfig, ERPNextError
-
 
 # ERPNext configuration — read from environment, fall back to defaults
 ERPNEXT_URL = os.environ.get("ERPNEXT_URL", "https://erp.dotmac.ng")

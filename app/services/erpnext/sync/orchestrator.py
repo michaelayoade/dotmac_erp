@@ -6,8 +6,9 @@ Coordinates the full migration process with proper dependency ordering.
 
 import logging
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Optional, Sequence, cast
+from typing import Any, cast
 
 from sqlalchemy.orm import Session
 
@@ -61,21 +62,21 @@ class MigrationConfig:
     erpnext_url: str
     erpnext_api_key: str
     erpnext_api_secret: str
-    erpnext_company: Optional[str] = None
+    erpnext_company: str | None = None
 
     # Sync options
     sync_type: SyncType = SyncType.FULL
     batch_size: int = 100
 
     # Entity types to sync (empty = all)
-    entity_types: Optional[list[str]] = None
+    entity_types: list[str] | None = None
 
     # DotMac ERP configuration
-    ar_control_account_id: Optional[uuid.UUID] = None
-    ap_control_account_id: Optional[uuid.UUID] = None
-    default_inventory_account_id: Optional[uuid.UUID] = None
-    default_asset_account_id: Optional[uuid.UUID] = None
-    default_depreciation_account_id: Optional[uuid.UUID] = None
+    ar_control_account_id: uuid.UUID | None = None
+    ap_control_account_id: uuid.UUID | None = None
+    default_inventory_account_id: uuid.UUID | None = None
+    default_asset_account_id: uuid.UUID | None = None
+    default_depreciation_account_id: uuid.UUID | None = None
 
 
 # Sync phases with dependencies
@@ -194,8 +195,8 @@ class ERPNextSyncOrchestrator:
         self.organization_id = organization_id
         self.user_id = user_id
         self.config = config
-        self._client: Optional[ERPNextClient] = None
-        self._history: Optional[SyncHistory] = None
+        self._client: ERPNextClient | None = None
+        self._history: SyncHistory | None = None
 
     @property
     def client(self) -> ERPNextClient:

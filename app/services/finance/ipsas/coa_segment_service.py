@@ -25,6 +25,10 @@ class CoASegmentService:
     def __init__(self, db: Session):
         self.db = db
 
+    def _commit_and_refresh(self, entity) -> None:
+        self.db.commit()
+        self.db.refresh(entity)
+
     def list_definitions(self, organization_id: UUID) -> list[CoASegmentDefinition]:
         """List all segment definitions for an organization."""
         stmt = (
@@ -68,6 +72,7 @@ class CoASegmentService:
             data.segment_type,
             organization_id,
         )
+        self._commit_and_refresh(segment_def)
         return segment_def
 
     def list_values(self, segment_def_id: UUID) -> list[CoASegmentValue]:
@@ -111,4 +116,5 @@ class CoASegmentService:
             data.segment_code,
             segment_def_id,
         )
+        self._commit_and_refresh(value)
         return value

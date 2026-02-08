@@ -5,12 +5,12 @@ Numbering sequences and system settings.
 
 from app.models.finance.core_config.numbering_sequence import (
     NumberingSequence,
-    SequenceType,
     ResetFrequency,
+    SequenceType,
 )
 from app.models.finance.core_config.system_configuration import (
-    SystemConfiguration,
     ConfigType,
+    SystemConfiguration,
 )
 
 __all__ = [

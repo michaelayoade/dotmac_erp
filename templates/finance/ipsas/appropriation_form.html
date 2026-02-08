@@ -21,13 +21,13 @@
 
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
-                    <label for="appropriation_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Code</label>
+                    <label for="appropriation_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Code <span class="text-rose-500">*</span></label>
                     <input type="text" id="appropriation_code" name="appropriation_code" required maxlength="30"
                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white"
                            placeholder="e.g. APP-2026-001">
                 </div>
                 <div>
-                    <label for="appropriation_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Type</label>
+                    <label for="appropriation_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Type <span class="text-rose-500">*</span></label>
                     <select id="appropriation_type" name="appropriation_type" required
                             class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                         <option value="ORIGINAL">Original</option>
@@ -37,7 +37,7 @@
             </div>
 
             <div class="mt-4">
-                <label for="appropriation_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Name</label>
+                <label for="appropriation_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Name <span class="text-rose-500">*</span></label>
                 <input type="text" id="appropriation_name" name="appropriation_name" required maxlength="200"
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white"
                        placeholder="Personnel Emoluments Appropriation">
@@ -45,7 +45,7 @@
 
             <div class="mt-4 grid gap-4 sm:grid-cols-2">
                 <div>
-                    <label for="fund_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fund</label>
+                    <label for="fund_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fund <span class="text-rose-500">*</span></label>
                     <select id="fund_id" name="fund_id" required
                             class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                         <option value="">Select fund...</option>
@@ -55,7 +55,7 @@
                     </select>
                 </div>
                 <div>
-                    <label for="fiscal_year_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fiscal Year</label>
+                    <label for="fiscal_year_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fiscal Year <span class="text-rose-500">*</span></label>
                     <select id="fiscal_year_id" name="fiscal_year_id" required
                             class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                         <option value="">Select year...</option>
@@ -68,12 +68,12 @@
 
             <div class="mt-4 grid gap-4 sm:grid-cols-2">
                 <div>
-                    <label for="approved_amount" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Approved Amount</label>
+                    <label for="approved_amount" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Approved Amount <span class="text-rose-500">*</span></label>
                     <input type="number" id="approved_amount" name="approved_amount" required step="0.01" min="0"
                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                 </div>
                 <div>
-                    <label for="currency_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Currency</label>
+                    <label for="currency_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Currency <span class="text-rose-500">*</span></label>
                     <input type="text" id="currency_code" name="currency_code" required maxlength="3" value="{{ organization.base_currency if organization and organization.base_currency else 'USD' }}"
                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                 </div>
@@ -81,7 +81,7 @@
 
             <div class="mt-4 grid gap-4 sm:grid-cols-2">
                 <div>
-                    <label for="effective_from" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Effective From</label>
+                    <label for="effective_from" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Effective From <span class="text-rose-500">*</span></label>
                     <input type="date" id="effective_from" name="effective_from" required
                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                 </div>

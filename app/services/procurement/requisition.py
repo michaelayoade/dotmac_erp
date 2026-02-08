@@ -5,9 +5,8 @@ Business logic for purchase requisition management.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -32,7 +31,7 @@ class RequisitionService:
         self,
         organization_id: UUID,
         requisition_id: UUID,
-    ) -> Optional[PurchaseRequisition]:
+    ) -> PurchaseRequisition | None:
         """Get a requisition by ID."""
         stmt = select(PurchaseRequisition).where(
             PurchaseRequisition.organization_id == organization_id,
@@ -44,11 +43,12 @@ class RequisitionService:
         self,
         organization_id: UUID,
         *,
-        status: Optional[str] = None,
-        urgency: Optional[str] = None,
+        status: str | None = None,
+        urgency: str | None = None,
+        search: str | None = None,
         offset: int = 0,
         limit: int = 25,
-    ) -> Tuple[List[PurchaseRequisition], int]:
+    ) -> tuple[list[PurchaseRequisition], int]:
         """List requisitions with filters."""
         base = select(PurchaseRequisition).where(
             PurchaseRequisition.organization_id == organization_id,
@@ -66,6 +66,16 @@ class RequisitionService:
                 base = base.where(
                     PurchaseRequisition.urgency == urgency_enum,
                 )
+        if search:
+            from sqlalchemy import or_
+
+            term = f"%{search}%"
+            base = base.where(
+                or_(
+                    PurchaseRequisition.requisition_number.ilike(term),
+                    PurchaseRequisition.justification.ilike(term),
+                )
+            )
 
         total = self.db.scalar(select(func.count()).select_from(base.subquery()))
         items = list(
@@ -177,7 +187,7 @@ class RequisitionService:
         req.status = RequisitionStatus.BUDGET_VERIFIED
         req.budget_verified = True
         req.budget_verified_by_id = verified_by_user_id
-        req.budget_verified_at = datetime.now(timezone.utc)
+        req.budget_verified_at = datetime.now(UTC)
         self.db.flush()
         logger.info("Budget verified requisition %s", req.requisition_number)
         return req
@@ -200,7 +210,7 @@ class RequisitionService:
 
         req.status = RequisitionStatus.APPROVED
         req.approved_by_user_id = approved_by_user_id
-        req.approved_at = datetime.now(timezone.utc)
+        req.approved_at = datetime.now(UTC)
         self.db.flush()
         logger.info("Approved requisition %s", req.requisition_number)
         return req

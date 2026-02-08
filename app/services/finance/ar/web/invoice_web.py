@@ -6,33 +6,24 @@ Provides view-focused data and operations for AR invoice web routes.
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
-from fastapi import Request, UploadFile
+from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.models.finance.ar.customer import Customer
-from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
-from app.models.finance.ar.invoice_line import InvoiceLine
-from app.models.finance.ar.payment_allocation import PaymentAllocation
+from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
 from app.models.inventory.item import Item
 from app.services.common import coerce_uuid
 from app.services.finance.ar.customer import customer_service
-from app.services.finance.ar.invoice import (
-    ARInvoiceInput,
-    ARInvoiceLineInput,
-    ar_invoice_service,
-)
+from app.services.finance.ar.invoice import ARInvoiceInput, ar_invoice_service
 from app.services.finance.ar.web.base import (
     InvoiceStats,
     customer_display_name,
@@ -47,8 +38,6 @@ from app.services.finance.ar.web.base import (
     invoice_detail_view,
     invoice_line_view,
     invoice_status_label,
-    parse_date,
-    parse_invoice_status,
 )
 from app.services.finance.common.attachment import AttachmentInput, attachment_service
 from app.services.finance.platform.currency_context import get_currency_context
@@ -63,71 +52,26 @@ class InvoiceWebService:
     """Web service methods for AR invoices."""
 
     @staticmethod
-    def build_invoice_input(data: dict) -> ARInvoiceInput:
-        """Build ARInvoiceInput from form data."""
-        lines_data = data.get("lines", [])
-        if isinstance(lines_data, str):
-            lines_data = json.loads(lines_data)
-
-        lines = []
-        for line in lines_data:
-            if line.get("revenue_account_id") and line.get("description"):
-                # Handle both new tax_code_ids array and legacy tax_code_id field
-                tax_code_ids = []
-                if line.get("tax_code_ids"):
-                    tax_code_ids = [
-                        UUID(tc_id) for tc_id in line["tax_code_ids"] if tc_id
-                    ]
-                legacy_tax_code_id = (
-                    UUID(line["tax_code_id"]) if line.get("tax_code_id") else None
-                )
-
-                lines.append(
-                    ARInvoiceLineInput(
-                        description=line.get("description", ""),
-                        quantity=Decimal(str(line.get("quantity", 1))),
-                        unit_price=Decimal(str(line.get("unit_price", 0))),
-                        revenue_account_id=UUID(line["revenue_account_id"])
-                        if line.get("revenue_account_id")
-                        else None,
-                        item_id=UUID(line["item_id"]) if line.get("item_id") else None,
-                        tax_code_ids=tax_code_ids,
-                        tax_code_id=legacy_tax_code_id,
-                        cost_center_id=UUID(line["cost_center_id"])
-                        if line.get("cost_center_id")
-                        else None,
-                        project_id=UUID(line["project_id"])
-                        if line.get("project_id")
-                        else None,
-                    )
-                )
-
-        invoice_date = parse_date(data.get("invoice_date")) or date.today()
-        due_date = parse_date(data.get("due_date")) or invoice_date
-
-        return ARInvoiceInput(
-            customer_id=UUID(data["customer_id"]),
-            invoice_type=InvoiceType.STANDARD,
-            invoice_date=invoice_date,
-            due_date=due_date,
-            currency_code=data.get(
-                "currency_code",
-                settings.default_functional_currency_code,
-            ),
-            notes=data.get("terms"),
-            internal_notes=data.get("notes"),
-            lines=lines,
+    def build_invoice_input(
+        db: Session, data: dict, organization_id: UUID
+    ) -> ARInvoiceInput:
+        """Build ARInvoiceInput from form data via service helper."""
+        payload = dict(data)
+        return ar_invoice_service.build_input_from_payload(
+            db=db,
+            organization_id=organization_id,
+            payload=payload,
         )
 
     @staticmethod
     def list_invoices_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        customer_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        customer_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -140,41 +84,26 @@ class InvoiceWebService:
             status,
             page,
         )
-        org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
         today = date.today()
+        org_id = coerce_uuid(organization_id)
 
-        status_value = parse_invoice_status(status)
-        from_date = parse_date(start_date)
-        to_date = parse_date(end_date)
+        from app.services.finance.ar.invoice_query import build_invoice_query
 
-        query = (
-            db.query(Invoice, Customer)
-            .join(Customer, Invoice.customer_id == Customer.customer_id)
-            .filter(Invoice.organization_id == org_id)
+        query = build_invoice_query(
+            db=db,
+            organization_id=organization_id,
+            search=search,
+            customer_id=customer_id,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
         )
-
-        if customer_id:
-            query = query.filter(Invoice.customer_id == coerce_uuid(customer_id))
-        if status_value:
-            query = query.filter(Invoice.status == status_value)
-        if from_date:
-            query = query.filter(Invoice.invoice_date >= from_date)
-        if to_date:
-            query = query.filter(Invoice.invoice_date <= to_date)
-        if search:
-            search_pattern = f"%{search}%"
-            query = query.filter(
-                or_(
-                    Invoice.invoice_number.ilike(search_pattern),
-                    Customer.legal_name.ilike(search_pattern),
-                    Customer.trading_name.ilike(search_pattern),
-                )
-            )
 
         total_count = query.with_entities(func.count(Invoice.invoice_id)).scalar() or 0
         invoices = (
-            query.order_by(Invoice.invoice_date.desc())
+            query.with_entities(Invoice, Customer)
+            .order_by(Invoice.invoice_date.desc())
             .limit(limit)
             .offset(offset)
             .all()
@@ -381,6 +310,15 @@ class InvoiceWebService:
         except Exception:
             customer = None
 
+        # Resolve payment terms name
+        payment_terms_name = None
+        if invoice.payment_terms_id:
+            from app.models.finance.ar.payment_terms import PaymentTerms
+
+            pt = db.get(PaymentTerms, invoice.payment_terms_id)
+            if pt:
+                payment_terms_name = pt.terms_name
+
         lines = ar_invoice_service.get_invoice_lines(
             db,
             organization_id=org_id,
@@ -412,8 +350,12 @@ class InvoiceWebService:
 
         logger.debug("invoice_detail_context: found %d lines", len(lines_view))
 
+        invoice_view = invoice_detail_view(invoice, customer)
+        if payment_terms_name:
+            invoice_view["payment_terms"] = payment_terms_name
+
         return {
-            "invoice": invoice_detail_view(invoice, customer),
+            "invoice": invoice_view,
             "customer": customer_form_view(customer) if customer else None,
             "lines": lines_view,
             "attachments": attachments_view,
@@ -424,7 +366,7 @@ class InvoiceWebService:
         db: Session,
         organization_id: str,
         invoice_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete an invoice. Returns error message or None on success."""
         logger.debug(
             "delete_invoice: org=%s invoice_id=%s", organization_id, invoice_id
@@ -432,36 +374,13 @@ class InvoiceWebService:
         org_id = coerce_uuid(organization_id)
         inv_id = coerce_uuid(invoice_id)
 
-        invoice = db.get(Invoice, inv_id)
-        if not invoice or invoice.organization_id != org_id:
-            return "Invoice not found"
-
-        # Only DRAFT invoices can be deleted
-        if invoice.status != InvoiceStatus.DRAFT:
-            return f"Cannot delete invoice with status '{invoice.status.value}'. Only DRAFT invoices can be deleted."
-
-        # Check for existing payment allocations
-        allocation_count = (
-            db.query(func.count(PaymentAllocation.allocation_id))
-            .filter(PaymentAllocation.invoice_id == inv_id)
-            .scalar()
-            or 0
-        )
-
-        if allocation_count > 0:
-            return (
-                f"Cannot delete invoice with {allocation_count} payment allocation(s)."
-            )
-
         try:
-            # Delete invoice lines first
-            db.query(InvoiceLine).filter(InvoiceLine.invoice_id == inv_id).delete()
-            db.delete(invoice)
-            db.commit()
+            ar_invoice_service.delete_invoice(db, org_id, inv_id)
             logger.info("delete_invoice: deleted invoice %s for org %s", inv_id, org_id)
             return None
+        except HTTPException as exc:
+            return exc.detail
         except Exception as e:
-            db.rollback()
             logger.exception("delete_invoice: failed for org %s", org_id)
             return f"Failed to delete invoice: {str(e)}"
 
@@ -474,11 +393,11 @@ class InvoiceWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str],
-        customer_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        customer_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
     ) -> HTMLResponse:
         """Render invoice list page."""
@@ -613,7 +532,7 @@ class InvoiceWebService:
         self,
         invoice_id: str,
         file: UploadFile,
-        description: Optional[str],
+        description: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:

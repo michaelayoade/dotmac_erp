@@ -160,8 +160,9 @@ class TestLeaseCalculationService:
 
     def test_generate_amortization_schedule_not_found(self, mock_db):
         """Test amortization schedule generation for non-existent lease."""
-        from app.services.finance.lease.lease_calculation import LeaseCalculationService
         from fastapi import HTTPException
+
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         mock_db.get.return_value = None
 
@@ -175,8 +176,9 @@ class TestLeaseCalculationService:
 
     def test_generate_amortization_schedule_no_liability(self, mock_db, mock_contract):
         """Test amortization schedule with no liability fails."""
-        from app.services.finance.lease.lease_calculation import LeaseCalculationService
         from fastapi import HTTPException
+
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         mock_db.get.return_value = mock_contract
         mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -192,8 +194,9 @@ class TestLeaseCalculationService:
 
     def test_calculate_interest_accrual_not_found(self, mock_db):
         """Test interest accrual calculation for non-existent lease."""
-        from app.services.finance.lease.lease_calculation import LeaseCalculationService
         from fastapi import HTTPException
+
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         mock_db.get.return_value = None
 
@@ -208,8 +211,9 @@ class TestLeaseCalculationService:
 
     def test_calculate_interest_accrual_no_liability(self, mock_db, mock_contract):
         """Test interest accrual with no liability fails."""
-        from app.services.finance.lease.lease_calculation import LeaseCalculationService
         from fastapi import HTTPException
+
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         mock_db.get.return_value = mock_contract
         mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -250,8 +254,9 @@ class TestLeaseCalculationService:
 
     def test_calculate_rou_depreciation_not_found(self, mock_db):
         """Test ROU depreciation for non-existent lease asset."""
-        from app.services.finance.lease.lease_calculation import LeaseCalculationService
         from fastapi import HTTPException
+
+        from app.services.finance.lease.lease_calculation import LeaseCalculationService
 
         mock_db.query.return_value.filter.return_value.first.return_value = None
 

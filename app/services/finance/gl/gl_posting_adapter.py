@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import date
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -27,9 +26,9 @@ class GLPostingResult:
     """Result of a GL posting operation."""
 
     success: bool
-    journal_entry_id: Optional[UUID] = None
-    entry_number: Optional[str] = None
-    message: Optional[str] = None
+    journal_entry_id: UUID | None = None
+    entry_number: str | None = None
+    message: str | None = None
 
 
 class GLPostingAdapter:

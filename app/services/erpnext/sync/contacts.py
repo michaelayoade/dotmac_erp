@@ -5,7 +5,7 @@ Contact Sync Service - ERPNext to DotMac ERP (Customers/Suppliers).
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -62,7 +62,7 @@ class CustomerSyncService(BaseSyncService[Customer]):
         super().__init__(db, organization_id, user_id)
         self._mapping = CustomerMapping()
         self._customer_cache: dict[str, Customer] = {}
-        self._ar_account_id: Optional[uuid.UUID] = None
+        self._ar_account_id: uuid.UUID | None = None
 
     def _get_ar_account_id(self) -> uuid.UUID:
         """Get the AR control account ID."""
@@ -82,7 +82,7 @@ class CustomerSyncService(BaseSyncService[Customer]):
 
         raise ValueError(f"AR control account {DEFAULT_AR_ACCOUNT} not found")
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         """Fetch customers from ERPNext."""
         if since:
             yield from client.get_modified_since(
@@ -153,7 +153,7 @@ class CustomerSyncService(BaseSyncService[Customer]):
         """Get customer ID."""
         return entity.customer_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[Customer]:
+    def find_existing_entity(self, source_name: str) -> Customer | None:
         """Find existing customer by code or name."""
         if source_name in self._customer_cache:
             return self._customer_cache[source_name]
@@ -197,7 +197,7 @@ class SupplierSyncService(BaseSyncService[Supplier]):
         super().__init__(db, organization_id, user_id)
         self._mapping = SupplierMapping()
         self._supplier_cache: dict[str, Supplier] = {}
-        self._ap_account_id: Optional[uuid.UUID] = None
+        self._ap_account_id: uuid.UUID | None = None
 
     def _get_ap_account_id(self) -> uuid.UUID:
         """Get the AP control account ID."""
@@ -217,7 +217,7 @@ class SupplierSyncService(BaseSyncService[Supplier]):
 
         raise ValueError(f"AP control account {DEFAULT_AP_ACCOUNT} not found")
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         """Fetch suppliers from ERPNext."""
         if since:
             yield from client.get_modified_since(
@@ -283,7 +283,7 @@ class SupplierSyncService(BaseSyncService[Supplier]):
         """Get supplier ID."""
         return entity.supplier_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[Supplier]:
+    def find_existing_entity(self, source_name: str) -> Supplier | None:
         """Find existing supplier by code or name."""
         if source_name in self._supplier_cache:
             return self._supplier_cache[source_name]

@@ -5,8 +5,9 @@ Revises: extend_alembic_version
 Create Date: 2025-01-10
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "add_organization_settings_columns"

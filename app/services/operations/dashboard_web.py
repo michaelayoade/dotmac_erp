@@ -132,7 +132,9 @@ class OperationsDashboardWebService:
             )
 
             for lot in expiring_lots:
-                setattr(lot, "item", db.get(Item, lot.item_id))
+                item = db.get(Item, lot.item_id)
+                if item:
+                    lot.item = item
 
             context["expiring_lots"] = expiring_lots
             context["expiring_lots_count"] = len(expiring_lots)

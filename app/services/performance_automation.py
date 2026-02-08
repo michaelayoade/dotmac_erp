@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, timedelta
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from dateutil.relativedelta import relativedelta
@@ -258,7 +258,7 @@ class PerformanceAutomationService:
         self,
         cycle: AppraisalCycle,
         *,
-        template_id: Optional[UUID] = None,
+        template_id: UUID | None = None,
     ) -> list[Appraisal]:
         """
         Generate appraisals for all eligible employees in a cycle.
@@ -442,7 +442,7 @@ class PerformanceAutomationService:
         self,
         *,
         days_ahead: int = 7,
-        org_id: Optional[UUID] = None,
+        org_id: UUID | None = None,
     ) -> list[dict]:
         """
         Get cycles with deadlines approaching in the next N days.

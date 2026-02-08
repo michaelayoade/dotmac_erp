@@ -79,7 +79,7 @@ class TrainingProgram(Base, AuditMixin, ERPNextSyncMixin):
         String(200),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -90,31 +90,31 @@ class TrainingProgram(Base, AuditMixin, ERPNextSyncMixin):
         default="INTERNAL",
         comment="INTERNAL, EXTERNAL, ONLINE, CERTIFICATION",
     )
-    category: Mapped[Optional[str]] = mapped_column(
+    category: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="TECHNICAL, SOFT_SKILLS, COMPLIANCE, LEADERSHIP, etc.",
     )
 
     # Duration
-    duration_hours: Mapped[Optional[int]] = mapped_column(
+    duration_hours: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
     )
-    duration_days: Mapped[Optional[int]] = mapped_column(
+    duration_days: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
     )
 
     # Department (if department-specific)
-    department_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    department_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.department.department_id"),
         nullable=True,
     )
 
     # Cost
-    cost_per_attendee: Mapped[Optional[Decimal]] = mapped_column(
+    cost_per_attendee: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
     )
@@ -124,25 +124,25 @@ class TrainingProgram(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # Content
-    objectives: Mapped[Optional[str]] = mapped_column(
+    objectives: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    prerequisites: Mapped[Optional[str]] = mapped_column(
+    prerequisites: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    syllabus: Mapped[Optional[str]] = mapped_column(
+    syllabus: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Provider (for external training)
-    provider_name: Mapped[Optional[str]] = mapped_column(
+    provider_name: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
     )
-    provider_contact: Mapped[Optional[str]] = mapped_column(
+    provider_contact: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
     )
@@ -158,7 +158,7 @@ class TrainingProgram(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

@@ -8,9 +8,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -49,34 +48,34 @@ class LeaseContractInput:
     interest_expense_account_id: UUID
     rou_asset_account_id: UUID
     depreciation_expense_account_id: UUID
-    description: Optional[str] = None
-    lessor_supplier_id: Optional[UUID] = None
-    external_reference: Optional[str] = None
+    description: str | None = None
+    lessor_supplier_id: UUID | None = None
+    external_reference: str | None = None
     is_lessee: bool = True
     payment_timing: str = "ADVANCE"
     has_renewal_option: bool = False
-    renewal_option_term_months: Optional[int] = None
+    renewal_option_term_months: int | None = None
     renewal_reasonably_certain: bool = False
     has_purchase_option: bool = False
-    purchase_option_price: Optional[Decimal] = None
+    purchase_option_price: Decimal | None = None
     purchase_reasonably_certain: bool = False
     has_termination_option: bool = False
-    termination_penalty: Optional[Decimal] = None
+    termination_penalty: Decimal | None = None
     has_variable_payments: bool = False
-    variable_payment_basis: Optional[str] = None
+    variable_payment_basis: str | None = None
     is_index_linked: bool = False
-    index_type: Optional[str] = None
-    index_base_value: Optional[Decimal] = None
+    index_type: str | None = None
+    index_base_value: Decimal | None = None
     residual_value_guarantee: Decimal = Decimal("0")
     implicit_rate_known: bool = False
-    implicit_rate: Optional[Decimal] = None
+    implicit_rate: Decimal | None = None
     initial_direct_costs: Decimal = Decimal("0")
     lease_incentives_received: Decimal = Decimal("0")
     restoration_obligation: Decimal = Decimal("0")
-    asset_category_id: Optional[UUID] = None
-    location_id: Optional[UUID] = None
-    cost_center_id: Optional[UUID] = None
-    project_id: Optional[UUID] = None
+    asset_category_id: UUID | None = None
+    location_id: UUID | None = None
+    cost_center_id: UUID | None = None
+    project_id: UUID | None = None
 
 
 class LeaseContractService(ListResponseMixin):
@@ -117,7 +116,7 @@ class LeaseContractService(ListResponseMixin):
     @staticmethod
     def determine_discount_rate(
         ibr: Decimal,
-        implicit_rate: Optional[Decimal],
+        implicit_rate: Decimal | None,
         implicit_known: bool,
     ) -> Decimal:
         """
@@ -271,7 +270,7 @@ class LeaseContractService(ListResponseMixin):
             )
 
         contract.approved_by_user_id = user_id
-        contract.approved_at = datetime.now(timezone.utc)
+        contract.approved_at = datetime.now(UTC)
 
         db.commit()
         db.refresh(contract)
@@ -409,7 +408,7 @@ class LeaseContractService(ListResponseMixin):
         organization_id: UUID,
         lease_id: UUID,
         termination_date: date,
-        termination_reason: Optional[str] = None,
+        termination_reason: str | None = None,
     ) -> LeaseContract:
         """
         Terminate a lease contract early.
@@ -449,10 +448,15 @@ class LeaseContractService(ListResponseMixin):
     def get(
         db: Session,
         lease_id: str,
+        organization_id: UUID | None = None,
     ) -> LeaseContract:
         """Get a lease contract by ID."""
         contract = db.get(LeaseContract, coerce_uuid(lease_id))
         if not contract:
+            raise HTTPException(status_code=404, detail="Lease contract not found")
+        if organization_id is not None and contract.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Lease contract not found")
         return contract
 
@@ -460,7 +464,7 @@ class LeaseContractService(ListResponseMixin):
     def get_liability(
         db: Session,
         lease_id: str,
-    ) -> Optional[LeaseLiability]:
+    ) -> LeaseLiability | None:
         """Get the lease liability for a contract."""
         ls_id = coerce_uuid(lease_id)
         return db.query(LeaseLiability).filter(LeaseLiability.lease_id == ls_id).first()
@@ -469,7 +473,7 @@ class LeaseContractService(ListResponseMixin):
     def get_asset(
         db: Session,
         lease_id: str,
-    ) -> Optional[LeaseAsset]:
+    ) -> LeaseAsset | None:
         """Get the ROU asset for a contract."""
         ls_id = coerce_uuid(lease_id)
         return db.query(LeaseAsset).filter(LeaseAsset.lease_id == ls_id).first()
@@ -477,11 +481,11 @@ class LeaseContractService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        classification: Optional[LeaseClassification] = None,
-        status: Optional[LeaseStatus] = None,
-        lessor_supplier_id: Optional[str] = None,
-        is_lessee: Optional[bool] = None,
+        organization_id: str | None = None,
+        classification: LeaseClassification | None = None,
+        status: LeaseStatus | None = None,
+        lessor_supplier_id: str | None = None,
+        is_lessee: bool | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[LeaseContract]:

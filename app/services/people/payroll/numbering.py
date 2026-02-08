@@ -1,27 +1,21 @@
 """
-Payroll Numbering Service - Idempotent slip and run number generation.
+Payroll Numbering Service - Thin wrapper around SyncNumberingService.
 
-Provides race-condition-safe number generation using unique constraints
-with retry-on-conflict. This pattern works with any database backend
-and is safer than MAX+1 or COUNT+1 approaches.
-
-Key design:
-- Numbers are reserved atomically via INSERT with unique constraint
-- On conflict (concurrent insert), retry with next number
-- Maintains per-organization, per-year sequences
-- Format: PREFIX-YYYY-NNNNN (e.g., SLIP-2026-00001, PAY-2026-0001)
+.. deprecated::
+    This module now delegates to ``SyncNumberingService`` from
+    ``app.services.finance.common.numbering``.  It is kept for backward
+    compatibility of the ``PayrollNumberingService`` class, the
+    ``PayrollNumberSequence`` model, and the convenience functions.
 """
 
 from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import Integer, String, UniqueConstraint, func, select
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from app.db import Base
@@ -39,6 +33,10 @@ class PayrollNumberSequence(Base):
 
     Each row represents a reserved number. The unique constraint on
     (organization_id, prefix, year, sequence_number) prevents duplicates.
+
+    .. note::
+        Kept for backward compatibility. New numbering goes through
+        ``SyncNumberingService`` and the ``numbering_sequence`` table.
     """
 
     __tablename__ = "payroll_number_sequence"
@@ -65,13 +63,8 @@ class PayrollNumberingService:
     """
     Service for generating unique payroll document numbers.
 
-    Uses a retry-on-conflict pattern with unique constraints to ensure
-    idempotent number generation even under concurrent load.
-
-    Usage:
-        service = PayrollNumberingService(db)
-        slip_number = service.generate_slip_number(org_id)
-        entry_number = service.generate_entry_number(org_id)
+    .. deprecated::
+        Delegates to ``SyncNumberingService``. Kept for backward compat.
     """
 
     # Number format configuration
@@ -87,170 +80,69 @@ class PayrollNumberingService:
     def generate_slip_number(
         self,
         organization_id: UUID,
-        year: Optional[int] = None,
+        year: int | None = None,
     ) -> str:
         """
         Generate a unique salary slip number.
 
         Args:
             organization_id: Organization scope
-            year: Year for the number (defaults to current year)
+            year: Deprecated — ignored, SyncNumberingService uses date
 
         Returns:
             Formatted slip number (e.g., SLIP-2026-00001)
-
-        Raises:
-            RuntimeError: If unable to generate number after max retries
         """
-        return self._generate_number(
-            organization_id=organization_id,
-            prefix=self.SLIP_PREFIX,
-            padding=self.SLIP_PADDING,
-            year=year,
+        from app.models.finance.core_config.numbering_sequence import SequenceType
+        from app.services.finance.common.numbering import SyncNumberingService
+
+        return SyncNumberingService(self.db).generate_next_number(
+            organization_id, SequenceType.SALARY_SLIP
         )
 
     def generate_entry_number(
         self,
         organization_id: UUID,
-        year: Optional[int] = None,
+        year: int | None = None,
     ) -> str:
         """
         Generate a unique payroll entry/run number.
 
         Args:
             organization_id: Organization scope
-            year: Year for the number (defaults to current year)
+            year: Deprecated — ignored, SyncNumberingService uses date
 
         Returns:
             Formatted entry number (e.g., PAY-2026-0001)
-
-        Raises:
-            RuntimeError: If unable to generate number after max retries
         """
-        return self._generate_number(
-            organization_id=organization_id,
-            prefix=self.ENTRY_PREFIX,
-            padding=self.ENTRY_PADDING,
-            year=year,
+        from app.models.finance.core_config.numbering_sequence import SequenceType
+        from app.services.finance.common.numbering import SyncNumberingService
+
+        return SyncNumberingService(self.db).generate_next_number(
+            organization_id, SequenceType.PAYROLL_ENTRY
         )
 
-    def _generate_number(
+    def peek_next_number(
         self,
         organization_id: UUID,
         prefix: str,
-        padding: int,
-        year: Optional[int] = None,
+        year: int | None = None,
     ) -> str:
         """
-        Core number generation with retry-on-conflict using savepoints.
+        Preview the next number without reserving it.
 
-        Algorithm:
-        1. Get current max sequence number for org/prefix/year
-        2. Create a savepoint and try to insert next number
-        3. On conflict (duplicate), rollback ONLY the savepoint and retry
-        4. Return the successfully reserved number
-
-        Uses begin_nested() savepoints to ensure that on conflict, only the
-        sequence INSERT is rolled back - not any other pending changes in
-        the transaction. This is critical when numbering is called mid-transaction.
+        Falls back to reading from the old PayrollNumberSequence table
+        for peek (non-reserving) operations.
         """
         if year is None:
             year = datetime.now().year
 
-        # Get the current max sequence number
-        max_seq = self._get_max_sequence(organization_id, prefix, year)
-        next_seq = (max_seq or 0) + 1
-
-        for attempt in range(MAX_RETRIES):
-            formatted = self._format_number(prefix, year, next_seq, padding)
-
-            # Use savepoint so we only rollback the INSERT on conflict,
-            # not any other pending changes in the transaction
-            savepoint = self.db.begin_nested()
-            try:
-                # Try to reserve this number
-                sequence_record = PayrollNumberSequence(
-                    organization_id=organization_id,
-                    prefix=prefix,
-                    year=year,
-                    sequence_number=next_seq,
-                    formatted_number=formatted,
-                )
-                self.db.add(sequence_record)
-                self.db.flush()
-                savepoint.commit()
-
-                logger.debug(
-                    "Reserved number %s for org %s (attempt %d)",
-                    formatted,
-                    organization_id,
-                    attempt + 1,
-                )
-                return formatted
-
-            except IntegrityError:
-                # Duplicate - another transaction got this number first
-                # Rollback only the savepoint, preserving other transaction work
-                savepoint.rollback()
-                logger.debug(
-                    "Number %s already taken, retrying (attempt %d)",
-                    formatted,
-                    attempt + 1,
-                )
-
-                # Refresh max sequence and try next
-                max_seq = self._get_max_sequence(organization_id, prefix, year)
-                next_seq = (max_seq or 0) + 1
-
-        # Exhausted retries
-        raise RuntimeError(
-            f"Unable to generate {prefix} number after {MAX_RETRIES} attempts. "
-            f"This may indicate extremely high concurrency or a bug."
-        )
-
-    def _get_max_sequence(
-        self,
-        organization_id: UUID,
-        prefix: str,
-        year: int,
-    ) -> Optional[int]:
-        """Get the current maximum sequence number for org/prefix/year."""
-        result = self.db.scalar(
+        max_seq = self.db.scalar(
             select(func.max(PayrollNumberSequence.sequence_number)).where(
                 PayrollNumberSequence.organization_id == organization_id,
                 PayrollNumberSequence.prefix == prefix,
                 PayrollNumberSequence.year == year,
             )
         )
-        return result
-
-    def _format_number(
-        self,
-        prefix: str,
-        year: int,
-        sequence: int,
-        padding: int,
-    ) -> str:
-        """Format the number with prefix, year, and zero-padded sequence."""
-        return f"{prefix}-{year}-{sequence:0{padding}d}"
-
-    def peek_next_number(
-        self,
-        organization_id: UUID,
-        prefix: str,
-        year: Optional[int] = None,
-    ) -> str:
-        """
-        Preview the next number without reserving it.
-
-        Useful for displaying "next number will be..." in UI.
-        Note: This is NOT guaranteed to be the actual next number
-        due to concurrent access.
-        """
-        if year is None:
-            year = datetime.now().year
-
-        max_seq = self._get_max_sequence(organization_id, prefix, year)
         next_seq = (max_seq or 0) + 1
 
         if prefix == self.SLIP_PREFIX:
@@ -258,7 +150,7 @@ class PayrollNumberingService:
         else:
             padding = self.ENTRY_PADDING
 
-        return self._format_number(prefix, year, next_seq, padding)
+        return f"{prefix}-{year}-{next_seq:0{padding}d}"
 
 
 # Convenience functions for backward compatibility

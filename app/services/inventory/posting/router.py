@@ -3,7 +3,6 @@ INV Transaction Router - Routes transactions to appropriate posting handler.
 """
 
 from datetime import date
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -25,7 +24,7 @@ def post_transaction(
     transaction_id: UUID,
     posting_date: date,
     posted_by_user_id: UUID,
-    idempotency_key: Optional[str] = None,
+    idempotency_key: str | None = None,
 ) -> INVPostingResult:
     """
     Post any inventory transaction to the general ledger.

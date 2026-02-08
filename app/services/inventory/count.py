@@ -6,11 +6,11 @@ Manages inventory counts, variance calculation, and adjustment posting.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -35,10 +35,10 @@ class CountInput:
     count_number: str
     count_date: date
     fiscal_period_id: UUID
-    count_description: Optional[str] = None
-    warehouse_id: Optional[UUID] = None
-    location_id: Optional[UUID] = None
-    category_id: Optional[UUID] = None
+    count_description: str | None = None
+    warehouse_id: UUID | None = None
+    location_id: UUID | None = None
+    category_id: UUID | None = None
     is_full_count: bool = False
     is_cycle_count: bool = False
 
@@ -50,10 +50,10 @@ class CountLineInput:
     item_id: UUID
     warehouse_id: UUID
     counted_quantity: Decimal
-    lot_id: Optional[UUID] = None
-    location_id: Optional[UUID] = None
-    reason_code: Optional[str] = None
-    notes: Optional[str] = None
+    lot_id: UUID | None = None
+    location_id: UUID | None = None
+    reason_code: str | None = None
+    notes: str | None = None
 
 
 @dataclass
@@ -314,13 +314,13 @@ class InventoryCountService(ListResponseMixin):
         if line.counted_quantity is None:
             line.counted_quantity = input.counted_quantity
             line.counted_by_user_id = user_id
-            line.counted_at = datetime.now(timezone.utc)
+            line.counted_at = datetime.now(UTC)
             count.items_counted += 1
         else:
             # Recount
             line.recount_quantity = input.counted_quantity
             line.recounted_by_user_id = user_id
-            line.recounted_at = datetime.now(timezone.utc)
+            line.recounted_at = datetime.now(UTC)
 
         line.final_quantity = input.counted_quantity
         line.reason_code = input.reason_code
@@ -434,7 +434,7 @@ class InventoryCountService(ListResponseMixin):
             )
 
         count.approved_by_user_id = user_id
-        count.approved_at = datetime.now(timezone.utc)
+        count.approved_at = datetime.now(UTC)
 
         db.commit()
         db.refresh(count)
@@ -534,7 +534,7 @@ class InventoryCountService(ListResponseMixin):
 
         count.status = CountStatus.POSTED
         count.posted_by_user_id = user_id
-        count.posted_at = datetime.now(timezone.utc)
+        count.posted_at = datetime.now(UTC)
 
         db.commit()
         db.refresh(count)
@@ -616,12 +616,12 @@ class InventoryCountService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        warehouse_id: Optional[str] = None,
-        status: Optional[CountStatus] = None,
+        organization_id: str | None = None,
+        warehouse_id: str | None = None,
+        status: CountStatus | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[InventoryCount]:
+    ) -> builtins.list[InventoryCount]:
         """List inventory counts with optional filters."""
         query = db.query(InventoryCount)
 
@@ -645,11 +645,11 @@ class InventoryCountService(ListResponseMixin):
     def list_lines(
         db: Session,
         count_id: str,
-        has_variance: Optional[bool] = None,
-        is_counted: Optional[bool] = None,
+        has_variance: bool | None = None,
+        is_counted: bool | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[InventoryCountLine]:
+    ) -> builtins.list[InventoryCountLine]:
         """List count lines with optional filters."""
         cnt_id = coerce_uuid(count_id)
 

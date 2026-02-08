@@ -4,20 +4,20 @@ Tests for PaymentBatchService.
 Tests payment batch creation, approval, processing, and bank file generation.
 """
 
-import pytest
 from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+import pytest
 from fastapi import HTTPException
 
 from app.models.finance.ap.payment_batch import APBatchStatus
 from app.models.finance.ap.supplier_payment import APPaymentStatus
 from app.services.finance.ap.payment_batch import (
-    PaymentBatchService,
-    PaymentBatchInput,
     BatchPaymentItem,
+    PaymentBatchInput,
+    PaymentBatchService,
 )
 
 
@@ -148,7 +148,7 @@ class TestCreateBatch:
         """Test successful batch creation."""
         mock_sequence.get_next_number.return_value = "PMT-202601-0001"
 
-        result = PaymentBatchService.create_batch(mock_db, org_id, batch_input, user_id)
+        PaymentBatchService.create_batch(mock_db, org_id, batch_input, user_id)
 
         mock_db.add.assert_called_once()
         mock_db.flush.assert_called_once()
@@ -161,7 +161,7 @@ class TestCreateBatch:
         """Test that batch creation calculates correct totals."""
         mock_sequence.get_next_number.return_value = "PMT-202601-0001"
 
-        result = PaymentBatchService.create_batch(mock_db, org_id, batch_input, user_id)
+        PaymentBatchService.create_batch(mock_db, org_id, batch_input, user_id)
 
         # The batch added should have correct totals
         added_batch = mock_db.add.call_args[0][0]
@@ -210,7 +210,7 @@ class TestAddPaymentToBatch:
         sr2.first.return_value = payment
         mock_db.scalars.side_effect = [sr1, sr2]
 
-        result = PaymentBatchService.add_payment_to_batch(
+        PaymentBatchService.add_payment_to_batch(
             mock_db, org_id, batch.batch_id, payment.payment_id
         )
 
@@ -332,7 +332,7 @@ class TestRemovePaymentFromBatch:
         sr2.first.return_value = payment
         mock_db.scalars.side_effect = [sr1, sr2]
 
-        result = PaymentBatchService.remove_payment_from_batch(
+        PaymentBatchService.remove_payment_from_batch(
             mock_db, org_id, batch.batch_id, payment.payment_id
         )
 
@@ -414,9 +414,7 @@ class TestApproveBatch:
         mock_db.scalars.side_effect = [sr1, sr2]
         mock_db.scalar.return_value = 2  # payment count
 
-        result = PaymentBatchService.approve_batch(
-            mock_db, org_id, batch.batch_id, approver_id
-        )
+        PaymentBatchService.approve_batch(mock_db, org_id, batch.batch_id, approver_id)
 
         assert batch.status == APBatchStatus.APPROVED
         assert batch.approved_by_user_id == approver_id
@@ -514,9 +512,7 @@ class TestProcessBatch:
         sr2.all.return_value = payments
         mock_db.scalars.side_effect = [sr1, sr2]
 
-        result = PaymentBatchService.process_batch(
-            mock_db, org_id, batch.batch_id, user_id
-        )
+        PaymentBatchService.process_batch(mock_db, org_id, batch.batch_id, user_id)
 
         assert batch.status == APBatchStatus.COMPLETED
         assert mock_payment_service.post_payment.call_count == 2
@@ -548,9 +544,7 @@ class TestProcessBatch:
             HTTPException(status_code=400, detail="Processing failed"),
         ]
 
-        result = PaymentBatchService.process_batch(
-            mock_db, org_id, batch.batch_id, user_id
-        )
+        PaymentBatchService.process_batch(mock_db, org_id, batch.batch_id, user_id)
 
         assert batch.status == APBatchStatus.FAILED
         assert payments[1].status == APPaymentStatus.REJECTED

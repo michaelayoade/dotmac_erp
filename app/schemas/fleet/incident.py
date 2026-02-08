@@ -6,7 +6,6 @@ Schemas for incident API endpoints.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -21,13 +20,13 @@ class IncidentBase(BaseModel):
     incident_type: IncidentType
     severity: IncidentSeverity
     incident_date: date
-    incident_time: Optional[str] = Field(default=None, max_length=10)
-    location: Optional[str] = Field(default=None, max_length=300)
+    incident_time: str | None = Field(default=None, max_length=10)
+    location: str | None = Field(default=None, max_length=300)
     description: str
-    driver_id: Optional[UUID] = None
+    driver_id: UUID | None = None
     third_party_involved: bool = False
-    third_party_details: Optional[str] = None
-    notes: Optional[str] = None
+    third_party_details: str | None = None
+    notes: str | None = None
 
 
 class IncidentCreate(IncidentBase):
@@ -39,22 +38,22 @@ class IncidentCreate(IncidentBase):
 class IncidentUpdate(BaseModel):
     """Update incident request."""
 
-    incident_type: Optional[IncidentType] = None
-    severity: Optional[IncidentSeverity] = None
-    incident_date: Optional[date] = None
-    incident_time: Optional[str] = Field(default=None, max_length=10)
-    location: Optional[str] = Field(default=None, max_length=300)
-    description: Optional[str] = None
-    driver_id: Optional[UUID] = None
-    third_party_involved: Optional[bool] = None
-    third_party_details: Optional[str] = None
-    police_report_number: Optional[str] = Field(default=None, max_length=50)
-    police_report_date: Optional[date] = None
-    insurance_claim_number: Optional[str] = Field(default=None, max_length=50)
-    insurance_claim_date: Optional[date] = None
-    insurance_claim_status: Optional[str] = Field(default=None, max_length=30)
-    estimated_repair_cost: Optional[Decimal] = Field(default=None, ge=0)
-    notes: Optional[str] = None
+    incident_type: IncidentType | None = None
+    severity: IncidentSeverity | None = None
+    incident_date: date | None = None
+    incident_time: str | None = Field(default=None, max_length=10)
+    location: str | None = Field(default=None, max_length=300)
+    description: str | None = None
+    driver_id: UUID | None = None
+    third_party_involved: bool | None = None
+    third_party_details: str | None = None
+    police_report_number: str | None = Field(default=None, max_length=50)
+    police_report_date: date | None = None
+    insurance_claim_number: str | None = Field(default=None, max_length=50)
+    insurance_claim_date: date | None = None
+    insurance_claim_status: str | None = Field(default=None, max_length=30)
+    estimated_repair_cost: Decimal | None = Field(default=None, ge=0)
+    notes: str | None = None
 
 
 class IncidentRead(IncidentBase):
@@ -66,21 +65,21 @@ class IncidentRead(IncidentBase):
     organization_id: UUID
     reported_by_id: UUID
     status: IncidentStatus
-    police_report_number: Optional[str] = None
-    police_report_date: Optional[date] = None
-    insurance_claim_number: Optional[str] = None
-    insurance_claim_date: Optional[date] = None
-    insurance_claim_status: Optional[str] = None
-    insurance_payout: Optional[Decimal] = None
-    estimated_repair_cost: Optional[Decimal] = None
-    actual_repair_cost: Optional[Decimal] = None
-    other_costs: Optional[Decimal] = None
-    expense_claim_id: Optional[UUID] = None
-    resolution_date: Optional[date] = None
-    resolution_notes: Optional[str] = None
+    police_report_number: str | None = None
+    police_report_date: date | None = None
+    insurance_claim_number: str | None = None
+    insurance_claim_date: date | None = None
+    insurance_claim_status: str | None = None
+    insurance_payout: Decimal | None = None
+    estimated_repair_cost: Decimal | None = None
+    actual_repair_cost: Decimal | None = None
+    other_costs: Decimal | None = None
+    expense_claim_id: UUID | None = None
+    resolution_date: date | None = None
+    resolution_notes: str | None = None
     is_deleted: bool = False
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class IncidentBrief(BaseModel):
@@ -94,24 +93,24 @@ class IncidentBrief(BaseModel):
     severity: IncidentSeverity
     incident_date: date
     status: IncidentStatus
-    estimated_repair_cost: Optional[Decimal] = None
-    actual_repair_cost: Optional[Decimal] = None
+    estimated_repair_cost: Decimal | None = None
+    actual_repair_cost: Decimal | None = None
 
 
 class IncidentResolve(BaseModel):
     """Request to resolve an incident."""
 
-    resolution_date: Optional[date] = None
+    resolution_date: date | None = None
     resolution_notes: str
-    actual_repair_cost: Optional[Decimal] = Field(default=None, ge=0)
-    other_costs: Optional[Decimal] = Field(default=None, ge=0)
-    insurance_payout: Optional[Decimal] = Field(default=None, ge=0)
+    actual_repair_cost: Decimal | None = Field(default=None, ge=0)
+    other_costs: Decimal | None = Field(default=None, ge=0)
+    insurance_payout: Decimal | None = Field(default=None, ge=0)
 
 
 class IncidentListResponse(BaseModel):
     """Paginated incident list response."""
 
-    items: List[IncidentBrief]
+    items: list[IncidentBrief]
     total: int
     offset: int
     limit: int

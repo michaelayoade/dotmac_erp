@@ -12,11 +12,9 @@ import tempfile
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List
 from unittest.mock import MagicMock
 
 import pytest
-
 
 # ============ UUID Fixtures ============
 
@@ -73,27 +71,27 @@ class CSVFileHelper:
 
     @staticmethod
     def create_csv_file(
-        headers: List[str],
-        rows: List[List[str]],
+        headers: list[str],
+        rows: list[list[str]],
         encoding: str = "utf-8",
     ) -> Path:
         """Create a temporary CSV file with the given data."""
-        temp_file = tempfile.NamedTemporaryFile(
+        with tempfile.NamedTemporaryFile(
             mode="w",
             suffix=".csv",
             delete=False,
             encoding=encoding,
             newline="",
-        )
-        writer = csv.writer(temp_file)
-        writer.writerow(headers)
-        for row in rows:
-            writer.writerow(row)
-        temp_file.close()
-        return Path(temp_file.name)
+        ) as temp_file:
+            writer = csv.writer(temp_file)
+            writer.writerow(headers)
+            for row in rows:
+                writer.writerow(row)
+            temp_path = temp_file.name
+        return Path(temp_path)
 
     @staticmethod
-    def create_csv_string(headers: List[str], rows: List[List[str]]) -> str:
+    def create_csv_string(headers: list[str], rows: list[list[str]]) -> str:
         """Create a CSV string with the given data."""
         output = io.StringIO()
         writer = csv.writer(output)
@@ -104,10 +102,10 @@ class CSVFileHelper:
 
     @staticmethod
     def create_dict_rows(
-        headers: List[str], rows: List[List[str]]
-    ) -> List[Dict[str, str]]:
+        headers: list[str], rows: list[list[str]]
+    ) -> list[dict[str, str]]:
         """Convert headers and rows to list of dictionaries."""
-        return [dict(zip(headers, row)) for row in rows]
+        return [dict(zip(headers, row, strict=False)) for row in rows]
 
 
 @pytest.fixture

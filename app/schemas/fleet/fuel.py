@@ -6,7 +6,6 @@ Schemas for fuel log API endpoints.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -24,36 +23,36 @@ class FuelLogBase(BaseModel):
     price_per_liter: Decimal = Field(gt=0)
     total_cost: Decimal = Field(gt=0)
     odometer_reading: int = Field(ge=0)
-    station_name: Optional[str] = Field(default=None, max_length=100)
-    station_location: Optional[str] = Field(default=None, max_length=200)
-    receipt_number: Optional[str] = Field(default=None, max_length=50)
+    station_name: str | None = Field(default=None, max_length=100)
+    station_location: str | None = Field(default=None, max_length=200)
+    receipt_number: str | None = Field(default=None, max_length=50)
     is_full_tank: bool = True
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class FuelLogCreate(FuelLogBase):
     """Create fuel log request."""
 
-    employee_id: Optional[UUID] = None
-    expense_claim_id: Optional[UUID] = None
+    employee_id: UUID | None = None
+    expense_claim_id: UUID | None = None
 
 
 class FuelLogUpdate(BaseModel):
     """Update fuel log request."""
 
-    log_date: Optional[date] = None
-    fuel_type: Optional[FuelType] = None
-    quantity_liters: Optional[Decimal] = Field(default=None, gt=0)
-    price_per_liter: Optional[Decimal] = Field(default=None, gt=0)
-    total_cost: Optional[Decimal] = Field(default=None, gt=0)
-    odometer_reading: Optional[int] = Field(default=None, ge=0)
-    station_name: Optional[str] = Field(default=None, max_length=100)
-    station_location: Optional[str] = Field(default=None, max_length=200)
-    receipt_number: Optional[str] = Field(default=None, max_length=50)
-    is_full_tank: Optional[bool] = None
-    employee_id: Optional[UUID] = None
-    expense_claim_id: Optional[UUID] = None
-    notes: Optional[str] = None
+    log_date: date | None = None
+    fuel_type: FuelType | None = None
+    quantity_liters: Decimal | None = Field(default=None, gt=0)
+    price_per_liter: Decimal | None = Field(default=None, gt=0)
+    total_cost: Decimal | None = Field(default=None, gt=0)
+    odometer_reading: int | None = Field(default=None, ge=0)
+    station_name: str | None = Field(default=None, max_length=100)
+    station_location: str | None = Field(default=None, max_length=200)
+    receipt_number: str | None = Field(default=None, max_length=50)
+    is_full_tank: bool | None = None
+    employee_id: UUID | None = None
+    expense_claim_id: UUID | None = None
+    notes: str | None = None
 
 
 class FuelLogRead(FuelLogBase):
@@ -63,10 +62,10 @@ class FuelLogRead(FuelLogBase):
 
     fuel_log_id: UUID
     organization_id: UUID
-    employee_id: Optional[UUID] = None
-    expense_claim_id: Optional[UUID] = None
+    employee_id: UUID | None = None
+    expense_claim_id: UUID | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class FuelLogBrief(BaseModel):
@@ -101,7 +100,7 @@ class FuelEfficiencyReport(BaseModel):
 class FuelLogListResponse(BaseModel):
     """Paginated fuel log list response."""
 
-    items: List[FuelLogBrief]
+    items: list[FuelLogBrief]
     total: int
     offset: int
     limit: int

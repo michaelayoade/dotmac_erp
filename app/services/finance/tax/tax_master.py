@@ -6,11 +6,11 @@ Manages tax codes, rates, and jurisdiction configuration.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -34,19 +34,19 @@ class TaxCodeInput:
     jurisdiction_id: UUID
     tax_rate: Decimal
     effective_from: date
-    description: Optional[str] = None
-    effective_to: Optional[date] = None
+    description: str | None = None
+    effective_to: date | None = None
     is_compound: bool = False
     is_inclusive: bool = False
     is_recoverable: bool = True
     recovery_rate: Decimal = Decimal("1.0")
     applies_to_purchases: bool = True
     applies_to_sales: bool = True
-    tax_return_box: Optional[str] = None
-    reporting_code: Optional[str] = None
-    tax_collected_account_id: Optional[UUID] = None
-    tax_paid_account_id: Optional[UUID] = None
-    tax_expense_account_id: Optional[UUID] = None
+    tax_return_box: str | None = None
+    reporting_code: str | None = None
+    tax_collected_account_id: UUID | None = None
+    tax_paid_account_id: UUID | None = None
+    tax_expense_account_id: UUID | None = None
 
 
 @dataclass
@@ -65,18 +65,18 @@ class TaxJurisdictionInput:
     deferred_tax_asset_account_id: UUID
     deferred_tax_liability_account_id: UUID
     deferred_tax_expense_account_id: UUID
-    description: Optional[str] = None
-    state_province: Optional[str] = None
-    future_tax_rate: Optional[Decimal] = None
-    future_rate_effective_from: Optional[date] = None
+    description: str | None = None
+    state_province: str | None = None
+    future_tax_rate: Decimal | None = None
+    future_rate_effective_from: date | None = None
     has_reduced_rate: bool = False
-    reduced_rate: Optional[Decimal] = None
-    reduced_rate_threshold: Optional[Decimal] = None
+    reduced_rate: Decimal | None = None
+    reduced_rate_threshold: Decimal | None = None
     fiscal_year_end_month: int = 12
     filing_due_months: int = 6
-    extension_months: Optional[int] = None
-    tax_authority_name: Optional[str] = None
-    tax_id_number: Optional[str] = None
+    extension_months: int | None = None
+    tax_authority_name: str | None = None
+    tax_id_number: str | None = None
 
 
 @dataclass
@@ -305,10 +305,15 @@ class TaxCodeService(ListResponseMixin):
     def get(
         db: Session,
         tax_code_id: str,
+        organization_id: UUID | None = None,
     ) -> TaxCode:
         """Get a tax code by ID."""
         tax_code = db.get(TaxCode, coerce_uuid(tax_code_id))
         if not tax_code:
+            raise HTTPException(status_code=404, detail="Tax code not found")
+        if organization_id is not None and tax_code.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Tax code not found")
         return tax_code
 
@@ -317,7 +322,7 @@ class TaxCodeService(ListResponseMixin):
         db: Session,
         organization_id: str,
         code: str,
-    ) -> Optional[TaxCode]:
+    ) -> TaxCode | None:
         """Get a tax code by code string."""
         return (
             db.query(TaxCode)
@@ -331,15 +336,15 @@ class TaxCodeService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        tax_type: Optional[TaxType] = None,
-        jurisdiction_id: Optional[str] = None,
-        is_active: Optional[bool] = None,
-        applies_to_purchases: Optional[bool] = None,
-        applies_to_sales: Optional[bool] = None,
+        organization_id: str | None = None,
+        tax_type: TaxType | None = None,
+        jurisdiction_id: str | None = None,
+        is_active: bool | None = None,
+        applies_to_purchases: bool | None = None,
+        applies_to_sales: bool | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[TaxCode]:
+    ) -> builtins.list[TaxCode]:
         """List tax codes with optional filters."""
         query = db.query(TaxCode)
 
@@ -373,7 +378,7 @@ class TaxCodeService(ListResponseMixin):
         db: Session,
         organization_id: str,
         as_of_date: date,
-    ) -> List[TaxCode]:
+    ) -> builtins.list[TaxCode]:
         """Get all tax codes effective on a given date."""
         org_id = coerce_uuid(organization_id)
 
@@ -472,7 +477,7 @@ class TaxJurisdictionService(ListResponseMixin):
         organization_id: UUID,
         jurisdiction_id: UUID,
         as_of_date: date,
-        taxable_income: Optional[Decimal] = None,
+        taxable_income: Decimal | None = None,
     ) -> Decimal:
         """
         Get applicable tax rate for a jurisdiction.
@@ -597,10 +602,15 @@ class TaxJurisdictionService(ListResponseMixin):
     def get(
         db: Session,
         jurisdiction_id: str,
+        organization_id: UUID | None = None,
     ) -> TaxJurisdiction:
         """Get a jurisdiction by ID."""
         jurisdiction = db.get(TaxJurisdiction, coerce_uuid(jurisdiction_id))
         if not jurisdiction:
+            raise HTTPException(status_code=404, detail="Jurisdiction not found")
+        if organization_id is not None and jurisdiction.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Jurisdiction not found")
         return jurisdiction
 
@@ -609,7 +619,7 @@ class TaxJurisdictionService(ListResponseMixin):
         db: Session,
         organization_id: str,
         code: str,
-    ) -> Optional[TaxJurisdiction]:
+    ) -> TaxJurisdiction | None:
         """Get a jurisdiction by code string."""
         return (
             db.query(TaxJurisdiction)
@@ -623,13 +633,13 @@ class TaxJurisdictionService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        country_code: Optional[str] = None,
-        jurisdiction_level: Optional[str] = None,
-        is_active: Optional[bool] = None,
+        organization_id: str | None = None,
+        country_code: str | None = None,
+        jurisdiction_level: str | None = None,
+        is_active: bool | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[TaxJurisdiction]:
+    ) -> builtins.list[TaxJurisdiction]:
         """List jurisdictions with optional filters."""
         query = db.query(TaxJurisdiction)
 

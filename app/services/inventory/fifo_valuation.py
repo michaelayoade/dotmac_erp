@@ -11,7 +11,6 @@ import uuid as uuid_lib
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -36,8 +35,8 @@ class FIFOLayer:
     quantity: Decimal
     unit_cost: Decimal
     total_cost: Decimal
-    lot_id: Optional[UUID] = None
-    reference: Optional[str] = None
+    lot_id: UUID | None = None
+    reference: str | None = None
 
 
 @dataclass
@@ -91,8 +90,8 @@ class FIFOValuationService(ListResponseMixin):
         quantity: Decimal,
         unit_cost: Decimal,
         layer_date: date,
-        lot_id: Optional[UUID] = None,
-        reference: Optional[str] = None,
+        lot_id: UUID | None = None,
+        reference: str | None = None,
     ) -> InventoryLot:
         """
         Add a new FIFO cost layer (via lot creation).

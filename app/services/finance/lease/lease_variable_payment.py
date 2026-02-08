@@ -10,7 +10,6 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -35,7 +34,7 @@ class VariablePaymentInput:
 
     schedule_id: UUID
     variable_amount: Decimal
-    description: Optional[str] = None
+    description: str | None = None
 
 
 @dataclass
@@ -47,7 +46,7 @@ class IndexAdjustmentInput:
     fiscal_period_id: UUID
     new_index_value: Decimal
     base_index_value: Decimal
-    description: Optional[str] = None
+    description: str | None = None
 
 
 @dataclass
@@ -91,7 +90,7 @@ class LeaseVariablePaymentService(ListResponseMixin):
         Returns:
             Updated LeasePaymentSchedule
         """
-        org_id = coerce_uuid(organization_id)
+        coerce_uuid(organization_id)
         schedule_id = coerce_uuid(input.schedule_id)
 
         schedule = (
@@ -270,9 +269,9 @@ class LeaseVariablePaymentService(ListResponseMixin):
     def get_variable_payment_summary(
         db: Session,
         organization_id: UUID,
-        lease_id: Optional[UUID] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
+        lease_id: UUID | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
     ) -> dict:
         """
         Get summary of variable payments.
@@ -327,7 +326,7 @@ class LeaseVariablePaymentService(ListResponseMixin):
         schedule_id: UUID,
         actual_payment_date: date,
         actual_payment_amount: Decimal,
-        payment_reference: Optional[UUID] = None,
+        payment_reference: UUID | None = None,
     ) -> LeasePaymentSchedule:
         """
         Mark a scheduled payment as paid.
@@ -372,7 +371,7 @@ class LeaseVariablePaymentService(ListResponseMixin):
     def get_overdue_payments(
         db: Session,
         organization_id: UUID,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
     ) -> list[LeasePaymentSchedule]:
         """
         Get overdue lease payments.

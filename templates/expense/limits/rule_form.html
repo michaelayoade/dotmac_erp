@@ -176,7 +176,7 @@
                         {% endfor %}
                     </select>
                     {% if errors.action_type %}
-                    <p class="mt-1 text-sm text-red-500">{{ errors.action_type }}</p>
+                    <p class="mt-1 text-sm text-red-500">{{ errors.action_type | replace('_', ' ') | title }}</p>
                     {% endif %}
                 </div>
             </div>
@@ -220,7 +220,7 @@
                            value="{{ rule.priority if rule else '100' }}"
                            class="form-input{% if errors.priority %} border-red-300{% endif %}">
                     {% if errors.priority %}
-                    <p class="mt-1 text-sm text-red-500">{{ errors.priority }}</p>
+                    <p class="mt-1 text-sm text-red-500">{{ errors.priority | replace('_', ' ') | title }}</p>
                     {% endif %}
                     <p class="mt-1 text-xs text-slate-500">Lower = higher priority</p>
                 </div>
@@ -236,7 +236,7 @@
         </div>
 
         <!-- Form Actions -->
-        <div class="flex justify-end gap-3">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/expense/limits/rules" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 {% if rule and rule.rule_id %}Update Rule{% else %}Create Rule{% endif %}

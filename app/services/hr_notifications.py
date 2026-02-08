@@ -14,12 +14,14 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from app.models.email_profile import EmailModule
 from app.services.email import send_email
+from app.services.email_branding import render_branded_email
 
 if TYPE_CHECKING:
     from app.models.people.hr.employee import Employee
@@ -36,7 +38,7 @@ def _get_app_url() -> str:
     return os.getenv("APP_URL", "http://localhost:8000").rstrip("/")
 
 
-def _employee_full_name(employee: Optional["Employee"]) -> str:
+def _employee_full_name(employee: Employee | None) -> str:
     """Best-effort full name for an employee."""
     if not employee:
         return "Employee"
@@ -49,7 +51,7 @@ def _employee_full_name(employee: Optional["Employee"]) -> str:
     return "Employee"
 
 
-def _employee_first_name(employee: Optional["Employee"]) -> str:
+def _employee_first_name(employee: Employee | None) -> str:
     """Best-effort first name for an employee."""
     if not employee:
         return "there"
@@ -57,7 +59,7 @@ def _employee_first_name(employee: Optional["Employee"]) -> str:
     return full_name.split(" ")[0] if full_name else "there"
 
 
-def _get_employee_email(employee: Optional["Employee"]) -> Optional[str]:
+def _get_employee_email(employee: Employee | None) -> str | None:
     """Get employee email address."""
     if not employee:
         return None
@@ -82,6 +84,13 @@ def _get_employee_email(employee: Optional["Employee"]) -> Optional[str]:
     return None
 
 
+def _org_id(employee: Employee | None) -> UUID | None:
+    """Safely extract organization_id from employee."""
+    if employee:
+        return getattr(employee, "organization_id", None)
+    return None
+
+
 class HRNotificationService:
     """
     Service for sending HR-related email notifications.
@@ -93,10 +102,41 @@ class HRNotificationService:
         self.db = db
         self.app_url = _get_app_url()
 
+    def _send(
+        self,
+        template: str,
+        context: dict,
+        *,
+        to_email: str,
+        subject: str,
+        organization_id: UUID | None,
+    ) -> bool:
+        """Render a branded email template and send it."""
+        try:
+            body_html, body_text = render_branded_email(
+                template,
+                context,
+                self.db,
+                organization_id,
+            )
+            send_email(
+                self.db,
+                to_email,
+                subject,
+                body_html=body_html,
+                body_text=body_text,
+                module=EmailModule.PEOPLE_PAYROLL,
+                organization_id=organization_id,
+            )
+            return True
+        except Exception as e:
+            logger.error("Failed to send %s: %s", template, e)
+            return False
+
     def send_probation_ending_notification(
         self,
-        employee: "Employee",
-        manager: "Employee",
+        employee: Employee,
+        manager: Employee,
         *,
         days_remaining: int,
     ) -> bool:
@@ -120,7 +160,6 @@ class HRNotificationService:
             return False
 
         employee_name = _employee_full_name(employee)
-        manager_first = _employee_first_name(manager)
 
         if days_remaining == 0:
             subject = f"Probation Review Due Today: {employee_name}"
@@ -132,46 +171,29 @@ class HRNotificationService:
             subject = f"Upcoming Probation Review: {employee_name}"
             urgency = f"in {days_remaining} days"
 
-        employee_url = f"{self.app_url}/people/hr/employees/{employee.employee_id}"
+        probation_end = getattr(employee, "probation_end_date", None)
+        context = {
+            "manager_first": _employee_first_name(manager),
+            "employee_name": employee_name,
+            "urgency": urgency,
+            "probation_end_date": (
+                probation_end.strftime("%B %d, %Y") if probation_end else "N/A"
+            ),
+            "employee_url": f"{self.app_url}/people/hr/employees/{employee.employee_id}",
+        }
 
-        body = f"""Hi {manager_first},
-
-This is a reminder that the probation period for {employee_name} is ending {urgency}.
-
-Probation End Date: {employee.probation_end_date.strftime("%B %d, %Y") if employee.probation_end_date else "N/A"}
-
-Please review their performance and make a decision about their confirmation.
-
-View Employee: {employee_url}
-
-Best regards,
-HR Notifications
-"""
-
-        try:
-            send_email(
-                self.db,
-                manager_email,
-                subject,
-                body_html=body.replace("\n", "<br>"),
-                body_text=body,
-                module=EmailModule.PEOPLE_PAYROLL,
-                organization_id=employee.organization_id,
-            )
-            logger.info(
-                "Sent probation notification for %s to %s",
-                employee.employee_id,
-                manager_email,
-            )
-            return True
-        except Exception as e:
-            logger.error("Failed to send probation notification: %s", e)
-            return False
+        return self._send(
+            "emails/hr/probation_ending.html",
+            context,
+            to_email=manager_email,
+            subject=subject,
+            organization_id=_org_id(employee),
+        )
 
     def send_contract_expiry_notification(
         self,
-        employee: "Employee",
-        manager: "Employee",
+        employee: Employee,
+        manager: Employee,
         *,
         days_remaining: int,
     ) -> bool:
@@ -195,7 +217,6 @@ HR Notifications
             return False
 
         employee_name = _employee_full_name(employee)
-        manager_first = _employee_first_name(manager)
 
         if days_remaining <= 7:
             subject = f"Urgent: Contract Expiring Soon - {employee_name}"
@@ -204,47 +225,29 @@ HR Notifications
         else:
             subject = f"Upcoming Contract Expiry: {employee_name}"
 
-        employee_url = f"{self.app_url}/people/hr/employees/{employee.employee_id}"
-
         contract_end_date = getattr(employee, "contract_end_date", None)
-        body = f"""Hi {manager_first},
+        context = {
+            "manager_first": _employee_first_name(manager),
+            "employee_name": employee_name,
+            "days_remaining": days_remaining,
+            "contract_end_date": (
+                contract_end_date.strftime("%B %d, %Y") if contract_end_date else "N/A"
+            ),
+            "employee_url": f"{self.app_url}/people/hr/employees/{employee.employee_id}",
+        }
 
-This is to inform you that the contract for {employee_name} will expire in {days_remaining} days.
-
-Contract End Date: {contract_end_date.strftime("%B %d, %Y") if contract_end_date else "N/A"}
-
-Please take necessary action regarding contract renewal or extension.
-
-View Employee: {employee_url}
-
-Best regards,
-HR Notifications
-"""
-
-        try:
-            send_email(
-                self.db,
-                manager_email,
-                subject,
-                body_html=body.replace("\n", "<br>"),
-                body_text=body,
-                module=EmailModule.PEOPLE_PAYROLL,
-                organization_id=employee.organization_id,
-            )
-            logger.info(
-                "Sent contract expiry notification for %s to %s",
-                employee.employee_id,
-                manager_email,
-            )
-            return True
-        except Exception as e:
-            logger.error("Failed to send contract expiry notification: %s", e)
-            return False
+        return self._send(
+            "emails/hr/contract_expiry.html",
+            context,
+            to_email=manager_email,
+            subject=subject,
+            organization_id=_org_id(employee),
+        )
 
     def send_work_anniversary_notification(
         self,
-        employee: "Employee",
-        manager: Optional["Employee"],
+        employee: Employee,
+        manager: Employee | None,
         *,
         years_of_service: int,
         is_milestone: bool = False,
@@ -269,7 +272,6 @@ HR Notifications
             return False
 
         employee_name = _employee_full_name(employee)
-        manager_first = _employee_first_name(manager)
 
         if is_milestone:
             subject = (
@@ -278,44 +280,25 @@ HR Notifications
         else:
             subject = f"Work Anniversary: {employee_name} - {years_of_service} Year(s)"
 
-        milestone_note = ""
-        if is_milestone:
-            milestone_note = f"\n\nThis is a significant milestone! Consider recognizing {employee_name}'s dedication and contributions."
+        context = {
+            "manager_first": _employee_first_name(manager),
+            "employee_name": employee_name,
+            "years_of_service": years_of_service,
+            "is_milestone": is_milestone,
+        }
 
-        body = f"""Hi {manager_first},
-
-{employee_name} will be celebrating {years_of_service} year(s) with the organization this week!{milestone_note}
-
-This is a great opportunity to acknowledge their contribution to the team.
-
-Best regards,
-HR Notifications
-"""
-
-        try:
-            send_email(
-                self.db,
-                manager_email,
-                subject,
-                body_html=body.replace("\n", "<br>"),
-                body_text=body,
-                module=EmailModule.PEOPLE_PAYROLL,
-                organization_id=employee.organization_id,
-            )
-            logger.info(
-                "Sent anniversary notification for %s to %s",
-                employee.employee_id,
-                manager_email,
-            )
-            return True
-        except Exception as e:
-            logger.error("Failed to send anniversary notification: %s", e)
-            return False
+        return self._send(
+            "emails/hr/work_anniversary.html",
+            context,
+            to_email=manager_email,
+            subject=subject,
+            organization_id=_org_id(employee),
+        )
 
     def send_birthday_notification(
         self,
-        employee: "Employee",
-        manager: "Employee",
+        employee: Employee,
+        manager: Employee,
         *,
         is_advance_notice: bool = True,
     ) -> bool:
@@ -335,7 +318,6 @@ HR Notifications
             return False
 
         employee_name = _employee_full_name(employee)
-        manager_first = _employee_first_name(manager)
 
         if is_advance_notice:
             subject = f"Reminder: {employee_name}'s Birthday Tomorrow"
@@ -344,40 +326,24 @@ HR Notifications
             subject = f"Today: {employee_name}'s Birthday"
             timing = "today"
 
-        body = f"""Hi {manager_first},
+        context = {
+            "manager_first": _employee_first_name(manager),
+            "employee_name": employee_name,
+            "timing": timing,
+        }
 
-This is a friendly reminder that {employee_name}'s birthday is {timing}.
-
-Consider wishing them a happy birthday!
-
-Best regards,
-HR Notifications
-"""
-
-        try:
-            send_email(
-                self.db,
-                manager_email,
-                subject,
-                body_html=body.replace("\n", "<br>"),
-                body_text=body,
-                module=EmailModule.PEOPLE_PAYROLL,
-                organization_id=employee.organization_id,
-            )
-            logger.info(
-                "Sent birthday notification for %s to %s",
-                employee.employee_id,
-                manager_email,
-            )
-            return True
-        except Exception as e:
-            logger.error("Failed to send birthday notification: %s", e)
-            return False
+        return self._send(
+            "emails/hr/birthday.html",
+            context,
+            to_email=manager_email,
+            subject=subject,
+            organization_id=_org_id(employee),
+        )
 
     def send_self_assessment_reminder(
         self,
-        employee: "Employee",
-        cycle: "AppraisalCycle",
+        employee: Employee,
+        cycle: AppraisalCycle,
         *,
         days_remaining: int,
     ) -> bool:
@@ -396,7 +362,6 @@ HR Notifications
         if not employee_email:
             return False
 
-        employee_first = _employee_first_name(employee)
         cycle_name = cycle.cycle_name if cycle.cycle_name else "Performance Review"
 
         if days_remaining == 0:
@@ -409,46 +374,28 @@ HR Notifications
             subject = f"Reminder: Self-Assessment Due in {days_remaining} Days"
             urgency = f"due in {days_remaining} days"
 
-        appraisal_url = f"{self.app_url}/people/perf/appraisals"
+        deadline = getattr(cycle, "self_assessment_deadline", None)
+        context = {
+            "employee_first": _employee_first_name(employee),
+            "cycle_name": cycle_name,
+            "urgency": urgency,
+            "deadline": (deadline.strftime("%B %d, %Y") if deadline else "N/A"),
+            "appraisal_url": f"{self.app_url}/people/perf/appraisals",
+        }
 
-        body = f"""Hi {employee_first},
-
-This is a reminder that your self-assessment for the {cycle_name} cycle is {urgency}.
-
-Deadline: {cycle.self_assessment_deadline.strftime("%B %d, %Y") if cycle.self_assessment_deadline else "N/A"}
-
-Please complete your self-assessment to ensure a timely review process.
-
-Complete Self-Assessment: {appraisal_url}
-
-Best regards,
-HR Notifications
-"""
-
-        try:
-            send_email(
-                self.db,
-                employee_email,
-                subject,
-                body_html=body.replace("\n", "<br>"),
-                body_text=body,
-                module=EmailModule.PEOPLE_PAYROLL,
-                organization_id=cycle.organization_id,
-            )
-            logger.info(
-                "Sent self-assessment reminder to %s",
-                employee_email,
-            )
-            return True
-        except Exception as e:
-            logger.error("Failed to send self-assessment reminder: %s", e)
-            return False
+        return self._send(
+            "emails/hr/self_assessment_reminder.html",
+            context,
+            to_email=employee_email,
+            subject=subject,
+            organization_id=cycle.organization_id,
+        )
 
     def send_manager_review_reminder(
         self,
-        manager: "Employee",
-        employee: "Employee",
-        cycle: "AppraisalCycle",
+        manager: Employee,
+        employee: Employee,
+        cycle: AppraisalCycle,
         *,
         days_remaining: int,
     ) -> bool:
@@ -468,7 +415,6 @@ HR Notifications
         if not manager_email:
             return False
 
-        manager_first = _employee_first_name(manager)
         employee_name = _employee_full_name(employee)
         cycle_name = cycle.cycle_name if cycle.cycle_name else "Performance Review"
 
@@ -479,46 +425,30 @@ HR Notifications
         else:
             subject = f"Reminder: {employee_name}'s Review Due in {days_remaining} Days"
 
-        appraisal_url = f"{self.app_url}/people/perf/appraisals"
+        review_deadline = getattr(cycle, "manager_review_deadline", None)
+        context = {
+            "manager_first": _employee_first_name(manager),
+            "employee_name": employee_name,
+            "cycle_name": cycle_name,
+            "days_remaining": days_remaining,
+            "review_deadline": (
+                review_deadline.strftime("%B %d, %Y") if review_deadline else "N/A"
+            ),
+            "appraisal_url": f"{self.app_url}/people/perf/appraisals",
+        }
 
-        body = f"""Hi {manager_first},
-
-This is a reminder that your review for {employee_name} in the {cycle_name} cycle is due in {days_remaining} day(s).
-
-Review Deadline: {cycle.manager_review_deadline.strftime("%B %d, %Y") if cycle.manager_review_deadline else "N/A"}
-
-Please complete the review to ensure a timely appraisal process.
-
-Complete Review: {appraisal_url}
-
-Best regards,
-HR Notifications
-"""
-
-        try:
-            send_email(
-                self.db,
-                manager_email,
-                subject,
-                body_html=body.replace("\n", "<br>"),
-                body_text=body,
-                module=EmailModule.PEOPLE_PAYROLL,
-                organization_id=cycle.organization_id,
-            )
-            logger.info(
-                "Sent manager review reminder to %s for employee %s",
-                manager_email,
-                employee.employee_id,
-            )
-            return True
-        except Exception as e:
-            logger.error("Failed to send manager review reminder: %s", e)
-            return False
+        return self._send(
+            "emails/hr/manager_review_reminder.html",
+            context,
+            to_email=manager_email,
+            subject=subject,
+            organization_id=cycle.organization_id,
+        )
 
     def send_certification_expiry_notification(
         self,
-        employee: "Employee",
-        certification: "EmployeeCertification",
+        employee: Employee,
+        certification: EmployeeCertification,
         *,
         days_remaining: int,
     ) -> bool:
@@ -537,7 +467,6 @@ HR Notifications
         if not employee_email:
             return False
 
-        employee_first = _employee_first_name(employee)
         cert_name = certification.certification_name
 
         if days_remaining <= 7:
@@ -547,35 +476,22 @@ HR Notifications
         else:
             subject = f"Notice: Certification Renewal Due - {cert_name}"
 
-        body = f"""Hi {employee_first},
+        valid_until = getattr(certification, "valid_until", None)
+        context = {
+            "employee_first": _employee_first_name(employee),
+            "cert_name": cert_name,
+            "days_remaining": days_remaining,
+            "expiry_date": (
+                valid_until.strftime("%B %d, %Y") if valid_until else "N/A"
+            ),
+            "issuing_org": getattr(certification, "issuing_organization", None)
+            or "N/A",
+        }
 
-Your certification "{cert_name}" is expiring in {days_remaining} days.
-
-Expiry Date: {certification.valid_until.strftime("%B %d, %Y") if certification.valid_until else "N/A"}
-Issuing Organization: {certification.issuing_organization or "N/A"}
-
-Please take necessary steps to renew your certification before it expires.
-
-Best regards,
-HR Notifications
-"""
-
-        try:
-            send_email(
-                self.db,
-                employee_email,
-                subject,
-                body_html=body.replace("\n", "<br>"),
-                body_text=body,
-                module=EmailModule.PEOPLE_PAYROLL,
-                organization_id=employee.organization_id,
-            )
-            logger.info(
-                "Sent certification expiry notification to %s for cert %s",
-                employee_email,
-                certification.certification_id,
-            )
-            return True
-        except Exception as e:
-            logger.error("Failed to send certification expiry notification: %s", e)
-            return False
+        return self._send(
+            "emails/hr/certification_expiry.html",
+            context,
+            to_email=employee_email,
+            subject=subject,
+            organization_id=_org_id(employee),
+        )

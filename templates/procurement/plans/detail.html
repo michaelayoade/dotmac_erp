@@ -1,5 +1,6 @@
 {% extends "procurement/base_procurement.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}{{ plan.title }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -23,7 +24,7 @@
             {% set label, classes = status_labels.get(plan.status, ("Unknown", "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400")) %}
             <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium {{ classes }}">{{ label }}</span>
         </div>
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+        <div class="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
             <div><span class="text-slate-500 dark:text-slate-400">Total Value:</span><p class="font-semibold text-slate-900 dark:text-white">{{ plan.currency_code }} {{ "{:,.2f}".format(plan.total_estimated_value) }}</p></div>
             <div><span class="text-slate-500 dark:text-slate-400">Items:</span><p class="font-semibold text-slate-900 dark:text-white">{{ items | length }}</p></div>
             <div><span class="text-slate-500 dark:text-slate-400">Created:</span><p class="font-semibold text-slate-900 dark:text-white">{{ plan.created_at.strftime('%Y-%m-%d') }}</p></div>
@@ -34,16 +35,16 @@
     <!-- Plan Items -->
     <div class="card">
         <div class="p-4 border-b border-slate-200 dark:border-slate-700"><h3 class="font-semibold text-slate-900 dark:text-white">Plan Items</h3></div>
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 dark:bg-slate-800/50">
                     <tr>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">#</th>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Description</th>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Method</th>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Quarter</th>
-                        <th scope="col" class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Est. Value</th>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Status</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">#</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Description</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Method</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Quarter</th>
+                        <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Est. Value</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
@@ -54,7 +55,7 @@
                         <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ item.procurement_method.value }}</td>
                         <td class="px-4 py-3 text-slate-600 dark:text-slate-400">Q{{ item.planned_quarter }}</td>
                         <td class="px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(item.estimated_value) }}</td>
-                        <td class="px-4 py-3"><span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400">{{ item.status.value }}</span></td>
+                        <td class="px-4 py-3">{{ status_badge(item.status.value, size="sm") }}</td>
                     </tr>
                     {% else %}
                     <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500 dark:text-slate-400">No items.</td></tr>

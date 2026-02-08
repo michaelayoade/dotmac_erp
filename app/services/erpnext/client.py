@@ -9,7 +9,7 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Optional, cast
+from typing import Any, cast
 from urllib.parse import urljoin
 
 import httpx
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class ERPNextError(Exception):
     """ERPNext API error."""
 
-    def __init__(self, message: str, status_code: Optional[int] = None):
+    def __init__(self, message: str, status_code: int | None = None):
         self.message = message
         self.status_code = status_code
         super().__init__(message)
@@ -33,7 +33,7 @@ class ERPNextConfig:
     url: str
     api_key: str
     api_secret: str
-    company: Optional[str] = None
+    company: str | None = None
     timeout: float = 30.0
     max_retries: int = 3
     retry_delay: float = 1.0
@@ -49,7 +49,7 @@ class ERPNextClient:
 
     def __init__(self, config: ERPNextConfig):
         self.config = config
-        self._client: Optional[httpx.Client] = None
+        self._client: httpx.Client | None = None
 
     @property
     def client(self) -> httpx.Client:
@@ -93,8 +93,8 @@ class ERPNextClient:
         Raises:
             ERPNextError: On API error
         """
-        url = urljoin(self.config.url, path)
-        last_error: Optional[Exception] = None
+        urljoin(self.config.url, path)
+        last_error: Exception | None = None
 
         for attempt in range(self.config.max_retries):
             try:
@@ -171,7 +171,7 @@ class ERPNextClient:
         self,
         doctype: str,
         name: str,
-        fields: Optional[list[str]] = None,
+        fields: list[str] | None = None,
     ) -> dict[str, Any]:
         """
         Get a single document by name.
@@ -197,9 +197,9 @@ class ERPNextClient:
     def list_documents(
         self,
         doctype: str,
-        filters: Optional[dict[str, Any]] = None,
-        fields: Optional[list[str]] = None,
-        order_by: Optional[str] = None,
+        filters: dict[str, Any] | None = None,
+        fields: list[str] | None = None,
+        order_by: str | None = None,
         limit_start: int = 0,
         limit_page_length: int = 100,
     ) -> list[dict[str, Any]]:
@@ -244,7 +244,7 @@ class ERPNextClient:
     def get_count(
         self,
         doctype: str,
-        filters: Optional[dict[str, Any]] = None,
+        filters: dict[str, Any] | None = None,
     ) -> int:
         """
         Get count of documents matching filters.
@@ -270,9 +270,9 @@ class ERPNextClient:
     def get_all_documents(
         self,
         doctype: str,
-        filters: Optional[dict[str, Any]] = None,
-        fields: Optional[list[str]] = None,
-        order_by: Optional[str] = None,
+        filters: dict[str, Any] | None = None,
+        fields: list[str] | None = None,
+        order_by: str | None = None,
         batch_size: int = 100,
     ):
         """
@@ -302,8 +302,7 @@ class ERPNextClient:
             if not batch:
                 break
 
-            for doc in batch:
-                yield doc
+            yield from batch
 
             if len(batch) < batch_size:
                 break
@@ -314,8 +313,8 @@ class ERPNextClient:
         self,
         doctype: str,
         since: datetime,
-        filters: Optional[dict[str, Any]] = None,
-        fields: Optional[list[str]] = None,
+        filters: dict[str, Any] | None = None,
+        fields: list[str] | None = None,
     ):
         """
         Get documents modified since a given timestamp.
@@ -351,7 +350,7 @@ class ERPNextClient:
 
     def get_chart_of_accounts(
         self,
-        company: Optional[str] = None,
+        company: str | None = None,
         include_disabled: bool = False,
     ):
         """
@@ -452,7 +451,7 @@ class ERPNextClient:
 
     def get_assets(
         self,
-        company: Optional[str] = None,
+        company: str | None = None,
     ):
         """
         Get fixed assets.
@@ -514,7 +513,7 @@ class ERPNextClient:
 
     def get_warehouses(
         self,
-        company: Optional[str] = None,
+        company: str | None = None,
         include_disabled: bool = False,
     ):
         """
@@ -620,9 +619,9 @@ class ERPNextClient:
 
     def get_stock_ledger_entries(
         self,
-        company: Optional[str] = None,
-        from_date: Optional[datetime] = None,
-        to_date: Optional[datetime] = None,
+        company: str | None = None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
     ):
         """
         Get stock ledger entries (inventory transactions).
@@ -677,8 +676,8 @@ class ERPNextClient:
 
     def get_sales_invoices(
         self,
-        company: Optional[str] = None,
-        from_date: Optional[datetime] = None,
+        company: str | None = None,
+        from_date: datetime | None = None,
     ):
         """
         Get sales invoices.
@@ -719,8 +718,8 @@ class ERPNextClient:
 
     def get_purchase_invoices(
         self,
-        company: Optional[str] = None,
-        from_date: Optional[datetime] = None,
+        company: str | None = None,
+        from_date: datetime | None = None,
     ):
         """
         Get purchase invoices.
@@ -900,7 +899,7 @@ class ERPNextClient:
         doctype: str,
         name: str,
         method: str,
-        args: Optional[dict[str, Any]] = None,
+        args: dict[str, Any] | None = None,
     ) -> Any:
         """
         Run a whitelisted method on a document.
@@ -934,7 +933,7 @@ class ERPNextClient:
     # HR-specific convenience methods
     # --------------------------
 
-    def get_departments(self, company: Optional[str] = None):
+    def get_departments(self, company: str | None = None):
         """
         Get departments.
 
@@ -1017,7 +1016,7 @@ class ERPNextClient:
 
     def get_employees(
         self,
-        company: Optional[str] = None,
+        company: str | None = None,
         include_inactive: bool = False,
     ):
         """
@@ -1109,8 +1108,8 @@ class ERPNextClient:
 
     def get_leave_allocations(
         self,
-        company: Optional[str] = None,
-        fiscal_year: Optional[str] = None,
+        company: str | None = None,
+        fiscal_year: str | None = None,
     ):
         """
         Get leave allocations.
@@ -1152,8 +1151,8 @@ class ERPNextClient:
 
     def get_leave_applications(
         self,
-        company: Optional[str] = None,
-        from_date: Optional[datetime] = None,
+        company: str | None = None,
+        from_date: datetime | None = None,
     ):
         """
         Get leave applications.
@@ -1221,8 +1220,8 @@ class ERPNextClient:
 
     def get_attendance(
         self,
-        company: Optional[str] = None,
-        from_date: Optional[datetime] = None,
+        company: str | None = None,
+        from_date: datetime | None = None,
     ):
         """
         Get attendance records.
@@ -1285,8 +1284,8 @@ class ERPNextClient:
 
     def get_expense_claims(
         self,
-        company: Optional[str] = None,
-        from_date: Optional[datetime] = None,
+        company: str | None = None,
+        from_date: datetime | None = None,
     ):
         """
         Get expense claims with their items.
@@ -1357,7 +1356,7 @@ class ERPNextClient:
 
     def get_projects(
         self,
-        company: Optional[str] = None,
+        company: str | None = None,
         include_completed: bool = False,
     ):
         """
@@ -1403,7 +1402,7 @@ class ERPNextClient:
 
     def get_issues(
         self,
-        from_date: Optional[datetime] = None,
+        from_date: datetime | None = None,
         include_closed: bool = False,
     ):
         """
@@ -1472,8 +1471,8 @@ class ERPNextClient:
 
     def get_material_requests(
         self,
-        company: Optional[str] = None,
-        from_date: Optional[datetime] = None,
+        company: str | None = None,
+        from_date: datetime | None = None,
         include_cancelled: bool = False,
     ):
         """

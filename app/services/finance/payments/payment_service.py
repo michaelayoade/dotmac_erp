@@ -5,9 +5,9 @@ Handles payment intent creation and processing for Paystack integration.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
@@ -50,12 +50,16 @@ class PaymentService:
         self.db = db
         self.organization_id = coerce_uuid(organization_id)
 
+    def _commit_and_refresh(self, intent: PaymentIntent) -> None:
+        self.db.commit()
+        self.db.refresh(intent)
+
     @staticmethod
     def get_intent_by_reference(
         db: Session,
         reference: str,
-        organization_id: Optional[UUID] = None,
-    ) -> Optional[PaymentIntent]:
+        organization_id: UUID | None = None,
+    ) -> PaymentIntent | None:
         """Get a payment intent by reference (optionally scoped to org)."""
         query = db.query(PaymentIntent).filter(
             PaymentIntent.paystack_reference == reference
@@ -71,7 +75,7 @@ class PaymentService:
         invoice_id: UUID,
         callback_url: str,
         paystack_config: PaystackConfig,
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> PaymentIntent:
         """
         Create a payment intent for an invoice.
@@ -128,8 +132,8 @@ class PaymentService:
         if existing_intent:
             expires_at = existing_intent.expires_at
             if expires_at and expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-            if expires_at and expires_at <= datetime.now(timezone.utc):
+                expires_at = expires_at.replace(tzinfo=UTC)
+            if expires_at and expires_at <= datetime.now(UTC):
                 existing_intent.status = PaymentIntentStatus.EXPIRED
                 self.db.flush()
             else:
@@ -209,7 +213,7 @@ class PaymentService:
             source_id=inv_id,
             status=PaymentIntentStatus.PENDING,
             intent_metadata=intent_metadata,
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+            expires_at=datetime.now(UTC) + timedelta(hours=24),
         )
 
         # Initialize with Paystack
@@ -239,6 +243,8 @@ class PaymentService:
             },
         )
 
+        self._commit_and_refresh(intent)
+        self._commit_and_refresh(intent)
         return intent
 
     def verify_payment_by_reference(
@@ -279,6 +285,7 @@ class PaymentService:
                             "reference": result.reference,
                         },
                     )
+                    self._commit_and_refresh(intent)
                     raise HTTPException(status_code=400, detail=str(e))
 
                 if result.paid_at:
@@ -287,9 +294,9 @@ class PaymentService:
                             result.paid_at.replace("Z", "+00:00")
                         )
                     except ValueError:
-                        paid_at = datetime.now(timezone.utc)
+                        paid_at = datetime.now(UTC)
                 else:
-                    paid_at = datetime.now(timezone.utc)
+                    paid_at = datetime.now(UTC)
 
                 self.process_successful_payment(
                     intent=intent,
@@ -315,6 +322,7 @@ class PaymentService:
         except PaystackError:
             raise
 
+        self._commit_and_refresh(intent)
         return intent
 
     @staticmethod
@@ -576,7 +584,7 @@ class PaymentService:
         self,
         intent: PaymentIntent,
         error_message: str,
-        gateway_response: Optional[dict[str, Any]] = None,
+        gateway_response: dict[str, Any] | None = None,
     ) -> None:
         """
         Mark a payment intent as failed.
@@ -608,7 +616,7 @@ class PaymentService:
 
         logger.info(f"Payment intent {intent.intent_id} abandoned")
 
-    def get_intent_by_id(self, intent_id: UUID) -> Optional[PaymentIntent]:
+    def get_intent_by_id(self, intent_id: UUID) -> PaymentIntent | None:
         """Get a payment intent by ID."""
         intent = self.db.get(PaymentIntent, coerce_uuid(intent_id))
         if intent and intent.organization_id != self.organization_id:
@@ -638,7 +646,7 @@ class PaymentService:
         paystack_config: PaystackConfig,
         recipient_bank_code: str,
         recipient_account_number: str,
-        metadata: Optional[dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> PaymentIntent:
         """
         Create a payment intent for expense reimbursement via Paystack Transfer.
@@ -659,6 +667,7 @@ class PaymentService:
         from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
 
         claim_id = coerce_uuid(expense_claim_id)
+        should_commit = False
 
         # Check for existing active payment intent (idempotency check)
         active_statuses = [
@@ -676,10 +685,11 @@ class PaymentService:
         if existing_intent:
             # Check if expired
             expires_at = existing_intent.expires_at
-            if expires_at and expires_at <= datetime.now(timezone.utc):
+            if expires_at and expires_at <= datetime.now(UTC):
                 # Mark as expired and allow new intent
                 existing_intent.status = PaymentIntentStatus.EXPIRED
                 self.db.flush()
+                should_commit = True
                 logger.info(
                     f"Expired stale payment intent {existing_intent.intent_id} for claim {claim_id}"
                 )
@@ -759,7 +769,7 @@ class PaymentService:
         reference = f"EXP-{claim.claim_number}-{short_uuid}"
 
         # Amount in kobo (Naira * 100) - use round to avoid truncation
-        amount_kobo = int(
+        int(
             (Decimal(claim.net_payable_amount) * Decimal("100")).to_integral_value(
                 rounding=ROUND_HALF_UP
             )
@@ -796,6 +806,7 @@ class PaymentService:
         # Store verified account name on claim for audit trail
         claim.recipient_account_name = account_info.account_name
         self.db.flush()
+        should_commit = True
 
         # Create payment intent
         intent = PaymentIntent(
@@ -815,11 +826,12 @@ class PaymentService:
             recipient_account_name=account_info.account_name,
             status=PaymentIntentStatus.PENDING,
             intent_metadata=intent_metadata,
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+            expires_at=datetime.now(UTC) + timedelta(hours=24),
         )
 
         self.db.add(intent)
         self.db.flush()
+        should_commit = True
 
         logger.info(
             f"Created expense payment intent {intent.intent_id} for claim {claim.claim_number}",
@@ -832,6 +844,8 @@ class PaymentService:
             },
         )
 
+        if should_commit:
+            self._commit_and_refresh(intent)
         return intent
 
     def initiate_expense_transfer(
@@ -875,9 +889,10 @@ class PaymentService:
             )
 
         # Check intent expiration
-        if intent.expires_at and intent.expires_at <= datetime.now(timezone.utc):
+        if intent.expires_at and intent.expires_at <= datetime.now(UTC):
             intent.status = PaymentIntentStatus.EXPIRED
             self.db.flush()
+            self._commit_and_refresh(intent)
             raise HTTPException(
                 status_code=400,
                 detail="Payment intent has expired. Please create a new one.",
@@ -940,7 +955,7 @@ class PaymentService:
             self.db.flush()
             self.process_successful_transfer(
                 intent=intent,
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(UTC),
                 gateway_response={
                     "immediate": True,
                     "transfer_code": result.transfer_code,
@@ -987,7 +1002,7 @@ class PaymentService:
         intent: PaymentIntent,
         completed_at: datetime,
         gateway_response: dict[str, Any],
-        fee_kobo: Optional[int] = None,
+        fee_kobo: int | None = None,
     ) -> None:
         """
         Process a successful transfer (expense reimbursement).
@@ -1148,7 +1163,7 @@ class PaymentService:
         intent: PaymentIntent,
         fee_amount: Decimal,
         posting_date,
-        system_user_id: Optional[UUID],
+        system_user_id: UUID | None,
     ) -> None:
         """
         Post transfer fee to GL if fee account is configured.
@@ -1231,9 +1246,9 @@ class PaymentService:
         self,
         intent: PaymentIntent,
         status: TransferBatchItemStatus,
-        completed_at: Optional[datetime] = None,
-        fee_amount: Optional[Decimal] = None,
-        error_message: Optional[str] = None,
+        completed_at: datetime | None = None,
+        fee_amount: Decimal | None = None,
+        error_message: str | None = None,
     ) -> None:
         """
         Update batch item status if the intent is part of a batch.
@@ -1302,7 +1317,7 @@ class PaymentService:
         self,
         intent: PaymentIntent,
         error_message: str,
-        gateway_response: Optional[dict[str, Any]] = None,
+        gateway_response: dict[str, Any] | None = None,
     ) -> None:
         """
         Mark a transfer intent as failed.
@@ -1387,7 +1402,7 @@ class PaymentService:
         if result.status == "success":
             self.process_successful_transfer(
                 intent,
-                completed_at=datetime.now(timezone.utc),
+                completed_at=datetime.now(UTC),
                 gateway_response={"polled": True, "transfer_status": result.status},
                 fee_kobo=result.fee,
             )
@@ -1400,7 +1415,7 @@ class PaymentService:
         elif result.status == "reversed":
             self.process_transfer_reversal(
                 intent,
-                reversed_at=datetime.now(timezone.utc),
+                reversed_at=datetime.now(UTC),
                 gateway_response={"polled": True, "transfer_status": result.status},
                 reason=result.reason,
             )
@@ -1416,7 +1431,7 @@ class PaymentService:
         intent: PaymentIntent,
         reversed_at: datetime,
         gateway_response: dict[str, Any],
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> None:
         """
         Process a transfer reversal (funds returned).

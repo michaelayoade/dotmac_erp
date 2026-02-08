@@ -5,7 +5,6 @@ Inventory Count Line Model - Inventory Schema.
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     DateTime,
@@ -58,11 +57,11 @@ class InventoryCountLine(Base):
         ForeignKey("inv.warehouse.warehouse_id"),
         nullable=False,
     )
-    location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    location_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    lot_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    lot_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -72,24 +71,24 @@ class InventoryCountLine(Base):
     uom: Mapped[str] = mapped_column(String(20), nullable=False)
 
     # Count results
-    counted_quantity: Mapped[Optional[Decimal]] = mapped_column(
+    counted_quantity: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6), nullable=True
     )
-    recount_quantity: Mapped[Optional[Decimal]] = mapped_column(
+    recount_quantity: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6), nullable=True
     )
-    final_quantity: Mapped[Optional[Decimal]] = mapped_column(
+    final_quantity: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6), nullable=True
     )
 
     # Variance
-    variance_quantity: Mapped[Optional[Decimal]] = mapped_column(
+    variance_quantity: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6), nullable=True
     )
-    variance_value: Mapped[Optional[Decimal]] = mapped_column(
+    variance_value: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6), nullable=True
     )
-    variance_percent: Mapped[Optional[Decimal]] = mapped_column(
+    variance_percent: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 4), nullable=True
     )
 
@@ -97,33 +96,33 @@ class InventoryCountLine(Base):
     unit_cost: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
 
     # Count metadata
-    counted_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    counted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    counted_at: Mapped[Optional[datetime]] = mapped_column(
+    counted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    recounted_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    recounted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    recounted_at: Mapped[Optional[datetime]] = mapped_column(
+    recounted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
     # Adjustment reason
-    reason_code: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    reason_code: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

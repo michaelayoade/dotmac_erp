@@ -7,7 +7,6 @@ import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     DateTime,
@@ -97,18 +96,18 @@ class AccountBalance(Base):
     )
 
     # Dimensions (NULL = all)
-    business_unit_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    business_unit_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    segment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    segment_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
 

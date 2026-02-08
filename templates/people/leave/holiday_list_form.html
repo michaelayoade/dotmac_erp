@@ -135,7 +135,7 @@
                     </div>
                 </template>
 
-                <div class="space-y-3">
+                <div class="space-y-4">
                     <template x-for="(holiday, index) in holidays" :key="index">
                         <div class="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                             <div class="flex-1 grid grid-cols-1 md:grid-cols-4 gap-3">
@@ -194,7 +194,7 @@
         </div>
 
         <!-- Actions -->
-        <div class="flex items-center justify-end gap-3">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/people/leave/holidays" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 {% if holiday_list %}Update Holiday List{% else %}Create Holiday List{% endif %}

@@ -55,7 +55,7 @@ class FuelLogEntry(Base, FleetBaseMixin, AuditMixin):
         ForeignKey("fleet.vehicle.vehicle_id"),
         nullable=False,
     )
-    employee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    employee_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
@@ -90,15 +90,15 @@ class FuelLogEntry(Base, FleetBaseMixin, AuditMixin):
     )
 
     # Station/vendor details
-    station_name: Mapped[Optional[str]] = mapped_column(
+    station_name: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
-    station_location: Mapped[Optional[str]] = mapped_column(
+    station_location: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
     )
-    receipt_number: Mapped[Optional[str]] = mapped_column(
+    receipt_number: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
     )
@@ -112,7 +112,7 @@ class FuelLogEntry(Base, FleetBaseMixin, AuditMixin):
     )
 
     # Expense link
-    expense_claim_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    expense_claim_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("expense.expense_claim.claim_id"),
         nullable=True,
@@ -120,7 +120,7 @@ class FuelLogEntry(Base, FleetBaseMixin, AuditMixin):
     )
 
     # Notes
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )

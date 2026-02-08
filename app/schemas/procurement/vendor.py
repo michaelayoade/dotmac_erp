@@ -4,7 +4,7 @@ Vendor Prequalification Schemas.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -17,7 +17,7 @@ class PrequalificationCreate(BaseModel):
 
     supplier_id: UUID
     application_date: date
-    categories: Optional[List[Dict[str, Any]]] = None
+    categories: list[dict[str, Any]] | None = None
     documents_verified: bool = False
     tax_clearance_valid: bool = False
     pension_compliance: bool = False
@@ -28,18 +28,18 @@ class PrequalificationCreate(BaseModel):
 class PrequalificationUpdate(BaseModel):
     """Schema for updating a prequalification record."""
 
-    categories: Optional[List[Dict[str, Any]]] = None
-    valid_from: Optional[date] = None
-    valid_to: Optional[date] = None
-    documents_verified: Optional[bool] = None
-    tax_clearance_valid: Optional[bool] = None
-    pension_compliance: Optional[bool] = None
-    itf_compliance: Optional[bool] = None
-    nsitf_compliance: Optional[bool] = None
-    financial_capability_score: Optional[Decimal] = None
-    technical_capability_score: Optional[Decimal] = None
-    overall_score: Optional[Decimal] = None
-    review_notes: Optional[str] = None
+    categories: list[dict[str, Any]] | None = None
+    valid_from: date | None = None
+    valid_to: date | None = None
+    documents_verified: bool | None = None
+    tax_clearance_valid: bool | None = None
+    pension_compliance: bool | None = None
+    itf_compliance: bool | None = None
+    nsitf_compliance: bool | None = None
+    financial_capability_score: Decimal | None = None
+    technical_capability_score: Decimal | None = None
+    overall_score: Decimal | None = None
+    review_notes: str | None = None
 
 
 class PrequalificationResponse(BaseModel):
@@ -52,21 +52,21 @@ class PrequalificationResponse(BaseModel):
     supplier_id: UUID
     application_date: date
     status: PrequalificationStatus
-    categories: Optional[List[Dict[str, Any]]] = None
-    valid_from: Optional[date] = None
-    valid_to: Optional[date] = None
+    categories: list[dict[str, Any]] | None = None
+    valid_from: date | None = None
+    valid_to: date | None = None
     documents_verified: bool
     tax_clearance_valid: bool
     pension_compliance: bool
     itf_compliance: bool
     nsitf_compliance: bool
-    financial_capability_score: Optional[Decimal] = None
-    technical_capability_score: Optional[Decimal] = None
-    overall_score: Optional[Decimal] = None
-    review_notes: Optional[str] = None
-    reviewed_by_user_id: Optional[UUID] = None
-    reviewed_at: Optional[datetime] = None
+    financial_capability_score: Decimal | None = None
+    technical_capability_score: Decimal | None = None
+    overall_score: Decimal | None = None
+    review_notes: str | None = None
+    reviewed_by_user_id: UUID | None = None
+    reviewed_at: datetime | None = None
     blacklisted: bool
-    blacklist_reason: Optional[str] = None
+    blacklist_reason: str | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None

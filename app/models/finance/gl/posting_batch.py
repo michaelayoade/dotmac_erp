@@ -6,7 +6,6 @@ Document 07: Batch posting with idempotency.
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     DateTime,
@@ -74,7 +73,7 @@ class PostingBatch(Base):
 
     # Source
     source_module: Mapped[str] = mapped_column(String(20), nullable=False)
-    batch_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    batch_description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Stats
     total_entries: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
@@ -87,7 +86,7 @@ class PostingBatch(Base):
         nullable=False,
         default=BatchStatus.PENDING,
     )
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Lifecycle
     submitted_at: Mapped[datetime] = mapped_column(
@@ -99,13 +98,13 @@ class PostingBatch(Base):
         UUID(as_uuid=True),
         nullable=False,
     )
-    processing_started_at: Mapped[Optional[datetime]] = mapped_column(
+    processing_started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
-    correlation_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(100), nullable=True)

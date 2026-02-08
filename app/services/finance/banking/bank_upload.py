@@ -14,7 +14,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Literal, Optional
+from typing import Literal
 
 from sqlalchemy.orm import Session
 
@@ -38,9 +38,9 @@ class PaymentItem:
     amount: Decimal  # Payment amount
     account_number: str  # Beneficiary account number
     bank_name: str  # Beneficiary bank name (will be resolved to code)
-    bank_code: Optional[str] = None  # Beneficiary bank code (if known)
-    beneficiary_code: Optional[str] = None  # Internal code (employee ID, supplier code)
-    narration: Optional[str] = None  # Payment narration/memo
+    bank_code: str | None = None  # Beneficiary bank code (if known)
+    beneficiary_code: str | None = None  # Internal code (employee ID, supplier code)
+    narration: str | None = None  # Payment narration/memo
 
 
 @dataclass
@@ -73,7 +73,7 @@ class BankUploadService:
         source_account_number: str,
         payment_date: date,
         bank_format: BankFormat = "zenith",
-        batch_reference: Optional[str] = None,
+        batch_reference: str | None = None,
     ) -> BankUploadResult:
         """
         Generate bank upload file for bulk payments.
@@ -148,7 +148,7 @@ class BankUploadService:
         items: list[PaymentItem],
         source_account_number: str,
         payment_date: date,
-        batch_reference: Optional[str] = None,
+        batch_reference: str | None = None,
     ) -> BankUploadResult:
         """
         Generate Zenith Bank upload format.
@@ -229,7 +229,7 @@ class BankUploadService:
         items: list[PaymentItem],
         source_account_number: str,
         payment_date: date,
-        batch_reference: Optional[str] = None,
+        batch_reference: str | None = None,
     ) -> BankUploadResult:
         """
         Generate Access Bank upload format.
@@ -294,7 +294,7 @@ class BankUploadService:
         items: list[PaymentItem],
         source_account_number: str,
         payment_date: date,
-        batch_reference: Optional[str] = None,
+        batch_reference: str | None = None,
     ) -> BankUploadResult:
         """
         Generate GTBank upload format.
@@ -355,7 +355,7 @@ class BankUploadService:
         items: list[PaymentItem],
         source_account_number: str,
         payment_date: date,
-        batch_reference: Optional[str] = None,
+        batch_reference: str | None = None,
     ) -> BankUploadResult:
         """
         Generate generic bank upload format.

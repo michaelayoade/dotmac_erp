@@ -23,8 +23,8 @@ Usage:
 """
 
 import uuid
+from collections.abc import AsyncGenerator, Generator
 from contextlib import asynccontextmanager, contextmanager
-from typing import AsyncGenerator, Generator, Optional
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -127,7 +127,7 @@ async def tenant_context(
         await clear_organization_context(db)
 
 
-async def get_current_organization_id(db: AsyncSession) -> Optional[uuid.UUID]:
+async def get_current_organization_id(db: AsyncSession) -> uuid.UUID | None:
     """
     Get the current organization ID from the session context.
 
@@ -238,7 +238,7 @@ def tenant_context_sync(
         clear_organization_context_sync(db)
 
 
-def get_current_organization_id_sync(db: Session) -> Optional[uuid.UUID]:
+def get_current_organization_id_sync(db: Session) -> uuid.UUID | None:
     """
     Get the current organization ID from the session context (sync version).
 

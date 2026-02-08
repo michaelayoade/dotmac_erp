@@ -4,15 +4,12 @@ Reports Web Routes.
 HTML template routes for financial reports and analytics.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.rpt.web import reports_web_service
-from app.web.deps import get_db, require_finance_access, WebAuthContext
-
+from app.web.deps import WebAuthContext, get_db, require_finance_access
 
 router = APIRouter(prefix="/reports", tags=["reports-web"])
 
@@ -21,8 +18,8 @@ router = APIRouter(prefix="/reports", tags=["reports-web"])
 @router.get("/", response_class=HTMLResponse)
 def reports_dashboard(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -35,7 +32,7 @@ def reports_dashboard(
 @router.get("/trial-balance", response_class=HTMLResponse)
 def trial_balance_report(
     request: Request,
-    as_of_date: Optional[str] = None,
+    as_of_date: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -46,8 +43,8 @@ def trial_balance_report(
 @router.get("/income-statement", response_class=HTMLResponse)
 def income_statement_report(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -60,7 +57,7 @@ def income_statement_report(
 @router.get("/balance-sheet", response_class=HTMLResponse)
 def balance_sheet_report(
     request: Request,
-    as_of_date: Optional[str] = None,
+    as_of_date: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -71,7 +68,7 @@ def balance_sheet_report(
 @router.get("/ap-aging", response_class=HTMLResponse)
 def ap_aging_report(
     request: Request,
-    as_of_date: Optional[str] = None,
+    as_of_date: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -82,7 +79,7 @@ def ap_aging_report(
 @router.get("/ar-aging", response_class=HTMLResponse)
 def ar_aging_report(
     request: Request,
-    as_of_date: Optional[str] = None,
+    as_of_date: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -93,9 +90,9 @@ def ar_aging_report(
 @router.get("/general-ledger", response_class=HTMLResponse)
 def general_ledger_report(
     request: Request,
-    account_id: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    account_id: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -113,8 +110,8 @@ def general_ledger_report(
 @router.get("/tax-summary", response_class=HTMLResponse)
 def tax_summary_report(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -127,8 +124,8 @@ def tax_summary_report(
 @router.get("/expense-summary", response_class=HTMLResponse)
 def expense_summary_report(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -141,8 +138,8 @@ def expense_summary_report(
 @router.get("/cash-flow", response_class=HTMLResponse)
 def cash_flow_report(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -155,8 +152,8 @@ def cash_flow_report(
 @router.get("/changes-in-equity", response_class=HTMLResponse)
 def changes_in_equity_report(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -169,10 +166,10 @@ def changes_in_equity_report(
 @router.get("/budget-vs-actual", response_class=HTMLResponse)
 def budget_vs_actual_report(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    budget_id: Optional[str] = None,
-    budget_code: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    budget_id: str | None = None,
+    budget_code: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):

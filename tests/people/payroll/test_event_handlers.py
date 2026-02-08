@@ -6,27 +6,26 @@ when payroll events are dispatched.
 """
 
 import uuid
-from decimal import Decimal
 from datetime import date
+from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
 from app.models.people.payroll.payroll_entry import PayrollEntry, PayrollEntryStatus
-from app.services.people.payroll.events import (
-    PayrollEventDispatcher,
-    SlipPosted,
-    SlipPaid,
-    RunPosted,
-)
+from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
 from app.services.people.payroll.event_handlers import (
     PayrollEventHandlers,
+    are_handlers_registered,
     register_payroll_handlers,
     unregister_payroll_handlers,
-    are_handlers_registered,
 )
-
+from app.services.people.payroll.events import (
+    PayrollEventDispatcher,
+    RunPosted,
+    SlipPaid,
+    SlipPosted,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -341,7 +340,7 @@ class TestRunPostedHandler:
 
         # Add 3 slips to the run
         employees = []
-        for i in range(3):
+        for _i in range(3):
             slip = MockSalarySlip(organization_id=org_id)
             employee = MockEmployee(employee_id=slip.employee_id)
             slip.employee = employee  # For eager loading

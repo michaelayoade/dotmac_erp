@@ -10,7 +10,7 @@ Handles:
 """
 
 import logging
-from typing import Any, List
+from typing import Any
 from uuid import UUID
 
 from celery import shared_task
@@ -26,8 +26,8 @@ logger = logging.getLogger(__name__)
 
 def _get_finance_recipients(
     db: Session,
-    role_names: List[str],
-) -> List[UUID]:
+    role_names: list[str],
+) -> list[UUID]:
     """
     Get user IDs with specified finance roles.
 

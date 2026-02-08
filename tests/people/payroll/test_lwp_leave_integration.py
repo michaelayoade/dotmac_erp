@@ -12,12 +12,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.models.people.leave.leave_type import LeaveType
 from app.models.people.leave.leave_application import (
     LeaveApplication,
     LeaveApplicationStatus,
 )
-
+from app.models.people.leave.leave_type import LeaveType
 
 # ---------------------------------------------------------------------------
 # Fixtures

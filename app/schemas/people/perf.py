@@ -11,7 +11,6 @@ Pydantic schemas for Performance APIs including:
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -21,7 +20,6 @@ from app.models.people.perf import (
     AppraisalStatus,
     KPIStatus,
 )
-
 
 # =============================================================================
 # Appraisal Cycle Schemas
@@ -33,14 +31,14 @@ class AppraisalCycleBase(BaseModel):
 
     cycle_code: str = Field(max_length=30)
     cycle_name: str = Field(max_length=200)
-    description: Optional[str] = None
+    description: str | None = None
     review_period_start: date
     review_period_end: date
     start_date: date
     end_date: date
-    self_assessment_deadline: Optional[date] = None
-    manager_review_deadline: Optional[date] = None
-    calibration_deadline: Optional[date] = None
+    self_assessment_deadline: date | None = None
+    manager_review_deadline: date | None = None
+    calibration_deadline: date | None = None
     include_probation_employees: bool = False
     min_tenure_months: int = 3
 
@@ -54,19 +52,19 @@ class AppraisalCycleCreate(AppraisalCycleBase):
 class AppraisalCycleUpdate(BaseModel):
     """Update appraisal cycle request."""
 
-    cycle_code: Optional[str] = Field(default=None, max_length=30)
-    cycle_name: Optional[str] = Field(default=None, max_length=200)
-    description: Optional[str] = None
-    review_period_start: Optional[date] = None
-    review_period_end: Optional[date] = None
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    self_assessment_deadline: Optional[date] = None
-    manager_review_deadline: Optional[date] = None
-    calibration_deadline: Optional[date] = None
-    include_probation_employees: Optional[bool] = None
-    min_tenure_months: Optional[int] = None
-    status: Optional[AppraisalCycleStatus] = None
+    cycle_code: str | None = Field(default=None, max_length=30)
+    cycle_name: str | None = Field(default=None, max_length=200)
+    description: str | None = None
+    review_period_start: date | None = None
+    review_period_end: date | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    self_assessment_deadline: date | None = None
+    manager_review_deadline: date | None = None
+    calibration_deadline: date | None = None
+    include_probation_employees: bool | None = None
+    min_tenure_months: int | None = None
+    status: AppraisalCycleStatus | None = None
 
 
 class AppraisalCycleRead(AppraisalCycleBase):
@@ -78,13 +76,13 @@ class AppraisalCycleRead(AppraisalCycleBase):
     organization_id: UUID
     status: AppraisalCycleStatus
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class AppraisalCycleListResponse(BaseModel):
     """Paginated appraisal cycle list response."""
 
-    items: List[AppraisalCycleRead]
+    items: list[AppraisalCycleRead]
     total: int
     offset: int
     limit: int
@@ -111,12 +109,12 @@ class KRABase(BaseModel):
 
     kra_code: str = Field(max_length=30)
     kra_name: str = Field(max_length=200)
-    description: Optional[str] = None
-    department_id: Optional[UUID] = None
-    designation_id: Optional[UUID] = None
+    description: str | None = None
+    department_id: UUID | None = None
+    designation_id: UUID | None = None
     default_weightage: Decimal = Decimal("0.00")
-    category: Optional[str] = Field(default=None, max_length=50)
-    measurement_criteria: Optional[str] = None
+    category: str | None = Field(default=None, max_length=50)
+    measurement_criteria: str | None = None
     is_active: bool = True
 
 
@@ -129,15 +127,15 @@ class KRACreate(KRABase):
 class KRAUpdate(BaseModel):
     """Update KRA request."""
 
-    kra_code: Optional[str] = Field(default=None, max_length=30)
-    kra_name: Optional[str] = Field(default=None, max_length=200)
-    description: Optional[str] = None
-    department_id: Optional[UUID] = None
-    designation_id: Optional[UUID] = None
-    default_weightage: Optional[Decimal] = None
-    category: Optional[str] = Field(default=None, max_length=50)
-    measurement_criteria: Optional[str] = None
-    is_active: Optional[bool] = None
+    kra_code: str | None = Field(default=None, max_length=30)
+    kra_name: str | None = Field(default=None, max_length=200)
+    description: str | None = None
+    department_id: UUID | None = None
+    designation_id: UUID | None = None
+    default_weightage: Decimal | None = None
+    category: str | None = Field(default=None, max_length=50)
+    measurement_criteria: str | None = None
+    is_active: bool | None = None
 
 
 class DepartmentBrief(BaseModel):
@@ -168,13 +166,13 @@ class KRARead(KRABase):
     kra_id: UUID
     organization_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class KRAListResponse(BaseModel):
     """Paginated KRA list response."""
 
-    items: List[KRARead]
+    items: list[KRARead]
     total: int
     offset: int
     limit: int
@@ -199,17 +197,17 @@ class KPIBase(BaseModel):
     """Base KPI schema."""
 
     employee_id: UUID
-    kra_id: Optional[UUID] = None
+    kra_id: UUID | None = None
     kpi_name: str = Field(max_length=200)
-    description: Optional[str] = None
+    description: str | None = None
     period_start: date
     period_end: date
     target_value: Decimal
-    unit_of_measure: Optional[str] = Field(default=None, max_length=30)
-    threshold_value: Optional[Decimal] = None
-    stretch_value: Optional[Decimal] = None
+    unit_of_measure: str | None = Field(default=None, max_length=30)
+    threshold_value: Decimal | None = None
+    stretch_value: Decimal | None = None
     weightage: Decimal = Decimal("0.00")
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class KPICreate(KPIBase):
@@ -221,20 +219,20 @@ class KPICreate(KPIBase):
 class KPIUpdate(BaseModel):
     """Update KPI request."""
 
-    kra_id: Optional[UUID] = None
-    kpi_name: Optional[str] = Field(default=None, max_length=200)
-    description: Optional[str] = None
-    period_start: Optional[date] = None
-    period_end: Optional[date] = None
-    target_value: Optional[Decimal] = None
-    unit_of_measure: Optional[str] = Field(default=None, max_length=30)
-    threshold_value: Optional[Decimal] = None
-    stretch_value: Optional[Decimal] = None
-    actual_value: Optional[Decimal] = None
-    weightage: Optional[Decimal] = None
-    status: Optional[KPIStatus] = None
-    notes: Optional[str] = None
-    evidence: Optional[str] = None
+    kra_id: UUID | None = None
+    kpi_name: str | None = Field(default=None, max_length=200)
+    description: str | None = None
+    period_start: date | None = None
+    period_end: date | None = None
+    target_value: Decimal | None = None
+    unit_of_measure: str | None = Field(default=None, max_length=30)
+    threshold_value: Decimal | None = None
+    stretch_value: Decimal | None = None
+    actual_value: Decimal | None = None
+    weightage: Decimal | None = None
+    status: KPIStatus | None = None
+    notes: str | None = None
+    evidence: str | None = None
 
 
 class EmployeeBrief(BaseModel):
@@ -253,21 +251,21 @@ class KPIRead(KPIBase):
 
     kpi_id: UUID
     organization_id: UUID
-    actual_value: Optional[Decimal] = None
-    achievement_percentage: Optional[Decimal] = None
+    actual_value: Decimal | None = None
+    achievement_percentage: Decimal | None = None
     status: KPIStatus
-    evidence: Optional[str] = None
+    evidence: str | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
-    employee: Optional[EmployeeBrief] = None
-    kra: Optional[KRABrief] = None
+    employee: EmployeeBrief | None = None
+    kra: KRABrief | None = None
 
 
 class KPIListResponse(BaseModel):
     """Paginated KPI list response."""
 
-    items: List[KPIRead]
+    items: list[KPIRead]
     total: int
     offset: int
     limit: int
@@ -277,8 +275,8 @@ class KPIProgressUpdateRequest(BaseModel):
     """Update KPI progress."""
 
     actual_value: Decimal
-    evidence: Optional[str] = None
-    notes: Optional[str] = None
+    evidence: str | None = None
+    notes: str | None = None
 
 
 # =============================================================================
@@ -308,14 +306,14 @@ class AppraisalKRAScoreRead(BaseModel):
     appraisal_id: UUID
     kra_id: UUID
     weightage: Decimal
-    self_rating: Optional[int] = None
-    self_comments: Optional[str] = None
-    manager_rating: Optional[int] = None
-    manager_comments: Optional[str] = None
-    final_rating: Optional[int] = None
-    weighted_score: Optional[Decimal] = None
+    self_rating: int | None = None
+    self_comments: str | None = None
+    manager_rating: int | None = None
+    manager_comments: str | None = None
+    final_rating: int | None = None
+    weighted_score: Decimal | None = None
 
-    kra: Optional[KRABrief] = None
+    kra: KRABrief | None = None
 
 
 class AppraisalFeedbackBase(BaseModel):
@@ -341,12 +339,12 @@ class AppraisalFeedbackRead(BaseModel):
     appraisal_id: UUID
     feedback_from_id: UUID
     feedback_type: str
-    overall_rating: Optional[int] = None
-    strengths: Optional[str] = None
-    areas_for_improvement: Optional[str] = None
-    general_comments: Optional[str] = None
+    overall_rating: int | None = None
+    strengths: str | None = None
+    areas_for_improvement: str | None = None
+    general_comments: str | None = None
     is_anonymous: bool
-    submitted_on: Optional[date] = None
+    submitted_on: date | None = None
 
 
 class AppraisalBase(BaseModel):
@@ -354,21 +352,21 @@ class AppraisalBase(BaseModel):
 
     employee_id: UUID
     cycle_id: UUID
-    template_id: Optional[UUID] = None
+    template_id: UUID | None = None
     manager_id: UUID
 
 
 class AppraisalCreate(AppraisalBase):
     """Create appraisal request."""
 
-    kra_scores: List[AppraisalKRAScoreCreate] = []
+    kra_scores: list[AppraisalKRAScoreCreate] = []
 
 
 class AppraisalUpdate(BaseModel):
     """Update appraisal request."""
 
-    template_id: Optional[UUID] = None
-    manager_id: Optional[UUID] = None
+    template_id: UUID | None = None
+    manager_id: UUID | None = None
 
 
 class AppraisalRead(AppraisalBase):
@@ -381,43 +379,43 @@ class AppraisalRead(AppraisalBase):
     status: AppraisalStatus
 
     # Self assessment
-    self_assessment_date: Optional[date] = None
-    self_overall_rating: Optional[int] = None
-    self_summary: Optional[str] = None
-    achievements: Optional[str] = None
-    challenges: Optional[str] = None
-    development_needs: Optional[str] = None
+    self_assessment_date: date | None = None
+    self_overall_rating: int | None = None
+    self_summary: str | None = None
+    achievements: str | None = None
+    challenges: str | None = None
+    development_needs: str | None = None
 
     # Manager review
-    manager_review_date: Optional[date] = None
-    manager_overall_rating: Optional[int] = None
-    manager_summary: Optional[str] = None
-    manager_recommendations: Optional[str] = None
+    manager_review_date: date | None = None
+    manager_overall_rating: int | None = None
+    manager_summary: str | None = None
+    manager_recommendations: str | None = None
 
     # Calibration
-    calibration_date: Optional[date] = None
-    calibrated_rating: Optional[int] = None
-    calibration_notes: Optional[str] = None
+    calibration_date: date | None = None
+    calibrated_rating: int | None = None
+    calibration_notes: str | None = None
 
     # Final scores
-    final_score: Optional[Decimal] = None
-    final_rating: Optional[int] = None
-    rating_label: Optional[str] = None
-    completed_on: Optional[date] = None
+    final_score: Decimal | None = None
+    final_rating: int | None = None
+    rating_label: str | None = None
+    completed_on: date | None = None
 
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
-    cycle: Optional[AppraisalCycleBrief] = None
-    employee: Optional[EmployeeBrief] = None
-    manager: Optional[EmployeeBrief] = None
-    kra_scores: List[AppraisalKRAScoreRead] = []
+    cycle: AppraisalCycleBrief | None = None
+    employee: EmployeeBrief | None = None
+    manager: EmployeeBrief | None = None
+    kra_scores: list[AppraisalKRAScoreRead] = []
 
 
 class AppraisalListResponse(BaseModel):
     """Paginated appraisal list response."""
 
-    items: List[AppraisalRead]
+    items: list[AppraisalRead]
     total: int
     offset: int
     limit: int
@@ -427,11 +425,11 @@ class SelfAssessmentRequest(BaseModel):
     """Submit self assessment."""
 
     self_overall_rating: int = Field(ge=1, le=5)
-    self_summary: Optional[str] = None
-    achievements: Optional[str] = None
-    challenges: Optional[str] = None
-    development_needs: Optional[str] = None
-    kra_ratings: List["KRASelfRatingRequest"] = []
+    self_summary: str | None = None
+    achievements: str | None = None
+    challenges: str | None = None
+    development_needs: str | None = None
+    kra_ratings: list["KRASelfRatingRequest"] = []
 
 
 class KRASelfRatingRequest(BaseModel):
@@ -439,16 +437,16 @@ class KRASelfRatingRequest(BaseModel):
 
     score_id: UUID
     rating: int = Field(ge=1, le=5)
-    comments: Optional[str] = None
+    comments: str | None = None
 
 
 class ManagerReviewRequest(BaseModel):
     """Submit manager review."""
 
     manager_overall_rating: int = Field(ge=1, le=5)
-    manager_summary: Optional[str] = None
-    manager_recommendations: Optional[str] = None
-    kra_ratings: List["KRAManagerRatingRequest"] = []
+    manager_summary: str | None = None
+    manager_recommendations: str | None = None
+    kra_ratings: list["KRAManagerRatingRequest"] = []
 
 
 class KRAManagerRatingRequest(BaseModel):
@@ -456,24 +454,24 @@ class KRAManagerRatingRequest(BaseModel):
 
     score_id: UUID
     rating: int = Field(ge=1, le=5)
-    comments: Optional[str] = None
+    comments: str | None = None
 
 
 class CalibrationRequest(BaseModel):
     """HR calibration request."""
 
     calibrated_rating: int = Field(ge=1, le=5)
-    calibration_notes: Optional[str] = None
-    rating_label: Optional[str] = None
+    calibration_notes: str | None = None
+    rating_label: str | None = None
 
 
 class FeedbackSubmitRequest(BaseModel):
     """Submit feedback for an appraisal."""
 
     overall_rating: int = Field(ge=1, le=5)
-    strengths: Optional[str] = None
-    areas_for_improvement: Optional[str] = None
-    general_comments: Optional[str] = None
+    strengths: str | None = None
+    areas_for_improvement: str | None = None
+    general_comments: str | None = None
 
 
 # =============================================================================
@@ -504,7 +502,7 @@ class AppraisalTemplateKRARead(AppraisalTemplateKRABase):
     template_id: UUID
     organization_id: UUID
     created_at: datetime
-    kra: Optional[KRABrief] = None
+    kra: KRABrief | None = None
 
 
 class AppraisalTemplateBase(BaseModel):
@@ -512,9 +510,9 @@ class AppraisalTemplateBase(BaseModel):
 
     template_code: str = Field(max_length=30)
     template_name: str = Field(max_length=200)
-    description: Optional[str] = None
-    department_id: Optional[UUID] = None
-    designation_id: Optional[UUID] = None
+    description: str | None = None
+    department_id: UUID | None = None
+    designation_id: UUID | None = None
     rating_scale_max: int = 5
     is_active: bool = True
 
@@ -522,20 +520,20 @@ class AppraisalTemplateBase(BaseModel):
 class AppraisalTemplateCreate(AppraisalTemplateBase):
     """Create appraisal template request."""
 
-    kras: List[AppraisalTemplateKRACreate] = []
+    kras: list[AppraisalTemplateKRACreate] = []
 
 
 class AppraisalTemplateUpdate(BaseModel):
     """Update appraisal template request."""
 
-    template_code: Optional[str] = Field(default=None, max_length=30)
-    template_name: Optional[str] = Field(default=None, max_length=200)
-    description: Optional[str] = None
-    department_id: Optional[UUID] = None
-    designation_id: Optional[UUID] = None
-    rating_scale_max: Optional[int] = None
-    is_active: Optional[bool] = None
-    kras: Optional[List[AppraisalTemplateKRACreate]] = None
+    template_code: str | None = Field(default=None, max_length=30)
+    template_name: str | None = Field(default=None, max_length=200)
+    description: str | None = None
+    department_id: UUID | None = None
+    designation_id: UUID | None = None
+    rating_scale_max: int | None = None
+    is_active: bool | None = None
+    kras: list[AppraisalTemplateKRACreate] | None = None
 
 
 class AppraisalTemplateRead(AppraisalTemplateBase):
@@ -546,17 +544,17 @@ class AppraisalTemplateRead(AppraisalTemplateBase):
     template_id: UUID
     organization_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    kras: List[AppraisalTemplateKRARead] = []
+    updated_at: datetime | None = None
+    kras: list[AppraisalTemplateKRARead] = []
 
-    department: Optional[DepartmentBrief] = None
-    designation: Optional[DesignationBrief] = None
+    department: DepartmentBrief | None = None
+    designation: DesignationBrief | None = None
 
 
 class AppraisalTemplateListResponse(BaseModel):
     """Paginated appraisal template list response."""
 
-    items: List[AppraisalTemplateRead]
+    items: list[AppraisalTemplateRead]
     total: int
     offset: int
     limit: int
@@ -572,9 +570,9 @@ class ScorecardItemBase(BaseModel):
 
     perspective: str
     metric_name: str = Field(max_length=200)
-    description: Optional[str] = None
-    target_value: Optional[Decimal] = None
-    unit_of_measure: Optional[str] = Field(default=None, max_length=30)
+    description: str | None = None
+    target_value: Decimal | None = None
+    unit_of_measure: str | None = Field(default=None, max_length=30)
     weightage: Decimal = Decimal("0.00")
     sequence: int = 0
 
@@ -592,10 +590,10 @@ class ScorecardItemRead(ScorecardItemBase):
 
     item_id: UUID
     scorecard_id: UUID
-    actual_value: Optional[Decimal] = None
-    score: Optional[Decimal] = None
-    weighted_score: Optional[Decimal] = None
-    status: Optional[str] = None
+    actual_value: Decimal | None = None
+    score: Decimal | None = None
+    weighted_score: Decimal | None = None
+    status: str | None = None
 
 
 class ScorecardBase(BaseModel):
@@ -604,29 +602,29 @@ class ScorecardBase(BaseModel):
     employee_id: UUID
     period_start: date
     period_end: date
-    period_label: Optional[str] = Field(default=None, max_length=50)
+    period_label: str | None = Field(default=None, max_length=50)
 
 
 class ScorecardCreate(ScorecardBase):
     """Create scorecard request."""
 
-    items: List[ScorecardItemCreate] = []
+    items: list[ScorecardItemCreate] = []
 
 
 class ScorecardUpdate(BaseModel):
     """Update scorecard request."""
 
-    period_start: Optional[date] = None
-    period_end: Optional[date] = None
-    period_label: Optional[str] = Field(default=None, max_length=50)
-    financial_score: Optional[Decimal] = None
-    customer_score: Optional[Decimal] = None
-    process_score: Optional[Decimal] = None
-    learning_score: Optional[Decimal] = None
-    overall_score: Optional[Decimal] = None
-    overall_rating: Optional[int] = None
-    rating_label: Optional[str] = None
-    summary: Optional[str] = None
+    period_start: date | None = None
+    period_end: date | None = None
+    period_label: str | None = Field(default=None, max_length=50)
+    financial_score: Decimal | None = None
+    customer_score: Decimal | None = None
+    process_score: Decimal | None = None
+    learning_score: Decimal | None = None
+    overall_score: Decimal | None = None
+    overall_rating: int | None = None
+    rating_label: str | None = None
+    summary: str | None = None
 
 
 class ScorecardRead(ScorecardBase):
@@ -636,29 +634,29 @@ class ScorecardRead(ScorecardBase):
 
     scorecard_id: UUID
     organization_id: UUID
-    financial_score: Optional[Decimal] = None
-    customer_score: Optional[Decimal] = None
-    process_score: Optional[Decimal] = None
-    learning_score: Optional[Decimal] = None
-    overall_score: Optional[Decimal] = None
-    overall_rating: Optional[int] = None
-    rating_label: Optional[str] = None
-    previous_score: Optional[Decimal] = None
-    score_change: Optional[Decimal] = None
-    summary: Optional[str] = None
+    financial_score: Decimal | None = None
+    customer_score: Decimal | None = None
+    process_score: Decimal | None = None
+    learning_score: Decimal | None = None
+    overall_score: Decimal | None = None
+    overall_rating: int | None = None
+    rating_label: str | None = None
+    previous_score: Decimal | None = None
+    score_change: Decimal | None = None
+    summary: str | None = None
     is_finalized: bool
-    finalized_on: Optional[date] = None
+    finalized_on: date | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
-    employee: Optional[EmployeeBrief] = None
-    items: List[ScorecardItemRead] = []
+    employee: EmployeeBrief | None = None
+    items: list[ScorecardItemRead] = []
 
 
 class ScorecardListResponse(BaseModel):
     """Paginated scorecard list response."""
 
-    items: List[ScorecardRead]
+    items: list[ScorecardRead]
     total: int
     offset: int
     limit: int
@@ -667,7 +665,7 @@ class ScorecardListResponse(BaseModel):
 class FinalizeScorecardRequest(BaseModel):
     """Finalize scorecard request."""
 
-    summary: Optional[str] = None
+    summary: str | None = None
 
 
 class PerformanceStats(BaseModel):
@@ -678,12 +676,12 @@ class PerformanceStats(BaseModel):
     pending_manager_review: int
     pending_calibration: int
     completed_appraisals: int
-    average_rating: Optional[Decimal] = None
+    average_rating: Decimal | None = None
 
 
 class PerformanceTrend(BaseModel):
     """Performance trend data."""
 
     employee_id: UUID
-    periods: List[str]
-    scores: List[Optional[Decimal]]
+    periods: list[str]
+    scores: list[Decimal | None]

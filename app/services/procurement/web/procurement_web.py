@@ -5,7 +5,7 @@ Provides methods to build template context for procurement management pages.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -119,7 +119,7 @@ class ProcurementWebService:
     # Dashboard
     # ─────────────────────────────────────────────────────────────
 
-    def dashboard_context(self, organization_id: UUID) -> Dict[str, Any]:
+    def dashboard_context(self, organization_id: UUID) -> dict[str, Any]:
         """Build context for procurement dashboard page."""
         org_id = coerce_uuid(organization_id)
 
@@ -166,17 +166,19 @@ class ProcurementWebService:
     def plan_list_context(
         self,
         organization_id: UUID,
-        status: Optional[str] = None,
-        fiscal_year: Optional[str] = None,
+        status: str | None = None,
+        fiscal_year: str | None = None,
+        search: str | None = None,
         offset: int = 0,
         limit: int = 25,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for plan list page."""
         service = ProcurementPlanService(self.db)
         plans, total = service.list_plans(
             organization_id,
             status=status,
             fiscal_year=fiscal_year,
+            search=search,
             offset=offset,
             limit=limit,
         )
@@ -185,6 +187,7 @@ class ProcurementWebService:
             "total": total,
             "offset": offset,
             "limit": limit,
+            "search": search or "",
             "filter_status": status,
             "filter_fiscal_year": fiscal_year,
             "status_labels": PLAN_STATUS_LABELS,
@@ -195,7 +198,7 @@ class ProcurementWebService:
         self,
         organization_id: UUID,
         plan_id: UUID,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for plan detail page."""
         service = ProcurementPlanService(self.db)
         plan = service.get_by_id(organization_id, plan_id)
@@ -215,7 +218,7 @@ class ProcurementWebService:
     def plan_form_context(
         self,
         organization_id: UUID,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for plan create/edit form."""
         return {
             "procurement_methods": list(ProcurementMethod),
@@ -230,17 +233,19 @@ class ProcurementWebService:
     def requisition_list_context(
         self,
         organization_id: UUID,
-        status: Optional[str] = None,
-        urgency: Optional[str] = None,
+        status: str | None = None,
+        urgency: str | None = None,
+        search: str | None = None,
         offset: int = 0,
         limit: int = 25,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for requisition list page."""
         service = RequisitionService(self.db)
         requisitions, total = service.list_requisitions(
             organization_id,
             status=status,
             urgency=urgency,
+            search=search,
             offset=offset,
             limit=limit,
         )
@@ -249,6 +254,7 @@ class ProcurementWebService:
             "total": total,
             "offset": offset,
             "limit": limit,
+            "search": search or "",
             "filter_status": status,
             "filter_urgency": urgency,
             "status_labels": REQUISITION_STATUS_LABELS,
@@ -260,7 +266,7 @@ class ProcurementWebService:
         self,
         organization_id: UUID,
         requisition_id: UUID,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for requisition detail page."""
         service = RequisitionService(self.db)
         requisition = service.get_by_id(organization_id, requisition_id)
@@ -279,7 +285,7 @@ class ProcurementWebService:
     def requisition_form_context(
         self,
         organization_id: UUID,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for requisition create/edit form."""
         return {
             "urgency_levels": list(UrgencyLevel),
@@ -292,17 +298,19 @@ class ProcurementWebService:
     def rfq_list_context(
         self,
         organization_id: UUID,
-        status: Optional[str] = None,
-        procurement_method: Optional[str] = None,
+        status: str | None = None,
+        procurement_method: str | None = None,
+        search: str | None = None,
         offset: int = 0,
         limit: int = 25,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for RFQ list page."""
         service = RFQService(self.db)
         rfqs, total = service.list_rfqs(
             organization_id,
             status=status,
             procurement_method=procurement_method,
+            search=search,
             offset=offset,
             limit=limit,
         )
@@ -311,6 +319,7 @@ class ProcurementWebService:
             "total": total,
             "offset": offset,
             "limit": limit,
+            "search": search or "",
             "filter_status": status,
             "filter_method": procurement_method,
             "status_labels": RFQ_STATUS_LABELS,
@@ -322,7 +331,7 @@ class ProcurementWebService:
         self,
         organization_id: UUID,
         rfq_id: UUID,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for RFQ detail page."""
         rfq_service = RFQService(self.db)
         quot_service = QuotationResponseService(self.db)
@@ -347,7 +356,7 @@ class ProcurementWebService:
     def rfq_form_context(
         self,
         organization_id: UUID,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for RFQ create/edit form."""
         return {
             "procurement_methods": list(ProcurementMethod),
@@ -360,20 +369,22 @@ class ProcurementWebService:
     def evaluation_list_context(
         self,
         organization_id: UUID,
-        status: Optional[str] = None,
+        status: str | None = None,
+        search: str | None = None,
         offset: int = 0,
         limit: int = 25,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for evaluation list page."""
         eval_service = BidEvaluationService(self.db)
         evaluations, total = eval_service.list_evaluations(
             organization_id,
             status=status,
+            search=search,
             offset=offset,
             limit=limit,
         )
 
-        rfq_map: Dict[UUID, RequestForQuotation] = {}
+        rfq_map: dict[UUID, RequestForQuotation] = {}
         rfq_ids = {evaluation.rfq_id for evaluation in evaluations}
         if rfq_ids:
             rfqs = self.db.scalars(
@@ -389,6 +400,7 @@ class ProcurementWebService:
             "total": total,
             "offset": offset,
             "limit": limit,
+            "search": search or "",
             "filter_status": status,
             "status_labels": EVALUATION_STATUS_LABELS,
             "evaluation_statuses": list(EvaluationStatus),
@@ -399,7 +411,7 @@ class ProcurementWebService:
         self,
         organization_id: UUID,
         rfq_id: UUID,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for evaluation matrix page."""
         rfq_service = RFQService(self.db)
         quot_service = QuotationResponseService(self.db)
@@ -418,8 +430,8 @@ class ProcurementWebService:
         )
 
         # Build total_scores and ranks from evaluation scores
-        total_scores: Dict[Any, float] = {}
-        scores: Dict[tuple, float] = {}
+        total_scores: dict[Any, float] = {}
+        scores: dict[tuple, float] = {}
         for evaluation in evaluations:
             if hasattr(evaluation, "scores"):
                 for s in evaluation.scores:
@@ -433,7 +445,7 @@ class ProcurementWebService:
         sorted_responses = sorted(
             total_scores.items(), key=lambda x: x[1], reverse=True
         )
-        ranks: Dict[Any, int] = {
+        ranks: dict[Any, int] = {
             resp_id: rank + 1 for rank, (resp_id, _) in enumerate(sorted_responses)
         }
 
@@ -459,15 +471,17 @@ class ProcurementWebService:
     def contract_list_context(
         self,
         organization_id: UUID,
-        status: Optional[str] = None,
+        status: str | None = None,
+        search: str | None = None,
         offset: int = 0,
         limit: int = 25,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for contract list page."""
         service = ContractService(self.db)
         contracts, total = service.list_contracts(
             organization_id,
             status=status,
+            search=search,
             offset=offset,
             limit=limit,
         )
@@ -476,6 +490,7 @@ class ProcurementWebService:
             "total": total,
             "offset": offset,
             "limit": limit,
+            "search": search or "",
             "filter_status": status,
             "status_labels": CONTRACT_STATUS_LABELS,
             "contract_statuses": list(ContractStatus),
@@ -485,7 +500,7 @@ class ProcurementWebService:
         self,
         organization_id: UUID,
         contract_id: UUID,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for contract detail page."""
         service = ContractService(self.db)
         contract = service.get_by_id(organization_id, contract_id)
@@ -512,7 +527,7 @@ class ProcurementWebService:
     def contract_form_context(
         self,
         organization_id: UUID,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for contract create/edit form."""
         return {}
 
@@ -523,11 +538,11 @@ class ProcurementWebService:
     def vendor_list_context(
         self,
         organization_id: UUID,
-        status: Optional[str] = None,
-        q: Optional[str] = None,
+        status: str | None = None,
+        q: str | None = None,
         offset: int = 0,
         limit: int = 25,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for vendor registry page."""
         from app.models.finance.ap.supplier import Supplier
 
@@ -541,7 +556,7 @@ class ProcurementWebService:
 
         # Fetch supplier data for display
         supplier_ids = [p.supplier_id for p in prequalifications]
-        supplier_map: Dict[UUID, Any] = {}
+        supplier_map: dict[UUID, Any] = {}
         if supplier_ids:
             suppliers = self.db.scalars(
                 select(Supplier).where(Supplier.supplier_id.in_(supplier_ids))
@@ -575,7 +590,7 @@ class ProcurementWebService:
         self,
         organization_id: UUID,
         prequalification_id: UUID,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for prequalification detail page."""
         from app.models.finance.ap.supplier import Supplier
 
@@ -651,7 +666,7 @@ class ProcurementWebService:
             "status_labels": PREQUALIFICATION_STATUS_LABELS,
         }
 
-    def prequalification_form_context(self, organization_id: UUID) -> Dict[str, Any]:
+    def prequalification_form_context(self, organization_id: UUID) -> dict[str, Any]:
         """Build context for prequalification create form."""
         from app.models.finance.ap.supplier import Supplier
 

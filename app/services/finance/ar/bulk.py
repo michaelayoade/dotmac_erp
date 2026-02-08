@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 from uuid import UUID
 
+from fastapi import Response
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
@@ -32,6 +33,7 @@ class CustomerBulkService(BulkActionService[Customer]):
 
     model = Customer
     id_field = "customer_id"
+    search_fields = ["customer_name", "customer_code", "tax_id"]
     org_field = "organization_id"
 
     # Fields to export in CSV
@@ -92,6 +94,30 @@ class CustomerBulkService(BulkActionService[Customer]):
         """Get customer export filename."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return f"customers_export_{timestamp}.csv"
+
+    async def export_all(
+        self,
+        search: str = "",
+        status: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        extra_filters: dict[str, object] | None = None,
+        format: str = "csv",
+    ) -> Response:
+        """
+        Export all customers matching filters to CSV.
+        """
+        from app.services.finance.ar.customer_query import build_customer_query
+
+        query = build_customer_query(
+            db=self.db,
+            organization_id=str(self.organization_id),
+            search=search,
+            status=status,
+        )
+
+        entities = query.all()
+        return self._build_csv(entities)
 
 
 def get_customer_bulk_service(

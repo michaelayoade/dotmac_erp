@@ -60,6 +60,7 @@
     {% endif %}
 
     <form method="POST" action="/admin/settings/email" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
         <!-- SMTP Server Settings -->
         <div class="admin-card p-6">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">SMTP Server</h2>

@@ -16,6 +16,7 @@
     </div>
 
     <form action="{{ '/admin/settings/' ~ setting_data.id ~ '/edit' if setting_data else '/admin/settings/new' }}" method="POST" class="space-y-6" x-data="{ valueType: '{{ setting_data.value_type if setting_data else 'string' }}' }">
+        {{ request.state.csrf_form | safe }}
         <!-- Error Alert -->
         {% if error %}
         <div class="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
@@ -222,7 +223,7 @@
                         document.getElementById('key').value = '{{ sug.key }}';
                         document.getElementById('domain').value = '{{ sug.domain }}';
                         document.getElementById('value_type').value = '{{ sug.type }}';
-                        valueType = '{{ sug.type }}';
+                        valueType = '{{ sug.type | replace('_', ' ') | title }}';
                     "
                     class="flex items-center justify-between px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-left hover:border-primary-400 dark:hover:border-primary-500 transition-colors group"
                 >
@@ -232,7 +233,7 @@
                     </div>
                     <div class="flex items-center gap-2">
                         <span class="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400">{{ sug.domain }}</span>
-                        <span class="px-2 py-0.5 rounded text-xs font-medium bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300">{{ sug.type }}</span>
+                        <span class="px-2 py-0.5 rounded text-xs font-medium bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300">{{ sug.type | replace('_', ' ') | title }}</span>
                     </div>
                 </button>
                 {% endfor %}
@@ -272,7 +273,8 @@
     </form>
 
     {% if setting_data %}
-    <form id="delete-form" action="/admin/settings/{{ setting_data.id }}/delete" method="POST" class="hidden"></form>
+    <form id="delete-form" action="/admin/settings/{{ setting_data.id }}/delete" method="POST" class="hidden">
+        {{ request.state.csrf_form | safe }}</form>
     {% endif %}
 </div>
 {% endblock %}

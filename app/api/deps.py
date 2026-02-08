@@ -1,4 +1,3 @@
-from typing import Optional
 from uuid import UUID
 
 from fastapi import Depends, HTTPException
@@ -7,29 +6,29 @@ from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
 from app.services.auth_dependencies import (
+    optional_web_session,
+    require_admin_bypass,
     require_audit_auth,
     require_permission,
     require_role,
-    require_user_auth,
     require_tenant_auth,
-    require_tenant_role,
     require_tenant_permission,
-    require_admin_bypass,
+    require_tenant_role,
+    require_user_auth,
     require_web_session,
-    optional_web_session,
 )
 from app.services.common import coerce_uuid
 from app.services.feature_flags import (
-    require_feature,
-    is_feature_enabled,
-    FEATURE_INVENTORY,
-    FEATURE_FIXED_ASSETS,
-    FEATURE_LEASES,
+    FEATURE_BANK_RECONCILIATION,
     FEATURE_BUDGETING,
+    FEATURE_FIXED_ASSETS,
+    FEATURE_INVENTORY,
+    FEATURE_LEASES,
     FEATURE_MULTI_CURRENCY,
     FEATURE_PROJECT_ACCOUNTING,
-    FEATURE_BANK_RECONCILIATION,
     FEATURE_RECURRING_TRANSACTIONS,
+    is_feature_enabled,
+    require_feature,
 )
 
 __all__ = [
@@ -103,7 +102,7 @@ def require_current_employee_id(
 def get_current_employee_id_optional(
     auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(_get_db),
-) -> Optional[UUID]:
+) -> UUID | None:
     """
     Return the employee_id for the authenticated user, or None if not linked.
 

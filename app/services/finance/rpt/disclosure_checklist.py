@@ -6,11 +6,11 @@ Manages IFRS disclosure requirements tracking and completion status.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -36,20 +36,20 @@ class DisclosureItemInput:
     disclosure_name: str
     ifrs_standard: str
     sequence_number: int
-    paragraph_reference: Optional[str] = None
-    description: Optional[str] = None
-    parent_checklist_id: Optional[UUID] = None
+    paragraph_reference: str | None = None
+    description: str | None = None
+    parent_checklist_id: UUID | None = None
     indent_level: int = 0
     is_mandatory: bool = True
-    applicability_criteria: Optional[str] = None
+    applicability_criteria: str | None = None
 
 
 @dataclass
 class DisclosureCompletionInput:
     """Input for completing a disclosure item."""
 
-    disclosure_location: Optional[str] = None
-    notes: Optional[str] = None
+    disclosure_location: str | None = None
+    notes: str | None = None
 
 
 @dataclass
@@ -228,7 +228,7 @@ class DisclosureChecklistService(ListResponseMixin):
         item.disclosure_location = input.disclosure_location
         item.notes = input.notes
         item.completed_by_user_id = user_id
-        item.completed_at = datetime.now(timezone.utc)
+        item.completed_at = datetime.now(UTC)
 
         db.commit()
         db.refresh(item)
@@ -273,7 +273,7 @@ class DisclosureChecklistService(ListResponseMixin):
         item.status = DisclosureStatus.NOT_APPLICABLE
         item.notes = reason
         item.completed_by_user_id = user_id
-        item.completed_at = datetime.now(timezone.utc)
+        item.completed_at = datetime.now(UTC)
 
         db.commit()
         db.refresh(item)
@@ -325,7 +325,7 @@ class DisclosureChecklistService(ListResponseMixin):
 
         item.status = DisclosureStatus.REVIEWED
         item.reviewed_by_user_id = user_id
-        item.reviewed_at = datetime.now(timezone.utc)
+        item.reviewed_at = datetime.now(UTC)
 
         db.commit()
         db.refresh(item)
@@ -514,7 +514,7 @@ class DisclosureChecklistService(ListResponseMixin):
         db: Session,
         organization_id: str,
         fiscal_period_id: str,
-    ) -> List[DisclosureChecklist]:
+    ) -> builtins.list[DisclosureChecklist]:
         """
         Get incomplete mandatory disclosure items.
 
@@ -555,7 +555,7 @@ class DisclosureChecklistService(ListResponseMixin):
         organization_id: UUID,
         source_period_id: UUID,
         target_period_id: UUID,
-    ) -> List[DisclosureChecklist]:
+    ) -> builtins.list[DisclosureChecklist]:
         """
         Copy checklist from one period to another.
 
@@ -627,21 +627,26 @@ class DisclosureChecklistService(ListResponseMixin):
     def get(
         db: Session,
         checklist_id: str,
+        organization_id: UUID | None = None,
     ) -> DisclosureChecklist:
         """Get a disclosure checklist item by ID."""
         item = db.get(DisclosureChecklist, coerce_uuid(checklist_id))
         if not item:
+            raise HTTPException(status_code=404, detail="Disclosure item not found")
+        if organization_id is not None and item.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Disclosure item not found")
         return item
 
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        fiscal_period_id: Optional[str] = None,
-        ifrs_standard: Optional[str] = None,
-        status: Optional[DisclosureStatus] = None,
-        is_mandatory: Optional[bool] = None,
+        organization_id: str | None = None,
+        fiscal_period_id: str | None = None,
+        ifrs_standard: str | None = None,
+        status: DisclosureStatus | None = None,
+        is_mandatory: bool | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[DisclosureChecklist]:

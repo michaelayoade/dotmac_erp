@@ -4,11 +4,10 @@ This module provides reusable validators for common fields like email
 and phone numbers, ensuring consistent validation across the application.
 """
 
-from typing import Annotated, Any
 import re
+from typing import Annotated, Any
 
 from pydantic import AfterValidator, EmailStr, Field
-
 
 # Phone number validation regex
 # Supports:

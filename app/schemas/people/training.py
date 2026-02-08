@@ -9,17 +9,15 @@ Pydantic schemas for Training APIs including:
 
 from datetime import date, datetime, time
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.people.training import (
-    TrainingProgramStatus,
-    TrainingEventStatus,
     AttendeeStatus,
+    TrainingEventStatus,
+    TrainingProgramStatus,
 )
-
 
 # =============================================================================
 # Training Program Schemas
@@ -31,19 +29,19 @@ class TrainingProgramBase(BaseModel):
 
     program_code: str = Field(max_length=30)
     program_name: str = Field(max_length=200)
-    description: Optional[str] = None
+    description: str | None = None
     training_type: str = "INTERNAL"
-    category: Optional[str] = Field(default=None, max_length=50)
-    duration_hours: Optional[int] = None
-    duration_days: Optional[int] = None
-    department_id: Optional[UUID] = None
-    cost_per_attendee: Optional[Decimal] = None
+    category: str | None = Field(default=None, max_length=50)
+    duration_hours: int | None = None
+    duration_days: int | None = None
+    department_id: UUID | None = None
+    cost_per_attendee: Decimal | None = None
     currency_code: str = "NGN"
-    objectives: Optional[str] = None
-    prerequisites: Optional[str] = None
-    syllabus: Optional[str] = None
-    provider_name: Optional[str] = Field(default=None, max_length=200)
-    provider_contact: Optional[str] = Field(default=None, max_length=200)
+    objectives: str | None = None
+    prerequisites: str | None = None
+    syllabus: str | None = None
+    provider_name: str | None = Field(default=None, max_length=200)
+    provider_contact: str | None = Field(default=None, max_length=200)
     status: TrainingProgramStatus = TrainingProgramStatus.DRAFT
 
 
@@ -56,22 +54,22 @@ class TrainingProgramCreate(TrainingProgramBase):
 class TrainingProgramUpdate(BaseModel):
     """Update training program request."""
 
-    program_code: Optional[str] = Field(default=None, max_length=30)
-    program_name: Optional[str] = Field(default=None, max_length=200)
-    description: Optional[str] = None
-    training_type: Optional[str] = None
-    category: Optional[str] = Field(default=None, max_length=50)
-    duration_hours: Optional[int] = None
-    duration_days: Optional[int] = None
-    department_id: Optional[UUID] = None
-    cost_per_attendee: Optional[Decimal] = None
-    currency_code: Optional[str] = None
-    objectives: Optional[str] = None
-    prerequisites: Optional[str] = None
-    syllabus: Optional[str] = None
-    provider_name: Optional[str] = Field(default=None, max_length=200)
-    provider_contact: Optional[str] = Field(default=None, max_length=200)
-    status: Optional[TrainingProgramStatus] = None
+    program_code: str | None = Field(default=None, max_length=30)
+    program_name: str | None = Field(default=None, max_length=200)
+    description: str | None = None
+    training_type: str | None = None
+    category: str | None = Field(default=None, max_length=50)
+    duration_hours: int | None = None
+    duration_days: int | None = None
+    department_id: UUID | None = None
+    cost_per_attendee: Decimal | None = None
+    currency_code: str | None = None
+    objectives: str | None = None
+    prerequisites: str | None = None
+    syllabus: str | None = None
+    provider_name: str | None = Field(default=None, max_length=200)
+    provider_contact: str | None = Field(default=None, max_length=200)
+    status: TrainingProgramStatus | None = None
 
 
 class DepartmentBrief(BaseModel):
@@ -92,15 +90,15 @@ class TrainingProgramRead(TrainingProgramBase):
     program_id: UUID
     organization_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
-    department: Optional[DepartmentBrief] = None
+    department: DepartmentBrief | None = None
 
 
 class TrainingProgramListResponse(BaseModel):
     """Paginated training program list response."""
 
-    items: List[TrainingProgramRead]
+    items: list[TrainingProgramRead]
     total: int
     offset: int
     limit: int
@@ -127,19 +125,19 @@ class TrainingEventBase(BaseModel):
 
     program_id: UUID
     event_name: str = Field(max_length=200)
-    description: Optional[str] = None
+    description: str | None = None
     start_date: date
     end_date: date
-    start_time: Optional[time] = None
-    end_time: Optional[time] = None
+    start_time: time | None = None
+    end_time: time | None = None
     event_type: str = "IN_PERSON"
-    location: Optional[str] = Field(default=None, max_length=200)
-    meeting_link: Optional[str] = Field(default=None, max_length=500)
-    trainer_name: Optional[str] = Field(default=None, max_length=200)
-    trainer_email: Optional[str] = Field(default=None, max_length=255)
-    trainer_employee_id: Optional[UUID] = None
-    max_attendees: Optional[int] = None
-    total_cost: Optional[Decimal] = None
+    location: str | None = Field(default=None, max_length=200)
+    meeting_link: str | None = Field(default=None, max_length=500)
+    trainer_name: str | None = Field(default=None, max_length=200)
+    trainer_email: str | None = Field(default=None, max_length=255)
+    trainer_employee_id: UUID | None = None
+    max_attendees: int | None = None
+    total_cost: Decimal | None = None
     currency_code: str = "NGN"
 
 
@@ -152,22 +150,22 @@ class TrainingEventCreate(TrainingEventBase):
 class TrainingEventUpdate(BaseModel):
     """Update training event request."""
 
-    event_name: Optional[str] = Field(default=None, max_length=200)
-    description: Optional[str] = None
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    start_time: Optional[time] = None
-    end_time: Optional[time] = None
-    event_type: Optional[str] = None
-    location: Optional[str] = Field(default=None, max_length=200)
-    meeting_link: Optional[str] = Field(default=None, max_length=500)
-    trainer_name: Optional[str] = Field(default=None, max_length=200)
-    trainer_email: Optional[str] = Field(default=None, max_length=255)
-    trainer_employee_id: Optional[UUID] = None
-    max_attendees: Optional[int] = None
-    total_cost: Optional[Decimal] = None
-    currency_code: Optional[str] = None
-    status: Optional[TrainingEventStatus] = None
+    event_name: str | None = Field(default=None, max_length=200)
+    description: str | None = None
+    start_date: date | None = None
+    end_date: date | None = None
+    start_time: time | None = None
+    end_time: time | None = None
+    event_type: str | None = None
+    location: str | None = Field(default=None, max_length=200)
+    meeting_link: str | None = Field(default=None, max_length=500)
+    trainer_name: str | None = Field(default=None, max_length=200)
+    trainer_email: str | None = Field(default=None, max_length=255)
+    trainer_employee_id: UUID | None = None
+    max_attendees: int | None = None
+    total_cost: Decimal | None = None
+    currency_code: str | None = None
+    status: TrainingEventStatus | None = None
 
 
 class EmployeeBrief(BaseModel):
@@ -187,19 +185,19 @@ class TrainingEventRead(TrainingEventBase):
     event_id: UUID
     organization_id: UUID
     status: TrainingEventStatus
-    average_rating: Optional[Decimal] = None
-    feedback_notes: Optional[str] = None
+    average_rating: Decimal | None = None
+    feedback_notes: str | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
-    program: Optional[TrainingProgramBrief] = None
-    trainer: Optional[EmployeeBrief] = None
+    program: TrainingProgramBrief | None = None
+    trainer: EmployeeBrief | None = None
 
 
 class TrainingEventListResponse(BaseModel):
     """Paginated training event list response."""
 
-    items: List[TrainingEventRead]
+    items: list[TrainingEventRead]
     total: int
     offset: int
     limit: int
@@ -226,13 +224,13 @@ class ScheduleEventRequest(BaseModel):
 class CancelEventRequest(BaseModel):
     """Cancel event request."""
 
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class CompleteEventRequest(BaseModel):
     """Mark event as completed."""
 
-    feedback_notes: Optional[str] = None
+    feedback_notes: str | None = None
 
 
 # =============================================================================
@@ -245,7 +243,7 @@ class TrainingAttendeeBase(BaseModel):
 
     event_id: UUID
     employee_id: UUID
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class TrainingAttendeeCreate(TrainingAttendeeBase):
@@ -257,8 +255,8 @@ class TrainingAttendeeCreate(TrainingAttendeeBase):
 class TrainingAttendeeUpdate(BaseModel):
     """Update training attendee request."""
 
-    status: Optional[AttendeeStatus] = None
-    notes: Optional[str] = None
+    status: AttendeeStatus | None = None
+    notes: str | None = None
 
 
 class TrainingAttendeeRead(BaseModel):
@@ -271,25 +269,25 @@ class TrainingAttendeeRead(BaseModel):
     event_id: UUID
     employee_id: UUID
     status: AttendeeStatus
-    invited_on: Optional[date] = None
-    confirmed_on: Optional[date] = None
-    attended_on: Optional[date] = None
-    rating: Optional[int] = None
-    feedback: Optional[str] = None
+    invited_on: date | None = None
+    confirmed_on: date | None = None
+    attended_on: date | None = None
+    rating: int | None = None
+    feedback: str | None = None
     certificate_issued: bool
-    certificate_number: Optional[str] = None
-    notes: Optional[str] = None
+    certificate_number: str | None = None
+    notes: str | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
-    event: Optional[TrainingEventBrief] = None
-    employee: Optional[EmployeeBrief] = None
+    event: TrainingEventBrief | None = None
+    employee: EmployeeBrief | None = None
 
 
 class TrainingAttendeeListResponse(BaseModel):
     """Paginated training attendee list response."""
 
-    items: List[TrainingAttendeeRead]
+    items: list[TrainingAttendeeRead]
     total: int
     offset: int
     limit: int
@@ -298,8 +296,8 @@ class TrainingAttendeeListResponse(BaseModel):
 class BulkInviteRequest(BaseModel):
     """Bulk invite employees to training event."""
 
-    employee_ids: List[UUID]
-    registration_type: Optional[str] = "voluntary"
+    employee_ids: list[UUID]
+    registration_type: str | None = "voluntary"
 
 
 class BulkInviteResponse(BaseModel):
@@ -307,7 +305,7 @@ class BulkInviteResponse(BaseModel):
 
     success_count: int
     failed_count: int
-    errors: List[str] = []
+    errors: list[str] = []
 
 
 class AttendeeConfirmRequest(BaseModel):
@@ -326,14 +324,14 @@ class AttendeeFeedbackRequest(BaseModel):
     """Submit attendee feedback."""
 
     rating: int = Field(ge=1, le=5)
-    feedback: Optional[str] = None
+    feedback: str | None = None
 
 
 class IssueCertificateRequest(BaseModel):
     """Issue certificate to attendee."""
 
     certificate_number: str = Field(max_length=50)
-    certificate_url: Optional[str] = None
+    certificate_url: str | None = None
 
 
 class TrainingStats(BaseModel):
@@ -344,7 +342,7 @@ class TrainingStats(BaseModel):
     upcoming_events: int
     completed_events: int
     total_attendees: int
-    average_rating: Optional[Decimal] = None
+    average_rating: Decimal | None = None
 
 
 class EmployeeTrainingHistory(BaseModel):
@@ -353,4 +351,4 @@ class EmployeeTrainingHistory(BaseModel):
     employee_id: UUID
     total_trainings_attended: int
     total_hours: int
-    trainings: List[TrainingAttendeeRead]
+    trainings: list[TrainingAttendeeRead]

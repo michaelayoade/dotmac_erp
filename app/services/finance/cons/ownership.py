@@ -6,11 +6,11 @@ Manages ownership interests, control determination, and NCI calculations (IFRS 1
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -33,11 +33,11 @@ class OwnershipInput:
     ownership_percentage: Decimal
     voting_rights_percentage: Decimal
     effective_from: date
-    shares_held: Optional[Decimal] = None
-    total_shares_outstanding: Optional[Decimal] = None
-    investment_cost: Optional[Decimal] = None
-    nci_at_acquisition: Optional[Decimal] = None
-    nci_measurement_basis: Optional[str] = None
+    shares_held: Decimal | None = None
+    total_shares_outstanding: Decimal | None = None
+    investment_cost: Decimal | None = None
+    nci_at_acquisition: Decimal | None = None
+    nci_measurement_basis: str | None = None
 
 
 @dataclass
@@ -61,7 +61,7 @@ class NCISummary:
     entity_id: UUID
     entity_name: str
     nci_percentage: Decimal
-    nci_at_acquisition: Optional[Decimal]
+    nci_at_acquisition: Decimal | None
     has_control: bool
 
 
@@ -232,7 +232,7 @@ class OwnershipService(ListResponseMixin):
     def calculate_effective_ownership(
         db: Session,
         group_id: UUID,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
     ) -> list[EffectiveOwnershipResult]:
         """
         Calculate effective ownership for all entities in group.
@@ -447,23 +447,37 @@ class OwnershipService(ListResponseMixin):
     def get(
         db: Session,
         interest_id: str,
+        group_id: UUID | None = None,
     ) -> OwnershipInterest:
         """Get an ownership interest by ID."""
         interest = db.get(OwnershipInterest, coerce_uuid(interest_id))
         if not interest:
             raise HTTPException(status_code=404, detail="Ownership interest not found")
+        if group_id is not None:
+            grp_id = coerce_uuid(group_id)
+            investor = db.get(LegalEntity, interest.investor_entity_id)
+            investee = db.get(LegalEntity, interest.investee_entity_id)
+            if (
+                not investor
+                or not investee
+                or investor.group_id != grp_id
+                or investee.group_id != grp_id
+            ):
+                raise HTTPException(
+                    status_code=404, detail="Ownership interest not found"
+                )
         return interest
 
     @staticmethod
     def list(
         db: Session,
-        investor_entity_id: Optional[str] = None,
-        investee_entity_id: Optional[str] = None,
-        is_current: Optional[bool] = None,
-        has_control: Optional[bool] = None,
+        investor_entity_id: str | None = None,
+        investee_entity_id: str | None = None,
+        is_current: bool | None = None,
+        has_control: bool | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[OwnershipInterest]:
+    ) -> builtins.list[OwnershipInterest]:
         """List ownership interests with optional filters."""
         query = db.query(OwnershipInterest)
 

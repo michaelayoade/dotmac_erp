@@ -30,27 +30,28 @@
     {% endif %}
 
     <form method="post" action="{{ form_action | default('/people/attendance/shifts/new') }}" class="card p-6 space-y-6">
+        {{ request.state.csrf_form | safe }}
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-                <label class="form-label">Shift Code</label>
+                <label class="form-label">Shift Code <span class="text-rose-500">*</span></label>
                 <input type="text" name="shift_code" required maxlength="30"
                        value="{{ form_data.shift_code | default('', true) }}"
                        class="form-input" placeholder="DAY-01">
             </div>
             <div>
-                <label class="form-label">Shift Name</label>
+                <label class="form-label">Shift Name <span class="text-rose-500">*</span></label>
                 <input type="text" name="shift_name" required maxlength="100"
                        value="{{ form_data.shift_name | default('', true) }}"
                        class="form-input" placeholder="Day Shift">
             </div>
             <div>
-                <label class="form-label">Start Time</label>
+                <label class="form-label">Start Time <span class="text-rose-500">*</span></label>
                 <input type="time" name="start_time" required
                        value="{{ form_data.start_time | default('09:00') }}"
                        class="form-input">
             </div>
             <div>
-                <label class="form-label">End Time</label>
+                <label class="form-label">End Time <span class="text-rose-500">*</span></label>
                 <input type="time" name="end_time" required
                        value="{{ form_data.end_time | default('17:00') }}"
                        class="form-input">

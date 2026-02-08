@@ -5,21 +5,21 @@ Account Sync Service - ERPNext to DotMac ERP.
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
-logger = logging.getLogger(__name__)
-
-# Maximum account code length in the database
-MAX_ACCOUNT_CODE_LENGTH = 20
 
 from app.models.finance.gl.account import Account, AccountType, NormalBalance
 from app.models.finance.gl.account_category import AccountCategory
 from app.services.erpnext.mappings.accounts import ROOT_TYPE_MAP, AccountMapping
 
 from .base import BaseSyncService
+
+logger = logging.getLogger(__name__)
+
+# Maximum account code length in the database
+MAX_ACCOUNT_CODE_LENGTH = 20
 
 
 class AccountSyncService(BaseSyncService[Account]):
@@ -39,7 +39,7 @@ class AccountSyncService(BaseSyncService[Account]):
         self._account_cache: dict[str, Account] = {}
         self._category_cache: dict[str, AccountCategory] = {}
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         """Fetch accounts from ERPNext."""
         if since:
             yield from client.get_modified_since(
@@ -164,9 +164,7 @@ class AccountSyncService(BaseSyncService[Account]):
         is_header = data.get("is_header", False)
 
         # Determine account_type - must be CONTROL, POSTING, or STATISTICAL
-        if is_header:
-            account_type = "CONTROL"
-        elif data.get("subledger_type"):
+        if is_header or data.get("subledger_type"):
             account_type = "CONTROL"
         else:
             account_type = "POSTING"
@@ -186,7 +184,7 @@ class AccountSyncService(BaseSyncService[Account]):
         """Get account ID."""
         return entity.account_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[Account]:
+    def find_existing_entity(self, source_name: str) -> Account | None:
         """Find existing account by sync entity or code.
 
         Primary lookup is via sync_entity (stores full source_name).

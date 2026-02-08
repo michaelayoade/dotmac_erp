@@ -5,7 +5,6 @@ REST API for vehicle maintenance management.
 """
 
 from datetime import date
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -39,11 +38,11 @@ def get_db():
 @router.get("", response_model=MaintenanceListResponse)
 def list_maintenance(
     organization_id: UUID = Depends(require_organization_id),
-    vehicle_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    maintenance_type: Optional[str] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    vehicle_id: UUID | None = None,
+    status: str | None = None,
+    maintenance_type: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -160,7 +159,7 @@ def complete_maintenance(
 @router.post("/{maintenance_id}/cancel", response_model=MaintenanceRead)
 def cancel_maintenance(
     maintenance_id: UUID,
-    reason: Optional[str] = None,
+    reason: str | None = None,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
 ):

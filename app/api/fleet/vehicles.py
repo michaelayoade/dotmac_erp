@@ -4,7 +4,6 @@ Vehicle API Endpoints.
 REST API for vehicle management.
 """
 
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -51,12 +50,12 @@ def get_db():
 @router.get("", response_model=VehicleListResponse)
 def list_vehicles(
     organization_id: UUID = Depends(require_organization_id),
-    status: Optional[str] = None,
-    vehicle_type: Optional[str] = None,
-    assignment_type: Optional[str] = None,
-    ownership_type: Optional[str] = None,
-    assigned_employee_id: Optional[UUID] = None,
-    search: Optional[str] = None,
+    status: str | None = None,
+    vehicle_type: str | None = None,
+    assignment_type: str | None = None,
+    ownership_type: str | None = None,
+    assigned_employee_id: UUID | None = None,
+    search: str | None = None,
     include_disposed: bool = False,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),

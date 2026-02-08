@@ -13,13 +13,12 @@ from sqlalchemy.orm import Session
 from app.services.people.settings_web import people_settings_web_service
 from app.templates import templates
 from app.web.deps import (
+    WebAuthContext,
+    base_context,
     get_async_db,
     get_db,
     require_hr_access,
-    WebAuthContext,
-    base_context,
 )
-
 
 router = APIRouter(prefix="/settings", tags=["people-settings"])
 

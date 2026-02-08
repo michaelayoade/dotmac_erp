@@ -106,7 +106,7 @@ class LoanRepayment(Base):
     )
 
     # Payroll link (for PAYROLL_DEDUCTION type)
-    salary_slip_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    salary_slip_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("payroll.salary_slip.slip_id", ondelete="SET NULL"),
         nullable=True,
@@ -114,19 +114,19 @@ class LoanRepayment(Base):
     )
 
     # Payment reference (for MANUAL_PAYMENT type)
-    payment_reference: Mapped[Optional[str]] = mapped_column(
+    payment_reference: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Payment reference for manual payments",
     )
-    payment_method: Mapped[Optional[str]] = mapped_column(
+    payment_method: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Payment method (bank transfer, cash, etc.)",
     )
 
     # Notes
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -137,7 +137,7 @@ class LoanRepayment(Base):
         nullable=False,
         server_default=func.now(),
     )
-    created_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,
@@ -207,7 +207,7 @@ class SalarySlipLoanDeduction(Base):
     )
 
     # Repayment link
-    repayment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    repayment_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("payroll.loan_repayment.repayment_id", ondelete="SET NULL"),
         nullable=True,

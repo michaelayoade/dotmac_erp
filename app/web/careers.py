@@ -8,7 +8,6 @@ No authentication required.
 import logging
 import secrets
 import uuid
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -17,11 +16,11 @@ from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
 from app.middleware.rate_limit import check_rate_limit
+from app.models.person import Person, PersonStatus
+from app.models.rbac import PersonRole, Role
 from app.services.careers.captcha import get_captcha_site_key, is_captcha_enabled
 from app.services.careers.web import CareersWebService
 from app.services.people.recruit.offer_letter_service import OfferLetterService
-from app.models.person import Person, PersonStatus
-from app.models.rbac import PersonRole, Role
 from app.templates import templates
 from app.web.csrf import CSRF_COOKIE_NAME, _is_secure_request
 
@@ -128,11 +127,11 @@ def _parse_department_ids(request: Request) -> list[uuid.UUID]:
 def job_list_page(
     request: Request,
     org_slug: str,
-    search: Optional[str] = None,
-    department_id: Optional[str] = None,
-    location: Optional[str] = None,
-    employment_type: Optional[str] = None,
-    is_remote: Optional[bool] = None,
+    search: str | None = None,
+    department_id: str | None = None,
+    location: str | None = None,
+    employment_type: str | None = None,
+    is_remote: bool | None = None,
     page: int = 1,
     db: Session = Depends(get_db),
 ):
@@ -253,17 +252,17 @@ async def submit_application(
     first_name: str = Form(...),
     last_name: str = Form(...),
     email: str = Form(...),
-    phone: Optional[str] = Form(None),
-    cover_letter: Optional[str] = Form(None),
-    current_employer: Optional[str] = Form(None),
-    current_job_title: Optional[str] = Form(None),
-    years_of_experience: Optional[int] = Form(None),
-    highest_qualification: Optional[str] = Form(None),
-    skills: Optional[str] = Form(None),
-    city: Optional[str] = Form(None),
-    country_code: Optional[str] = Form(None),
-    resume: Optional[UploadFile] = None,
-    captcha_token: Optional[str] = Form(None, alias="cf-turnstile-response"),
+    phone: str | None = Form(None),
+    cover_letter: str | None = Form(None),
+    current_employer: str | None = Form(None),
+    current_job_title: str | None = Form(None),
+    years_of_experience: int | None = Form(None),
+    highest_qualification: str | None = Form(None),
+    skills: str | None = Form(None),
+    city: str | None = Form(None),
+    country_code: str | None = Form(None),
+    resume: UploadFile | None = None,
+    captcha_token: str | None = Form(None, alias="cf-turnstile-response"),
     db: Session = Depends(get_db),
 ):
     check_rate_limit(request, max_requests=10, window_seconds=300, key_suffix=email)
@@ -402,7 +401,7 @@ async def request_status_check(
     request: Request,
     org_slug: str,
     email: str = Form(...),
-    application_number: Optional[str] = Form(None),
+    application_number: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
     check_rate_limit(request, max_requests=3, window_seconds=60)
@@ -585,7 +584,7 @@ def offer_portal_decline(
     request: Request,
     org_slug: str,
     token: str,
-    reason: Optional[str] = Form(None),
+    reason: str | None = Form(None),
     db: Session = Depends(get_db),
 ):
     check_rate_limit(request, max_requests=5, window_seconds=300, key_suffix=token)

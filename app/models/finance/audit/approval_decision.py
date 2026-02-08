@@ -5,7 +5,6 @@ Approval Decision Model - Individual approval/rejection decisions.
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -63,7 +62,7 @@ class ApprovalDecision(Base):
         UUID(as_uuid=True),
         nullable=False,
     )
-    delegated_from_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    delegated_from_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -72,14 +71,14 @@ class ApprovalDecision(Base):
         Enum(ApprovalDecisionAction, name="approval_decision_action"),
         nullable=False,
     )
-    comments: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    comments: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     decided_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
-    ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     mfa_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Relationships

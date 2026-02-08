@@ -1,5 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
+{% from "components/macros.html" import empty_state %}
 {% block page_title %}Statement of financial position{% endblock %}
 
 {% block breadcrumbs %}
@@ -90,6 +91,12 @@
                                 <td class="py-1 px-2 text-slate-700 dark:text-slate-300">{{ item.name }}</td>
                                 <td class="py-1 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.amount }}</td>
                             </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="99" class="p-0">
+                                    {{ empty_state("No balance_sheet_lines found", "There are no balance_sheet_lines to display.") }}
+                                </td>
+                            </tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -102,6 +109,12 @@
                             <tr>
                                 <td class="py-1 px-2 text-slate-700 dark:text-slate-300">{{ item.name }}</td>
                                 <td class="py-1 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.amount }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="99" class="p-0">
+                                    {{ empty_state("No balance_sheet_lines found", "There are no balance_sheet_lines to display.") }}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -131,6 +144,12 @@
                                 <td class="py-1 px-2 text-slate-700 dark:text-slate-300">{{ item.name }}</td>
                                 <td class="py-1 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.amount }}</td>
                             </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="99" class="p-0">
+                                    {{ empty_state("No balance_sheet_lines found", "There are no balance_sheet_lines to display.") }}
+                                </td>
+                            </tr>
                             {% endfor %}
                         </tbody>
                     </table>
@@ -141,6 +160,12 @@
                             <tr>
                                 <td class="py-1 px-2 text-slate-700 dark:text-slate-300">{{ item.name }}</td>
                                 <td class="py-1 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.amount }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="99" class="p-0">
+                                    {{ empty_state("No balance_sheet_lines found", "There are no balance_sheet_lines to display.") }}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -165,6 +190,12 @@
                             <tr>
                                 <td class="py-1 px-2 text-slate-700 dark:text-slate-300">{{ item.name }}</td>
                                 <td class="py-1 px-2 text-right font-mono text-slate-900 dark:text-white">{{ item.amount }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="99" class="p-0">
+                                    {{ empty_state("No balance_sheet_lines found", "There are no balance_sheet_lines to display.") }}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -204,6 +235,12 @@
                             <td class="py-2 px-2 text-slate-700 dark:text-slate-300">{{ item.account_name }}</td>
                             <td class="py-2 px-2 text-right font-mono text-slate-900 dark:text-white w-28">{{ item.amount }}</td>
                         </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="99" class="p-0">
+                                {{ empty_state("No asset_items found", "There are no asset_items to display.") }}
+                            </td>
+                        </tr>
                         {% endfor %}
                     </tbody>
                     <tfoot>
@@ -238,6 +275,12 @@
                                 <td class="py-2 px-2 text-slate-700 dark:text-slate-300">{{ item.account_name }}</td>
                                 <td class="py-2 px-2 text-right font-mono text-slate-900 dark:text-white w-28">{{ item.amount }}</td>
                             </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="99" class="p-0">
+                                    {{ empty_state("No liability_items found", "There are no liability_items to display.") }}
+                                </td>
+                            </tr>
                             {% endfor %}
                         </tbody>
                         <tfoot>
@@ -269,6 +312,12 @@
                                 <td class="py-2 px-2 font-mono text-xs text-slate-500 w-20">{{ item.account_code }}</td>
                                 <td class="py-2 px-2 text-slate-700 dark:text-slate-300">{{ item.account_name }}</td>
                                 <td class="py-2 px-2 text-right font-mono text-slate-900 dark:text-white w-28">{{ item.amount }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="99" class="p-0">
+                                    {{ empty_state("No equity_items found", "There are no equity_items to display.") }}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>

@@ -17,8 +17,9 @@ Usage:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Callable, Optional
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session
 
@@ -227,7 +228,7 @@ class PayrollEventHandlers:
 
                 if not getattr(run, "payslips_email_status", None):
                     run.payslips_email_status = "QUEUED"
-                    run.payslips_email_queued_at = datetime.now(timezone.utc)
+                    run.payslips_email_queued_at = datetime.now(UTC)
 
                 db.commit()
 
@@ -484,12 +485,12 @@ class PayrollEventHandlers:
 
 
 _handlers_registered = False
-_handlers_instance: Optional["PayrollEventHandlers"] = None
+_handlers_instance: PayrollEventHandlers | None = None
 
 
 def register_payroll_handlers(
-    dispatcher: Optional[PayrollEventDispatcher] = None,
-    session_factory: Optional[Callable[[], Session]] = None,
+    dispatcher: PayrollEventDispatcher | None = None,
+    session_factory: Callable[[], Session] | None = None,
 ) -> PayrollEventHandlers:
     """
     Register payroll event handlers with the dispatcher.
@@ -538,8 +539,8 @@ def register_payroll_handlers(
 
 
 def unregister_payroll_handlers(
-    dispatcher: Optional[PayrollEventDispatcher] = None,
-    handlers: Optional[PayrollEventHandlers] = None,
+    dispatcher: PayrollEventDispatcher | None = None,
+    handlers: PayrollEventHandlers | None = None,
 ) -> None:
     """
     Unregister payroll event handlers (useful for testing).

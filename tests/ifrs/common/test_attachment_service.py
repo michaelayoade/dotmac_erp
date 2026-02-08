@@ -12,24 +12,30 @@ from uuid import uuid4
 import pytest
 
 from app.models.finance.common.attachment import AttachmentCategory
-from app.services.finance.common.attachment import (
-    AttachmentService,
-    AttachmentInput,
-    AttachmentView,
-)
 from app.services.file_upload import (
     FileUploadError,
-    coerce_uuid as _coerce_uuid,
-    compute_checksum_from_file as _compute_checksum,
-    format_file_size as _format_file_size,
     get_finance_attachment_upload,
 )
+from app.services.file_upload import (
+    coerce_uuid as _coerce_uuid,
+)
+from app.services.file_upload import (
+    compute_checksum_from_file as _compute_checksum,
+)
+from app.services.file_upload import (
+    format_file_size as _format_file_size,
+)
+from app.services.finance.common.attachment import (
+    AttachmentInput,
+    AttachmentService,
+    AttachmentView,
+)
+from tests.ifrs.common.conftest import MockAttachment
 
 # Derive allowed types and max size from the canonical upload config
 _finance_upload = get_finance_attachment_upload()
 ALLOWED_CONTENT_TYPES = _finance_upload.config.allowed_content_types
 MAX_FILE_SIZE = _finance_upload.config.max_size_bytes
-from tests.ifrs.common.conftest import MockAttachment
 
 
 @pytest.fixture
@@ -195,27 +201,29 @@ class TestSaveFile:
         mock_svc = MagicMock()
         mock_svc.save.return_value = mock_upload_result
 
-        with patch(
-            "app.services.finance.common.attachment._upload_service",
-            return_value=mock_svc,
-        ):
-            with patch(
+        with (
+            patch(
+                "app.services.finance.common.attachment._upload_service",
+                return_value=mock_svc,
+            ),
+            patch(
                 "app.services.finance.common.attachment.Attachment"
-            ) as MockAttachmentClass:
-                mock_attachment = MockAttachment(
-                    organization_id=org_id,
-                    entity_id=uuid4(),
-                    uploaded_by=user_id,
-                )
-                MockAttachmentClass.return_value = mock_attachment
+            ) as MockAttachmentClass,
+        ):
+            mock_attachment = MockAttachment(
+                organization_id=org_id,
+                entity_id=uuid4(),
+                uploaded_by=user_id,
+            )
+            MockAttachmentClass.return_value = mock_attachment
 
-                result = AttachmentService.save_file(
-                    mock_db, org_id, sample_attachment_input, file_content, user_id
-                )
+            AttachmentService.save_file(
+                mock_db, org_id, sample_attachment_input, file_content, user_id
+            )
 
-                mock_db.add.assert_called_once()
-                mock_db.commit.assert_called_once()
-                mock_db.refresh.assert_called_once()
+            mock_db.add.assert_called_once()
+            mock_db.commit.assert_called_once()
+            mock_db.refresh.assert_called_once()
 
     def test_save_file_invalid_content_type_fails(
         self, mock_db, org_id, user_id, entity_id
@@ -371,13 +379,15 @@ class TestDeleteAttachment:
             f.write(b"test content")
             f.flush()
 
-            with patch.object(
-                AttachmentService, "get_file_path", return_value=Path(f.name)
+            with (
+                patch.object(
+                    AttachmentService, "get_file_path", return_value=Path(f.name)
+                ),
+                patch("app.services.finance.common.attachment.Attachment"),
             ):
-                with patch("app.services.finance.common.attachment.Attachment"):
-                    result = AttachmentService.delete(
-                        mock_db, str(attachment.attachment_id), org_id
-                    )
+                result = AttachmentService.delete(
+                    mock_db, str(attachment.attachment_id), org_id
+                )
 
             assert result is True
             mock_db.delete.assert_called_once_with(attachment)

@@ -6,12 +6,12 @@ Manages payment creation, approval, posting, and allocation to invoices.
 
 from __future__ import annotations
 
+import builtins
 import logging
 import uuid as uuid_lib
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -33,6 +33,13 @@ from app.models.finance.audit.audit_log import AuditAction
 from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import coerce_uuid
+from app.services.finance.ap.input_utils import (
+    parse_date_str,
+    parse_decimal,
+    parse_json_list,
+    require_uuid,
+    resolve_currency_code,
+)
 from app.services.finance.platform.sequence import SequenceService
 from app.services.response import ListResponseMixin
 
@@ -58,18 +65,18 @@ class SupplierPaymentInput:
     amount: Decimal  # Net amount paid (after WHT deduction)
     bank_account_id: UUID
     allocations: list[PaymentAllocationInput] = field(default_factory=list)
-    exchange_rate: Optional[Decimal] = None
-    reference: Optional[str] = None
-    description: Optional[str] = None
+    exchange_rate: Decimal | None = None
+    reference: str | None = None
+    description: str | None = None
     # Withholding Tax (WHT) - when we withhold tax from supplier payment
-    gross_amount: Optional[Decimal] = (
+    gross_amount: Decimal | None = (
         None  # Invoice amount before WHT; defaults to amount if no WHT
     )
-    wht_code_id: Optional[UUID] = None  # WHT tax code applied
+    wht_code_id: UUID | None = None  # WHT tax code applied
     wht_amount: Decimal = field(default_factory=lambda: Decimal("0"))  # WHT withheld
     # Legacy field - maps to wht_amount for backward compatibility
-    withholding_tax_amount: Optional[Decimal] = None
-    correlation_id: Optional[str] = None
+    withholding_tax_amount: Decimal | None = None
+    correlation_id: str | None = None
 
 
 class SupplierPaymentService(ListResponseMixin):
@@ -78,6 +85,70 @@ class SupplierPaymentService(ListResponseMixin):
 
     Manages payment creation, approval, posting, and invoice allocation.
     """
+
+    @staticmethod
+    def build_input_from_payload(
+        db: Session,
+        organization_id: UUID,
+        payload: dict,
+    ) -> SupplierPaymentInput:
+        """Build SupplierPaymentInput from raw payload (strings or JSON)."""
+        org_id = coerce_uuid(organization_id)
+
+        payment_date = (
+            parse_date_str(payload.get("payment_date"), "Payment date") or date.today()
+        )
+
+        method_str = payload.get("payment_method", "BANK_TRANSFER")
+        try:
+            payment_method = APPaymentMethod(method_str)
+        except ValueError:
+            payment_method = APPaymentMethod.BANK_TRANSFER
+
+        allocations: list[PaymentAllocationInput] = []
+        allocations_data = parse_json_list(payload.get("allocations"), "Allocations")
+        for alloc in allocations_data:
+            if alloc.get("invoice_id") and alloc.get("amount"):
+                allocations.append(
+                    PaymentAllocationInput(
+                        invoice_id=require_uuid(alloc.get("invoice_id"), "Invoice"),
+                        amount=parse_decimal(alloc.get("amount"), "Allocation amount"),
+                    )
+                )
+
+        has_wht = payload.get("has_wht") in ("true", "1", True, "on")
+        wht_code_id = coerce_uuid(payload.get("wht_code_id")) if has_wht else None
+        wht_amount = (
+            parse_decimal(payload.get("wht_amount", "0"), "WHT amount")
+            if has_wht
+            else Decimal("0")
+        )
+        gross_amount = (
+            parse_decimal(payload.get("gross_amount"), "Gross amount")
+            if has_wht and payload.get("gross_amount") is not None
+            else None
+        )
+
+        bank_account_id = payload.get("bank_account_id")
+        if not bank_account_id:
+            raise ValueError("Bank account is required for supplier payments")
+
+        return SupplierPaymentInput(
+            supplier_id=require_uuid(payload.get("supplier_id"), "Supplier"),
+            payment_date=payment_date,
+            payment_method=payment_method,
+            currency_code=resolve_currency_code(
+                db, org_id, payload.get("currency_code")
+            ),
+            amount=parse_decimal(payload.get("amount", 0), "Amount"),
+            bank_account_id=coerce_uuid(bank_account_id),
+            reference=payload.get("reference"),
+            description=payload.get("description"),
+            allocations=allocations,
+            gross_amount=gross_amount,
+            wht_code_id=wht_code_id,
+            wht_amount=wht_amount,
+        )
 
     @staticmethod
     def create_payment(
@@ -134,7 +205,7 @@ class SupplierPaymentService(ListResponseMixin):
                     detail=f"Amount mismatch: gross ({gross_amount}) - WHT ({wht_amount}) != net ({input.amount})",
                 )
 
-        wht_code_id: Optional[UUID] = None
+        wht_code_id: UUID | None = None
 
         # WHT code is required if WHT amount is non-zero
         if wht_amount > Decimal("0") and not input.wht_code_id:
@@ -293,7 +364,7 @@ class SupplierPaymentService(ListResponseMixin):
         old_status = payment.status.value
         payment.status = APPaymentStatus.APPROVED
         payment.approved_by_user_id = user_id
-        payment.approved_at = datetime.now(timezone.utc)
+        payment.approved_at = datetime.now(UTC)
 
         try:
             from app.services.finance.automation.event_dispatcher import (
@@ -340,7 +411,7 @@ class SupplierPaymentService(ListResponseMixin):
         organization_id: UUID,
         payment_id: UUID,
         posted_by_user_id: UUID,
-        posting_date: Optional[date] = None,
+        posting_date: date | None = None,
     ) -> SupplierPayment:
         """
         Post an approved payment to the general ledger.
@@ -386,7 +457,7 @@ class SupplierPaymentService(ListResponseMixin):
         # Update payment status
         payment.status = APPaymentStatus.SENT
         payment.posted_by_user_id = user_id
-        payment.posted_at = datetime.now(timezone.utc)
+        payment.posted_at = datetime.now(UTC)
         payment.journal_entry_id = result.journal_entry_id
         payment.posting_batch_id = result.posting_batch_id
 
@@ -549,7 +620,7 @@ class SupplierPaymentService(ListResponseMixin):
     def get(
         db: Session,
         payment_id: str,
-        organization_id: Optional[UUID] = None,
+        organization_id: UUID | None = None,
     ) -> SupplierPayment:
         """
         Get a payment by ID.
@@ -577,7 +648,7 @@ class SupplierPaymentService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         payment_id: UUID,
-    ) -> List[APPaymentAllocation]:
+    ) -> builtins.list[APPaymentAllocation]:
         """
         Get allocations for a payment.
 
@@ -605,17 +676,46 @@ class SupplierPaymentService(ListResponseMixin):
         )
 
     @staticmethod
+    def delete_payment(
+        db: Session,
+        organization_id: UUID,
+        payment_id: UUID,
+    ) -> None:
+        """Delete a payment (DRAFT only)."""
+        org_id = coerce_uuid(organization_id)
+        pay_id = coerce_uuid(payment_id)
+
+        payment = db.get(SupplierPayment, pay_id)
+        if not payment or payment.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Payment not found")
+
+        if payment.status != APPaymentStatus.DRAFT:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Cannot delete payment with status '{payment.status.value}'. "
+                    "Only draft payments can be deleted."
+                ),
+            )
+
+        db.query(APPaymentAllocation).filter(
+            APPaymentAllocation.payment_id == pay_id
+        ).delete()
+        db.delete(payment)
+        db.commit()
+
+    @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        supplier_id: Optional[str] = None,
-        status: Optional[APPaymentStatus] = None,
-        payment_method: Optional[APPaymentMethod] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
+        organization_id: str | None = None,
+        supplier_id: str | None = None,
+        status: APPaymentStatus | None = None,
+        payment_method: APPaymentMethod | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[SupplierPayment]:
+    ) -> builtins.list[SupplierPayment]:
         """
         List payments with optional filters.
 

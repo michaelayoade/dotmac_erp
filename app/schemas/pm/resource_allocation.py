@@ -6,11 +6,9 @@ Schemas for PM Resource Allocation API endpoints.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 # =============================================================================
 # Resource Allocation Schemas
@@ -22,12 +20,12 @@ class ResourceAllocationBase(BaseModel):
 
     project_id: UUID
     employee_id: UUID
-    role_on_project: Optional[str] = Field(default=None, max_length=100)
+    role_on_project: str | None = Field(default=None, max_length=100)
     allocation_percent: Decimal = Field(ge=0, le=100)
     start_date: date
-    end_date: Optional[date] = None
-    cost_rate_per_hour: Optional[Decimal] = None
-    billing_rate_per_hour: Optional[Decimal] = None
+    end_date: date | None = None
+    cost_rate_per_hour: Decimal | None = None
+    billing_rate_per_hour: Decimal | None = None
 
 
 class ResourceAllocationCreate(ResourceAllocationBase):
@@ -39,12 +37,12 @@ class ResourceAllocationCreate(ResourceAllocationBase):
 class ResourceAllocationUpdate(BaseModel):
     """Update resource allocation request."""
 
-    role_on_project: Optional[str] = Field(default=None, max_length=100)
-    allocation_percent: Optional[Decimal] = Field(default=None, ge=0, le=100)
-    end_date: Optional[date] = None
-    is_active: Optional[bool] = None
-    cost_rate_per_hour: Optional[Decimal] = None
-    billing_rate_per_hour: Optional[Decimal] = None
+    role_on_project: str | None = Field(default=None, max_length=100)
+    allocation_percent: Decimal | None = Field(default=None, ge=0, le=100)
+    end_date: date | None = None
+    is_active: bool | None = None
+    cost_rate_per_hour: Decimal | None = None
+    billing_rate_per_hour: Decimal | None = None
 
 
 class ResourceAllocationRead(ResourceAllocationBase):
@@ -56,7 +54,7 @@ class ResourceAllocationRead(ResourceAllocationBase):
     organization_id: UUID
     is_active: bool = True
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class ResourceAllocationWithDetails(ResourceAllocationRead):
@@ -64,15 +62,15 @@ class ResourceAllocationWithDetails(ResourceAllocationRead):
 
     model_config = ConfigDict(from_attributes=True)
 
-    project_name: Optional[str] = None
-    employee_name: Optional[str] = None
+    project_name: str | None = None
+    employee_name: str | None = None
     is_current: bool = False
 
 
 class ResourceAllocationListResponse(BaseModel):
     """Paginated resource allocation list response."""
 
-    items: List[ResourceAllocationWithDetails]
+    items: list[ResourceAllocationWithDetails]
     total: int
     offset: int
     limit: int
@@ -88,10 +86,10 @@ class TeamMemberSummary(BaseModel):
 
     employee_id: UUID
     employee_name: str
-    role_on_project: Optional[str] = None
+    role_on_project: str | None = None
     allocation_percent: Decimal
     start_date: date
-    end_date: Optional[date] = None
+    end_date: date | None = None
     is_active: bool = True
     total_hours_logged: Decimal = Decimal("0.00")
 
@@ -101,7 +99,7 @@ class ProjectTeamResponse(BaseModel):
 
     project_id: UUID
     project_name: str
-    team_members: List[TeamMemberSummary]
+    team_members: list[TeamMemberSummary]
     total_allocation_percent: Decimal
 
 
@@ -114,7 +112,7 @@ class UtilizationSummary(BaseModel):
     period_end: date
     total_allocation_percent: Decimal
     available_percent: Decimal
-    project_allocations: List["ProjectAllocationSummary"]
+    project_allocations: list["ProjectAllocationSummary"]
 
 
 class ProjectAllocationSummary(BaseModel):
@@ -123,7 +121,7 @@ class ProjectAllocationSummary(BaseModel):
     project_id: UUID
     project_name: str
     allocation_percent: Decimal
-    role_on_project: Optional[str] = None
+    role_on_project: str | None = None
 
 
 # =============================================================================
@@ -134,4 +132,4 @@ class ProjectAllocationSummary(BaseModel):
 class EndAllocationRequest(BaseModel):
     """Request to end a resource allocation."""
 
-    end_date: Optional[date] = None
+    end_date: date | None = None

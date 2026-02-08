@@ -11,18 +11,18 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.schemas.sync.dotmac_crm import (
+    CRMProjectPayload,
+    CRMTicketPayload,
+    CRMWorkOrderPayload,
+    ExpenseTotals,
+)
 from app.services.sync.dotmac_crm_sync_service import (
     CRM_SYNC_STATUS_MAP,
     PROJECT_STATUS_MAP,
     TASK_STATUS_MAP,
     TICKET_STATUS_MAP,
     DotMacCRMSyncService,
-)
-from app.schemas.sync.dotmac_crm import (
-    CRMProjectPayload,
-    CRMTicketPayload,
-    CRMWorkOrderPayload,
-    ExpenseTotals,
 )
 
 
@@ -134,7 +134,7 @@ class TestSyncProject:
                 mock_project.project_id = uuid.uuid4()
                 mock_create.return_value = mock_project
 
-                mapping = service.sync_project(org_id, payload)
+                service.sync_project(org_id, payload)
 
         # Assert
         mock_create.assert_called_once()
@@ -214,7 +214,7 @@ class TestSyncTicket:
                 mock_ticket.ticket_id = uuid.uuid4()
                 mock_create.return_value = mock_ticket
 
-                mapping = service.sync_ticket(org_id, payload)
+                service.sync_ticket(org_id, payload)
 
         mock_create.assert_called_once()
         mock_db.add.assert_called()
@@ -283,7 +283,7 @@ class TestSyncWorkOrder:
                             mock_task.task_id = uuid.uuid4()
                             mock_create.return_value = mock_task
 
-                            mapping = service.sync_work_order(org_id, payload)
+                            service.sync_work_order(org_id, payload)
 
         mock_create.assert_called_once()
         # Verify project_id was passed
@@ -319,7 +319,7 @@ class TestSyncWorkOrder:
                                 mock_task.task_id = uuid.uuid4()
                                 mock_create.return_value = mock_task
 
-                                mapping = service.sync_work_order(org_id, payload)
+                                service.sync_work_order(org_id, payload)
 
         # Verify default project was used
         call_args = mock_create.call_args
@@ -671,9 +671,10 @@ class TestInventorySync:
         service.db.execute.return_value.all.return_value = [(mock_item, mock_category)]
         service.db.scalar.return_value = 1
 
-        # Mock balance service static methods
-        mock_balance_class.get_on_hand.return_value = Decimal("50")
-        mock_balance_class.get_reserved.return_value = Decimal("5")
+        # Mock batch stock levels (returns dict[UUID, tuple[on_hand, reserved]])
+        mock_balance_class.get_batch_stock_levels.return_value = {
+            mock_item.item_id: (Decimal("50"), Decimal("5")),
+        }
 
         result = service.list_inventory_items(org_id, include_zero_stock=True)
 
@@ -812,15 +813,21 @@ class TestInventorySync:
         page3.all.return_value = []
         service.db.execute.side_effect = [page1, page2, page3]
 
-        def on_hand_side_effect(_db, _org, item_id):
-            if item_id == mock_item1.item_id:
-                return Decimal("0")
-            if item_id == mock_item2.item_id:
-                return Decimal("5")
-            return Decimal("10")
+        # Mock batch stock levels for each page of results
+        # Page 1: item1 has 0 on-hand (filtered out), item2 has 5
+        # Page 2: item3 has 10
+        def batch_stock_side_effect(_db, _org, item_ids, _wh=None):
+            stock = {}
+            for iid in item_ids:
+                if iid == mock_item1.item_id:
+                    stock[iid] = (Decimal("0"), Decimal("0"))
+                elif iid == mock_item2.item_id:
+                    stock[iid] = (Decimal("5"), Decimal("0"))
+                else:
+                    stock[iid] = (Decimal("10"), Decimal("0"))
+            return stock
 
-        mock_balance_class.get_on_hand.side_effect = on_hand_side_effect
-        mock_balance_class.get_reserved.return_value = Decimal("0")
+        mock_balance_class.get_batch_stock_levels.side_effect = batch_stock_side_effect
 
         result = service.list_inventory_items(org_id, limit=1)
 

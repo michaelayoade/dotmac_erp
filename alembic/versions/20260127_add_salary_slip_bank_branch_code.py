@@ -5,8 +5,9 @@ Revises: 20260126_add_pm_comments
 Create Date: 2026-01-27
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260127_add_salary_slip_bank_branch_code"

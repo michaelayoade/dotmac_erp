@@ -4,7 +4,6 @@ Fleet Web Routes.
 Server-rendered HTML routes for fleet management.
 """
 
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -45,9 +44,9 @@ def fleet_dashboard(
 @router.get("/vehicles", response_class=HTMLResponse)
 def vehicle_list(
     request: Request,
-    status: Optional[str] = None,
-    vehicle_type: Optional[str] = None,
-    department_id: Optional[UUID] = None,
+    status: str | None = None,
+    vehicle_type: str | None = None,
+    department_id: UUID | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_fleet_access),
@@ -128,9 +127,9 @@ def vehicle_edit(
 @router.get("/maintenance", response_class=HTMLResponse)
 def maintenance_list(
     request: Request,
-    vehicle_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    maintenance_type: Optional[str] = None,
+    vehicle_id: UUID | None = None,
+    status: str | None = None,
+    maintenance_type: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_fleet_access),
@@ -155,7 +154,7 @@ def maintenance_list(
 @router.get("/maintenance/new", response_class=HTMLResponse)
 def maintenance_new(
     request: Request,
-    vehicle_id: Optional[UUID] = None,
+    vehicle_id: UUID | None = None,
     auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
@@ -201,7 +200,7 @@ def maintenance_detail(
 @router.get("/fuel", response_class=HTMLResponse)
 def fuel_list(
     request: Request,
-    vehicle_id: Optional[UUID] = None,
+    vehicle_id: UUID | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_fleet_access),
@@ -224,7 +223,7 @@ def fuel_list(
 @router.get("/fuel/new", response_class=HTMLResponse)
 def fuel_new(
     request: Request,
-    vehicle_id: Optional[UUID] = None,
+    vehicle_id: UUID | None = None,
     auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
@@ -245,9 +244,9 @@ def fuel_new(
 @router.get("/incidents", response_class=HTMLResponse)
 def incident_list(
     request: Request,
-    vehicle_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    severity: Optional[str] = None,
+    vehicle_id: UUID | None = None,
+    status: str | None = None,
+    severity: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_fleet_access),
@@ -272,7 +271,7 @@ def incident_list(
 @router.get("/incidents/new", response_class=HTMLResponse)
 def incident_new(
     request: Request,
-    vehicle_id: Optional[UUID] = None,
+    vehicle_id: UUID | None = None,
     auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
@@ -314,8 +313,8 @@ def incident_detail(
 @router.get("/reservations", response_class=HTMLResponse)
 def reservation_list(
     request: Request,
-    vehicle_id: Optional[UUID] = None,
-    status: Optional[str] = None,
+    vehicle_id: UUID | None = None,
+    status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_fleet_access),
@@ -380,8 +379,8 @@ def reservation_detail(
 @router.get("/documents", response_class=HTMLResponse)
 def document_list(
     request: Request,
-    vehicle_id: Optional[UUID] = None,
-    document_type: Optional[str] = None,
+    vehicle_id: UUID | None = None,
+    document_type: str | None = None,
     expired_only: bool = False,
     expiring_soon: bool = False,
     offset: int = Query(0, ge=0),
@@ -409,7 +408,7 @@ def document_list(
 @router.get("/documents/new", response_class=HTMLResponse)
 def document_new(
     request: Request,
-    vehicle_id: Optional[UUID] = None,
+    vehicle_id: UUID | None = None,
     auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):

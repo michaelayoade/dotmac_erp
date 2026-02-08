@@ -5,15 +5,12 @@ Lists training programs and events with full CRUD operations.
 All business logic is delegated to the training_web_service.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.people.training.web import training_web_service
 from app.web.deps import WebAuthContext, get_db, require_hr_access
-
 
 router = APIRouter(prefix="/training", tags=["people-training-web"])
 
@@ -26,9 +23,9 @@ router = APIRouter(prefix="/training", tags=["people-training-web"])
 @router.get("/programs", response_class=HTMLResponse)
 def list_programs(
     request: Request,
-    search: Optional[str] = None,
-    status: Optional[str] = None,
-    category: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
+    category: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -63,7 +60,7 @@ async def create_program(
 def view_program(
     request: Request,
     program_id: str,
-    success: Optional[str] = None,
+    success: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -127,11 +124,11 @@ def retire_program(
 @router.get("/events", response_class=HTMLResponse)
 def list_events(
     request: Request,
-    search: Optional[str] = None,
-    status: Optional[str] = None,
-    program_id: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
+    program_id: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -145,7 +142,7 @@ def list_events(
 @router.get("/events/new", response_class=HTMLResponse)
 def new_event_form(
     request: Request,
-    program_id: Optional[str] = None,
+    program_id: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -167,7 +164,7 @@ async def create_event(
 def view_event(
     request: Request,
     event_id: str,
-    success: Optional[str] = None,
+    success: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -247,8 +244,8 @@ def cancel_event(
 @router.get("/reports/completion", response_class=HTMLResponse)
 def report_completion(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -261,8 +258,8 @@ def report_completion(
 @router.get("/reports/by-department", response_class=HTMLResponse)
 def report_by_department(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -275,8 +272,8 @@ def report_by_department(
 @router.get("/reports/cost-analysis", response_class=HTMLResponse)
 def report_cost_analysis(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -289,8 +286,8 @@ def report_cost_analysis(
 @router.get("/reports/effectiveness", response_class=HTMLResponse)
 def report_effectiveness(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):

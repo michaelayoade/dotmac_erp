@@ -5,7 +5,6 @@ Numbering Sequence Model - Core Config.
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     BigInteger,
@@ -45,6 +44,12 @@ class SequenceType(str, enum.Enum):
     PROJECT = "PROJECT"
     TASK = "TASK"
     MATERIAL_REQUEST = "MATERIAL_REQUEST"
+    CUSTOMER = "CUSTOMER"
+    EMPLOYEE = "EMPLOYEE"
+    LEAVE_APPLICATION = "LEAVE_APPLICATION"
+    SALARY_SLIP = "SALARY_SLIP"
+    PAYROLL_ENTRY = "PAYROLL_ENTRY"
+    EXPENSE_INVOICE = "EXPENSE_INVOICE"
 
 
 class ResetFrequency(str, enum.Enum):
@@ -107,8 +112,8 @@ class NumberingSequence(Base):
 
     # Current sequence tracking
     current_number: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
-    current_year: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    current_month: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    current_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    current_month: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Reset behavior
     reset_frequency: Mapped[ResetFrequency] = mapped_column(
@@ -121,12 +126,12 @@ class NumberingSequence(Base):
     fiscal_year_reset: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
-    fiscal_year_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    fiscal_year_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
 
-    last_used_at: Mapped[Optional[datetime]] = mapped_column(
+    last_used_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -135,7 +140,7 @@ class NumberingSequence(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

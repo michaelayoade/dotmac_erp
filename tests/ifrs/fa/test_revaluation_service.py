@@ -47,9 +47,7 @@ class TestAssetRevaluationService:
             valuer_name="Valuation Co.",
         )
 
-        result = AssetRevaluationService.create_revaluation(
-            mock_db, org_id, input_data, user_id
-        )
+        AssetRevaluationService.create_revaluation(mock_db, org_id, input_data, user_id)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -81,19 +79,18 @@ class TestAssetRevaluationService:
             valuation_method="Market Approach",
         )
 
-        result = AssetRevaluationService.create_revaluation(
-            mock_db, org_id, input_data, user_id
-        )
+        AssetRevaluationService.create_revaluation(mock_db, org_id, input_data, user_id)
 
         mock_db.add.assert_called_once()
 
     def test_create_revaluation_asset_not_found(self, mock_db, org_id, user_id):
         """Test revaluation creation fails when asset not found."""
+        from fastapi import HTTPException
+
         from app.services.fixed_assets.revaluation import (
             AssetRevaluationService,
             RevaluationInput,
         )
-        from fastapi import HTTPException
 
         mock_db.get.return_value = None
 
@@ -116,11 +113,12 @@ class TestAssetRevaluationService:
         self, mock_db, org_id, mock_asset, user_id
     ):
         """Test revaluation fails for non-active asset."""
+        from fastapi import HTTPException
+
         from app.services.fixed_assets.revaluation import (
             AssetRevaluationService,
             RevaluationInput,
         )
-        from fastapi import HTTPException
 
         mock_asset.status = MockAssetStatus.DRAFT  # Not active
         mock_asset.organization_id = org_id
@@ -146,11 +144,12 @@ class TestAssetRevaluationService:
         self, mock_db, org_id, mock_asset, mock_category, user_id
     ):
         """Test revaluation fails when not allowed for category."""
+        from fastapi import HTTPException
+
         from app.services.fixed_assets.revaluation import (
             AssetRevaluationService,
             RevaluationInput,
         )
-        from fastapi import HTTPException
 
         mock_asset.status = MockAssetStatus.ACTIVE
         mock_asset.organization_id = org_id
@@ -179,11 +178,12 @@ class TestAssetRevaluationService:
         self, mock_db, org_id, mock_asset, user_id
     ):
         """Test revaluation fails when category not found."""
+        from fastapi import HTTPException
+
         from app.services.fixed_assets.revaluation import (
             AssetRevaluationService,
             RevaluationInput,
         )
-        from fastapi import HTTPException
 
         mock_asset.status = MockAssetStatus.ACTIVE
         mock_asset.organization_id = org_id
@@ -244,9 +244,7 @@ class TestAssetRevaluationService:
             valuation_method="Market Approach",
         )
 
-        result = AssetRevaluationService.create_revaluation(
-            mock_db, org_id, input_data, user_id
-        )
+        AssetRevaluationService.create_revaluation(mock_db, org_id, input_data, user_id)
 
         mock_db.add.assert_called_once()
 
@@ -287,9 +285,7 @@ class TestAssetRevaluationService:
             valuation_method="Market Approach",
         )
 
-        result = AssetRevaluationService.create_revaluation(
-            mock_db, org_id, input_data, user_id
-        )
+        AssetRevaluationService.create_revaluation(mock_db, org_id, input_data, user_id)
 
         mock_db.add.assert_called_once()
 
@@ -315,7 +311,7 @@ class TestAssetRevaluationService:
         # db.get called for revaluation, asset, category
         mock_db.get.side_effect = [revaluation, mock_asset, mock_category]
 
-        result = AssetRevaluationService.approve_revaluation(
+        AssetRevaluationService.approve_revaluation(
             mock_db, org_id, revaluation.revaluation_id, user_id
         )
 
@@ -323,8 +319,9 @@ class TestAssetRevaluationService:
 
     def test_approve_revaluation_not_found(self, mock_db, org_id, user_id):
         """Test approving non-existent revaluation fails."""
-        from app.services.fixed_assets.revaluation import AssetRevaluationService
         from fastapi import HTTPException
+
+        from app.services.fixed_assets.revaluation import AssetRevaluationService
 
         mock_db.get.return_value = None
 
@@ -339,8 +336,9 @@ class TestAssetRevaluationService:
         self, mock_db, org_id, mock_asset, user_id
     ):
         """Test creator cannot approve own revaluation (SoD)."""
-        from app.services.fixed_assets.revaluation import AssetRevaluationService
         from fastapi import HTTPException
+
+        from app.services.fixed_assets.revaluation import AssetRevaluationService
 
         revaluation = MockAssetRevaluation(
             organization_id=org_id,

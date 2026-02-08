@@ -78,7 +78,7 @@ class SalaryComponent(Base, AuditMixin, ERPNextSyncMixin):
         String(100),
         nullable=False,
     )
-    abbr: Mapped[Optional[str]] = mapped_column(
+    abbr: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="Short abbreviation for payslips",
@@ -87,19 +87,19 @@ class SalaryComponent(Base, AuditMixin, ERPNextSyncMixin):
         Enum(SalaryComponentType, name="salary_component_type"),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # GL Account Mapping (Critical for posting)
-    expense_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    expense_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,
         comment="For EARNING: Salary Expense account to debit",
     )
-    liability_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    liability_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,
@@ -154,7 +154,7 @@ class SalaryComponent(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

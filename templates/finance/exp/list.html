@@ -1,5 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
+{% from "components/macros.html" import status_badge, empty_state %}
 {% block page_title %}Expenses{% endblock %}
 
 {% block breadcrumbs %}
@@ -111,21 +112,9 @@
                         <td class="text-slate-500">{{ exp.payee }}</td>
                         <td class="text-slate-500 text-sm">{{ exp.expense_account }}</td>
                         <td class="text-right font-mono text-slate-900 dark:text-white">{{ exp.total_amount }}</td>
-                        <td><span class="badge badge-neutral">{{ exp.payment_method }}</span></td>
+                        <td><span class="badge badge-neutral">{{ exp.payment_method | replace('_', ' ') | title }}</span></td>
                         <td>
-                            {% if exp.status == 'DRAFT' %}
-                            <span class="badge badge-neutral">Draft</span>
-                            {% elif exp.status == 'SUBMITTED' %}
-                            <span class="badge badge-warning">Submitted</span>
-                            {% elif exp.status == 'APPROVED' %}
-                            <span class="badge badge-info">Approved</span>
-                            {% elif exp.status == 'POSTED' %}
-                            <span class="badge badge-success">Posted</span>
-                            {% elif exp.status == 'REJECTED' %}
-                            <span class="badge badge-danger">Rejected</span>
-                            {% elif exp.status == 'VOID' %}
-                            <span class="badge badge-neutral">Void</span>
-                            {% endif %}
+                            {{ status_badge(exp.status) }}
                         </td>
                         <td>
                             <div class="table-actions">
@@ -136,6 +125,12 @@
                                     </svg>
                                 </a>
                             </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No expenses found", "There are no expenses to display.") }}
                         </td>
                     </tr>
                     {% endfor %}

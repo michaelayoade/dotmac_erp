@@ -9,16 +9,16 @@ from uuid import uuid4
 
 import pytest
 
+from app.models.inventory.item import CostingMethod
 from app.services.inventory.fifo_valuation import (
-    FIFOValuationService,
     FIFOInventory,
+    FIFOValuationService,
     NRVCalculation,
 )
-from app.models.inventory.item import CostingMethod
 from tests.ifrs.inv.conftest import (
-    MockItem,
     MockInventoryLot,
     MockInventoryValuation,
+    MockItem,
 )
 
 
@@ -79,7 +79,7 @@ class TestAddInventoryLayer:
             "0"
         )
 
-        result = service.add_inventory_layer(
+        service.add_inventory_layer(
             mock_db,
             org_id,
             item.item_id,
@@ -343,7 +343,7 @@ class TestCreateValuationRecord:
         with patch.object(
             FIFOValuationService, "get_fifo_inventory", return_value=fifo_inv
         ):
-            result = service.create_valuation_record(
+            service.create_valuation_record(
                 mock_db,
                 org_id,
                 item.item_id,

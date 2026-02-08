@@ -14,7 +14,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import or_, select
@@ -52,9 +52,9 @@ class ApprovalStep:
     max_amount: Decimal
     is_escalation: bool = False
     is_completed: bool = False
-    decision: Optional[str] = None  # "APPROVED", "REJECTED", None
-    decided_at: Optional[datetime] = None
-    notes: Optional[str] = None
+    decision: str | None = None  # "APPROVED", "REJECTED", None
+    decided_at: datetime | None = None
+    notes: str | None = None
 
 
 @dataclass
@@ -65,18 +65,18 @@ class ApprovalChain:
     total_steps: int
     completed_steps: int
     current_step: int
-    steps: List[ApprovalStep] = field(default_factory=list)
+    steps: list[ApprovalStep] = field(default_factory=list)
     requires_all_approvals: bool = False
     is_complete: bool = False
-    final_decision: Optional[str] = None
+    final_decision: str | None = None
 
     @property
-    def pending_steps(self) -> List[ApprovalStep]:
+    def pending_steps(self) -> list[ApprovalStep]:
         """Get steps that are pending approval."""
         return [s for s in self.steps if not s.is_completed]
 
     @property
-    def current_approvers(self) -> List[UUID]:
+    def current_approvers(self) -> list[UUID]:
         """Get IDs of approvers who can currently approve."""
         if self.is_complete:
             return []
@@ -95,8 +95,8 @@ class ReceiptValidationResult:
     """Result of receipt validation for an expense claim."""
 
     is_valid: bool
-    missing_receipts: List[str] = field(default_factory=list)
-    warnings: List[str] = field(default_factory=list)
+    missing_receipts: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
     @property
     def has_issues(self) -> bool:
@@ -117,7 +117,7 @@ class ExpenseApprovalService:
     def __init__(
         self,
         db: Session,
-        ctx: Optional["WebAuthContext"] = None,
+        ctx: WebAuthContext | None = None,
     ) -> None:
         self.db = db
         self.ctx = ctx
@@ -168,7 +168,7 @@ class ExpenseApprovalService:
                 is_complete=False,
             )
 
-        steps: List[ApprovalStep] = []
+        steps: list[ApprovalStep] = []
         seen_approvers = set()
 
         # Step 1: Check for triggered rules requiring multi-approval
@@ -180,9 +180,10 @@ class ExpenseApprovalService:
             r.action_type == LimitActionType.AUTO_ESCALATE for r in rules
         )
 
-        # Step 2: Start with direct manager if available
-        if employee.reports_to_id:
-            manager = self.db.get(Employee, employee.reports_to_id)
+        # Step 2: Start with expense approver (if set), otherwise manager
+        initial_approver_id = employee.expense_approver_id or employee.reports_to_id
+        if initial_approver_id:
+            manager = self.db.get(Employee, initial_approver_id)
             if manager:
                 manager_limit = self._get_approver_max_amount(org_id, manager)
                 if manager_limit and manager_limit >= claim_amount:
@@ -308,8 +309,8 @@ class ExpenseApprovalService:
         claim: ExpenseClaim,
         current_approver_id: UUID,
         *,
-        reason: Optional[str] = None,
-    ) -> Optional[UUID]:
+        reason: str | None = None,
+    ) -> UUID | None:
         """
         Escalate approval to a higher authority.
 
@@ -375,8 +376,8 @@ class ExpenseApprovalService:
         approver_id: UUID,
         decision: str,  # "APPROVED" or "REJECTED"
         *,
-        notes: Optional[str] = None,
-        approved_amounts: Optional[List[dict]] = None,
+        notes: str | None = None,
+        approved_amounts: list[dict] | None = None,
     ) -> ApprovalChain:
         """
         Process an approval decision for a claim.
@@ -495,8 +496,8 @@ class ExpenseApprovalService:
     def _get_triggered_rules(
         self,
         claim: ExpenseClaim,
-        employee: "Employee",
-    ) -> List[ExpenseLimitRule]:
+        employee: Employee,
+    ) -> list[ExpenseLimitRule]:
         """Get limit rules that were triggered for this claim."""
         from app.services.expense.limit_service import ExpenseLimitService
 
@@ -518,8 +519,8 @@ class ExpenseApprovalService:
     def _get_approver_max_amount(
         self,
         organization_id: UUID,
-        employee: "Employee",
-    ) -> Optional[Decimal]:
+        employee: Employee,
+    ) -> Decimal | None:
         """Get the maximum amount an employee can approve."""
         # Check employee-specific limit
         emp_limit = self.db.scalar(
@@ -564,17 +565,21 @@ class ExpenseApprovalService:
     def _get_escalation_approvers(
         self,
         organization_id: UUID,
-        employee: "Employee",
+        employee: Employee,
         amount: Decimal,
         exclude_ids: set,
-    ) -> List[tuple]:
+    ) -> list[tuple]:
         """Get approvers through escalation chain."""
         from app.models.people.hr.employee import Employee as EmployeeModel
 
         result = []
 
-        # Walk up the management chain
+        # Walk up the management chain, starting from expense approver if set
         current = employee
+        if employee.expense_approver_id:
+            base = self.db.get(EmployeeModel, employee.expense_approver_id)
+            if base:
+                current = base
         for _ in range(5):  # Max 5 levels of escalation
             if not current.reports_to_id:
                 break
@@ -606,11 +611,11 @@ class ExpenseApprovalService:
     def _get_additional_approvers(
         self,
         organization_id: UUID,
-        employee: "Employee",
+        employee: Employee,
         amount: Decimal,
         exclude_ids: set,
         needed: int,
-    ) -> List[tuple]:
+    ) -> list[tuple]:
         """Get additional approvers for multi-approval requirements."""
         from app.models.people.hr.employee import Employee as EmployeeModel
         from app.models.people.hr.employee import EmployeeStatus
@@ -646,7 +651,7 @@ class ExpenseApprovalService:
         self,
         organization_id: UUID,
         amount: Decimal,
-    ) -> List[tuple]:
+    ) -> list[tuple]:
         """Get fallback approvers when no specific chain is available."""
         from app.models.people.hr.employee import Employee as EmployeeModel
         from app.models.people.hr.employee import EmployeeStatus
@@ -683,8 +688,8 @@ class ExpenseApprovalService:
     def filter_limits_by_employment_type(
         self,
         organization_id: UUID,
-        employee: "Employee",
-    ) -> List[ExpenseLimitRule]:
+        employee: Employee,
+    ) -> list[ExpenseLimitRule]:
         """
         Get expense limit rules filtered by employee's employment type.
 

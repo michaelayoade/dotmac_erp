@@ -27,7 +27,7 @@ the primary business operation.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -83,7 +83,7 @@ def fire_audit_event(
         from app.services.finance.platform.audit_log import AuditLogService
 
         # Resolve actor from explicit arg or ContextVar
-        resolved_user_id: Optional[UUID] = user_id
+        resolved_user_id: UUID | None = user_id
         if resolved_user_id is None:
             actor_str = actor_id_var.get()
             if actor_str:

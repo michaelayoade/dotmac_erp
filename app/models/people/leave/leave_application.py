@@ -103,7 +103,7 @@ class LeaveApplication(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         Boolean,
         default=False,
     )
-    half_day_date: Mapped[Optional[date]] = mapped_column(
+    half_day_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="Which date is half-day (if half_day=True)",
@@ -117,16 +117,16 @@ class LeaveApplication(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
     )
 
     # Reason and details
-    reason: Mapped[Optional[str]] = mapped_column(
+    reason: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    contact_during_leave: Mapped[Optional[str]] = mapped_column(
+    contact_during_leave: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Contact number during leave",
     )
-    address_during_leave: Mapped[Optional[str]] = mapped_column(
+    address_during_leave: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -138,21 +138,21 @@ class LeaveApplication(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
     )
 
     # Approval details
-    leave_approver_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    leave_approver_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
         comment="Employee who should approve",
     )
-    approved_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
     )
-    rejection_reason: Mapped[Optional[str]] = mapped_column(
+    rejection_reason: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -162,7 +162,7 @@ class LeaveApplication(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         Boolean,
         default=False,
     )
-    salary_slip_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    salary_slip_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("payroll.salary_slip.slip_id"),
         nullable=True,
@@ -173,7 +173,7 @@ class LeaveApplication(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

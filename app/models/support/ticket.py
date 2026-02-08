@@ -8,7 +8,7 @@ Used for linking expense claims and other entities to support tickets.
 import enum
 import uuid
 from datetime import date, datetime
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     Boolean,
@@ -29,13 +29,13 @@ from app.db import Base
 from app.models.people.base import AuditMixin, ERPNextSyncMixin
 
 if TYPE_CHECKING:
-    from app.models.finance.core_org import Organization, Project
     from app.models.finance.ar.customer import Customer
+    from app.models.finance.core_org import Organization, Project
     from app.models.people.hr import Employee
-    from app.models.support.comment import TicketComment
     from app.models.support.attachment import TicketAttachment
-    from app.models.support.team import SupportTeam
     from app.models.support.category import TicketCategory
+    from app.models.support.comment import TicketComment
+    from app.models.support.team import SupportTeam
 
 
 class TicketStatus(str, enum.Enum):
@@ -123,7 +123,7 @@ class Ticket(Base, AuditMixin, ERPNextSyncMixin):
         String(255),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -142,18 +142,18 @@ class Ticket(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # People assignments (optional - may not have employees synced yet)
-    raised_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    raised_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
         comment="Employee who raised the ticket",
     )
-    raised_by_email: Mapped[Optional[str]] = mapped_column(
+    raised_by_email: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
         comment="Email of person who raised ticket (for lookup before employee sync)",
     )
-    assigned_to_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    assigned_to_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
@@ -161,7 +161,7 @@ class Ticket(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # Project linkage (optional)
-    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.project.project_id"),
         nullable=True,
@@ -169,7 +169,7 @@ class Ticket(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # Customer linkage (optional - for customer support tickets)
-    customer_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("ar.customer.customer_id"),
         nullable=True,
@@ -178,24 +178,24 @@ class Ticket(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # Contact info (can be auto-populated from customer or manually entered)
-    contact_email: Mapped[Optional[str]] = mapped_column(
+    contact_email: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
         comment="Contact email for this ticket (may differ from customer record)",
     )
-    contact_phone: Mapped[Optional[str]] = mapped_column(
+    contact_phone: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Contact phone for this ticket",
     )
-    contact_address: Mapped[Optional[str]] = mapped_column(
+    contact_address: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Contact address for this ticket",
     )
 
     # Category (optional)
-    category_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    category_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("support.ticket_category.category_id"),
         nullable=True,
@@ -203,7 +203,7 @@ class Ticket(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # Team assignment (optional)
-    team_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    team_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("support.support_team.team_id"),
         nullable=True,
@@ -219,7 +219,7 @@ class Ticket(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # Resolution details
-    resolution: Mapped[Optional[str]] = mapped_column(
+    resolution: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Resolution details",
@@ -231,7 +231,7 @@ class Ticket(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         default=date.today,
     )
-    resolution_date: Mapped[Optional[date]] = mapped_column(
+    resolution_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -242,7 +242,7 @@ class Ticket(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -280,13 +280,13 @@ class Ticket(Base, AuditMixin, ERPNextSyncMixin):
         "SupportTeam",
         back_populates="tickets",
     )
-    comments: Mapped[List["TicketComment"]] = relationship(
+    comments: Mapped[list["TicketComment"]] = relationship(
         "TicketComment",
         back_populates="ticket",
         cascade="all, delete-orphan",
         order_by="TicketComment.created_at",
     )
-    attachments: Mapped[List["TicketAttachment"]] = relationship(
+    attachments: Mapped[list["TicketAttachment"]] = relationship(
         "TicketAttachment",
         back_populates="ticket",
         cascade="all, delete-orphan",

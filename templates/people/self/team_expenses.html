@@ -41,7 +41,7 @@
 
     {% if claims %}
     <div class="card overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
@@ -124,10 +124,10 @@
                                         <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700 text-sm">
                                             <thead class="bg-slate-50 dark:bg-slate-900/50">
                                                 <tr>
-                                                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-slate-500">Description</th>
-                                                    <th scope="col" class="px-3 py-2 text-left text-xs font-medium text-slate-500">Category</th>
-                                                    <th scope="col" class="px-3 py-2 text-right text-xs font-medium text-slate-500">Amount</th>
-                                                    <th scope="col" class="px-3 py-2 text-center text-xs font-medium text-slate-500">Receipt</th>
+                                                    <th scope="col" class="px-3 py-2 text-left text-xs text-xs font-semibold uppercase tracking-wider text-slate-500">Description</th>
+                                                    <th scope="col" class="px-3 py-2 text-left text-xs text-xs font-semibold uppercase tracking-wider text-slate-500">Category</th>
+                                                    <th scope="col" class="px-3 py-2 text-right text-xs text-xs font-semibold uppercase tracking-wider text-slate-500">Amount</th>
+                                                    <th scope="col" class="px-3 py-2 text-center text-xs text-xs font-semibold uppercase tracking-wider text-slate-500">Receipt</th>
                                                 </tr>
                                             </thead>
                                             <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
@@ -204,13 +204,13 @@
                     {% if claim.status.value == "SUBMITTED" %}
                     <div id="reject-modal-{{ claim.claim_id }}" class="hidden fixed inset-0 z-50 overflow-y-auto" aria-modal="true">
                         <div class="flex min-h-screen items-center justify-center p-4">
-                            <div class="fixed inset-0 bg-black/50" onclick="this.parentElement.parentElement.classList.add('hidden')"></div>
+                            <div class="fixed inset-0 bg-slate-900/50" onclick="this.parentElement.parentElement.classList.add('hidden')"></div>
                             <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6">
                                 <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Reject Expense Claim</h3>
                                 <form method="post" action="/people/self/team/expenses/{{ claim.claim_id }}/reject">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                     <div class="mb-4">
-                                        <label class="form-label">Rejection Reason</label>
+                                        <label class="form-label">Rejection Reason <span class="text-rose-500">*</span></label>
                                         <textarea name="reason" rows="3" class="form-input w-full" required placeholder="Please provide a reason for rejection..."></textarea>
                                     </div>
                                     <div class="flex justify-end gap-3">

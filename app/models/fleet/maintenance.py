@@ -19,8 +19,8 @@ from app.models.fleet.enums import MaintenanceStatus, MaintenanceType
 from app.models.people.base import AuditMixin
 
 if TYPE_CHECKING:
-    from app.models.fleet.vehicle import Vehicle
     from app.models.finance.ap.supplier import Supplier
+    from app.models.fleet.vehicle import Vehicle
 
 
 class MaintenanceRecord(Base, FleetBaseMixin, AuditMixin):
@@ -73,7 +73,7 @@ class MaintenanceRecord(Base, FleetBaseMixin, AuditMixin):
         Date,
         nullable=False,
     )
-    completed_date: Mapped[Optional[date]] = mapped_column(
+    completed_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -82,67 +82,67 @@ class MaintenanceRecord(Base, FleetBaseMixin, AuditMixin):
     )
 
     # Odometer tracking
-    odometer_at_service: Mapped[Optional[int]] = mapped_column(
+    odometer_at_service: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Odometer reading when service performed",
     )
-    next_service_odometer: Mapped[Optional[int]] = mapped_column(
+    next_service_odometer: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Odometer reading for next service (e.g., +5000km)",
     )
-    next_service_date: Mapped[Optional[date]] = mapped_column(
+    next_service_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="Recommended date for next service",
     )
 
     # Cost tracking
-    estimated_cost: Mapped[Optional[Decimal]] = mapped_column(
+    estimated_cost: Mapped[Decimal | None] = mapped_column(
         Numeric(18, 2),
         nullable=True,
     )
-    actual_cost: Mapped[Optional[Decimal]] = mapped_column(
+    actual_cost: Mapped[Decimal | None] = mapped_column(
         Numeric(18, 2),
         nullable=True,
     )
-    supplier_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    supplier_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("ap.supplier.supplier_id"),
         nullable=True,
         comment="Service provider / garage",
     )
-    invoice_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    invoice_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("ap.supplier_invoice.invoice_id"),
         nullable=True,
         comment="Link to AP invoice for this service",
     )
-    invoice_number: Mapped[Optional[str]] = mapped_column(
+    invoice_number: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="External invoice/receipt number",
     )
 
     # Work details
-    work_performed: Mapped[Optional[str]] = mapped_column(
+    work_performed: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Description of work actually performed",
     )
-    parts_replaced: Mapped[Optional[str]] = mapped_column(
+    parts_replaced: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="List of parts replaced",
     )
-    technician_name: Mapped[Optional[str]] = mapped_column(
+    technician_name: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
 
     # Notes
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -166,14 +166,14 @@ class MaintenanceRecord(Base, FleetBaseMixin, AuditMixin):
         return date.today() > self.scheduled_date
 
     @property
-    def cost_variance(self) -> Optional[Decimal]:
+    def cost_variance(self) -> Decimal | None:
         """Calculate difference between estimated and actual cost."""
         if self.estimated_cost is not None and self.actual_cost is not None:
             return self.actual_cost - self.estimated_cost
         return None
 
     @property
-    def is_under_budget(self) -> Optional[bool]:
+    def is_under_budget(self) -> bool | None:
         """Check if actual cost is under estimate."""
         variance = self.cost_variance
         if variance is not None:

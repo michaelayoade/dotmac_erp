@@ -7,14 +7,14 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.services.common import (
-    ServiceError,
-    NotFoundError,
-    ValidationError,
-    ConflictError,
-    ForbiddenError,
-    RateLimitError,
     AuthenticationError,
     AuthorizationError,
+    ConflictError,
+    ForbiddenError,
+    NotFoundError,
+    RateLimitError,
+    ServiceError,
+    ValidationError,
 )
 from app.templates import templates
 

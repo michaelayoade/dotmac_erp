@@ -9,12 +9,11 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.finance.core_config.numbering_sequence import (
@@ -28,8 +27,6 @@ from app.models.fixed_assets.asset_category import AssetCategory, DepreciationMe
 from app.models.fixed_assets.depreciation_run import DepreciationRun
 from app.services.common import coerce_uuid
 from app.services.finance.platform.currency_context import get_currency_context
-from app.services.formatters import format_currency as _format_currency
-from app.services.formatters import format_date as _format_date
 from app.services.finance.platform.org_context import org_context_service
 from app.services.fixed_assets.asset import (
     AssetCategoryInput,
@@ -37,6 +34,8 @@ from app.services.fixed_assets.asset import (
     asset_category_service,
     asset_service,
 )
+from app.services.formatters import format_currency as _format_currency
+from app.services.formatters import format_date as _format_date
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -51,7 +50,7 @@ def _safe_form_text(value: object) -> str:
     return str(value)
 
 
-def _parse_status(value: Optional[str]) -> Optional[AssetStatus]:
+def _parse_status(value: str | None) -> AssetStatus | None:
     if not value:
         return None
     try:
@@ -63,7 +62,7 @@ def _parse_status(value: Optional[str]) -> Optional[AssetStatus]:
             return None
 
 
-def _try_uuid(value: Optional[str]) -> Optional[UUID]:
+def _try_uuid(value: str | None) -> UUID | None:
     if not value:
         return None
     try:
@@ -76,7 +75,7 @@ class FixedAssetWebService:
     """View service for fixed assets web routes."""
 
     @staticmethod
-    def _sequence_preview(sequence: Optional[NumberingSequence]) -> Optional[str]:
+    def _sequence_preview(sequence: NumberingSequence | None) -> str | None:
         if not sequence:
             return None
         next_number = sequence.current_number + 1
@@ -159,43 +158,32 @@ class FixedAssetWebService:
     def list_assets_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        category: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        category: str | None,
+        status: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
-        org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
+        org_id = coerce_uuid(organization_id)
+        from app.services.fixed_assets.asset_query import build_asset_query
 
-        status_value = _parse_status(status)
-        category_id = _try_uuid(category)
-
-        query = (
-            db.query(Asset, AssetCategory)
-            .join(AssetCategory, Asset.category_id == AssetCategory.category_id)
-            .filter(Asset.organization_id == org_id)
+        query = build_asset_query(
+            db=db,
+            organization_id=organization_id,
+            search=search,
+            category=category,
+            status=status,
         )
 
-        if status_value:
-            query = query.filter(Asset.status == status_value)
-        if category_id:
-            query = query.filter(Asset.category_id == category_id)
-        elif category:
-            query = query.filter(AssetCategory.category_code == category)
-        if search:
-            search_pattern = f"%{search}%"
-            query = query.filter(
-                or_(
-                    Asset.asset_number.ilike(search_pattern),
-                    Asset.asset_name.ilike(search_pattern),
-                    Asset.serial_number.ilike(search_pattern),
-                    Asset.barcode.ilike(search_pattern),
-                )
-            )
-
         total_count = query.with_entities(func.count(Asset.asset_id)).scalar() or 0
-        rows = query.order_by(Asset.asset_number).limit(limit).offset(offset).all()
+        rows = (
+            query.with_entities(Asset, AssetCategory)
+            .order_by(Asset.asset_number)
+            .limit(limit)
+            .offset(offset)
+            .all()
+        )
 
         assets_view = []
         for asset, category_row in rows:
@@ -262,8 +250,8 @@ class FixedAssetWebService:
         category_id: str,
         acquisition_date: str,
         acquisition_cost: str,
-        currency_code: Optional[str],
-        description: Optional[str],
+        currency_code: str | None,
+        description: str | None,
         db: Session,
     ) -> HTMLResponse | RedirectResponse:
         try:
@@ -308,7 +296,7 @@ class FixedAssetWebService:
     def list_categories_context(
         db: Session,
         organization_id: str,
-        is_active: Optional[bool],
+        is_active: bool | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -364,7 +352,7 @@ class FixedAssetWebService:
     def category_form_context(
         db: Session,
         organization_id: str,
-        category_id: Optional[str] = None,
+        category_id: str | None = None,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
         categories = (
@@ -392,7 +380,7 @@ class FixedAssetWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        is_active: Optional[bool],
+        is_active: bool | None,
         page: int,
         db: Session,
     ) -> HTMLResponse:
@@ -414,7 +402,7 @@ class FixedAssetWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        error: Optional[str] = None,
+        error: str | None = None,
     ) -> HTMLResponse:
         context = base_context(request, auth, "New Asset Category", "fa")
         context.update(self.category_form_context(db, str(auth.organization_id)))
@@ -494,9 +482,9 @@ class FixedAssetWebService:
         auth: WebAuthContext,
         category_id: str,
         db: Session,
-        error: Optional[str] = None,
+        error: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
-        category = asset_category_service.get(db, category_id)
+        category = asset_category_service.get(db, category_id, auth.organization_id)
         if not category or category.organization_id != auth.organization_id:
             return RedirectResponse(url="/fixed-assets/categories", status_code=302)
 
@@ -601,8 +589,8 @@ class FixedAssetWebService:
     def depreciation_context(
         db: Session,
         organization_id: str,
-        asset_id: Optional[str],
-        period: Optional[str],
+        asset_id: str | None,
+        period: str | None,
         page: int = 1,
         limit: int = 50,
     ) -> dict:
@@ -756,7 +744,7 @@ class FixedAssetWebService:
     ) -> RedirectResponse:
         """Handle asset update."""
         try:
-            form_data = await request.form()
+            await request.form()
             # For now, just redirect back - full implementation would update the asset
             return RedirectResponse(
                 url=f"/fixed-assets/assets/{asset_id}?success=Asset+updated",
@@ -893,9 +881,9 @@ class FixedAssetWebService:
         """Handle asset impairment."""
         try:
             form_data = await request.form()
-            impairment_date = form_data.get("impairment_date")
-            impairment_amount = form_data.get("impairment_amount", "0")
-            reason = form_data.get("reason", "")
+            form_data.get("impairment_date")
+            form_data.get("impairment_amount", "0")
+            form_data.get("reason", "")
 
             # Impairment is handled through the asset service or a dedicated impairment service
             # For now, redirect with placeholder

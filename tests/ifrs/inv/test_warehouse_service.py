@@ -9,9 +9,9 @@ from uuid import uuid4
 import pytest
 
 from app.services.inventory.warehouse import (
-    WarehouseService,
     WarehouseInput,
     WarehouseLocationInput,
+    WarehouseService,
 )
 from tests.ifrs.inv.conftest import (
     MockItem,
@@ -89,7 +89,7 @@ class TestCreateWarehouse:
         # No existing warehouse
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        result = service.create_warehouse(mock_db, org_id, sample_warehouse_input)
+        service.create_warehouse(mock_db, org_id, sample_warehouse_input)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -304,6 +304,7 @@ class TestDeactivateWarehouse:
     def test_deactivate_warehouse_with_inventory_fails(self, service, mock_db, org_id):
         """Test deactivating warehouse with inventory fails."""
         from fastapi import HTTPException
+
         from app.services.inventory.warehouse import InventoryBalance, WarehouseService
 
         warehouse = MockWarehouse(organization_id=org_id, is_active=True)
@@ -321,11 +322,13 @@ class TestDeactivateWarehouse:
             total_value=Decimal("1000.00"),
             currency_code="USD",
         )
-        with patch.object(
-            WarehouseService, "get_warehouse_inventory", return_value=[balance]
+        with (
+            patch.object(
+                WarehouseService, "get_warehouse_inventory", return_value=[balance]
+            ),
+            pytest.raises(HTTPException) as exc,
         ):
-            with pytest.raises(HTTPException) as exc:
-                service.deactivate_warehouse(mock_db, org_id, warehouse.warehouse_id)
+            service.deactivate_warehouse(mock_db, org_id, warehouse.warehouse_id)
 
         assert exc.value.status_code == 400
         assert "items in stock" in exc.value.detail

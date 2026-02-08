@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import Request, UploadFile
@@ -19,14 +18,17 @@ from sqlalchemy.orm import Session
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.models.finance.tax.tax_code import TaxCode, TaxType
-from app.models.finance.tax.tax_period import TaxPeriodFrequency, TaxPeriodStatus
-from app.models.finance.tax.tax_return import TaxReturn, TaxReturnStatus
+from app.models.finance.tax.tax_period import (
+    TaxPeriod,
+    TaxPeriodFrequency,
+    TaxPeriodStatus,
+)
+from app.models.finance.tax.tax_return import TaxReturn, TaxReturnStatus, TaxReturnType
 from app.models.finance.tax.tax_transaction import TaxTransaction, TaxTransactionType
 from app.services.common import coerce_uuid
 from app.services.finance.platform.currency_context import get_currency_context
-from app.services.formatters import format_currency as _format_currency
-from app.services.formatters import format_date as _format_date
 from app.services.finance.tax import (
+    TaxReturnInput,
     deferred_tax_service,
     tax_code_service,
     tax_jurisdiction_service,
@@ -34,8 +36,14 @@ from app.services.finance.tax import (
 )
 from app.services.finance.tax.seed import get_default_jurisdiction
 from app.services.finance.tax.tax_master import TaxCodeInput
-from app.services.finance.tax.tax_return import TaxReturnBoxValue, tax_return_service
+from app.services.finance.tax.tax_return import (
+    TaxReturnBoxValue,
+    TaxReturnUpdateInput,
+    tax_return_service,
+)
 from app.services.finance.tax.tax_transaction import tax_transaction_service
+from app.services.formatters import format_currency as _format_currency
+from app.services.formatters import format_date as _format_date
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -111,8 +119,9 @@ def _tax_code_list_view(tax_code: TaxCode) -> dict:
         "tax_code_id": tax_code.tax_code_id,
         "tax_code": tax_code.tax_code,
         "tax_name": tax_code.tax_name,
-        "tax_type": tax_code.tax_type.value.replace("_", " ").title(),
-        "tax_rate": rate_display,
+        "tax_type": tax_code.tax_type.value,
+        "tax_type_label": tax_code.tax_type.value.replace("_", " ").title(),
+        "tax_rate_display": rate_display,
         "applies_to_sales": tax_code.applies_to_sales,
         "applies_to_purchases": tax_code.applies_to_purchases,
         "is_active": tax_code.is_active,
@@ -199,7 +208,7 @@ class TaxWebService:
         return_id: str,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
-        tax_return = tax_return_service.get(db, return_id)
+        tax_return = tax_return_service.get(db, return_id, org_id)
 
         if not tax_return or tax_return.organization_id != org_id:
             return {"tax_return": None, "box_values": []}
@@ -221,8 +230,8 @@ class TaxWebService:
         organization_id: str,
         start_date: date,
         end_date: date,
-        transaction_type: Optional[str] = None,
-        tax_code_id: Optional[str] = None,
+        transaction_type: str | None = None,
+        tax_code_id: str | None = None,
         page: int = 1,
         limit: int = 50,
     ) -> dict:
@@ -406,7 +415,7 @@ class TaxWebService:
         org_id = coerce_uuid(organization_id)
 
         # Get return details
-        tax_return = tax_return_service.get(db, return_id)
+        tax_return = tax_return_service.get(db, return_id, org_id)
         if not tax_return or tax_return.organization_id != org_id:
             return {
                 "tax_return": None,
@@ -459,7 +468,7 @@ class TaxWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        country_code: Optional[str],
+        country_code: str | None,
         page: int,
         db: Session,
     ) -> HTMLResponse:
@@ -491,11 +500,11 @@ class TaxWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        tax_type: Optional[str],
-        jurisdiction_id: Optional[str],
+        tax_type: str | None,
+        jurisdiction_id: str | None,
         page: int,
         db: Session,
-        is_active: Optional[bool] = None,
+        is_active: bool | None = None,
     ) -> HTMLResponse:
         limit = 50
         offset = (page - 1) * limit
@@ -554,10 +563,10 @@ class TaxWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        jurisdiction_id: Optional[str],
-        frequency: Optional[str],
-        status: Optional[str],
-        year: Optional[int],
+        jurisdiction_id: str | None,
+        frequency: str | None,
+        status: str | None,
+        year: int | None,
         page: int,
         db: Session,
     ) -> HTMLResponse:
@@ -607,7 +616,7 @@ class TaxWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        as_of_date: Optional[str],
+        as_of_date: str | None,
         db: Session,
     ) -> HTMLResponse:
         check_date = date.fromisoformat(as_of_date) if as_of_date else None
@@ -626,8 +635,9 @@ class TaxWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        period_id: Optional[str],
-        status: Optional[str],
+        period_id: str | None,
+        return_type: str | None,
+        status: str | None,
         page: int,
         db: Session,
     ) -> HTMLResponse:
@@ -635,29 +645,84 @@ class TaxWebService:
         offset = (page - 1) * limit
 
         org_id = coerce_uuid(auth.organization_id)
-        status_value: Optional[TaxReturnStatus] = None
+        status_value: TaxReturnStatus | None = None
         if status:
             try:
                 status_value = TaxReturnStatus(status)
             except ValueError:
                 status_value = None
+        return_type_value: TaxReturnType | None = None
+        if return_type:
+            try:
+                return_type_value = TaxReturnType(return_type)
+            except ValueError:
+                return_type_value = None
 
         returns = tax_return_service.list(
             db=db,
             organization_id=org_id,
             tax_period_id=period_id,
+            return_type=return_type_value,
             status=status_value,
             limit=limit,
             offset=offset,
         )
 
+        period_ids = {ret.tax_period_id for ret in returns if ret.tax_period_id}
+        periods = (
+            db.query(TaxPeriod).filter(TaxPeriod.period_id.in_(period_ids)).all()
+            if period_ids
+            else []
+        )
+        period_map = {p.period_id: p for p in periods}
+
+        formatted_returns = []
+        for ret in returns:
+            period = period_map.get(ret.tax_period_id)
+            formatted_returns.append(
+                {
+                    "return_id": ret.return_id,
+                    "return_reference": ret.return_reference,
+                    "return_type": ret.return_type.value
+                    if hasattr(ret.return_type, "value")
+                    else ret.return_type,
+                    "tax_period_id": str(ret.tax_period_id),
+                    "period_name": period.period_name if period else None,
+                    "due_date": _format_date(period.due_date) if period else None,
+                    "final_amount": _format_currency(ret.final_amount),
+                    "status": ret.status.value
+                    if hasattr(ret.status, "value")
+                    else ret.status,
+                }
+            )
+
+        periods = tax_period_service.list(
+            db=db,
+            organization_id=str(org_id),
+            limit=200,
+        )
+
+        total_count = len(returns)
+        draft_count = sum(1 for r in returns if r.status == TaxReturnStatus.DRAFT)
+        prepared_count = sum(1 for r in returns if r.status == TaxReturnStatus.PREPARED)
+        reviewed_count = sum(1 for r in returns if r.status == TaxReturnStatus.REVIEWED)
+        filed_count = sum(1 for r in returns if r.status == TaxReturnStatus.FILED)
+
         context = base_context(request, auth, "Tax Returns", "tax")
         context.update(
             {
-                "returns": returns,
+                "returns": formatted_returns,
                 "period_id": period_id,
+                "return_type": return_type,
                 "status": status,
                 "page": page,
+                "periods": periods,
+                "return_types": list(TaxReturnType),
+                "total_count": total_count,
+                "draft_count": draft_count,
+                "prepared_count": prepared_count,
+                "reviewed_count": reviewed_count,
+                "filed_count": filed_count,
             }
         )
 
@@ -697,17 +762,212 @@ class TaxWebService:
         )
 
         context = base_context(request, auth, "Prepare Tax Return", "tax")
-        context["periods"] = periods
+        context.update(
+            {
+                "periods": periods,
+                "return_types": list(TaxReturnType),
+                "form_action": "/finance/tax/returns/new",
+                "is_edit": False,
+                "tax_return": None,
+            }
+        )
 
         return templates.TemplateResponse(
             request, "finance/tax/return_form.html", context
+        )
+
+    async def create_return_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse | RedirectResponse:
+        """Handle new tax return form submission."""
+        form = await request.form()
+        org_id = coerce_uuid(auth.organization_id)
+
+        try:
+            if not auth.person_id:
+                raise ValueError("User context is required to prepare a return")
+
+            tax_period_id = _safe_form_text(form.get("tax_period_id")).strip()
+            return_type_str = _safe_form_text(form.get("return_type")).strip()
+            adjustments_str = _safe_form_text(form.get("adjustments", "0")).strip()
+
+            if not tax_period_id:
+                raise ValueError("Tax period is required")
+            if not return_type_str:
+                raise ValueError("Return type is required")
+
+            period = (
+                db.query(TaxPeriod)
+                .filter(
+                    TaxPeriod.period_id == coerce_uuid(tax_period_id),
+                    TaxPeriod.organization_id == org_id,
+                )
+                .first()
+            )
+            if not period:
+                raise ValueError("Tax period not found")
+
+            adjustments = Decimal(adjustments_str) if adjustments_str else Decimal("0")
+
+            input_data = TaxReturnInput(
+                tax_period_id=coerce_uuid(tax_period_id),
+                jurisdiction_id=period.jurisdiction_id,
+                return_type=TaxReturnType(return_type_str),
+                adjustments=adjustments,
+            )
+
+            tax_return = tax_return_service.prepare_return(
+                db,
+                organization_id=org_id,
+                input=input_data,
+                prepared_by_user_id=coerce_uuid(auth.person_id),
+            )
+
+            return RedirectResponse(
+                url=f"/finance/tax/returns/{tax_return.return_id}",
+                status_code=303,
+            )
+
+        except ValueError as e:
+            error_msg = str(e)
+        except Exception as e:
+            error_msg = getattr(e, "detail", str(e))
+
+        periods = tax_period_service.list(
+            db=db,
+            organization_id=str(auth.organization_id),
+            status=TaxPeriodStatus.OPEN,
+            limit=100,
+        )
+        context = base_context(request, auth, "Prepare Tax Return", "tax")
+        context.update(
+            {
+                "periods": periods,
+                "return_types": list(TaxReturnType),
+                "form_action": "/finance/tax/returns/new",
+                "is_edit": False,
+                "tax_return": None,
+                "error": error_msg,
+                "selected_period_id": _safe_form_text(
+                    form.get("tax_period_id")
+                ).strip(),
+                "selected_return_type": _safe_form_text(
+                    form.get("return_type")
+                ).strip(),
+                "adjustments": _safe_form_text(form.get("adjustments", "0")).strip(),
+            }
+        )
+        return templates.TemplateResponse(
+            request, "finance/tax/return_form.html", context
+        )
+
+    def edit_return_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        return_id: str,
+        db: Session,
+        error: str | None = None,
+    ) -> HTMLResponse | RedirectResponse:
+        """Display edit tax return form."""
+        org_id = coerce_uuid(auth.organization_id)
+
+        tax_return = tax_return_service.get(db, return_id, org_id)
+        if not tax_return or tax_return.organization_id != org_id:
+            return RedirectResponse(url="/finance/tax/returns", status_code=303)
+
+        if tax_return.status not in {TaxReturnStatus.DRAFT, TaxReturnStatus.PREPARED}:
+            return RedirectResponse(
+                url=f"/finance/tax/returns/{tax_return.return_id}", status_code=303
+            )
+
+        period = (
+            db.query(TaxPeriod)
+            .filter(
+                TaxPeriod.period_id == tax_return.tax_period_id,
+                TaxPeriod.organization_id == org_id,
+            )
+            .first()
+        )
+        periods = [period] if period else []
+
+        context = base_context(request, auth, "Edit Tax Return", "tax")
+        context.update(
+            {
+                "periods": periods,
+                "return_types": list(TaxReturnType),
+                "form_action": f"/finance/tax/returns/{tax_return.return_id}/edit",
+                "is_edit": True,
+                "tax_return": tax_return,
+                "selected_period_id": str(tax_return.tax_period_id),
+                "selected_return_type": tax_return.return_type.value
+                if hasattr(tax_return.return_type, "value")
+                else str(tax_return.return_type),
+                "adjustments": str(tax_return.adjustments),
+                "error": error,
+            }
+        )
+
+        return templates.TemplateResponse(
+            request, "finance/tax/return_form.html", context
+        )
+
+    async def update_return_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        return_id: str,
+        db: Session,
+    ) -> HTMLResponse | RedirectResponse:
+        """Handle edit tax return form submission."""
+        form = await request.form()
+        org_id = coerce_uuid(auth.organization_id)
+
+        try:
+            if not auth.person_id:
+                raise ValueError("User context is required to update a return")
+
+            return_type_str = _safe_form_text(form.get("return_type")).strip()
+            adjustments_str = _safe_form_text(form.get("adjustments", "0")).strip()
+
+            return_type = TaxReturnType(return_type_str) if return_type_str else None
+            adjustments = Decimal(adjustments_str) if adjustments_str else Decimal("0")
+
+            update_input = TaxReturnUpdateInput(
+                return_type=return_type,
+                adjustments=adjustments,
+            )
+
+            tax_return = tax_return_service.update_return(
+                db,
+                organization_id=org_id,
+                return_id=coerce_uuid(return_id),
+                input=update_input,
+                updated_by_user_id=coerce_uuid(auth.person_id),
+            )
+
+            return RedirectResponse(
+                url=f"/finance/tax/returns/{tax_return.return_id}",
+                status_code=303,
+            )
+
+        except ValueError as e:
+            error_msg = str(e)
+        except Exception as e:
+            error_msg = getattr(e, "detail", str(e))
+
+        return self.edit_return_form_response(
+            request, auth, return_id, db, error=error_msg
         )
 
     def deferred_tax_summary_response(
         self,
         request: Request,
         auth: WebAuthContext,
-        as_of_date: Optional[str],
+        as_of_date: str | None,
         db: Session,
     ) -> HTMLResponse:
         check_date = as_of_date or date.today().isoformat()
@@ -728,10 +988,10 @@ class TaxWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        start_date: Optional[str],
-        end_date: Optional[str],
-        transaction_type: Optional[str],
-        tax_code_id: Optional[str],
+        start_date: str | None,
+        end_date: str | None,
+        transaction_type: str | None,
+        tax_code_id: str | None,
         page: int,
         db: Session,
     ) -> HTMLResponse:
@@ -747,6 +1007,13 @@ class TaxWebService:
         else:
             end = date.fromisoformat(end_date)
 
+        tax_codes = tax_code_service.list(
+            db=db,
+            organization_id=str(auth.organization_id),
+            is_active=True,
+            limit=200,
+        )
+
         context = base_context(request, auth, "VAT Register", "tax")
         context.update(
             self.vat_register_context(
@@ -760,6 +1027,7 @@ class TaxWebService:
                 limit=50,
             )
         )
+        context["tax_codes"] = tax_codes
 
         return templates.TemplateResponse(
             request, "finance/tax/vat_register.html", context
@@ -769,8 +1037,8 @@ class TaxWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        start_date: Optional[str],
-        end_date: Optional[str],
+        start_date: str | None,
+        end_date: str | None,
         group_by: str,
         db: Session,
     ) -> HTMLResponse:
@@ -859,7 +1127,7 @@ class TaxWebService:
             pass
 
         return RedirectResponse(
-            url=f"/tax/returns/{return_id}",
+            url=f"/finance/tax/returns/{return_id}",
             status_code=303,
         )
 
@@ -872,7 +1140,7 @@ class TaxWebService:
         try:
             if not auth.person_id:
                 return RedirectResponse(
-                    url=f"/tax/returns/{return_id}",
+                    url=f"/finance/tax/returns/{return_id}",
                     status_code=303,
                 )
             org_id = coerce_uuid(auth.organization_id)
@@ -886,7 +1154,7 @@ class TaxWebService:
             pass
 
         return RedirectResponse(
-            url=f"/tax/returns/{return_id}",
+            url=f"/finance/tax/returns/{return_id}",
             status_code=303,
         )
 
@@ -899,7 +1167,7 @@ class TaxWebService:
         try:
             if not auth.person_id:
                 return RedirectResponse(
-                    url=f"/tax/returns/{return_id}",
+                    url=f"/finance/tax/returns/{return_id}",
                     status_code=303,
                 )
             org_id = coerce_uuid(auth.organization_id)
@@ -913,7 +1181,7 @@ class TaxWebService:
             pass
 
         return RedirectResponse(
-            url=f"/tax/returns/{return_id}",
+            url=f"/finance/tax/returns/{return_id}",
             status_code=303,
         )
 
@@ -925,8 +1193,8 @@ class TaxWebService:
         self,
         db: Session,
         auth: WebAuthContext,
-        tax_code: Optional[TaxCode] = None,
-        error: Optional[str] = None,
+        tax_code: TaxCode | None = None,
+        error: str | None = None,
     ) -> dict:
         """Get common context for tax code form."""
         org_id = coerce_uuid(auth.organization_id)
@@ -968,7 +1236,7 @@ class TaxWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        error: Optional[str] = None,
+        error: str | None = None,
     ) -> HTMLResponse:
         """Display new tax code form."""
         context = base_context(request, auth, "New Tax Code", "tax")
@@ -1108,12 +1376,12 @@ class TaxWebService:
         auth: WebAuthContext,
         tax_code_id: str,
         db: Session,
-        error: Optional[str] = None,
+        error: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Display edit tax code form."""
         org_id = coerce_uuid(auth.organization_id)
 
-        tax_code = tax_code_service.get(db, tax_code_id)
+        tax_code = tax_code_service.get(db, tax_code_id, org_id)
         if not tax_code or tax_code.organization_id != org_id:
             return RedirectResponse(url="/finance/tax/codes", status_code=303)
 
@@ -1136,7 +1404,7 @@ class TaxWebService:
         org_id = coerce_uuid(auth.organization_id)
 
         try:
-            tax_code = tax_code_service.get(db, tax_code_id)
+            tax_code = tax_code_service.get(db, tax_code_id, org_id)
             if not tax_code or tax_code.organization_id != org_id:
                 return RedirectResponse(url="/finance/tax/codes", status_code=303)
 
@@ -1273,7 +1541,7 @@ class TaxWebService:
         """Toggle tax code active/inactive status."""
         org_id = coerce_uuid(auth.organization_id)
 
-        tax_code = tax_code_service.get(db, tax_code_id)
+        tax_code = tax_code_service.get(db, tax_code_id, org_id)
         if tax_code and tax_code.organization_id == org_id:
             tax_code.is_active = not tax_code.is_active
             db.commit()
@@ -1287,8 +1555,8 @@ class TaxWebService:
     def tax_summary_by_type_page(
         self,
         request: Request,
-        start_date_str: Optional[str],
-        end_date_str: Optional[str],
+        start_date_str: str | None,
+        end_date_str: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> HTMLResponse:
@@ -1349,8 +1617,8 @@ class TaxWebService:
     def wht_report_page(
         self,
         request: Request,
-        start_date_str: Optional[str],
-        end_date_str: Optional[str],
+        start_date_str: str | None,
+        end_date_str: str | None,
         include_details: bool,
         auth: WebAuthContext,
         db: Session,

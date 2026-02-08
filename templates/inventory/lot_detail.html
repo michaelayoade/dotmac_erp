@@ -1,5 +1,6 @@
 {% extends "inventory/base_inventory.html" %}
 
+{% from "components/macros.html" import empty_state %}
 {% block page_title %}Lot {{ lot.lot_number }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -19,6 +20,7 @@
 {% block header_actions %}
 <form method="post" action="/inventory/lots/{{ lot.lot_id }}/toggle-quarantine"
       onsubmit="return confirm('{{ 'Release from quarantine?' if lot.is_quarantined else 'Place in quarantine?' }}');">
+    {{ request.state.csrf_form | safe }}
     <button type="submit" class="btn btn-secondary {{ 'text-emerald-600 hover:text-emerald-700' if lot.is_quarantined else 'text-amber-600 hover:text-amber-700' }}">
         {% if lot.is_quarantined %}
         <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -153,16 +155,16 @@
             <h3 class="font-semibold text-slate-900 dark:text-white">Transaction History</h3>
         </div>
         {% if transactions | default([]) | length > 0 %}
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="table-ledger">
                 <thead>
                     <tr>
                         <th scope="col">Date</th>
                         <th scope="col">Type</th>
                         <th scope="col">Reference</th>
-                        <th scope="col" class="text-right">Quantity</th>
-                        <th scope="col" class="text-right">Unit Cost</th>
-                        <th scope="col" class="text-right">Total</th>
+                        <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider">Quantity</th>
+                        <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider">Unit Cost</th>
+                        <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider">Total</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -185,6 +187,12 @@
                         </td>
                         <td class="text-right font-mono">{{ '{:,.4f}'.format(txn.unit_cost or 0) }}</td>
                         <td class="text-right font-mono">{{ '{:,.2f}'.format(txn.total_cost or 0) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No transactions found", "There are no transactions to display.") }}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

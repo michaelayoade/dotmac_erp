@@ -5,7 +5,6 @@ Disclosure Checklist Model - Reporting Schema.
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -69,16 +68,14 @@ class DisclosureChecklist(Base):
     # Disclosure identification
     disclosure_code: Mapped[str] = mapped_column(String(50), nullable=False)
     disclosure_name: Mapped[str] = mapped_column(String(300), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # IFRS standard reference
     ifrs_standard: Mapped[str] = mapped_column(String(50), nullable=False)
-    paragraph_reference: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True
-    )
+    paragraph_reference: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Hierarchy
-    parent_checklist_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    parent_checklist_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("rpt.disclosure_checklist.checklist_id"),
         nullable=True,
@@ -88,7 +85,7 @@ class DisclosureChecklist(Base):
 
     # Requirements
     is_mandatory: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    applicability_criteria: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    applicability_criteria: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Status
     status: Mapped[DisclosureStatus] = mapped_column(
@@ -98,25 +95,23 @@ class DisclosureChecklist(Base):
     )
 
     # Completion details
-    disclosure_location: Mapped[Optional[str]] = mapped_column(
-        String(200), nullable=True
-    )
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    disclosure_location: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Review
-    completed_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    completed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    reviewed_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    reviewed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+    reviewed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -126,7 +121,7 @@ class DisclosureChecklist(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

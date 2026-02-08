@@ -17,8 +17,9 @@ This migration creates the core payroll tables:
 """
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "create_payroll_tables"

@@ -7,7 +7,6 @@ Business logic for expense entry management.
 import logging
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -64,16 +63,16 @@ class ExpenseService:
         description: str,
         payment_method: PaymentMethod,
         created_by: str,
-        payment_account_id: Optional[str] = None,
-        tax_code_id: Optional[str] = None,
+        payment_account_id: str | None = None,
+        tax_code_id: str | None = None,
         tax_amount: Decimal = Decimal("0"),
         currency_code: str = settings.default_functional_currency_code,
-        payee: Optional[str] = None,
-        receipt_reference: Optional[str] = None,
-        notes: Optional[str] = None,
-        project_id: Optional[str] = None,
-        cost_center_id: Optional[str] = None,
-        business_unit_id: Optional[str] = None,
+        payee: str | None = None,
+        receipt_reference: str | None = None,
+        notes: str | None = None,
+        project_id: str | None = None,
+        cost_center_id: str | None = None,
+        business_unit_id: str | None = None,
     ) -> ExpenseEntry:
         """Create a new expense entry."""
         org_id = coerce_uuid(organization_id)

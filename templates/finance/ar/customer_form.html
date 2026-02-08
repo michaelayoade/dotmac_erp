@@ -399,6 +399,7 @@
     <form method="post"
           action="{{ '/finance/ar/customers/' ~ customer.customer_id ~ '/edit' if customer else '/finance/ar/customers/new' }}"
           class="space-y-8">
+        {{ request.state.csrf_form | safe }}
 
         <!-- Form Result Messages -->
         <div id="form-result">

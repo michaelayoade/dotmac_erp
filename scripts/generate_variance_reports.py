@@ -3,12 +3,13 @@ Generate account-level variance report and journal-level gap report for 2022.
 Compares GL balances to audited financial statement breakdowns.
 """
 
-import os
 import csv
+import os
 from decimal import Decimal
 from pathlib import Path
-from sqlalchemy import create_engine, text
+
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, text
 
 load_dotenv()
 

@@ -8,12 +8,12 @@ Handles:
 """
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from typing import TypedDict
 from uuid import UUID
 
 from celery import shared_task
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
 from app.db import SessionLocal
 from app.models.notification import (
@@ -64,8 +64,8 @@ def process_discipline_response_reminders() -> ResponseReminderResults:
     }
 
     with SessionLocal() as db:
-        from app.services.people.discipline import DisciplineService
         from app.services.notification import notification_service
+        from app.services.people.discipline import DisciplineService
 
         service = DisciplineService(db)
 
@@ -156,8 +156,8 @@ def process_discipline_hearing_reminders() -> HearingReminderResults:
     }
 
     with SessionLocal() as db:
-        from app.services.people.discipline import DisciplineService
         from app.services.notification import notification_service
+        from app.services.people.discipline import DisciplineService
 
         service = DisciplineService(db)
 
@@ -172,7 +172,7 @@ def process_discipline_hearing_reminders() -> HearingReminderResults:
                 if not case.hearing_date:
                     continue
 
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
                 time_until_hearing = case.hearing_date - now
                 days_until = time_until_hearing.days
 
@@ -223,8 +223,8 @@ def process_discipline_appeal_deadline_reminders() -> AppealReminderResults:
     }
 
     with SessionLocal() as db:
-        from app.services.people.discipline import DisciplineService
         from app.services.notification import notification_service
+        from app.services.people.discipline import DisciplineService
 
         service = DisciplineService(db)
 

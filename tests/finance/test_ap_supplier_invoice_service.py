@@ -13,6 +13,7 @@ from app.models.finance.ap.supplier_invoice import (
     SupplierInvoiceStatus,
     SupplierInvoiceType,
 )
+from app.models.finance.ap.supplier_invoice_line_tax import SupplierInvoiceLineTax
 from app.services.finance.ap.supplier_invoice import (
     InvoiceLineInput,
     SupplierInvoiceInput,
@@ -22,7 +23,6 @@ from app.services.finance.tax.tax_calculation import (
     LineCalculationResult,
     LineTaxResult,
 )
-from app.models.finance.ap.supplier_invoice_line_tax import SupplierInvoiceLineTax
 
 
 def _make_supplier(org_id, active=True):
@@ -251,7 +251,7 @@ def test_submit_approve_post_void_hold_release_record_payment():
         ) as post_invoice,
         patch(
             "app.services.finance.ap.supplier_invoice.SupplierInvoiceService._update_item_costs_from_invoice"
-        ) as update_costs,
+        ),
     ):
         post_invoice.return_value = SimpleNamespace(
             success=True, journal_entry_id=uuid4(), posting_batch_id=uuid4()

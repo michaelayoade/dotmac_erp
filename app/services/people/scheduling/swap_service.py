@@ -7,8 +7,7 @@ Handles shift swap requests and approval workflow.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
@@ -72,10 +71,10 @@ class SwapService:
         self,
         org_id: UUID,
         *,
-        status: Optional[SwapRequestStatus] = None,
-        requester_id: Optional[UUID] = None,
-        target_employee_id: Optional[UUID] = None,
-        pagination: Optional[PaginationParams] = None,
+        status: SwapRequestStatus | None = None,
+        requester_id: UUID | None = None,
+        target_employee_id: UUID | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[ShiftSwapRequest]:
         """List swap requests."""
         query = (
@@ -127,7 +126,7 @@ class SwapService:
         org_id: UUID,
         employee_id: UUID,
         *,
-        pagination: Optional[PaginationParams] = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[ShiftSwapRequest]:
         """Get swap requests created by an employee."""
         return self.list_swap_requests(
@@ -139,7 +138,7 @@ class SwapService:
         org_id: UUID,
         employee_id: UUID,
         *,
-        pagination: Optional[PaginationParams] = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[ShiftSwapRequest]:
         """Get swap requests waiting for an employee's acceptance."""
         return self.list_swap_requests(
@@ -180,7 +179,7 @@ class SwapService:
         requester_id: UUID,
         requester_schedule_id: UUID,
         target_schedule_id: UUID,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> ShiftSwapRequest:
         """
         Create a new swap request.
@@ -312,7 +311,7 @@ class SwapService:
             )
 
         request.status = SwapRequestStatus.TARGET_ACCEPTED
-        request.target_accepted_at = datetime.now(timezone.utc)
+        request.target_accepted_at = datetime.now(UTC)
 
         self.db.flush()
 
@@ -410,7 +409,7 @@ class SwapService:
         org_id: UUID,
         request_id: UUID,
         manager_id: UUID,
-        notes: Optional[str] = None,
+        notes: str | None = None,
     ) -> ShiftSwapRequest:
         """
         Manager approves the swap request and executes the swap.
@@ -440,7 +439,7 @@ class SwapService:
         # Update request status
         request.status = SwapRequestStatus.APPROVED
         request.reviewed_by_id = manager_id
-        request.reviewed_at = datetime.now(timezone.utc)
+        request.reviewed_at = datetime.now(UTC)
         request.review_notes = notes
 
         self.db.flush()
@@ -499,7 +498,7 @@ class SwapService:
         org_id: UUID,
         request_id: UUID,
         manager_id: UUID,
-        notes: Optional[str] = None,
+        notes: str | None = None,
     ) -> ShiftSwapRequest:
         """
         Manager rejects the swap request.
@@ -520,7 +519,7 @@ class SwapService:
 
         request.status = SwapRequestStatus.REJECTED
         request.reviewed_by_id = manager_id
-        request.reviewed_at = datetime.now(timezone.utc)
+        request.reviewed_at = datetime.now(UTC)
         request.review_notes = notes
 
         self.db.flush()
@@ -574,7 +573,7 @@ class SwapService:
         org_id: UUID,
         request_id: UUID,
         declining_employee_id: UUID,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> ShiftSwapRequest:
         """
         Target employee declines the swap request.

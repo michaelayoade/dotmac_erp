@@ -5,9 +5,9 @@ import io
 from decimal import Decimal
 from types import SimpleNamespace
 
+from app.services.people.payroll.nhf_export import NHFExportService
 from app.services.people.payroll.paye_export import PAYEExportService
 from app.services.people.payroll.pension_export import PensionExportService
-from app.services.people.payroll.nhf_export import NHFExportService
 
 
 def _make_component(code: str) -> SimpleNamespace:

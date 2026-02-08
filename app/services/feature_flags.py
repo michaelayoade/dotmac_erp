@@ -5,7 +5,7 @@ Provides functions to check if features are enabled via DomainSetting.
 Used for gating access to optional modules (inventory, fixed assets, leases, etc.).
 """
 
-from typing import Callable, Dict, Optional
+from collections.abc import Callable
 
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -43,10 +43,10 @@ FEATURE_LABELS = {
 }
 
 # Cache for defaults derived from settings specs (lazy initialization)
-_feature_defaults_cache: Optional[Dict[str, bool]] = None
+_feature_defaults_cache: dict[str, bool] | None = None
 
 
-def _get_feature_defaults() -> Dict[str, bool]:
+def _get_feature_defaults() -> dict[str, bool]:
     """
     Get feature defaults from settings specs (single source of truth).
 

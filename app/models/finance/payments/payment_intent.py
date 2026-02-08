@@ -8,7 +8,7 @@ import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import DateTime, Enum, Numeric, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -66,12 +66,12 @@ class PaymentIntent(Base):
         unique=True,
     )
     # Access code returned by Paystack
-    paystack_access_code: Mapped[Optional[str]] = mapped_column(
+    paystack_access_code: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
     # URL to redirect user for payment
-    authorization_url: Mapped[Optional[str]] = mapped_column(
+    authorization_url: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
     )
@@ -107,7 +107,7 @@ class PaymentIntent(Base):
     )
 
     # Bank account linkage for reconciliation
-    bank_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    bank_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="Bank account for settlement/source of funds",
@@ -119,34 +119,34 @@ class PaymentIntent(Base):
         nullable=False,
         comment="INVOICE, EXPENSE_CLAIM, GENERAL",
     )
-    source_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    source_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="ID of the document being paid",
     )
 
     # Transfer-specific fields (for OUTBOUND payments)
-    transfer_recipient_code: Mapped[Optional[str]] = mapped_column(
+    transfer_recipient_code: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Paystack transfer recipient code for payouts",
     )
-    transfer_code: Mapped[Optional[str]] = mapped_column(
+    transfer_code: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Paystack transfer code after initiation",
     )
-    recipient_bank_code: Mapped[Optional[str]] = mapped_column(
+    recipient_bank_code: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="Recipient bank code for transfers",
     )
-    recipient_account_number: Mapped[Optional[str]] = mapped_column(
+    recipient_account_number: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="Recipient account number for transfers",
     )
-    recipient_account_name: Mapped[Optional[str]] = mapped_column(
+    recipient_account_name: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
         comment="Recipient account name (verified by Paystack)",
@@ -165,45 +165,45 @@ class PaymentIntent(Base):
     )
 
     # Result after completion
-    customer_payment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    customer_payment_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="Links to AR customer_payment after successful payment",
     )
-    paystack_transaction_id: Mapped[Optional[str]] = mapped_column(
+    paystack_transaction_id: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Paystack transaction ID",
     )
-    paid_at: Mapped[Optional[datetime]] = mapped_column(
+    paid_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    gateway_response: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    gateway_response: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Full response from Paystack",
     )
 
     # Fee tracking
-    fee_amount: Mapped[Optional[Decimal]] = mapped_column(
+    fee_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(19, 4),
         nullable=True,
         comment="Gateway fee charged (in currency units, not kobo)",
     )
-    fee_journal_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    fee_journal_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="GL journal entry for fee posting",
     )
 
     # Custom data
-    intent_metadata: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    intent_metadata: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Custom metadata (invoice_number, customer_name, etc.)",
     )
-    expires_at: Mapped[Optional[datetime]] = mapped_column(
+    expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="When this intent expires",
@@ -215,7 +215,7 @@ class PaymentIntent(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

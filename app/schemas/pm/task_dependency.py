@@ -5,13 +5,11 @@ Schemas for task dependency management.
 """
 
 from datetime import datetime
-from typing import List
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
 from app.models.pm import DependencyType
-
 
 # =============================================================================
 # Task Dependency Schemas
@@ -54,5 +52,5 @@ class TaskDependencyWithDetails(TaskDependencyRead):
 class TaskDependencyListResponse(BaseModel):
     """List of task dependencies."""
 
-    items: List[TaskDependencyWithDetails]
+    items: list[TaskDependencyWithDetails]
     total: int

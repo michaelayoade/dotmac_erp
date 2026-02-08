@@ -6,35 +6,27 @@ Provides view-focused data and operations for AP invoice web routes.
 
 from __future__ import annotations
 
-import json
-import logging
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
-from fastapi import Request, UploadFile
+from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.config import settings
-from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
 from app.models.finance.ap.purchase_order import PurchaseOrder
 from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import (
     SupplierInvoice,
     SupplierInvoiceStatus,
-    SupplierInvoiceType,
 )
-from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
 from app.services.common import coerce_uuid
 from app.services.finance.ap.supplier import supplier_service
 from app.services.finance.ap.supplier_invoice import (
-    InvoiceLineInput,
     SupplierInvoiceInput,
     supplier_invoice_service,
 )
@@ -48,8 +40,6 @@ from app.services.finance.ap.web.base import (
     invoice_line_view,
     invoice_status_label,
     logger,
-    parse_date,
-    parse_invoice_status,
     supplier_display_name,
     supplier_form_view,
     supplier_option_view,
@@ -59,80 +49,32 @@ from app.services.finance.platform.currency_context import get_currency_context
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
-logger = logging.getLogger(__name__)
-
 
 class InvoiceWebService:
     """Web service methods for AP invoices."""
 
     @staticmethod
-    def build_invoice_input(data: dict) -> SupplierInvoiceInput:
+    def build_invoice_input(
+        db: Session, data: dict, organization_id: UUID
+    ) -> SupplierInvoiceInput:
         """Build SupplierInvoiceInput from form data."""
         logger.debug("build_invoice_input: building input from form data")
-        lines_data = data.get("lines", [])
-        if isinstance(lines_data, str):
-            lines_data = json.loads(lines_data)
-
-        lines = []
-        for line in lines_data:
-            if line.get("expense_account_id") and line.get("description"):
-                # Handle both new tax_code_ids array and legacy tax_code_id field
-                tax_code_ids = []
-                if line.get("tax_code_ids"):
-                    tax_code_ids = [
-                        UUID(tc_id) for tc_id in line["tax_code_ids"] if tc_id
-                    ]
-                legacy_tax_code_id = (
-                    UUID(line["tax_code_id"]) if line.get("tax_code_id") else None
-                )
-
-                lines.append(
-                    InvoiceLineInput(
-                        description=line.get("description", ""),
-                        quantity=Decimal(str(line.get("quantity", 1))),
-                        unit_price=Decimal(str(line.get("unit_price", 0))),
-                        expense_account_id=UUID(line["expense_account_id"])
-                        if line.get("expense_account_id")
-                        else None,
-                        tax_code_ids=tax_code_ids,
-                        tax_code_id=legacy_tax_code_id,
-                        cost_center_id=UUID(line["cost_center_id"])
-                        if line.get("cost_center_id")
-                        else None,
-                        project_id=UUID(line["project_id"])
-                        if line.get("project_id")
-                        else None,
-                    )
-                )
-
-        invoice_date = parse_date(data.get("invoice_date")) or date.today()
-        received_date = parse_date(data.get("received_date")) or invoice_date
-        due_date = parse_date(data.get("due_date")) or invoice_date
-
-        logger.debug("build_invoice_input: created %d lines", len(lines))
-        return SupplierInvoiceInput(
-            supplier_id=UUID(data["supplier_id"]),
-            invoice_type=SupplierInvoiceType.STANDARD,
-            invoice_date=invoice_date,
-            received_date=received_date,
-            due_date=due_date,
-            currency_code=data.get(
-                "currency_code",
-                settings.default_functional_currency_code,
-            ),
-            supplier_invoice_number=data.get("invoice_number"),
-            lines=lines,
+        payload = dict(data)
+        return supplier_invoice_service.build_input_from_payload(
+            db=db,
+            organization_id=organization_id,
+            payload=payload,
         )
 
     @staticmethod
     def list_invoices_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        supplier_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        supplier_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -145,45 +87,28 @@ class InvoiceWebService:
             status,
             page,
         )
-        org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
         today = date.today()
+        org_id = coerce_uuid(organization_id)
 
-        status_value = parse_invoice_status(status)
-        from_date = parse_date(start_date)
-        to_date = parse_date(end_date)
+        from app.services.finance.ap.invoice_query import build_invoice_query
 
-        query = (
-            db.query(SupplierInvoice, Supplier)
-            .join(Supplier, SupplierInvoice.supplier_id == Supplier.supplier_id)
-            .filter(SupplierInvoice.organization_id == org_id)
+        query = build_invoice_query(
+            db=db,
+            organization_id=organization_id,
+            search=search,
+            supplier_id=supplier_id,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
         )
-
-        if supplier_id:
-            query = query.filter(
-                SupplierInvoice.supplier_id == coerce_uuid(supplier_id)
-            )
-        if status_value:
-            query = query.filter(SupplierInvoice.status == status_value)
-        if from_date:
-            query = query.filter(SupplierInvoice.invoice_date >= from_date)
-        if to_date:
-            query = query.filter(SupplierInvoice.invoice_date <= to_date)
-        if search:
-            search_pattern = f"%{search}%"
-            query = query.filter(
-                or_(
-                    SupplierInvoice.invoice_number.ilike(search_pattern),
-                    Supplier.legal_name.ilike(search_pattern),
-                    Supplier.trading_name.ilike(search_pattern),
-                )
-            )
 
         total_count = (
             query.with_entities(func.count(SupplierInvoice.invoice_id)).scalar() or 0
         )
         invoices = (
-            query.order_by(SupplierInvoice.invoice_date.desc())
+            query.with_entities(SupplierInvoice, Supplier)
+            .order_by(SupplierInvoice.invoice_date.desc())
             .limit(limit)
             .offset(offset)
             .all()
@@ -295,8 +220,8 @@ class InvoiceWebService:
     def invoice_form_context(
         db: Session,
         organization_id: str,
-        supplier_id: Optional[str] = None,
-        po_id: Optional[str] = None,
+        supplier_id: str | None = None,
+        po_id: str | None = None,
     ) -> dict:
         """Get context for invoice create form."""
         from app.models.finance.tax.tax_code import TaxCode
@@ -524,7 +449,7 @@ class InvoiceWebService:
         db: Session,
         organization_id: str,
         invoice_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete an invoice. Returns error message or None on success."""
         logger.debug(
             "delete_invoice: org=%s invoice_id=%s", organization_id, invoice_id
@@ -532,38 +457,13 @@ class InvoiceWebService:
         org_id = coerce_uuid(organization_id)
         inv_id = coerce_uuid(invoice_id)
 
-        invoice = db.get(SupplierInvoice, inv_id)
-        if not invoice or invoice.organization_id != org_id:
-            return "Invoice not found"
-
-        # Only DRAFT invoices can be deleted
-        if invoice.status != SupplierInvoiceStatus.DRAFT:
-            return f"Cannot delete invoice with status '{invoice.status.value}'. Only DRAFT invoices can be deleted."
-
-        # Check for existing payments/allocations
-        allocation_count = (
-            db.query(func.count(APPaymentAllocation.allocation_id))
-            .filter(APPaymentAllocation.invoice_id == inv_id)
-            .scalar()
-            or 0
-        )
-
-        if allocation_count > 0:
-            return (
-                f"Cannot delete invoice with {allocation_count} payment allocation(s)."
-            )
-
         try:
-            # Delete invoice lines first
-            db.query(SupplierInvoiceLine).filter(
-                SupplierInvoiceLine.invoice_id == inv_id
-            ).delete()
-            db.delete(invoice)
-            db.commit()
+            supplier_invoice_service.delete_invoice(db, org_id, inv_id)
             logger.info("delete_invoice: deleted invoice %s for org %s", inv_id, org_id)
             return None
+        except HTTPException as exc:
+            return exc.detail
         except Exception as e:
-            db.rollback()
             logger.exception("delete_invoice: failed for org %s", org_id)
             return f"Failed to delete invoice: {str(e)}"
 
@@ -575,11 +475,11 @@ class InvoiceWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        search: Optional[str],
-        supplier_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        supplier_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         db: Session,
     ) -> HTMLResponse:
@@ -603,8 +503,8 @@ class InvoiceWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        supplier_id: Optional[str],
-        po_id: Optional[str],
+        supplier_id: str | None,
+        po_id: str | None,
         db: Session,
     ) -> HTMLResponse:
         """Render new invoice form."""
@@ -641,7 +541,7 @@ class InvoiceWebService:
             data = dict(form_data)
 
         try:
-            input_data = self.build_invoice_input(data)
+            input_data = self.build_invoice_input(db, data, org_id)
 
             invoice = supplier_invoice_service.create_invoice(
                 db=db,
@@ -724,7 +624,7 @@ class InvoiceWebService:
         self,
         invoice_id: str,
         file: UploadFile,
-        description: Optional[str],
+        description: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:

@@ -16,8 +16,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
 if TYPE_CHECKING:
-    from app.models.people.hr.employee import Employee
     from app.models.people.discipline.case import DisciplinaryCase
+    from app.models.people.hr.employee import Employee
 
 
 class DocumentType(str, enum.Enum):
@@ -73,7 +73,7 @@ class CaseDocument(Base):
         nullable=False,
         comment="Document title",
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Document description",
@@ -90,18 +90,18 @@ class CaseDocument(Base):
         nullable=False,
         comment="Original file name",
     )
-    file_size: Mapped[Optional[int]] = mapped_column(
+    file_size: Mapped[int | None] = mapped_column(
         nullable=True,
         comment="File size in bytes",
     )
-    mime_type: Mapped[Optional[str]] = mapped_column(
+    mime_type: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="MIME type of file",
     )
 
     # Uploaded by
-    uploaded_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    uploaded_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,

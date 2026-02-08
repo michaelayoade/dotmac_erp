@@ -6,12 +6,10 @@ since IFRS models use PostgreSQL-specific types not compatible with SQLite.
 """
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Optional
 
 import pytest
-
 
 # ============ Mock Models ============
 
@@ -29,25 +27,25 @@ class MockBankAccount:
         gl_account_id: uuid.UUID = None,
         currency_code: str = "USD",
         account_type: str = "checking",
-        bank_code: Optional[str] = None,
-        branch_code: Optional[str] = None,
-        branch_name: Optional[str] = None,
-        iban: Optional[str] = None,
-        contact_name: Optional[str] = None,
-        contact_phone: Optional[str] = None,
-        contact_email: Optional[str] = None,
-        notes: Optional[str] = None,
+        bank_code: str | None = None,
+        branch_code: str | None = None,
+        branch_name: str | None = None,
+        iban: str | None = None,
+        contact_name: str | None = None,
+        contact_phone: str | None = None,
+        contact_email: str | None = None,
+        notes: str | None = None,
         status: str = "active",
         is_primary: bool = False,
         allow_overdraft: bool = False,
-        overdraft_limit: Optional[Decimal] = None,
+        overdraft_limit: Decimal | None = None,
         normal_balance: str = "DEBIT",
-        last_statement_balance: Optional[Decimal] = None,
-        last_statement_date: Optional[datetime] = None,
-        last_reconciled_date: Optional[datetime] = None,
-        last_reconciled_balance: Optional[Decimal] = None,
+        last_statement_balance: Decimal | None = None,
+        last_statement_date: datetime | None = None,
+        last_reconciled_date: datetime | None = None,
+        last_reconciled_balance: Decimal | None = None,
         created_at: datetime = None,
-        updated_at: Optional[datetime] = None,
+        updated_at: datetime | None = None,
         **kwargs,
     ):
         self.bank_account_id = bank_account_id or uuid.uuid4()
@@ -75,7 +73,7 @@ class MockBankAccount:
         self.last_statement_date = last_statement_date
         self.last_reconciled_date = last_reconciled_date
         self.last_reconciled_balance = last_reconciled_balance
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -99,8 +97,8 @@ class MockBankStatement:
         total_debits: Decimal = Decimal("0"),
         currency_code: str = "USD",
         status: str = "imported",
-        import_source: Optional[str] = None,
-        import_filename: Optional[str] = None,
+        import_source: str | None = None,
+        import_filename: str | None = None,
         imported_at: datetime = None,
         total_lines: int = 0,
         matched_lines: int = 0,
@@ -123,11 +121,11 @@ class MockBankStatement:
         self.status = status
         self.import_source = import_source
         self.import_filename = import_filename
-        self.imported_at = imported_at or datetime.now(timezone.utc)
+        self.imported_at = imported_at or datetime.now(UTC)
         self.total_lines = total_lines
         self.matched_lines = matched_lines
         self.unmatched_lines = unmatched_lines
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -158,16 +156,16 @@ class MockBankReconciliation:
         outstanding_payments: Decimal = Decimal("0"),
         currency_code: str = "USD",
         status: str = "draft",
-        prepared_by: Optional[uuid.UUID] = None,
-        prepared_at: Optional[datetime] = None,
-        reviewed_by: Optional[uuid.UUID] = None,
-        reviewed_at: Optional[datetime] = None,
-        approved_by: Optional[uuid.UUID] = None,
-        approved_at: Optional[datetime] = None,
-        notes: Optional[str] = None,
-        review_notes: Optional[str] = None,
+        prepared_by: uuid.UUID | None = None,
+        prepared_at: datetime | None = None,
+        reviewed_by: uuid.UUID | None = None,
+        reviewed_at: datetime | None = None,
+        approved_by: uuid.UUID | None = None,
+        approved_at: datetime | None = None,
+        notes: str | None = None,
+        review_notes: str | None = None,
         created_at: datetime = None,
-        updated_at: Optional[datetime] = None,
+        updated_at: datetime | None = None,
         **kwargs,
     ):
         self.reconciliation_id = reconciliation_id or uuid.uuid4()
@@ -199,7 +197,7 @@ class MockBankReconciliation:
         self.approved_at = approved_at
         self.notes = notes
         self.review_notes = review_notes
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -216,14 +214,14 @@ class MockAccount:
         account_name: str = "Cash",
         account_type: str = "POSTING",
         normal_balance: str = "DEBIT",
-        description: Optional[str] = None,
-        parent_account_id: Optional[uuid.UUID] = None,
+        description: str | None = None,
+        parent_account_id: uuid.UUID | None = None,
         category_id: uuid.UUID = None,
         is_control_account: bool = False,
         is_reconcilable: bool = False,
         is_active: bool = True,
         created_at: datetime = None,
-        updated_at: Optional[datetime] = None,
+        updated_at: datetime | None = None,
         **kwargs,
     ):
         self.account_id = account_id or uuid.uuid4()
@@ -238,7 +236,7 @@ class MockAccount:
         self.is_control_account = is_control_account
         self.is_reconcilable = is_reconcilable
         self.is_active = is_active
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -274,7 +272,7 @@ class MockFiscalPeriod:
         self.status = status
         self.fiscal_year = fiscal_year
         self.is_adjustment_period = is_adjustment_period
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -318,7 +316,7 @@ class MockJournalEntry:
         self.status = status
         self.total_debit = total_debit
         self.total_credit = total_credit
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.created_by_user_id = created_by_user_id or uuid.uuid4()
         self.lines = lines if lines is not None else []
         # Also provide the old names for tests that use them
@@ -339,14 +337,14 @@ class MockInventoryItem:
         item_name: str = "Test Item",
         base_uom: str = "EACH",
         costing_method: str = "WEIGHTED_AVERAGE",
-        standard_cost: Optional[Decimal] = None,
-        average_cost: Optional[Decimal] = Decimal("10.00"),
-        last_purchase_cost: Optional[Decimal] = None,
-        list_price: Optional[Decimal] = None,
-        reorder_point: Optional[Decimal] = None,
-        reorder_quantity: Optional[Decimal] = None,
-        minimum_stock: Optional[Decimal] = None,
-        maximum_stock: Optional[Decimal] = None,
+        standard_cost: Decimal | None = None,
+        average_cost: Decimal | None = Decimal("10.00"),
+        last_purchase_cost: Decimal | None = None,
+        list_price: Decimal | None = None,
+        reorder_point: Decimal | None = None,
+        reorder_quantity: Decimal | None = None,
+        minimum_stock: Decimal | None = None,
+        maximum_stock: Decimal | None = None,
         track_inventory: bool = True,
         track_lots: bool = False,
         track_serial_numbers: bool = False,
@@ -395,7 +393,7 @@ class MockInventoryTransaction:
         total_cost: Decimal = Decimal("1000.00"),
         quantity_before: Decimal = Decimal("0"),
         quantity_after: Decimal = Decimal("100"),
-        reference: Optional[str] = None,
+        reference: str | None = None,
         **kwargs,
     ):
         self.transaction_id = transaction_id or uuid.uuid4()
@@ -423,7 +421,7 @@ class MockLot:
         item_id: uuid.UUID = None,
         lot_number: str = "LOT-001",
         received_date: date = None,
-        expiry_date: Optional[date] = None,
+        expiry_date: date | None = None,
         initial_quantity: Decimal = Decimal("100"),
         quantity_on_hand: Decimal = Decimal("100"),
         quantity_available: Decimal = Decimal("100"),
@@ -455,21 +453,21 @@ class MockStatementLine:
         line_id: uuid.UUID = None,
         statement_id: uuid.UUID = None,
         line_number: int = 1,
-        transaction_id: Optional[str] = None,
+        transaction_id: str | None = None,
         transaction_date: date = None,
-        value_date: Optional[date] = None,
+        value_date: date | None = None,
         transaction_type: str = "credit",
         amount: Decimal = Decimal("100.00"),
-        running_balance: Optional[Decimal] = None,
-        description: Optional[str] = "Test transaction",
-        reference: Optional[str] = None,
-        payee_payer: Optional[str] = None,
-        bank_reference: Optional[str] = None,
-        check_number: Optional[str] = None,
-        bank_category: Optional[str] = None,
+        running_balance: Decimal | None = None,
+        description: str | None = "Test transaction",
+        reference: str | None = None,
+        payee_payer: str | None = None,
+        bank_reference: str | None = None,
+        check_number: str | None = None,
+        bank_category: str | None = None,
         is_matched: bool = False,
-        matched_at: Optional[datetime] = None,
-        matched_journal_line_id: Optional[uuid.UUID] = None,
+        matched_at: datetime | None = None,
+        matched_journal_line_id: uuid.UUID | None = None,
         created_at: datetime = None,
         **kwargs,
     ):
@@ -491,7 +489,7 @@ class MockStatementLine:
         self.is_matched = is_matched
         self.matched_at = matched_at
         self.matched_journal_line_id = matched_journal_line_id
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -504,21 +502,21 @@ class MockReconciliationLine:
         line_id: uuid.UUID = None,
         reconciliation_id: uuid.UUID = None,
         match_type: str = "manual",
-        statement_line_id: Optional[uuid.UUID] = None,
-        journal_line_id: Optional[uuid.UUID] = None,
+        statement_line_id: uuid.UUID | None = None,
+        journal_line_id: uuid.UUID | None = None,
         transaction_date: date = None,
-        description: Optional[str] = "Matched transaction",
-        reference: Optional[str] = None,
-        statement_amount: Optional[Decimal] = Decimal("100.00"),
-        gl_amount: Optional[Decimal] = Decimal("100.00"),
-        difference: Optional[Decimal] = Decimal("0"),
+        description: str | None = "Matched transaction",
+        reference: str | None = None,
+        statement_amount: Decimal | None = Decimal("100.00"),
+        gl_amount: Decimal | None = Decimal("100.00"),
+        difference: Decimal | None = Decimal("0"),
         is_adjustment: bool = False,
-        adjustment_type: Optional[str] = None,
+        adjustment_type: str | None = None,
         is_outstanding: bool = False,
-        outstanding_type: Optional[str] = None,
-        match_confidence: Optional[Decimal] = None,
+        outstanding_type: str | None = None,
+        match_confidence: Decimal | None = None,
         is_cleared: bool = False,
-        notes: Optional[str] = None,
+        notes: str | None = None,
         created_at: datetime = None,
         **kwargs,
     ):
@@ -540,7 +538,7 @@ class MockReconciliationLine:
         self.match_confidence = match_confidence
         self.is_cleared = is_cleared
         self.notes = notes
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         for k, v in kwargs.items():
             setattr(self, k, v)
 

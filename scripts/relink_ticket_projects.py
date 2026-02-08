@@ -18,6 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import select
+
 from app.db import SessionLocal
 from app.models.support.ticket import Ticket
 from app.models.sync import SyncEntity

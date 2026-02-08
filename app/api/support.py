@@ -5,7 +5,6 @@ REST API for support ticket management.
 """
 
 from datetime import date
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -18,20 +17,19 @@ from app.api.deps import (
 )
 from app.db import SessionLocal
 from app.schemas.support import (
-    TicketCreate,
-    TicketUpdate,
-    TicketRead,
-    TicketListResponse,
-    TicketSummary,
-    TicketStats,
     TicketAssign,
+    TicketCreate,
+    TicketListResponse,
+    TicketRead,
     TicketResolve,
-    TicketStatusUpdate,
     TicketSearchResult,
+    TicketStats,
+    TicketStatusUpdate,
+    TicketSummary,
+    TicketUpdate,
 )
-from app.services.support.ticket import ticket_service
 from app.services.common import coerce_uuid
-
+from app.services.support.ticket import ticket_service
 
 router = APIRouter(
     prefix="/support",
@@ -59,12 +57,12 @@ def get_db():
 @router.get("/tickets", response_model=TicketListResponse)
 def list_tickets(
     organization_id: UUID = Depends(require_organization_id),
-    status_filter: Optional[str] = Query(None, alias="status"),
-    priority: Optional[str] = None,
-    assigned_to_id: Optional[str] = None,
-    search: Optional[str] = None,
-    date_from: Optional[date] = None,
-    date_to: Optional[date] = None,
+    status_filter: str | None = Query(None, alias="status"),
+    priority: str | None = None,
+    assigned_to_id: str | None = None,
+    search: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -104,10 +102,10 @@ def list_tickets(
     )
 
 
-@router.get("/tickets/search", response_model=List[TicketSearchResult])
+@router.get("/tickets/search", response_model=list[TicketSearchResult])
 def search_tickets(
     q: str = Query(..., min_length=1),
-    status_filter: Optional[str] = Query(None, alias="status"),
+    status_filter: str | None = Query(None, alias="status"),
     limit: int = Query(20, ge=1, le=100),
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),

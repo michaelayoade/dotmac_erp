@@ -5,16 +5,13 @@ Shared mock objects for GL module testing.
 """
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
 
-
 # ============ Mock Enums ============
-
 from app.models.finance.gl.account import AccountType, NormalBalance
 from app.models.finance.gl.fiscal_period import PeriodStatus
 from app.models.finance.gl.journal_entry import JournalStatus, JournalType
@@ -39,17 +36,17 @@ class MockAccount:
         category_id: uuid.UUID = None,
         account_code: str = "1000",
         account_name: str = "Cash",
-        description: Optional[str] = None,
-        search_terms: Optional[str] = None,
+        description: str | None = None,
+        search_terms: str | None = None,
         account_type: AccountType = None,
         normal_balance: NormalBalance = None,
         is_multi_currency: bool = False,
-        default_currency_code: Optional[str] = "USD",
+        default_currency_code: str | None = "USD",
         is_active: bool = True,
         is_posting_allowed: bool = True,
         is_budgetable: bool = True,
         is_reconciliation_required: bool = False,
-        subledger_type: Optional[str] = None,
+        subledger_type: str | None = None,
         is_cash_equivalent: bool = False,
         is_financial_instrument: bool = False,
         created_at: datetime = None,
@@ -73,7 +70,7 @@ class MockAccount:
         self.subledger_type = subledger_type
         self.is_cash_equivalent = is_cash_equivalent
         self.is_financial_instrument = is_financial_instrument
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
 
 
@@ -106,7 +103,7 @@ class MockFiscalYear:
         self.closed_at = closed_at
         self.closed_by_user_id = closed_by_user_id
         self.retained_earnings_account_id = retained_earnings_account_id
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
 
 
 class MockFiscalPeriod:
@@ -148,7 +145,7 @@ class MockFiscalPeriod:
         self.hard_closed_by_user_id = hard_closed_by_user_id
         self.reopen_count = reopen_count
         self.last_reopen_session_id = last_reopen_session_id
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
 
 
 class MockJournalEntry:
@@ -164,7 +161,7 @@ class MockJournalEntry:
         posting_date: date = None,
         fiscal_period_id: uuid.UUID = None,
         description: str = "Test journal",
-        reference: Optional[str] = None,
+        reference: str | None = None,
         currency_code: str = "USD",
         exchange_rate: Decimal = Decimal("1.0"),
         total_debit: Decimal = Decimal("0"),
@@ -198,7 +195,7 @@ class MockJournalEntry:
         self.submitted_by_user_id = submitted_by_user_id
         self.approved_by_user_id = approved_by_user_id
         self.posted_by_user_id = posted_by_user_id
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
 
 
 # ============ Fixtures ============

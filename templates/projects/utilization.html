@@ -1,5 +1,6 @@
 {% extends "modules/base_modules.html" %}
 
+{% from "components/macros.html" import empty_state %}
 {% block title %}Resource Utilization{% endblock %}
 
 {% block content %}
@@ -145,6 +146,12 @@
                         <span class="text-sm font-medium {{ 'text-green-600' if proj.billable_percent >= 80 else 'text-amber-600' }}">
                             {{ '{:.0f}'.format(proj.billable_percent) }}%
                         </span>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="99" class="p-0">
+                        {{ empty_state("No project_utilization found", "There are no project_utilization to display.") }}
                     </td>
                 </tr>
                 {% endfor %}

@@ -5,8 +5,7 @@ Mock objects for testing attachment and other common services.
 """
 
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
@@ -28,9 +27,9 @@ class MockAttachment:
         file_size: int = 1024,
         content_type: str = "application/pdf",
         category: AttachmentCategory = AttachmentCategory.INVOICE,
-        description: Optional[str] = None,
+        description: str | None = None,
         storage_provider: str = "LOCAL",
-        checksum: Optional[str] = None,
+        checksum: str | None = None,
         uploaded_by: uuid.UUID = None,
         uploaded_at: datetime = None,
         created_at: datetime = None,
@@ -48,8 +47,8 @@ class MockAttachment:
         self.storage_provider = storage_provider
         self.checksum = checksum or "abc123def456"
         self.uploaded_by = uploaded_by or uuid.uuid4()
-        self.uploaded_at = uploaded_at or datetime.now(timezone.utc)
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.uploaded_at = uploaded_at or datetime.now(UTC)
+        self.created_at = created_at or datetime.now(UTC)
 
 
 @pytest.fixture

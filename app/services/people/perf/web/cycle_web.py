@@ -7,7 +7,6 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -55,9 +54,9 @@ class CycleWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        status: Optional[str] = None,
-        year: Optional[str] = None,
-        search: Optional[str] = None,
+        status: str | None = None,
+        year: str | None = None,
+        search: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Render cycles list page."""
@@ -177,7 +176,7 @@ class CycleWebService:
         auth: WebAuthContext,
         db: Session,
         cycle_id: str,
-        success: Optional[str] = None,
+        success: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Render cycle detail page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -406,9 +405,9 @@ class CycleWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
-        is_active: Optional[str] = None,
-        department_id: Optional[str] = None,
+        search: str | None = None,
+        is_active: str | None = None,
+        department_id: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Render KRAs list page."""
@@ -540,7 +539,7 @@ class CycleWebService:
         auth: WebAuthContext,
         db: Session,
         kra_id: str,
-        success: Optional[str] = None,
+        success: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Render KRA detail page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -695,9 +694,9 @@ class CycleWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
-        is_active: Optional[str] = None,
-        department_id: Optional[str] = None,
+        search: str | None = None,
+        is_active: str | None = None,
+        department_id: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Render templates list page."""
@@ -840,7 +839,7 @@ class CycleWebService:
         auth: WebAuthContext,
         db: Session,
         template_id: str,
-        success: Optional[str] = None,
+        success: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Render template detail page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -1012,9 +1011,9 @@ class CycleWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        employee_id: Optional[str] = None,
-        cycle_id: Optional[str] = None,
-        is_finalized: Optional[str] = None,
+        employee_id: str | None = None,
+        cycle_id: str | None = None,
+        is_finalized: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Render scorecards list page."""
@@ -1153,7 +1152,7 @@ class CycleWebService:
         auth: WebAuthContext,
         db: Session,
         scorecard_id: str,
-        success: Optional[str] = None,
+        success: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Render scorecard detail page."""
         org_id = coerce_uuid(auth.organization_id)

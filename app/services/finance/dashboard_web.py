@@ -12,6 +12,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
+from app.services import formatters as _fmt
 from app.services.finance.dashboard import dashboard_service
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.platform.org_context import org_context_service
@@ -30,7 +31,7 @@ def _resolve_currency_prefix(presentation_code: str, currency_context: dict) -> 
 
 
 def _format_currency(amount: Decimal, currency_prefix: str) -> str:
-    return f"{currency_prefix}{amount:,.2f}"
+    return f"{currency_prefix}{_fmt.format_currency(amount, show_symbol=False)}"
 
 
 def _resolve_year_selection(

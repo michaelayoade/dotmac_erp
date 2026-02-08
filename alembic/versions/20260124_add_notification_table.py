@@ -7,9 +7,10 @@ Create Date: 2026-01-24
 Merges all support/expense/customer heads and adds the general notification table.
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260124_notification"

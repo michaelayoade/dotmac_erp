@@ -1,0 +1,20 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Review Reminder{% endblock %}
+{% block content %}
+<p style="margin: 0 0 16px 0;">Hi {{ manager_first }},</p>
+
+<p style="margin: 0 0 16px 0;">This is a reminder that your review for <strong>{{ employee_name }}</strong> in the {{ cycle_name }} cycle is due in {{ days_remaining }} day(s).</p>
+
+<table role="presentation" style="width: 100%; border-collapse: collapse; margin: 20px 0; background: #f8fafc; border-radius: 6px;">
+  <tr>
+    <td style="padding: 12px 16px; color: #64748b; width: 45%;">Review Deadline</td>
+    <td style="padding: 12px 16px; font-weight: 600;">{{ review_deadline }}</td>
+  </tr>
+</table>
+
+<p style="margin: 0 0 20px 0;">Please complete the review to ensure a timely appraisal process.</p>
+
+<p>
+  <a href="{{ appraisal_url }}" style="display: inline-block; padding: 12px 24px; background-color: {{ primary_color | default('#0d9488') }}; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600;">Complete Review</a>
+</p>
+{% endblock %}

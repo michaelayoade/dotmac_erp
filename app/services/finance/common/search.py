@@ -6,7 +6,8 @@ Provides reusable search filter functions for list queries.
 
 from __future__ import annotations
 
-from typing import Any, Optional, Sequence, TypeVar
+from collections.abc import Sequence
+from typing import Any, TypeVar
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Query
@@ -29,19 +30,18 @@ def build_search_pattern(term: str, match_type: str = "contains") -> str:
     # Escape special characters
     escaped = term.replace("%", r"\%").replace("_", r"\_")
 
-    if match_type == "starts_with":
-        return f"{escaped}%"
-    elif match_type == "ends_with":
-        return f"%{escaped}"
-    elif match_type == "exact":
-        return escaped
-    else:  # contains
-        return f"%{escaped}%"
+    patterns = {
+        "starts_with": f"{escaped}%",
+        "ends_with": f"%{escaped}",
+        "exact": escaped,
+        "contains": f"%{escaped}%",
+    }
+    return patterns.get(match_type, patterns["contains"])
 
 
 def apply_search_filter(
     query: Query,
-    search_term: Optional[str],
+    search_term: str | None,
     fields: Sequence[InstrumentedAttribute],
     match_type: str = "contains",
 ) -> Query:
@@ -79,10 +79,10 @@ def apply_search_filter(
 
 def apply_code_name_search(
     query: Query,
-    search_term: Optional[str],
+    search_term: str | None,
     code_field: InstrumentedAttribute,
     name_field: InstrumentedAttribute,
-    additional_fields: Optional[Sequence[InstrumentedAttribute]] = None,
+    additional_fields: Sequence[InstrumentedAttribute] | None = None,
 ) -> Query:
     """
     Apply a common code/name search pattern.
@@ -145,8 +145,8 @@ def apply_multi_field_filter(
 def apply_date_range_filter(
     query: Query,
     date_field: InstrumentedAttribute,
-    start_date: Optional[Any] = None,
-    end_date: Optional[Any] = None,
+    start_date: Any | None = None,
+    end_date: Any | None = None,
 ) -> Query:
     """
     Apply a date range filter to a query.
@@ -171,8 +171,8 @@ def apply_date_range_filter(
 def apply_amount_range_filter(
     query: Query,
     amount_field: InstrumentedAttribute,
-    min_amount: Optional[Any] = None,
-    max_amount: Optional[Any] = None,
+    min_amount: Any | None = None,
+    max_amount: Any | None = None,
 ) -> Query:
     """
     Apply an amount range filter to a query.
@@ -197,7 +197,7 @@ def apply_amount_range_filter(
 def apply_status_filter(
     query: Query,
     status_field: InstrumentedAttribute,
-    statuses: Optional[Sequence[Any]],
+    statuses: Sequence[Any] | None,
 ) -> Query:
     """
     Apply a status filter (multiple values using IN).

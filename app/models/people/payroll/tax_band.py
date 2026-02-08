@@ -16,7 +16,7 @@ NTA 2025 Tax Bands:
 import uuid
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
@@ -89,7 +89,7 @@ class TaxBand(Base, AuditMixin):
         nullable=False,
         comment="Lower bound (inclusive)",
     )
-    max_amount: Mapped[Optional[Decimal]] = mapped_column(
+    max_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(19, 4),
         nullable=True,
         comment="Upper bound (exclusive), NULL = unlimited",
@@ -107,7 +107,7 @@ class TaxBand(Base, AuditMixin):
         Date,
         nullable=False,
     )
-    effective_to: Mapped[Optional[date]] = mapped_column(
+    effective_to: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -132,7 +132,7 @@ class TaxBand(Base, AuditMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

@@ -7,7 +7,6 @@ Maps external system records (ERPNext) to DotMac ERP entities.
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     DateTime,
@@ -88,7 +87,7 @@ class SyncEntity(Base):
     target_table: Mapped[str] = mapped_column(
         String(100), nullable=False
     )  # e.g., 'inv.item', 'fa.asset'
-    target_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    target_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )  # DotMac ERP entity ID (null if failed)
 
@@ -100,15 +99,15 @@ class SyncEntity(Base):
     )
 
     # Timestamps for incremental sync
-    source_modified: Mapped[Optional[datetime]] = mapped_column(
+    source_modified: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )  # ERPNext modified timestamp
-    synced_at: Mapped[Optional[datetime]] = mapped_column(
+    synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
     # Error tracking
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     retry_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Audit
@@ -117,7 +116,7 @@ class SyncEntity(Base):
         server_default=func.now(),
         nullable=False,
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         onupdate=func.now(),
         nullable=True,

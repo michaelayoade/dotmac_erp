@@ -7,7 +7,6 @@ Tests for pagination controls and behavior across list pages.
 import pytest
 from playwright.sync_api import expect
 
-
 # =============================================================================
 # Pagination Controls Tests
 # =============================================================================
@@ -38,7 +37,7 @@ class TestPaginationControls:
         table = authenticated_page.locator("table tbody tr")
         if table.count() > 10:
             # With many rows, pagination should be present
-            controls_exist = pagination.count() > 0 or page_info.count() > 0
+            pagination.count() > 0 or page_info.count() > 0
             # Just verify page loaded properly
             expect(authenticated_page.locator("main")).to_be_visible()
 
@@ -49,7 +48,7 @@ class TestPaginationControls:
         authenticated_page.goto(f"{base_url}/ap/invoices")
         authenticated_page.wait_for_load_state("networkidle")
 
-        pagination = authenticated_page.locator(
+        authenticated_page.locator(
             ".pagination, nav[aria-label*='pagination'], [class*='paginate']"
         )
 
@@ -63,7 +62,7 @@ class TestPaginationControls:
         authenticated_page.goto(f"{base_url}/gl/journals")
         authenticated_page.wait_for_load_state("networkidle")
 
-        pagination = authenticated_page.locator(
+        authenticated_page.locator(
             ".pagination, nav[aria-label*='pagination'], [class*='paginate']"
         )
 
@@ -113,7 +112,6 @@ class TestPaginationNavigation:
 
             if not is_disabled:
                 # Get current URL or page indicator
-                current_url = authenticated_page.url
 
                 next_btn.first.click()
                 authenticated_page.wait_for_load_state("networkidle")
@@ -203,7 +201,7 @@ class TestPaginationPageSize:
 
         if page_size.count() > 0:
             # Get current row count
-            rows_before = authenticated_page.locator("table tbody tr").count()
+            authenticated_page.locator("table tbody tr").count()
 
             # Change page size
             page_size.first.select_option(index=1)  # Select different size
@@ -233,7 +231,6 @@ class TestPaginationPageSize:
             authenticated_page.wait_for_load_state("networkidle")
 
             # Filter should still be applied (check URL or filter value)
-            current_url = authenticated_page.url
             # Just verify page works with both filter and pagination
             expect(authenticated_page.locator("main")).to_be_visible()
 
@@ -254,7 +251,7 @@ class TestEmptyListPagination:
         )
 
         # Pagination should not be prominently visible for empty results
-        pagination = authenticated_page.locator(".pagination")
+        authenticated_page.locator(".pagination")
 
         if empty_state.count() > 0:
             # With empty results, pagination might be hidden or show "0 results"
@@ -275,7 +272,7 @@ class TestEmptyListPagination:
                 "a:has-text('Next'), button:has-text('Next')"
             )
             if next_btn.count() > 0:
-                is_disabled = next_btn.first.is_disabled() or "disabled" in (
+                next_btn.first.is_disabled() or "disabled" in (
                     next_btn.first.get_attribute("class") or ""
                 )
                 # Button should be disabled for single page
@@ -302,8 +299,6 @@ class TestPaginationURLState:
             authenticated_page.wait_for_load_state("networkidle")
 
             # URL should contain page parameter
-            current_url = authenticated_page.url
-            has_page_param = "page=" in current_url or "/page/" in current_url
 
             # Just verify navigation worked
             expect(authenticated_page.locator("main")).to_be_visible()
@@ -318,7 +313,7 @@ class TestPaginationURLState:
         expect(authenticated_page.locator("main")).to_be_visible()
 
         # Check if page indicator shows page 2
-        page_indicator = authenticated_page.locator(
+        authenticated_page.locator(
             ".pagination .active, [aria-current='page'], text=/Page 2/"
         )
         # Page 2 might be indicated somehow

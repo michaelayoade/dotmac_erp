@@ -18,6 +18,7 @@
 <div class="flex items-center gap-2">
     {% if template.is_active %}
     <form method="post" action="/automation/recurring/{{ template.template_id }}/generate">
+        {{ request.state.csrf_form | safe }}
         <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-teal-50 px-4 py-2 text-sm font-medium text-teal-700 hover:bg-teal-100 dark:bg-teal-900/20 dark:text-teal-400">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
@@ -27,6 +28,7 @@
         </button>
     </form>
     <form method="post" action="/automation/recurring/{{ template.template_id }}/pause">
+        {{ request.state.csrf_form | safe }}
         <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-amber-50 px-4 py-2 text-sm font-medium text-amber-700 hover:bg-amber-100 dark:bg-amber-900/20 dark:text-amber-400">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -36,6 +38,7 @@
     </form>
     {% elif template.is_paused %}
     <form method="post" action="/automation/recurring/{{ template.template_id }}/resume">
+        {{ request.state.csrf_form | safe }}
         <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-400">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
@@ -78,11 +81,11 @@
                     <dl class="grid gap-4 sm:grid-cols-2">
                         <div>
                             <dt class="text-sm text-slate-500 dark:text-slate-400">Entity Type</dt>
-                            <dd class="mt-1 font-medium text-slate-900 dark:text-white">{{ template.entity_type }}</dd>
+                            <dd class="mt-1 font-medium text-slate-900 dark:text-white">{{ template.entity_type | replace('_', ' ') | title }}</dd>
                         </div>
                         <div>
                             <dt class="text-sm text-slate-500 dark:text-slate-400">Frequency</dt>
-                            <dd class="mt-1 font-medium text-slate-900 dark:text-white">{{ template.frequency }}</dd>
+                            <dd class="mt-1 font-medium text-slate-900 dark:text-white">{{ template.frequency | replace('_', ' ') | title }}</dd>
                         </div>
                         <div>
                             <dt class="text-sm text-slate-500 dark:text-slate-400">Start Date</dt>
@@ -215,6 +218,7 @@
                 <h3 class="font-semibold text-rose-700 dark:text-rose-400 mb-4">Danger Zone</h3>
                 <form method="post" action="/automation/recurring/{{ template.template_id }}/cancel"
                       onsubmit="return confirm('Are you sure you want to cancel this recurring template? This action cannot be undone.')">
+                    {{ request.state.csrf_form | safe }}
                     <button type="submit" class="w-full rounded-lg bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700">
                         Cancel Template
                     </button>

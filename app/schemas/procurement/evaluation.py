@@ -4,7 +4,6 @@ Bid Evaluation Schemas.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -19,7 +18,7 @@ class EvaluationScoreCreate(BaseModel):
     criterion_name: str = Field(max_length=100)
     weight: Decimal = Field(ge=0, le=100)
     score: Decimal = Field(ge=0, le=100)
-    comments: Optional[str] = None
+    comments: str | None = None
 
 
 class EvaluationScoreResponse(BaseModel):
@@ -34,7 +33,7 @@ class EvaluationScoreResponse(BaseModel):
     weight: Decimal
     score: Decimal
     weighted_score: Decimal
-    comments: Optional[str] = None
+    comments: str | None = None
 
 
 class EvaluationCreate(BaseModel):
@@ -43,16 +42,16 @@ class EvaluationCreate(BaseModel):
     rfq_id: UUID
     evaluation_date: date
     evaluated_by_user_id: UUID
-    evaluation_report: Optional[str] = None
-    scores: List[EvaluationScoreCreate] = Field(default_factory=list)
+    evaluation_report: str | None = None
+    scores: list[EvaluationScoreCreate] = Field(default_factory=list)
 
 
 class EvaluationUpdate(BaseModel):
     """Schema for updating a bid evaluation."""
 
-    evaluation_report: Optional[str] = None
-    recommended_supplier_id: Optional[UUID] = None
-    recommended_response_id: Optional[UUID] = None
+    evaluation_report: str | None = None
+    recommended_supplier_id: UUID | None = None
+    recommended_response_id: UUID | None = None
 
 
 class EvaluationResponse(BaseModel):
@@ -65,12 +64,12 @@ class EvaluationResponse(BaseModel):
     organization_id: UUID
     evaluation_date: date
     status: EvaluationStatus
-    recommended_supplier_id: Optional[UUID] = None
-    recommended_response_id: Optional[UUID] = None
-    evaluation_report: Optional[str] = None
+    recommended_supplier_id: UUID | None = None
+    recommended_response_id: UUID | None = None
+    evaluation_report: str | None = None
     evaluated_by_user_id: UUID
-    approved_by_user_id: Optional[UUID] = None
-    approved_at: Optional[datetime] = None
+    approved_by_user_id: UUID | None = None
+    approved_at: datetime | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    scores: List[EvaluationScoreResponse] = Field(default_factory=list)
+    updated_at: datetime | None = None
+    scores: list[EvaluationScoreResponse] = Field(default_factory=list)

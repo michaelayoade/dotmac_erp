@@ -11,7 +11,6 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -52,7 +51,7 @@ class TAXPostingAdapter:
         transaction_id: UUID,
         posting_date: date,
         posted_by_user_id: UUID,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> TAXPostingResult:
         """
         Post a tax transaction to the general ledger.
@@ -227,8 +226,8 @@ class TAXPostingAdapter:
         current_tax_expense: Decimal,
         posting_date: date,
         posted_by_user_id: UUID,
-        reference: Optional[str] = None,
-        idempotency_key: Optional[str] = None,
+        reference: str | None = None,
+        idempotency_key: str | None = None,
     ) -> TAXPostingResult:
         """
         Post current income tax provision to the general ledger.
@@ -376,7 +375,7 @@ class TAXPostingAdapter:
         movement_id: UUID,
         posting_date: date,
         posted_by_user_id: UUID,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> TAXPostingResult:
         """
         Post deferred tax movement to the general ledger.

@@ -7,18 +7,17 @@ uses PostgreSQL-specific features not available in SQLite.
 """
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.models.people.discipline import (
-    CaseStatus,
-    ViolationType,
-    SeverityLevel,
     ActionType,
+    CaseStatus,
+    SeverityLevel,
+    ViolationType,
 )
-
 
 # ============ Mock Case for Testing ============
 
@@ -67,7 +66,7 @@ class MockCase:
         self.reported_by_id = kwargs.get("reported_by_id")
         self.investigating_officer_id = kwargs.get("investigating_officer_id")
         self.panel_chair_id = kwargs.get("panel_chair_id")
-        self.created_at = kwargs.get("created_at") or datetime.now(timezone.utc)
+        self.created_at = kwargs.get("created_at") or datetime.now(UTC)
         self.updated_at = kwargs.get("updated_at")
         self.is_deleted = False
 
@@ -307,7 +306,7 @@ class TestDisciplineWorkflow:
         mock_response.response_text = "My explanation."
         mock_response.is_initial_response = True
         mock_response.is_appeal_response = False
-        mock_response.submitted_at = datetime.now(timezone.utc)
+        mock_response.submitted_at = datetime.now(UTC)
         mock_response.acknowledged_at = None
 
         mock_discipline_service.get_case_or_404.return_value = test_case
@@ -370,7 +369,7 @@ class TestEmployeeActions:
         mock_action.payroll_processed = False
         mock_action.lifecycle_triggered = False
         mock_action.issued_by_id = None
-        mock_action.created_at = datetime.now(timezone.utc)
+        mock_action.created_at = datetime.now(UTC)
 
         mock_discipline_service.get_active_actions_for_employee.return_value = [
             mock_action

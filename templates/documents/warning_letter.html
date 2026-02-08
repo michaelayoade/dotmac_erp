@@ -104,7 +104,7 @@
             {% for warning in previous_warnings %}
             <tr>
                 <td style="padding: 8px; border: 1px solid #e2e8f0;">{{ warning.date | format_date }}</td>
-                <td style="padding: 8px; border: 1px solid #e2e8f0;">{{ warning.type }}</td>
+                <td style="padding: 8px; border: 1px solid #e2e8f0;">{{ warning.type | replace('_', ' ') | title }}</td>
                 <td style="padding: 8px; border: 1px solid #e2e8f0;">{{ warning.description }}</td>
             </tr>
             {% endfor %}

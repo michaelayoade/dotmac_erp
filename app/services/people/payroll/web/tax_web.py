@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -21,6 +21,13 @@ from app.services.people.payroll.paye_calculator import PAYECalculator
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
+from .base import (
+    DEFAULT_PAGE_SIZE,
+    parse_bool,
+    parse_decimal,
+    parse_uuid,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -29,14 +36,6 @@ def _get_form_str(form: Any, key: str, default: str = "") -> str:
     if isinstance(value, UploadFile) or value is None:
         return default
     return str(value).strip()
-
-
-from .base import (
-    DEFAULT_PAGE_SIZE,
-    parse_bool,
-    parse_decimal,
-    parse_uuid,
-)
 
 
 def _safe_form_text(value: object) -> str:
@@ -297,7 +296,7 @@ class TaxWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        employee_id: Optional[str] = None,
+        employee_id: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Render new tax profile form."""
         org_id = coerce_uuid(auth.organization_id)

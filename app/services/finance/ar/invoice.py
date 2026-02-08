@@ -9,13 +9,13 @@ from __future__ import annotations
 import logging
 import uuid as uuid_lib
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_
+from sqlalchemy import and_, func
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -24,8 +24,10 @@ from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.models.finance.ar.invoice_line import InvoiceLine
 from app.models.finance.ar.invoice_line_tax import InvoiceLineTax
+from app.models.finance.ar.payment_allocation import PaymentAllocation
 from app.models.finance.ar.payment_terms import PaymentTerms
 from app.models.finance.ar.performance_obligation import PerformanceObligation
+from app.models.finance.audit.audit_log import AuditAction
 from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.models.finance.core_org.cost_center import CostCenter
 from app.models.finance.core_org.project import Project
@@ -33,9 +35,15 @@ from app.models.finance.core_org.reporting_segment import ReportingSegment
 from app.models.finance.gl.account import Account
 from app.models.finance.tax.tax_code import TaxCode
 from app.models.inventory.item import Item
-from app.models.finance.audit.audit_log import AuditAction
 from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import coerce_uuid
+from app.services.finance.ar.input_utils import (
+    parse_date_str,
+    parse_decimal,
+    parse_json_list,
+    require_uuid,
+    resolve_currency_code,
+)
 from app.services.finance.platform.sequence import SequenceService
 from app.services.finance.tax.tax_calculation import (
     LineCalculationResult,
@@ -53,18 +61,18 @@ class ARInvoiceLineInput:
     description: str
     quantity: Decimal
     unit_price: Decimal
-    revenue_account_id: Optional[UUID] = None
-    item_id: Optional[UUID] = None
+    revenue_account_id: UUID | None = None
+    item_id: UUID | None = None
     # Multiple tax codes per line (replaces single tax_code_id)
     tax_code_ids: list[UUID] = field(default_factory=list)
     # Keep legacy field for backwards compatibility during transition
-    tax_code_id: Optional[UUID] = None
+    tax_code_id: UUID | None = None
     discount_amount: Decimal = Decimal("0")
-    cost_center_id: Optional[UUID] = None
-    project_id: Optional[UUID] = None
-    segment_id: Optional[UUID] = None
-    contract_id: Optional[UUID] = None
-    performance_obligation_id: Optional[UUID] = None
+    cost_center_id: UUID | None = None
+    project_id: UUID | None = None
+    segment_id: UUID | None = None
+    contract_id: UUID | None = None
+    performance_obligation_id: UUID | None = None
 
 
 @dataclass
@@ -77,24 +85,24 @@ class ARInvoiceInput:
     due_date: date
     currency_code: str
     lines: list[ARInvoiceLineInput] = field(default_factory=list)
-    contract_id: Optional[UUID] = None
-    exchange_rate: Optional[Decimal] = None
-    exchange_rate_type_id: Optional[UUID] = None
-    payment_terms_id: Optional[UUID] = None
-    billing_address: Optional[dict[str, Any]] = None
-    shipping_address: Optional[dict[str, Any]] = None
-    notes: Optional[str] = None
-    internal_notes: Optional[str] = None
+    contract_id: UUID | None = None
+    exchange_rate: Decimal | None = None
+    exchange_rate_type_id: UUID | None = None
+    payment_terms_id: UUID | None = None
+    billing_address: dict[str, Any] | None = None
+    shipping_address: dict[str, Any] | None = None
+    notes: str | None = None
+    internal_notes: str | None = None
     is_intercompany: bool = False
-    intercompany_org_id: Optional[UUID] = None
-    correlation_id: Optional[str] = None
+    intercompany_org_id: UUID | None = None
+    correlation_id: str | None = None
 
 
 def _require_org_match(
     db: Session,
     organization_id: UUID,
     model: type,
-    record_id: Optional[UUID],
+    record_id: UUID | None,
     label: str,
 ) -> None:
     """Ensure a referenced record belongs to the organization."""
@@ -218,11 +226,6 @@ class ARInvoiceService(ListResponseMixin):
 
         # Collect all line-level references
         for line in input.lines:
-            if not line.tax_code_ids and not line.tax_code_id:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Tax code is required for each invoice line",
-                )
             if line.revenue_account_id:
                 account_ids.add(line.revenue_account_id)
             if line.item_id:
@@ -260,10 +263,10 @@ class ARInvoiceService(ListResponseMixin):
         # Calculate totals with auto tax calculation
         subtotal = Decimal("0")
         tax_total = Decimal("0")
-        discount_total = Decimal("0")
+        Decimal("0")
 
         # Pre-calculate taxes for all lines
-        line_tax_results: list[Optional[LineCalculationResult]] = []
+        line_tax_results: list[LineCalculationResult | None] = []
         for line in input.lines:
             line_amount = line.quantity * line.unit_price - line.discount_amount
             subtotal += line_amount
@@ -448,7 +451,7 @@ class ARInvoiceService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
         inv_id = coerce_uuid(invoice_id)
-        user_id = coerce_uuid(updated_by_user_id)
+        coerce_uuid(updated_by_user_id)
         customer_id = coerce_uuid(input.customer_id)
 
         # Get existing invoice
@@ -489,7 +492,7 @@ class ARInvoiceService(ListResponseMixin):
         # Calculate totals from lines
         subtotal = Decimal("0")
         tax_total = Decimal("0")
-        line_tax_results: list[Optional[LineCalculationResult]] = []
+        line_tax_results: list[LineCalculationResult | None] = []
 
         for line_input in input.lines:
             line_amount = (
@@ -553,7 +556,7 @@ class ARInvoiceService(ListResponseMixin):
         invoice.ar_control_account_id = customer.ar_control_account_id
         invoice.is_intercompany = input.is_intercompany
         invoice.intercompany_org_id = input.intercompany_org_id
-        invoice.updated_at = datetime.now(timezone.utc)
+        invoice.updated_at = datetime.now(UTC)
 
         db.flush()
 
@@ -629,6 +632,138 @@ class ARInvoiceService(ListResponseMixin):
         return invoice
 
     @staticmethod
+    def build_input_from_payload(
+        db: Session,
+        organization_id: UUID,
+        payload: dict,
+    ) -> ARInvoiceInput:
+        """Build ARInvoiceInput from raw payload (strings or JSON)."""
+        lines_data = parse_json_list(payload.get("lines"), "Lines")
+
+        lines: list[ARInvoiceLineInput] = []
+        for line in lines_data:
+            if not line.get("description"):
+                raise ValueError("Line description is required")
+
+            tax_code_ids: list[UUID] = []
+            if line.get("tax_code_ids"):
+                tax_code_ids = [
+                    coerce_uuid(tc_id) for tc_id in line.get("tax_code_ids") if tc_id
+                ]
+            legacy_tax_code_id = (
+                coerce_uuid(line.get("tax_code_id"))
+                if line.get("tax_code_id")
+                else None
+            )
+
+            lines.append(
+                ARInvoiceLineInput(
+                    description=line.get("description", ""),
+                    quantity=parse_decimal(line.get("quantity", 1), "Quantity"),
+                    unit_price=parse_decimal(line.get("unit_price", 0), "Unit price"),
+                    revenue_account_id=coerce_uuid(line.get("revenue_account_id"))
+                    if line.get("revenue_account_id")
+                    else None,
+                    item_id=coerce_uuid(line.get("item_id"))
+                    if line.get("item_id")
+                    else None,
+                    tax_code_ids=tax_code_ids,
+                    tax_code_id=legacy_tax_code_id,
+                    cost_center_id=coerce_uuid(line.get("cost_center_id"))
+                    if line.get("cost_center_id")
+                    else None,
+                    project_id=coerce_uuid(line.get("project_id"))
+                    if line.get("project_id")
+                    else None,
+                )
+            )
+
+        invoice_date = parse_date_str(payload.get("invoice_date"), "Invoice date")
+        invoice_date = invoice_date or date.today()
+        due_date = parse_date_str(payload.get("due_date"), "Due date") or invoice_date
+
+        customer_id = require_uuid(payload.get("customer_id"), "Customer")
+        currency_code = resolve_currency_code(
+            db, coerce_uuid(organization_id), payload.get("currency_code")
+        )
+
+        return ARInvoiceInput(
+            customer_id=customer_id,
+            invoice_type=InvoiceType.STANDARD,
+            invoice_date=invoice_date,
+            due_date=due_date,
+            currency_code=currency_code,
+            notes=payload.get("terms"),
+            internal_notes=payload.get("notes"),
+            lines=lines,
+        )
+
+    @staticmethod
+    def build_credit_note_input_from_payload(
+        db: Session,
+        organization_id: UUID,
+        payload: dict,
+    ) -> ARInvoiceInput:
+        """Build ARInvoiceInput from raw payload for credit notes."""
+        lines_data = parse_json_list(payload.get("lines"), "Lines")
+
+        lines: list[ARInvoiceLineInput] = []
+        for line in lines_data:
+            if not line.get("description") or not line.get("revenue_account_id"):
+                continue
+
+            tax_code_ids: list[UUID] = []
+            if line.get("tax_code_ids"):
+                tax_code_ids = [
+                    coerce_uuid(tc_id) for tc_id in line.get("tax_code_ids") if tc_id
+                ]
+            legacy_tax_code_id = (
+                coerce_uuid(line.get("tax_code_id"))
+                if line.get("tax_code_id")
+                else None
+            )
+
+            lines.append(
+                ARInvoiceLineInput(
+                    description=line.get("description", ""),
+                    quantity=parse_decimal(line.get("quantity", 1), "Quantity"),
+                    unit_price=parse_decimal(line.get("unit_price", 0), "Unit price"),
+                    revenue_account_id=coerce_uuid(line.get("revenue_account_id"))
+                    if line.get("revenue_account_id")
+                    else None,
+                    tax_code_ids=tax_code_ids,
+                    tax_code_id=legacy_tax_code_id,
+                    cost_center_id=coerce_uuid(line.get("cost_center_id"))
+                    if line.get("cost_center_id")
+                    else None,
+                    project_id=coerce_uuid(line.get("project_id"))
+                    if line.get("project_id")
+                    else None,
+                )
+            )
+
+        credit_note_date = (
+            parse_date_str(payload.get("credit_note_date"), "Credit note date")
+            or date.today()
+        )
+
+        customer_id = require_uuid(payload.get("customer_id"), "Customer")
+        currency_code = resolve_currency_code(
+            db, coerce_uuid(organization_id), payload.get("currency_code")
+        )
+
+        return ARInvoiceInput(
+            customer_id=customer_id,
+            invoice_type=InvoiceType.CREDIT_NOTE,
+            invoice_date=credit_note_date,
+            due_date=credit_note_date,
+            currency_code=currency_code,
+            notes=payload.get("reason"),
+            internal_notes=payload.get("notes"),
+            lines=lines,
+        )
+
+    @staticmethod
     def submit_invoice(
         db: Session,
         organization_id: UUID,
@@ -652,7 +787,7 @@ class ARInvoiceService(ListResponseMixin):
 
         invoice.status = InvoiceStatus.SUBMITTED
         invoice.submitted_by_user_id = user_id
-        invoice.submitted_at = datetime.now(timezone.utc)
+        invoice.submitted_at = datetime.now(UTC)
 
         # Fire workflow automation event
         try:
@@ -721,7 +856,7 @@ class ARInvoiceService(ListResponseMixin):
 
         invoice.status = InvoiceStatus.APPROVED
         invoice.approved_by_user_id = user_id
-        invoice.approved_at = datetime.now(timezone.utc)
+        invoice.approved_at = datetime.now(UTC)
 
         # Fire workflow automation event
         try:
@@ -765,7 +900,7 @@ class ARInvoiceService(ListResponseMixin):
         organization_id: UUID,
         invoice_id: UUID,
         posted_by_user_id: UUID,
-        posting_date: Optional[date] = None,
+        posting_date: date | None = None,
     ) -> Invoice:
         """Post an approved invoice to the general ledger."""
         from app.services.finance.ar.ar_posting_adapter import ARPostingAdapter
@@ -799,7 +934,7 @@ class ARInvoiceService(ListResponseMixin):
         # Update invoice status
         invoice.status = InvoiceStatus.POSTED
         invoice.posted_by_user_id = user_id
-        invoice.posted_at = datetime.now(timezone.utc)
+        invoice.posted_at = datetime.now(UTC)
         invoice.journal_entry_id = result.journal_entry_id
         invoice.posting_batch_id = result.posting_batch_id
         invoice.posting_status = "POSTED"
@@ -873,7 +1008,7 @@ class ARInvoiceService(ListResponseMixin):
         old_status = invoice.status.value
         invoice.status = InvoiceStatus.VOID
         invoice.voided_by_user_id = user_id
-        invoice.voided_at = datetime.now(timezone.utc)
+        invoice.voided_at = datetime.now(UTC)
         invoice.void_reason = reason
 
         fire_audit_event(
@@ -900,7 +1035,7 @@ class ARInvoiceService(ListResponseMixin):
         organization_id: UUID,
         invoice_id: UUID,
         cancelled_by_user_id: UUID,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> Invoice:
         """
         Cancel an invoice, returning it to DRAFT status for editing.
@@ -981,7 +1116,7 @@ class ARInvoiceService(ListResponseMixin):
     def mark_overdue(
         db: Session,
         organization_id: UUID,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
     ) -> int:
         """
         Mark overdue invoices.
@@ -1098,11 +1233,11 @@ class ARInvoiceService(ListResponseMixin):
     def list(
         db: Session,
         organization_id: str,
-        customer_id: Optional[str] = None,
-        status: Optional[InvoiceStatus] = None,
-        invoice_type: Optional[InvoiceType] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
+        customer_id: str | None = None,
+        status: InvoiceStatus | None = None,
+        invoice_type: InvoiceType | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
         overdue_only: bool = False,
         limit: int = 50,
         offset: int = 0,
@@ -1174,6 +1309,107 @@ class ARInvoiceService(ListResponseMixin):
 
         query = query.order_by(Invoice.invoice_date.desc())
         return query.limit(limit).offset(offset).all()
+
+    @staticmethod
+    def delete_invoice(
+        db: Session,
+        organization_id: UUID,
+        invoice_id: UUID,
+    ) -> None:
+        """Delete an invoice in DRAFT status."""
+        org_id = coerce_uuid(organization_id)
+        inv_id = coerce_uuid(invoice_id)
+
+        invoice = db.get(Invoice, inv_id)
+        if not invoice or invoice.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+
+        if invoice.status != InvoiceStatus.DRAFT:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Cannot delete invoice with status '{invoice.status.value}'. "
+                    "Only DRAFT invoices can be deleted."
+                ),
+            )
+
+        allocation_count = (
+            db.query(func.count(PaymentAllocation.allocation_id))
+            .filter(PaymentAllocation.invoice_id == inv_id)
+            .scalar()
+            or 0
+        )
+        if allocation_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot delete invoice with {allocation_count} payment allocation(s).",
+            )
+
+        line_ids = [
+            line.line_id
+            for line in db.query(InvoiceLine)
+            .filter(InvoiceLine.invoice_id == inv_id)
+            .all()
+        ]
+        if line_ids:
+            db.query(InvoiceLineTax).filter(
+                InvoiceLineTax.line_id.in_(line_ids)
+            ).delete()
+        db.query(InvoiceLine).filter(InvoiceLine.invoice_id == inv_id).delete()
+        db.delete(invoice)
+        db.flush()
+
+    @staticmethod
+    def delete_credit_note(
+        db: Session,
+        organization_id: UUID,
+        credit_note_id: UUID,
+    ) -> None:
+        """Delete a credit note (DRAFT only)."""
+        org_id = coerce_uuid(organization_id)
+        cn_id = coerce_uuid(credit_note_id)
+
+        credit_note = db.get(Invoice, cn_id)
+        if not credit_note or credit_note.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Credit note not found")
+
+        if credit_note.invoice_type != InvoiceType.CREDIT_NOTE:
+            raise HTTPException(status_code=400, detail="Document is not a credit note")
+
+        if credit_note.status != InvoiceStatus.DRAFT:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Cannot delete credit note with status '{credit_note.status.value}'. "
+                    "Only DRAFT credit notes can be deleted."
+                ),
+            )
+
+        allocation_count = (
+            db.query(func.count(PaymentAllocation.allocation_id))
+            .filter(PaymentAllocation.invoice_id == cn_id)
+            .scalar()
+            or 0
+        )
+        if allocation_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot delete credit note with {allocation_count} allocation(s).",
+            )
+
+        line_ids = [
+            line.line_id
+            for line in db.query(InvoiceLine)
+            .filter(InvoiceLine.invoice_id == cn_id)
+            .all()
+        ]
+        if line_ids:
+            db.query(InvoiceLineTax).filter(
+                InvoiceLineTax.line_id.in_(line_ids)
+            ).delete()
+        db.query(InvoiceLine).filter(InvoiceLine.invoice_id == cn_id).delete()
+        db.delete(credit_note)
+        db.flush()
 
 
 # Module-level singleton instance

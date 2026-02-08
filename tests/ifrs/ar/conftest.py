@@ -6,16 +6,13 @@ while still testing the service logic.
 """
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
 
-
 # ============ Mock Enums ============
-
 from app.models.finance.ar.customer import CustomerType, RiskCategory
 from app.models.finance.ar.customer_payment import PaymentMethod, PaymentStatus
 from app.models.finance.ar.invoice import InvoiceStatus, InvoiceType
@@ -41,26 +38,26 @@ class MockCustomer:
         customer_code: str = "CUS001",
         customer_type: CustomerType = CustomerType.COMPANY,
         legal_name: str = "Test Customer",
-        trading_name: Optional[str] = None,
-        tax_identification_number: Optional[str] = None,
-        registration_number: Optional[str] = None,
-        credit_limit: Optional[Decimal] = None,
+        trading_name: str | None = None,
+        tax_identification_number: str | None = None,
+        registration_number: str | None = None,
+        credit_limit: Decimal | None = None,
         credit_terms_days: int = 30,
-        payment_terms_id: Optional[uuid.UUID] = None,
+        payment_terms_id: uuid.UUID | None = None,
         currency_code: str = "USD",
-        price_list_id: Optional[uuid.UUID] = None,
-        ar_control_account_id: Optional[uuid.UUID] = None,
-        default_revenue_account_id: Optional[uuid.UUID] = None,
-        sales_rep_user_id: Optional[uuid.UUID] = None,
-        customer_group_id: Optional[uuid.UUID] = None,
-        risk_category: Optional[RiskCategory] = None,
+        price_list_id: uuid.UUID | None = None,
+        ar_control_account_id: uuid.UUID | None = None,
+        default_revenue_account_id: uuid.UUID | None = None,
+        sales_rep_user_id: uuid.UUID | None = None,
+        customer_group_id: uuid.UUID | None = None,
+        risk_category: RiskCategory | None = None,
         is_related_party: bool = False,
-        related_party_type: Optional[str] = None,
-        related_party_relationship: Optional[str] = None,
-        billing_address: Optional[dict] = None,
-        shipping_address: Optional[dict] = None,
-        primary_contact: Optional[dict] = None,
-        bank_details: Optional[dict] = None,
+        related_party_type: str | None = None,
+        related_party_relationship: str | None = None,
+        billing_address: dict | None = None,
+        shipping_address: dict | None = None,
+        primary_contact: dict | None = None,
+        bank_details: dict | None = None,
         is_active: bool = True,
         created_at: datetime = None,
         updated_at: datetime = None,
@@ -91,7 +88,7 @@ class MockCustomer:
         self.primary_contact = primary_contact
         self.bank_details = bank_details
         self.is_active = is_active
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
 
 
@@ -115,18 +112,18 @@ class MockInvoice:
         amount_paid: Decimal = Decimal("0"),
         functional_currency_amount: Decimal = Decimal("1000.00"),
         status: InvoiceStatus = InvoiceStatus.DRAFT,
-        ar_control_account_id: Optional[uuid.UUID] = None,
-        journal_entry_id: Optional[uuid.UUID] = None,
-        posting_batch_id: Optional[uuid.UUID] = None,
+        ar_control_account_id: uuid.UUID | None = None,
+        journal_entry_id: uuid.UUID | None = None,
+        posting_batch_id: uuid.UUID | None = None,
         posting_status: str = "NOT_POSTED",
-        contract_id: Optional[uuid.UUID] = None,
-        created_by_user_id: Optional[uuid.UUID] = None,
-        submitted_by_user_id: Optional[uuid.UUID] = None,
-        submitted_at: Optional[datetime] = None,
-        approved_by_user_id: Optional[uuid.UUID] = None,
-        approved_at: Optional[datetime] = None,
-        posted_by_user_id: Optional[uuid.UUID] = None,
-        posted_at: Optional[datetime] = None,
+        contract_id: uuid.UUID | None = None,
+        created_by_user_id: uuid.UUID | None = None,
+        submitted_by_user_id: uuid.UUID | None = None,
+        submitted_at: datetime | None = None,
+        approved_by_user_id: uuid.UUID | None = None,
+        approved_at: datetime | None = None,
+        posted_by_user_id: uuid.UUID | None = None,
+        posted_at: datetime | None = None,
         created_at: datetime = None,
     ):
         self.invoice_id = invoice_id or uuid.uuid4()
@@ -156,7 +153,7 @@ class MockInvoice:
         self.approved_at = approved_at
         self.posted_by_user_id = posted_by_user_id
         self.posted_at = posted_at
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.lines = []
 
     @property
@@ -172,14 +169,14 @@ class MockInvoiceLine:
         line_id: uuid.UUID = None,
         invoice_id: uuid.UUID = None,
         line_number: int = 1,
-        account_id: Optional[uuid.UUID] = None,
+        account_id: uuid.UUID | None = None,
         description: str = "Test line",
         quantity: Decimal = Decimal("1"),
         unit_price: Decimal = Decimal("1000.00"),
         amount: Decimal = Decimal("1000.00"),
-        tax_code_id: Optional[uuid.UUID] = None,
+        tax_code_id: uuid.UUID | None = None,
         tax_amount: Decimal = Decimal("0"),
-        performance_obligation_id: Optional[uuid.UUID] = None,
+        performance_obligation_id: uuid.UUID | None = None,
     ):
         self.line_id = line_id or uuid.uuid4()
         self.invoice_id = invoice_id or uuid.uuid4()
@@ -208,16 +205,16 @@ class MockCustomerPayment:
         currency_code: str = "USD",
         exchange_rate: Decimal = Decimal("1.0"),
         amount: Decimal = Decimal("1000.00"),
-        gross_amount: Optional[Decimal] = None,
+        gross_amount: Decimal | None = None,
         wht_amount: Decimal = Decimal("0"),
-        wht_code_id: Optional[uuid.UUID] = None,
-        wht_certificate_number: Optional[str] = None,
+        wht_code_id: uuid.UUID | None = None,
+        wht_certificate_number: str | None = None,
         functional_currency_amount: Decimal = Decimal("1000.00"),
         status: PaymentStatus = PaymentStatus.PENDING,
-        bank_account_id: Optional[uuid.UUID] = None,
-        reference: Optional[str] = None,
-        created_by_user_id: Optional[uuid.UUID] = None,
-        approved_by_user_id: Optional[uuid.UUID] = None,
+        bank_account_id: uuid.UUID | None = None,
+        reference: str | None = None,
+        created_by_user_id: uuid.UUID | None = None,
+        approved_by_user_id: uuid.UUID | None = None,
         created_at: datetime = None,
         correlation_id: uuid.UUID = None,
     ):
@@ -240,7 +237,7 @@ class MockCustomerPayment:
         self.reference = reference
         self.created_by_user_id = created_by_user_id or uuid.uuid4()
         self.approved_by_user_id = approved_by_user_id
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.correlation_id = correlation_id or uuid.uuid4()
         self.allocations = []
 
@@ -260,7 +257,7 @@ class MockPaymentAllocation:
         self.payment_id = payment_id or uuid.uuid4()
         self.invoice_id = invoice_id or uuid.uuid4()
         self.allocated_amount = allocated_amount
-        self.allocated_at = allocated_at or datetime.now(timezone.utc)
+        self.allocated_at = allocated_at or datetime.now(UTC)
 
 
 class MockARAgingSnapshot:
@@ -271,7 +268,7 @@ class MockARAgingSnapshot:
         snapshot_id: uuid.UUID = None,
         organization_id: uuid.UUID = None,
         snapshot_date: date = None,
-        customer_id: Optional[uuid.UUID] = None,
+        customer_id: uuid.UUID | None = None,
         current_amount: Decimal = Decimal("0"),
         days_1_30: Decimal = Decimal("0"),
         days_31_60: Decimal = Decimal("0"),

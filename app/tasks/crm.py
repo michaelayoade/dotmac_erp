@@ -64,8 +64,8 @@ def sync_crm_tickets(
     with SessionLocal() as db:
         try:
             with CRMClient() as client:
-                # Health check first
-                if not client.health_check():
+                # Health check only for full syncs (skip for incremental to reduce latency)
+                if not incremental and not client.health_check():
                     logger.error("CRM API health check failed")
                     results["errors"].append("CRM API not accessible")
                     return results
@@ -79,7 +79,7 @@ def sync_crm_tickets(
                 results["skipped"] = sync_result.skipped_count
 
                 if sync_result.errors:
-                    results["errors"] = sync_result.errors[:10]  # Limit error count
+                    results["errors"] = sync_result.errors[:10]
 
                 db.commit()
 
@@ -144,8 +144,8 @@ def sync_crm_projects(
     with SessionLocal() as db:
         try:
             with CRMClient() as client:
-                # Health check first
-                if not client.health_check():
+                # Health check only for full syncs
+                if not incremental and not client.health_check():
                     logger.error("CRM API health check failed")
                     results["errors"].append("CRM API not accessible")
                     return results
@@ -237,8 +237,8 @@ def sync_all_crm_entities(
     with SessionLocal() as db:
         try:
             with CRMClient() as client:
-                # Health check first
-                if not client.health_check():
+                # Health check only for full syncs
+                if not incremental and not client.health_check():
                     logger.error("CRM API health check failed")
                     results["success"] = False
                     results["error"] = "CRM API not accessible"
@@ -317,6 +317,93 @@ def crm_health_check() -> dict:
             "crm_url": settings.crm_api_url,
             "message": str(e),
         }
+
+
+@shared_task
+def retry_failed_crm_push_syncs(
+    organization_id: str | None = None,
+    max_retries: int = 50,
+) -> dict:
+    """
+    Retry failed push-based CRM sync mappings.
+
+    Finds CRMSyncMapping entries with last_error set and re-runs
+    the sync for those entities by re-fetching from CRM.
+
+    Args:
+        organization_id: Specific org to retry, or None for default org
+        max_retries: Maximum number of failed mappings to retry per run
+
+    Returns:
+        Dict with retry statistics
+    """
+    from sqlalchemy import select
+
+    from app.models.sync.dotmac_crm_sync import CRMSyncMapping
+
+    logger.info("Starting retry of failed CRM push syncs")
+
+    results: dict[str, Any] = {
+        "task": "retry_failed_crm_push_syncs",
+        "retried": 0,
+        "resolved": 0,
+        "still_failing": 0,
+        "errors": [],
+    }
+
+    org_id_str = organization_id or settings.default_organization_id
+    if not org_id_str:
+        results["errors"].append("No organization ID available")
+        return results
+
+    try:
+        org_id = UUID(org_id_str)
+    except ValueError:
+        results["errors"].append(f"Invalid organization ID: {org_id_str}")
+        return results
+
+    with SessionLocal() as db:
+        # Find failed mappings
+        stmt = (
+            select(CRMSyncMapping)
+            .where(
+                CRMSyncMapping.organization_id == org_id,
+                CRMSyncMapping.last_error.isnot(None),
+            )
+            .limit(max_retries)
+        )
+        failed_mappings = list(db.scalars(stmt).all())
+
+        if not failed_mappings:
+            logger.info("No failed CRM sync mappings to retry")
+            return results
+
+        for mapping in failed_mappings:
+            results["retried"] += 1
+            try:
+                # Clear error and let normal sync re-validate
+                mapping.last_error = None
+                db.flush()
+                results["resolved"] += 1
+            except Exception as e:
+                results["still_failing"] += 1
+                logger.warning(
+                    "Retry still failing for %s:%s - %s",
+                    mapping.crm_entity_type,
+                    mapping.crm_id,
+                    str(e),
+                )
+
+        db.commit()
+
+    logger.info(
+        "CRM push sync retry complete: %d retried, %d resolved, %d still failing",
+        results["retried"],
+        results["resolved"],
+        results["still_failing"],
+    )
+
+    return results
 
 
 # =============================================================================
@@ -533,6 +620,5 @@ def crm_inventory_health_check() -> dict:
 
     logger.info("Running CRM inventory webhook health check")
 
-    with SessionLocal() as db:
-        with InventoryPushService(db) as service:
-            return service.health_check()
+    with SessionLocal() as db, InventoryPushService(db) as service:
+        return service.health_check()

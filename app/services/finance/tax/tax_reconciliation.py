@@ -6,11 +6,11 @@ Prepares tax rate reconciliation for financial statement disclosures.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -42,8 +42,8 @@ class TaxReconciliationInput:
     effect_of_tax_rate_change: Decimal = Decimal("0")
     prior_year_adjustments: Decimal = Decimal("0")
     other_reconciling_items: Decimal = Decimal("0")
-    other_items_description: Optional[str] = None
-    notes: Optional[str] = None
+    other_items_description: str | None = None
+    notes: str | None = None
 
 
 @dataclass
@@ -208,7 +208,7 @@ class TaxReconciliationService(ListResponseMixin):
             )
 
         reconciliation.reviewed_by_user_id = user_id
-        reconciliation.reviewed_at = datetime.now(timezone.utc)
+        reconciliation.reviewed_at = datetime.now(UTC)
 
         db.commit()
         db.refresh(reconciliation)
@@ -385,7 +385,7 @@ class TaxReconciliationService(ListResponseMixin):
     @staticmethod
     def validate_reconciliation(
         reconciliation: TaxReconciliation,
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Validate that reconciliation balances.
 
@@ -423,10 +423,16 @@ class TaxReconciliationService(ListResponseMixin):
     def get(
         db: Session,
         reconciliation_id: str,
+        organization_id: UUID | None = None,
     ) -> TaxReconciliation:
         """Get a reconciliation by ID."""
         reconciliation = db.get(TaxReconciliation, coerce_uuid(reconciliation_id))
         if not reconciliation:
+            raise HTTPException(status_code=404, detail="Reconciliation not found")
+        if (
+            organization_id is not None
+            and reconciliation.organization_id != coerce_uuid(organization_id)
+        ):
             raise HTTPException(status_code=404, detail="Reconciliation not found")
         return reconciliation
 
@@ -436,7 +442,7 @@ class TaxReconciliationService(ListResponseMixin):
         organization_id: str,
         fiscal_period_id: str,
         jurisdiction_id: str,
-    ) -> Optional[TaxReconciliation]:
+    ) -> TaxReconciliation | None:
         """Get reconciliation by period and jurisdiction."""
         return (
             db.query(TaxReconciliation)
@@ -451,13 +457,13 @@ class TaxReconciliationService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        fiscal_period_id: Optional[str] = None,
-        jurisdiction_id: Optional[str] = None,
-        is_reviewed: Optional[bool] = None,
+        organization_id: str | None = None,
+        fiscal_period_id: str | None = None,
+        jurisdiction_id: str | None = None,
+        is_reviewed: bool | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[TaxReconciliation]:
+    ) -> builtins.list[TaxReconciliation]:
         """List reconciliations with optional filters."""
         query = db.query(TaxReconciliation)
 

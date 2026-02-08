@@ -6,7 +6,6 @@ Budget authority granted by legislative/governing body.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Date,
@@ -68,7 +67,7 @@ class Appropriation(Base):
         ForeignKey("ipsas.fund.fund_id"),
         nullable=False,
     )
-    budget_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    budget_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.budget.budget_id"),
         nullable=True,
@@ -99,39 +98,39 @@ class Appropriation(Base):
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
 
     # Scope (optional narrowing)
-    account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,
     )
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    business_unit_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    business_unit_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
 
     # Legislative reference
-    appropriation_act_reference: Mapped[Optional[str]] = mapped_column(
+    appropriation_act_reference: Mapped[str | None] = mapped_column(
         String(100), nullable=True
     )
 
     # Effective dates
     effective_from: Mapped[date] = mapped_column(Date, nullable=False)
-    effective_to: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Audit / SoD
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         nullable=False,
     )
-    approved_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -140,7 +139,7 @@ class Appropriation(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -190,11 +189,11 @@ class Allotment(Base):
     allotment_name: Mapped[str] = mapped_column(String(200), nullable=False)
 
     # Scope
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    business_unit_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    business_unit_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -220,7 +219,7 @@ class Allotment(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

@@ -5,7 +5,6 @@ Cash Generating Unit Model - FA Schema.
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -49,22 +48,22 @@ class CashGeneratingUnit(Base):
 
     cgu_code: Mapped[str] = mapped_column(String(30), nullable=False)
     cgu_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Hierarchy
-    parent_cgu_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    parent_cgu_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("fa.cash_generating_unit.cgu_id"),
         nullable=True,
     )
 
     # Linkage to organizational structure
-    business_unit_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    business_unit_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.business_unit.business_unit_id"),
         nullable=True,
     )
-    reporting_segment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    reporting_segment_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.reporting_segment.segment_id"),
         nullable=True,
@@ -78,15 +77,15 @@ class CashGeneratingUnit(Base):
     )
 
     # Latest impairment test results
-    last_test_date: Mapped[Optional[datetime]] = mapped_column(
+    last_test_date: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    recoverable_amount: Mapped[Optional[Decimal]] = mapped_column(
+    recoverable_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
-    carrying_amount: Mapped[Optional[Decimal]] = mapped_column(
+    carrying_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
@@ -98,7 +97,7 @@ class CashGeneratingUnit(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

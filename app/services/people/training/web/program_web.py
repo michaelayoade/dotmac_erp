@@ -4,8 +4,6 @@ Training Web Service - Program methods.
 
 from __future__ import annotations
 
-import logging
-from typing import Optional
 from uuid import UUID
 
 from fastapi import Request
@@ -21,8 +19,6 @@ from app.web.deps import WebAuthContext, base_context
 
 from .base import logger, parse_decimal, parse_int, parse_program_status
 
-logger = logging.getLogger(__name__)
-
 
 class ProgramWebService:
     """Web service methods for training programs."""
@@ -31,9 +27,9 @@ class ProgramWebService:
     def list_programs_context(
         db: Session,
         organization_id: UUID,
-        search: Optional[str] = None,
-        status: Optional[str] = None,
-        category: Optional[str] = None,
+        search: str | None = None,
+        status: str | None = None,
+        category: str | None = None,
         page: int = 1,
     ) -> dict:
         """Build context for programs list page."""
@@ -65,7 +61,7 @@ class ProgramWebService:
     def program_form_context(
         db: Session,
         organization_id: UUID,
-        program_id: Optional[str] = None,
+        program_id: str | None = None,
     ) -> dict:
         """Build context for program create/edit form."""
         org_svc = OrganizationService(db, organization_id)
@@ -144,9 +140,9 @@ class ProgramWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
-        status: Optional[str] = None,
-        category: Optional[str] = None,
+        search: str | None = None,
+        status: str | None = None,
+        category: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Render programs list page."""
@@ -181,7 +177,7 @@ class ProgramWebService:
         auth: WebAuthContext,
         db: Session,
         program_id: str,
-        success: Optional[str] = None,
+        success: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Render program detail page."""
         ctx = self.program_detail_context(

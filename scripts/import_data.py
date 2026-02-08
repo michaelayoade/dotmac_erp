@@ -25,7 +25,6 @@ Import order:
 import argparse
 import sys
 from pathlib import Path
-from typing import List, Optional
 from uuid import UUID
 
 # Add the project root to the Python path
@@ -35,19 +34,19 @@ sys.path.insert(0, str(project_root))
 from app.db import get_db_session
 from app.services.finance.import_export import (
     AccountImporter,
-    CustomerImporter,
-    SupplierImporter,
-    ItemImporter,
     AssetImporter,
     BankAccountImporter,
-    InvoiceImporter,
-    ExpenseImporter,
+    CustomerImporter,
     CustomerPaymentImporter,
+    ExpenseImporter,
     ImportConfig,
     ImportResult,
     ImportStatus,
-    get_ar_control_account,
+    InvoiceImporter,
+    ItemImporter,
+    SupplierImporter,
     get_ap_control_account,
+    get_ar_control_account,
 )
 
 
@@ -127,10 +126,11 @@ def import_items(args, db, config: ImportConfig) -> ImportResult:
     print(f"Importing items from: {args.file}")
 
     from sqlalchemy import select
+
     from app.models.finance.gl.account import Account
 
     # Find required accounts
-    def find_account(subledger_type: str) -> Optional[UUID]:
+    def find_account(subledger_type: str) -> UUID | None:
         result = db.execute(
             select(Account).where(
                 Account.organization_id == config.organization_id,
@@ -172,6 +172,7 @@ def import_assets(args, db, config: ImportConfig) -> ImportResult:
     print(f"Importing fixed assets from: {args.file}")
 
     from sqlalchemy import select
+
     from app.models.finance.gl.account import Account
 
     # Find asset account
@@ -213,6 +214,7 @@ def import_banking(args, db, config: ImportConfig) -> ImportResult:
     print(f"Importing bank accounts from: {args.file}")
 
     from sqlalchemy import select
+
     from app.models.finance.gl.account import Account
 
     # Find bank GL account
@@ -234,6 +236,7 @@ def import_invoices(args, db, config: ImportConfig) -> ImportResult:
     print(f"Importing invoices from: {args.file}")
 
     from sqlalchemy import select
+
     from app.models.finance.gl.account import Account
 
     ar_control_id = get_ar_control_account(db, config.organization_id)
@@ -260,6 +263,7 @@ def import_expenses(args, db, config: ImportConfig) -> ImportResult:
     print(f"Importing expenses from: {args.file}")
 
     from sqlalchemy import select
+
     from app.models.finance.gl.account import Account
 
     # Find expense account
@@ -295,6 +299,7 @@ def import_payments(args, db, config: ImportConfig) -> ImportResult:
     print(f"Importing payments from: {args.file}")
 
     from sqlalchemy import select
+
     from app.models.finance.banking.bank_account import BankAccount
 
     # Find bank account
@@ -310,7 +315,7 @@ def import_payments(args, db, config: ImportConfig) -> ImportResult:
     return importer.import_file(args.file)
 
 
-def import_all(args, db, config: ImportConfig) -> List[ImportResult]:
+def import_all(args, db, config: ImportConfig) -> list[ImportResult]:
     """Import all data from a directory."""
     results = []
     directory = Path(args.directory)

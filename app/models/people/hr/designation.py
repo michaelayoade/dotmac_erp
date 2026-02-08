@@ -6,7 +6,7 @@ Job titles/positions within the organization.
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, ForeignKey, String, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -16,8 +16,8 @@ from app.db import Base
 from app.models.people.base import AuditMixin, ERPNextSyncMixin, SoftDeleteMixin
 
 if TYPE_CHECKING:
-    from app.models.people.hr.employee import Employee
     from app.models.finance.core_org.organization import Organization
+    from app.models.people.hr.employee import Employee
 
 
 class Designation(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
@@ -54,7 +54,7 @@ class Designation(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
         String(100),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -71,7 +71,7 @@ class Designation(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

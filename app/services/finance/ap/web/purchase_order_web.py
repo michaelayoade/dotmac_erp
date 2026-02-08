@@ -6,11 +6,7 @@ Provides view-focused data and operations for AP purchase order web routes.
 
 from __future__ import annotations
 
-import json
-import logging
-from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import Request, UploadFile
@@ -26,11 +22,7 @@ from app.models.finance.ap.supplier import Supplier
 from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
 from app.services.common import coerce_uuid
-from app.services.finance.ap.purchase_order import (
-    POLineInput,
-    PurchaseOrderInput,
-    purchase_order_service,
-)
+from app.services.finance.ap.purchase_order import purchase_order_service
 from app.services.finance.ap.supplier import supplier_service
 from app.services.finance.ap.web.base import (
     format_currency,
@@ -47,11 +39,8 @@ from app.services.finance.ap.web.base import (
 )
 from app.services.finance.common.attachment import AttachmentInput, attachment_service
 from app.services.finance.platform.currency_context import get_currency_context
-from app.services.finance.platform.org_context import org_context_service
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
-
-logger = logging.getLogger(__name__)
 
 
 class PurchaseOrderWebService:
@@ -65,11 +54,11 @@ class PurchaseOrderWebService:
     def list_purchase_orders_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        supplier_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        supplier_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -341,7 +330,7 @@ class PurchaseOrderWebService:
     def purchase_order_form_context(
         db: Session,
         organization_id: str,
-        po_id: Optional[str] = None,
+        po_id: str | None = None,
     ) -> dict:
         """Build context for purchase order form (create/edit)."""
         logger.debug(
@@ -447,11 +436,11 @@ class PurchaseOrderWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        search: Optional[str],
-        supplier_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        supplier_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         db: Session,
     ) -> HTMLResponse:
@@ -544,70 +533,11 @@ class PurchaseOrderWebService:
             user_id = auth.person_id
             assert org_id is not None
             assert user_id is not None
-            lines_data = data.get("lines", [])
-            if isinstance(lines_data, str):
-                lines_data = json.loads(lines_data)
-
-            lines = []
-            for line in lines_data:
-                if line.get("description"):
-                    lines.append(
-                        POLineInput(
-                            item_id=UUID(line["item_id"])
-                            if line.get("item_id")
-                            else None,
-                            description=line.get("description", ""),
-                            quantity_ordered=Decimal(
-                                str(
-                                    line.get(
-                                        "quantity", line.get("quantity_ordered", 1)
-                                    )
-                                )
-                            ),
-                            unit_price=Decimal(str(line.get("unit_price", 0))),
-                            expense_account_id=UUID(line["expense_account_id"])
-                            if line.get("expense_account_id")
-                            else None,
-                            tax_code_id=UUID(line["tax_code_id"])
-                            if line.get("tax_code_id")
-                            else None,
-                            cost_center_id=UUID(line["cost_center_id"])
-                            if line.get("cost_center_id")
-                            else None,
-                            project_id=UUID(line["project_id"])
-                            if line.get("project_id")
-                            else None,
-                        )
-                    )
-
-            po_date_str = data.get("po_date")
-            po_date = (
-                datetime.strptime(po_date_str, "%Y-%m-%d").date()
-                if po_date_str
-                else date.today()
-            )
-
-            expected_delivery_str = data.get("expected_delivery_date")
-            expected_delivery = (
-                datetime.strptime(expected_delivery_str, "%Y-%m-%d").date()
-                if expected_delivery_str
-                else None
-            )
-
-            currency_code = data.get(
-                "currency_code"
-            ) or org_context_service.get_functional_currency(
-                db,
-                org_id,
-            )
-
-            input_data = PurchaseOrderInput(
-                supplier_id=UUID(data["supplier_id"]),
-                po_date=po_date,
-                expected_delivery_date=expected_delivery,
-                currency_code=currency_code,
-                terms_and_conditions=data.get("terms_and_conditions"),
-                lines=lines,
+            payload = dict(data)
+            input_data = purchase_order_service.build_input_from_payload(
+                db=db,
+                organization_id=org_id,
+                payload=payload,
             )
 
             po = purchase_order_service.create_po(
@@ -766,7 +696,7 @@ class PurchaseOrderWebService:
         self,
         po_id: str,
         file: UploadFile,
-        description: Optional[str],
+        description: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:

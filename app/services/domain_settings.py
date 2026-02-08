@@ -1,8 +1,9 @@
+import builtins
 import logging
-from typing import Any, List, Optional
+from typing import Any, TypeVar
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Query, Session
 
 from app.models.domain_settings import (
     DomainSetting,
@@ -21,14 +22,16 @@ logger = logging.getLogger(__name__)
 # Structured logger for settings audit trail
 settings_audit_logger = logging.getLogger("dotmac.settings.audit")
 
+T = TypeVar("T")
+
 
 def _log_setting_change(
     action: str,
     domain: SettingDomain,
     key: str,
-    old_value: Optional[Any] = None,
-    new_value: Optional[Any] = None,
-    setting_id: Optional[str] = None,
+    old_value: Any | None = None,
+    new_value: Any | None = None,
+    setting_id: str | None = None,
     is_secret: bool = False,
 ) -> None:
     """
@@ -66,10 +69,10 @@ def _log_setting_change(
 
 def _log_setting_attempt_failed(
     action: str,
-    domain: Optional[SettingDomain],
-    key: Optional[str],
+    domain: SettingDomain | None,
+    key: str | None,
     reason: str,
-    attempted_value: Optional[Any] = None,
+    attempted_value: Any | None = None,
     is_secret: bool = False,
 ) -> None:
     """
@@ -159,8 +162,8 @@ def _record_setting_history(
 
 
 def _apply_ordering(
-    query: Any, order_by: str, order_dir: str, allowed_columns: dict[str, Any]
-) -> Any:
+    query: Query[T], order_by: str, order_dir: str, allowed_columns: dict[str, Any]
+) -> Query[T]:
     if order_by not in allowed_columns:
         raise HTTPException(
             status_code=400,
@@ -172,7 +175,7 @@ def _apply_ordering(
     return query.order_by(column.asc())
 
 
-def _apply_pagination(query: Any, limit: int, offset: int) -> Any:
+def _apply_pagination(query: Query[T], limit: int, offset: int) -> Query[T]:
     return query.limit(limit).offset(offset)
 
 
@@ -344,12 +347,8 @@ class DomainSettings(ListResponseMixin):
             raise HTTPException(status_code=400, detail="Setting domain mismatch")
         if {"value_type", "value_text", "value_json"} & data.keys():
             value_type = data.get("value_type", setting.value_type)
-            value_text = (
-                data["value_text"] if "value_text" in data else setting.value_text
-            )
-            value_json = (
-                data["value_json"] if "value_json" in data else setting.value_json
-            )
+            value_text = data.get("value_text", setting.value_text)
+            value_json = data.get("value_json", setting.value_json)
             if "value_text" in data and "value_json" not in data:
                 value_json = None
             if "value_json" in data and "value_text" not in data:
@@ -504,7 +503,7 @@ class DomainSettings(ListResponseMixin):
         key: str,
         value_type: SettingValueType,
         value_text: str | None = None,
-        value_json: dict[str, Any] | List[Any] | bool | int | None = None,
+        value_json: dict[str, Any] | builtins.list[Any] | bool | int | None = None,
         is_secret: bool = False,
     ) -> DomainSetting:
         if not self.domain:

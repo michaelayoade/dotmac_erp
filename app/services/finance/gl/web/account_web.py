@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 from decimal import Decimal
-from typing import Optional
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -18,17 +17,16 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models.finance.gl.account import Account, AccountType, NormalBalance
 from app.models.finance.gl.account_balance import AccountBalance, BalanceType
-from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 from app.services.audit_info import get_audit_service
 from app.services.common import coerce_uuid
+from app.services.finance.gl.chart_of_accounts import chart_of_accounts_service
 from app.services.finance.gl.web.base import (
     account_detail_view,
     account_form_view,
     category_option_view,
     format_currency,
     ifrs_label,
-    parse_category,
 )
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.platform.org_context import org_context_service
@@ -138,9 +136,9 @@ class AccountWebService:
     def list_accounts_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        category: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        category: str | None,
+        status: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -153,34 +151,17 @@ class AccountWebService:
             status,
             page,
         )
-        org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
+        org_id = coerce_uuid(organization_id)
+        from app.services.finance.gl.account_query import build_account_query
 
-        is_active = None
-        if status == "active":
-            is_active = True
-        elif status == "inactive":
-            is_active = False
-
-        category_value = parse_category(category)
-
-        query = (
-            db.query(Account)
-            .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-            .filter(Account.organization_id == org_id)
+        query = build_account_query(
+            db=db,
+            organization_id=organization_id,
+            search=search,
+            category=category,
+            status=status,
         )
-
-        if is_active is not None:
-            query = query.filter(Account.is_active == is_active)
-        if category_value:
-            query = query.filter(AccountCategory.ifrs_category == category_value)
-        if search:
-            search_pattern = f"%{search}%"
-            query = query.filter(
-                (Account.account_code.ilike(search_pattern))
-                | (Account.account_name.ilike(search_pattern))
-                | (Account.search_terms.ilike(search_pattern))
-            )
 
         total_count = query.with_entities(func.count(Account.account_id)).scalar() or 0
         accounts = (
@@ -250,7 +231,7 @@ class AccountWebService:
     def account_form_context(
         db: Session,
         organization_id: str,
-        account_id: Optional[str] = None,
+        account_id: str | None = None,
     ) -> dict:
         """Get context for account create/edit form."""
         logger.debug(
@@ -263,55 +244,7 @@ class AccountWebService:
             if not account or account.organization_id != org_id:
                 account = None
 
-        categories = (
-            db.query(AccountCategory)
-            .filter(
-                AccountCategory.organization_id == org_id,
-                AccountCategory.is_active.is_(True),
-            )
-            .order_by(AccountCategory.category_code)
-            .all()
-        )
-
-        if not categories:
-            # Seed default categories
-            defaults = [
-                ("AST", "Assets", IFRSCategory.ASSETS),
-                ("LIA", "Liabilities", IFRSCategory.LIABILITIES),
-                ("EQT", "Equity", IFRSCategory.EQUITY),
-                ("REV", "Revenue", IFRSCategory.REVENUE),
-                ("EXP", "Expenses", IFRSCategory.EXPENSES),
-                (
-                    "OCI",
-                    "Other Comprehensive Income",
-                    IFRSCategory.OTHER_COMPREHENSIVE_INCOME,
-                ),
-            ]
-            seeded = []
-            for index, (code, name, ifrs_cat) in enumerate(defaults, start=1):
-                seeded.append(
-                    AccountCategory(
-                        organization_id=org_id,
-                        category_code=code,
-                        category_name=name,
-                        description=f"Default {name} category",
-                        ifrs_category=ifrs_cat,
-                        hierarchy_level=1,
-                        display_order=index,
-                        is_active=True,
-                    )
-                )
-            db.add_all(seeded)
-            db.commit()
-            categories = (
-                db.query(AccountCategory)
-                .filter(
-                    AccountCategory.organization_id == org_id,
-                    AccountCategory.is_active.is_(True),
-                )
-                .order_by(AccountCategory.category_code)
-                .all()
-            )
+        categories = chart_of_accounts_service.ensure_default_categories(db, org_id)
 
         context = {
             "account": account_form_view(account) if account else None,
@@ -357,10 +290,10 @@ class AccountWebService:
         is_posting_allowed: bool = True,
         is_budgetable: bool = False,
         is_reconciliation_required: bool = False,
-        subledger_type: Optional[str] = None,
+        subledger_type: str | None = None,
         is_cash_equivalent: bool = False,
         is_financial_instrument: bool = False,
-    ) -> tuple[Optional[Account], Optional[str]]:
+    ) -> tuple[Account | None, str | None]:
         """Create a new GL account. Returns (account, error)."""
         logger.debug(
             "create_account: org=%s code=%s name=%s",
@@ -369,65 +302,38 @@ class AccountWebService:
             account_name,
         )
         org_id = coerce_uuid(organization_id)
+        payload = {
+            "account_code": account_code,
+            "account_name": account_name,
+            "category_id": category_id,
+            "account_type": account_type,
+            "normal_balance": normal_balance,
+            "description": description,
+            "search_terms": search_terms,
+            "is_multi_currency": is_multi_currency,
+            "default_currency_code": default_currency_code,
+            "is_active": is_active,
+            "is_posting_allowed": is_posting_allowed,
+            "is_budgetable": is_budgetable,
+            "is_reconciliation_required": is_reconciliation_required,
+            "subledger_type": subledger_type,
+            "is_cash_equivalent": is_cash_equivalent,
+            "is_financial_instrument": is_financial_instrument,
+        }
 
         try:
-            account_type_enum = AccountType(account_type)
-        except ValueError:
-            logger.warning("create_account: invalid account type %s", account_type)
-            return None, f"Invalid account type: {account_type}"
-
-        try:
-            normal_balance_enum = NormalBalance(normal_balance)
-        except ValueError:
-            logger.warning("create_account: invalid normal balance %s", normal_balance)
-            return None, f"Invalid normal balance: {normal_balance}"
-
-        cat_id = coerce_uuid(category_id)
-        category = db.get(AccountCategory, cat_id)
-        if not category or category.organization_id != org_id:
-            return None, "Invalid account category"
-
-        existing = (
-            db.query(Account)
-            .filter(Account.organization_id == org_id)
-            .filter(Account.account_code == account_code)
-            .first()
-        )
-        if existing:
-            return None, f"Account code '{account_code}' already exists"
-
-        try:
-            account = Account(
-                organization_id=org_id,
-                account_code=account_code,
-                account_name=account_name,
-                description=description or None,
-                search_terms=search_terms or None,
-                category_id=cat_id,
-                account_type=account_type_enum,
-                normal_balance=normal_balance_enum,
-                is_multi_currency=is_multi_currency,
-                default_currency_code=default_currency_code,
-                is_active=is_active,
-                is_posting_allowed=is_posting_allowed,
-                is_budgetable=is_budgetable,
-                is_reconciliation_required=is_reconciliation_required,
-                subledger_type=subledger_type or None,
-                is_cash_equivalent=is_cash_equivalent,
-                is_financial_instrument=is_financial_instrument,
+            input_data = chart_of_accounts_service.build_input_from_payload(
+                db, org_id, payload
             )
-            db.add(account)
-            db.commit()
-            db.refresh(account)
-            logger.info(
-                "create_account: created %s for org %s", account.account_code, org_id
+            account = chart_of_accounts_service.create_account(
+                db=db,
+                organization_id=org_id,
+                input=input_data,
             )
             return account, None
-
         except Exception as e:
-            db.rollback()
             logger.exception("create_account: failed for org %s", org_id)
-            return None, f"Failed to create account: {str(e)}"
+            return None, str(e)
 
     @staticmethod
     def update_account(
@@ -447,121 +353,71 @@ class AccountWebService:
         is_posting_allowed: bool = True,
         is_budgetable: bool = False,
         is_reconciliation_required: bool = False,
-        subledger_type: Optional[str] = None,
+        subledger_type: str | None = None,
         is_cash_equivalent: bool = False,
         is_financial_instrument: bool = False,
-    ) -> tuple[Optional[Account], Optional[str]]:
+    ) -> tuple[Account | None, str | None]:
         """Update an existing GL account. Returns (account, error)."""
         logger.debug(
             "update_account: org=%s account_id=%s", organization_id, account_id
         )
         org_id = coerce_uuid(organization_id)
-        acct_id = coerce_uuid(account_id)
-
-        account = db.get(Account, acct_id)
-        if not account or account.organization_id != org_id:
-            return None, "Account not found"
-
-        try:
-            account_type_enum = AccountType(account_type)
-        except ValueError:
-            return None, f"Invalid account type: {account_type}"
-
-        try:
-            normal_balance_enum = NormalBalance(normal_balance)
-        except ValueError:
-            return None, f"Invalid normal balance: {normal_balance}"
-
-        cat_id = coerce_uuid(category_id)
-        category = db.get(AccountCategory, cat_id)
-        if not category or category.organization_id != org_id:
-            return None, "Invalid account category"
-
-        existing = (
-            db.query(Account)
-            .filter(Account.organization_id == org_id)
-            .filter(Account.account_code == account_code)
-            .filter(Account.account_id != acct_id)
-            .first()
-        )
-        if existing:
-            return None, f"Account code '{account_code}' already exists"
+        payload = {
+            "account_code": account_code,
+            "account_name": account_name,
+            "category_id": category_id,
+            "account_type": account_type,
+            "normal_balance": normal_balance,
+            "description": description,
+            "search_terms": search_terms,
+            "is_multi_currency": is_multi_currency,
+            "default_currency_code": default_currency_code,
+            "is_active": is_active,
+            "is_posting_allowed": is_posting_allowed,
+            "is_budgetable": is_budgetable,
+            "is_reconciliation_required": is_reconciliation_required,
+            "subledger_type": subledger_type,
+            "is_cash_equivalent": is_cash_equivalent,
+            "is_financial_instrument": is_financial_instrument,
+        }
 
         try:
-            account.account_code = account_code
-            account.account_name = account_name
-            account.description = description or None
-            account.search_terms = search_terms or None
-            account.category_id = cat_id
-            account.account_type = account_type_enum
-            account.normal_balance = normal_balance_enum
-            account.is_multi_currency = is_multi_currency
-            account.default_currency_code = default_currency_code
-            account.is_active = is_active
-            account.is_posting_allowed = is_posting_allowed
-            account.is_budgetable = is_budgetable
-            account.is_reconciliation_required = is_reconciliation_required
-            account.subledger_type = subledger_type or None
-            account.is_cash_equivalent = is_cash_equivalent
-            account.is_financial_instrument = is_financial_instrument
-
-            db.commit()
-            db.refresh(account)
-            logger.info(
-                "update_account: updated %s for org %s", account.account_code, org_id
+            input_data = chart_of_accounts_service.build_input_from_payload(
+                db, org_id, payload
+            )
+            account = chart_of_accounts_service.update_account_full(
+                db=db,
+                organization_id=org_id,
+                account_id=coerce_uuid(account_id),
+                input=input_data,
             )
             return account, None
-
         except Exception as e:
-            db.rollback()
             logger.exception("update_account: failed for org %s", org_id)
-            return None, f"Failed to update account: {str(e)}"
+            return None, str(e)
 
     @staticmethod
     def delete_account(
         db: Session,
         organization_id: str,
         account_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete a GL account. Returns error message or None on success."""
         logger.debug(
             "delete_account: org=%s account_id=%s", organization_id, account_id
         )
         org_id = coerce_uuid(organization_id)
-        acct_id = coerce_uuid(account_id)
-
-        account = db.get(Account, acct_id)
-        if not account or account.organization_id != org_id:
-            return "Account not found"
-
-        from app.models.finance.gl.journal_entry_line import JournalEntryLine
-
-        line_count = (
-            db.query(JournalEntryLine)
-            .filter(JournalEntryLine.account_id == acct_id)
-            .count()
-        )
-        if line_count > 0:
-            return f"Cannot delete account with {line_count} journal entries. Deactivate instead."
-
-        balance_count = (
-            db.query(AccountBalance)
-            .filter(AccountBalance.account_id == acct_id)
-            .count()
-        )
-        if balance_count > 0:
-            return "Cannot delete account with balance records. Deactivate instead."
-
         try:
-            db.delete(account)
-            db.commit()
-            logger.info("delete_account: deleted %s for org %s", acct_id, org_id)
+            chart_of_accounts_service.delete_account(
+                db=db,
+                organization_id=org_id,
+                account_id=coerce_uuid(account_id),
+            )
+            logger.info("delete_account: deleted %s for org %s", account_id, org_id)
             return None
-
         except Exception as e:
-            db.rollback()
             logger.exception("delete_account: failed for org %s", org_id)
-            return f"Failed to delete account: {str(e)}"
+            return str(e)
 
     # =========================================================================
     # HTTP Response Methods
@@ -572,9 +428,9 @@ class AccountWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str],
-        category: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        category: str | None,
+        status: str | None,
         page: int,
     ) -> HTMLResponse:
         """Render accounts list page."""
@@ -657,12 +513,12 @@ class AccountWebService:
         description: str,
         search_terms: str,
         is_multi_currency: bool,
-        default_currency_code: Optional[str],
+        default_currency_code: str | None,
         is_active: bool,
         is_posting_allowed: bool,
         is_budgetable: bool,
         is_reconciliation_required: bool,
-        subledger_type: Optional[str],
+        subledger_type: str | None,
         is_cash_equivalent: bool,
         is_financial_instrument: bool,
     ) -> HTMLResponse | RedirectResponse:
@@ -742,12 +598,12 @@ class AccountWebService:
         description: str,
         search_terms: str,
         is_multi_currency: bool,
-        default_currency_code: Optional[str],
+        default_currency_code: str | None,
         is_active: bool,
         is_posting_allowed: bool,
         is_budgetable: bool,
         is_reconciliation_required: bool,
-        subledger_type: Optional[str],
+        subledger_type: str | None,
         is_cash_equivalent: bool,
         is_financial_instrument: bool,
     ) -> HTMLResponse | RedirectResponse:

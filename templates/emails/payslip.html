@@ -1,67 +1,48 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Payslip</title>
-</head>
-<body style="font-family: Arial, sans-serif; color: #1e293b; line-height: 1.6; background: #ffffff;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="max-width: 640px; margin: 0 auto;">
-    <tr>
-      <td style="padding: 20px 0; border-bottom: 1px solid #e2e8f0;">
-        {% if brand_logo_url %}
-        <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo" style="height: 40px; vertical-align: middle;">
-        {% else %}
-        <span style="font-size: 18px; font-weight: 600; color: #0d9488;">{{ brand_name }}</span>
-        {% endif %}
-      </td>
-    </tr>
-    <tr>
-      <td style="padding: 20px 0;">
-        {% if email_header_html %}
-        <div style="margin-bottom: 16px;">{{ email_header_html | safe }}</div>
-        {% endif %}
-        <p>Dear {{ first_name }},</p>
-        <p>Your payslip for <strong>{{ period_str }}</strong> is now available.</p>
+{% extends "emails/base_email.html" %}
+{% block title %}Payslip{% endblock %}
+{% block content %}
+{% if email_header_html %}
+<div style="margin: 0 0 16px 0;">{{ email_header_html | safe }}</div>
+{% endif %}
 
-        <table style="margin: 20px 0; border-collapse: collapse;">
-          <tr>
-            <td style="padding: 6px 16px 6px 0; color: #64748b;">Payslip Number:</td>
-            <td style="padding: 6px 0; font-weight: 600;">{{ slip_number }}</td>
-          </tr>
-          <tr>
-            <td style="padding: 6px 16px 6px 0; color: #64748b;">Pay Period:</td>
-            <td style="padding: 6px 0;">{{ start_date }} - {{ end_date }}</td>
-          </tr>
-          <tr>
-            <td style="padding: 6px 16px 6px 0; color: #64748b;">Gross Pay:</td>
-            <td style="padding: 6px 0;">{{ currency_code }} {{ "{:,.2f}".format(gross_pay) }}</td>
-          </tr>
-          <tr>
-            <td style="padding: 6px 16px 6px 0; color: #64748b;">Deductions:</td>
-            <td style="padding: 6px 0; color: #dc2626;">({{ currency_code }} {{ "{:,.2f}".format(total_deduction) }})</td>
-          </tr>
-          <tr style="border-top: 2px solid #e2e8f0;">
-            <td style="padding: 10px 16px 6px 0; color: #64748b; font-weight: 600;">Net Pay:</td>
-            <td style="padding: 10px 0 6px 0; font-weight: 700; font-size: 16px; color: #0d9488;">{{ currency_code }} {{ "{:,.2f}".format(net_pay) }}</td>
-          </tr>
-        </table>
+<p style="margin: 0 0 16px 0;">Dear {{ first_name }},</p>
 
-        <p>Please find your detailed payslip attached to this email as a PDF document.</p>
+<p style="margin: 0 0 16px 0;">Your payslip for <strong>{{ period_str }}</strong> is now available.</p>
 
-        {% if email_footer_html %}
-        <div style="margin: 20px 0;">{{ email_footer_html | safe }}</div>
-        {% endif %}
+<table role="presentation" style="width: 100%; border-collapse: collapse; margin: 20px 0; background: #f8fafc; border-radius: 6px;">
+  <tr>
+    <td style="padding: 12px 16px; color: #64748b; width: 45%;">Payslip Number</td>
+    <td style="padding: 12px 16px; font-weight: 600;">{{ slip_number }}</td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 16px; color: #64748b; border-top: 1px solid #e2e8f0;">Pay Period</td>
+    <td style="padding: 12px 16px; border-top: 1px solid #e2e8f0;">{{ start_date }} &ndash; {{ end_date }}</td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 16px; color: #64748b; border-top: 1px solid #e2e8f0;">Gross Pay</td>
+    <td style="padding: 12px 16px; border-top: 1px solid #e2e8f0;">{{ currency_code }} {{ "{:,.2f}".format(gross_pay) }}</td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 16px; color: #64748b; border-top: 1px solid #e2e8f0;">Deductions</td>
+    <td style="padding: 12px 16px; color: #dc2626; border-top: 1px solid #e2e8f0;">({{ currency_code }} {{ "{:,.2f}".format(total_deduction) }})</td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 16px; color: #64748b; border-top: 2px solid #e2e8f0; font-weight: 600;">Net Pay</td>
+    <td style="padding: 12px 16px; border-top: 2px solid #e2e8f0; font-weight: 700; font-size: 16px; color: {{ primary_color | default('#0d9488') }};">{{ currency_code }} {{ "{:,.2f}".format(net_pay) }}</td>
+  </tr>
+</table>
 
-        <p style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #94a3b8;">
-          This is an automated message. Please do not reply to this email.<br>
-          {% if contact_email %}
-          For any queries regarding your payslip, please contact HR at {{ contact_email }}.
-          {% else %}
-          For any queries regarding your payslip, please contact HR.
-          {% endif %}
-        </p>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
+<p style="margin: 0 0 16px 0;">Please find your detailed payslip attached to this email as a PDF document.</p>
+
+{% if email_footer_html %}
+<div style="margin: 16px 0;">{{ email_footer_html | safe }}</div>
+{% endif %}
+
+<p style="margin: 0; font-size: 13px; color: #64748b;">
+  {% if contact_email %}
+  For any queries regarding your payslip, please contact HR at {{ contact_email }}.
+  {% else %}
+  For any queries regarding your payslip, please contact HR.
+  {% endif %}
+</p>
+{% endblock %}

@@ -14,12 +14,12 @@ from uuid import UUID
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.db import SessionLocal
-from app.models.finance.gl.account import Account
 from app.models.finance.banking.bank_account import (
     BankAccount,
-    BankAccountType,
     BankAccountStatus,
+    BankAccountType,
 )
+from app.models.finance.gl.account import Account
 
 # Organization ID - use existing org or override via env var
 ORG_ID = UUID(os.environ.get("ORG_ID", "00000000-0000-0000-0000-000000000001"))

@@ -11,19 +11,19 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from app.services.people.payroll.salary_slip_service import (
-    SalarySlipService,
-    SalarySlipInput,
-    BASIC_COMPONENT_CODE,
-    PENSION_COMPONENT_CODE,
-    NHF_COMPONENT_CODE,
-    NHIS_COMPONENT_CODE,
-    PAYE_COMPONENT_CODE,
-    STATUTORY_COMPONENT_CODES,
-)
 from app.models.people.payroll.salary_component import (
     SalaryComponent,
     SalaryComponentType,
+)
+from app.services.people.payroll.salary_slip_service import (
+    BASIC_COMPONENT_CODE,
+    NHF_COMPONENT_CODE,
+    NHIS_COMPONENT_CODE,
+    PAYE_COMPONENT_CODE,
+    PENSION_COMPONENT_CODE,
+    STATUTORY_COMPONENT_CODES,
+    SalarySlipInput,
+    SalarySlipService,
 )
 
 
@@ -43,7 +43,7 @@ class TestStatutoryComponentConstants:
 
     def test_statutory_codes_set(self):
         """Test statutory codes set contains all codes."""
-        assert STATUTORY_COMPONENT_CODES == {"PENSION", "NHF", "NHIS", "PAYE"}
+        assert {"PENSION", "NHF", "NHIS", "PAYE"} == STATUTORY_COMPONENT_CODES
 
 
 class TestGetOrCreateStatutoryComponent:
@@ -69,7 +69,7 @@ class TestGetOrCreateStatutoryComponent:
         """Test creating a new statutory component when none exists."""
         mock_db.first.return_value = None
 
-        component = SalarySlipService.get_or_create_statutory_component(
+        SalarySlipService.get_or_create_statutory_component(
             db=mock_db,
             organization_id=org_id,
             component_code="PAYE",

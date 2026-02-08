@@ -14,18 +14,18 @@ This package provides HTML template routes for HR functionality:
 
 from fastapi import APIRouter
 
-from .employees import router as employees_router
-from .lifecycle import router as lifecycle_router
-from .organization import router as organization_router
-from .locations import router as locations_router
-from .employee_extended import router as employee_extended_router
-from .skills import router as skills_router
 from .competencies import router as competencies_router
-from .job_descriptions import router as job_descriptions_router
 from .discipline import router as discipline_router
-from .onboarding_admin import router as onboarding_admin_router
+from .employee_extended import router as employee_extended_router
+from .employees import router as employees_router
 from .handbook import router as handbook_router
 from .info_changes import router as info_changes_router
+from .job_descriptions import router as job_descriptions_router
+from .lifecycle import router as lifecycle_router
+from .locations import router as locations_router
+from .onboarding_admin import router as onboarding_admin_router
+from .organization import router as organization_router
+from .skills import router as skills_router
 
 # Main HR router that includes all sub-routers
 router = APIRouter(prefix="/hr", tags=["hr-web"])

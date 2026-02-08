@@ -9,10 +9,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
-from datetime import timezone as tz
+from datetime import UTC, datetime
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -39,7 +37,7 @@ class CostingResult:
 
     unit_cost: Decimal
     total_cost: Decimal
-    lot_id: Optional[UUID] = None
+    lot_id: UUID | None = None
 
 
 @dataclass
@@ -126,7 +124,7 @@ class ARInventoryIntegration:
         item: Item,
         quantity: Decimal,
         warehouse_id: UUID,
-        lot_id: Optional[UUID] = None,
+        lot_id: UUID | None = None,
     ) -> CostingResult:
         """
         Get the cost for an inventory item based on its costing method.
@@ -144,7 +142,7 @@ class ARInventoryIntegration:
         """
         from app.models.inventory.inventory_lot import InventoryLot
 
-        org_id = coerce_uuid(organization_id)
+        coerce_uuid(organization_id)
 
         # Determine cost based on costing method
         if item.costing_method == CostingMethod.STANDARD_COST:
@@ -310,7 +308,7 @@ class ARInventoryIntegration:
             transaction_datetime = datetime.combine(
                 invoice.invoice_date,
                 datetime.min.time(),
-                tzinfo=tz.utc,
+                tzinfo=UTC,
             )
 
             try:

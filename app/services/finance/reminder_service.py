@@ -10,13 +10,11 @@ Handles:
 - Subledger reconciliation discrepancies
 """
 
-import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import List, Optional
-from uuid import UUID
+from uuid import NAMESPACE_DNS, UUID, uuid5
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
@@ -66,7 +64,7 @@ class ReminderConfig:
 class FinanceReminderService:
     """Service for identifying finance items needing reminders."""
 
-    def __init__(self, db: Session, config: Optional[ReminderConfig] = None):
+    def __init__(self, db: Session, config: ReminderConfig | None = None):
         self.db = db
         self.config = config or ReminderConfig()
         self.notification_service = NotificationService()
@@ -77,8 +75,8 @@ class FinanceReminderService:
 
     def get_periods_closing_soon(
         self,
-        organization_id: Optional[UUID] = None,
-    ) -> List[FiscalPeriod]:
+        organization_id: UUID | None = None,
+    ) -> list[FiscalPeriod]:
         """
         Get fiscal periods that are ending soon and still open.
 
@@ -102,7 +100,7 @@ class FinanceReminderService:
 
         return list(self.db.scalars(stmt).all())
 
-    def get_period_notice_type(self, period: FiscalPeriod) -> Optional[str]:
+    def get_period_notice_type(self, period: FiscalPeriod) -> str | None:
         """
         Determine which notice type to send based on days until close.
 
@@ -125,7 +123,7 @@ class FinanceReminderService:
     def send_fiscal_period_reminder(
         self,
         period: FiscalPeriod,
-        recipient_ids: List[UUID],
+        recipient_ids: list[UUID],
         notice_type: str,
     ) -> int:
         """
@@ -189,8 +187,8 @@ class FinanceReminderService:
 
     def get_tax_periods_due_soon(
         self,
-        organization_id: Optional[UUID] = None,
-    ) -> List[TaxPeriod]:
+        organization_id: UUID | None = None,
+    ) -> list[TaxPeriod]:
         """
         Get tax periods with filing due dates approaching.
 
@@ -228,8 +226,8 @@ class FinanceReminderService:
 
     def get_overdue_tax_periods(
         self,
-        organization_id: Optional[UUID] = None,
-    ) -> List[TaxPeriod]:
+        organization_id: UUID | None = None,
+    ) -> list[TaxPeriod]:
         """Get tax periods that are past their due date and still open."""
         today = date.today()
 
@@ -253,7 +251,7 @@ class FinanceReminderService:
 
         return list(self.db.scalars(stmt).all())
 
-    def get_tax_period_notice_type(self, period: TaxPeriod) -> Optional[str]:
+    def get_tax_period_notice_type(self, period: TaxPeriod) -> str | None:
         """Determine which notice type to send for a tax period."""
         today = date.today()
         effective_due = (
@@ -278,7 +276,7 @@ class FinanceReminderService:
     def send_tax_period_reminder(
         self,
         period: TaxPeriod,
-        recipient_ids: List[UUID],
+        recipient_ids: list[UUID],
         notice_type: str,
     ) -> int:
         """Send tax period filing reminder to recipients."""
@@ -344,8 +342,8 @@ class FinanceReminderService:
 
     def get_accounts_needing_reconciliation(
         self,
-        organization_id: Optional[UUID] = None,
-    ) -> List[BankAccount]:
+        organization_id: UUID | None = None,
+    ) -> list[BankAccount]:
         """
         Get bank accounts that haven't been reconciled recently.
 
@@ -369,7 +367,7 @@ class FinanceReminderService:
 
         return list(self.db.scalars(stmt).all())
 
-    def get_reconciliation_urgency(self, account: BankAccount) -> Optional[str]:
+    def get_reconciliation_urgency(self, account: BankAccount) -> str | None:
         """Determine reconciliation urgency level."""
         if account.last_reconciled_date is None:
             return "critical"  # Never reconciled
@@ -389,7 +387,7 @@ class FinanceReminderService:
     def send_reconciliation_reminder(
         self,
         account: BankAccount,
-        recipient_ids: List[UUID],
+        recipient_ids: list[UUID],
         urgency: str,
     ) -> int:
         """Send bank reconciliation reminder to recipients."""
@@ -454,9 +452,9 @@ class FinanceReminderService:
 
     def get_overdue_invoices(
         self,
-        organization_id: Optional[UUID] = None,
+        organization_id: UUID | None = None,
         min_days_overdue: int = 1,
-    ) -> List[Invoice]:
+    ) -> list[Invoice]:
         """
         Get AR invoices that are past due.
 
@@ -514,7 +512,7 @@ class FinanceReminderService:
     def send_collection_reminder(
         self,
         invoice: Invoice,
-        recipient_ids: List[UUID],
+        recipient_ids: list[UUID],
     ) -> int:
         """Send AR collection reminder to staff for overdue invoice."""
         days_overdue = (date.today() - invoice.due_date).days
@@ -572,7 +570,7 @@ class FinanceReminderService:
     def send_subledger_discrepancy_alert(
         self,
         organization_id: UUID,
-        recipient_ids: List[UUID],
+        recipient_ids: list[UUID],
         subledger_type: str,
         gl_balance: Decimal,
         subledger_balance: Decimal,
@@ -589,10 +587,9 @@ class FinanceReminderService:
         )
 
         # Create a pseudo-entity ID for the discrepancy (deterministic per org/type/day)
-        pseudo_id = UUID(
-            hashlib.md5(
-                f"{organization_id}-{subledger_type}-{date.today()}".encode()
-            ).hexdigest()
+        pseudo_id = uuid5(
+            NAMESPACE_DNS,
+            f"{organization_id}-{subledger_type}-{date.today()}",
         )
 
         sent = 0

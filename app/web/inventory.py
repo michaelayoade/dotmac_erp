@@ -4,7 +4,7 @@ INV (Inventory) Web Routes for Operations Module.
 HTML template routes for Items and Inventory Transactions.
 """
 
-from typing import Optional
+import logging
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -14,14 +14,11 @@ from app.services.inventory.material_request_web import MaterialRequestWebServic
 from app.services.inventory.web import inv_web_service
 from app.services.operations.inv_web import operations_inv_web_service
 from app.web.deps import (
-    get_db,
-    require_inventory_access,
-    require_any_web_permission,
     WebAuthContext,
+    get_db,
+    require_any_web_permission,
+    require_inventory_access,
 )
-
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +29,9 @@ router = APIRouter(prefix="/inventory", tags=["inventory-web"])
 def list_items(
     request: Request,
     auth: WebAuthContext = Depends(require_inventory_access),
-    search: Optional[str] = None,
-    category: Optional[str] = None,
-    status: Optional[str] = None,
+    search: str | None = None,
+    category: str | None = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, ge=10, le=500),
     db: Session = Depends(get_db),
@@ -64,23 +61,23 @@ def create_item(
     category_id: str = Form(...),
     item_type: str = Form(default="INVENTORY"),
     base_uom: str = Form(default="EACH"),
-    purchase_uom: Optional[str] = Form(default=None),
-    sales_uom: Optional[str] = Form(default=None),
+    purchase_uom: str | None = Form(default=None),
+    sales_uom: str | None = Form(default=None),
     costing_method: str = Form(default="WEIGHTED_AVERAGE"),
-    currency_code: Optional[str] = Form(default=None),
-    standard_cost: Optional[str] = Form(default=None),
-    list_price: Optional[str] = Form(default=None),
-    reorder_point: Optional[str] = Form(default=None),
-    reorder_quantity: Optional[str] = Form(default=None),
-    minimum_stock: Optional[str] = Form(default=None),
-    maximum_stock: Optional[str] = Form(default=None),
-    lead_time_days: Optional[str] = Form(default=None),
-    description: Optional[str] = Form(default=None),
-    track_inventory: Optional[str] = Form(default=None),
-    track_lots: Optional[str] = Form(default=None),
-    track_serial_numbers: Optional[str] = Form(default=None),
-    is_purchaseable: Optional[str] = Form(default=None),
-    is_saleable: Optional[str] = Form(default=None),
+    currency_code: str | None = Form(default=None),
+    standard_cost: str | None = Form(default=None),
+    list_price: str | None = Form(default=None),
+    reorder_point: str | None = Form(default=None),
+    reorder_quantity: str | None = Form(default=None),
+    minimum_stock: str | None = Form(default=None),
+    maximum_stock: str | None = Form(default=None),
+    lead_time_days: str | None = Form(default=None),
+    description: str | None = Form(default=None),
+    track_inventory: str | None = Form(default=None),
+    track_lots: str | None = Form(default=None),
+    track_serial_numbers: str | None = Form(default=None),
+    is_purchaseable: str | None = Form(default=None),
+    is_saleable: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Create a new inventory item."""
@@ -112,6 +109,23 @@ def create_item(
         is_saleable is not None,
         db,
     )
+
+
+@router.get("/items/export")
+async def export_all_items(
+    request: Request,
+    search: str = "",
+    status: str = "",
+    category: str = "",
+    auth: WebAuthContext = Depends(require_inventory_access),
+    db: Session = Depends(get_db),
+):
+    """Export all items matching filters to CSV."""
+    from app.services.inventory.bulk import get_item_bulk_service
+
+    service = get_item_bulk_service(db, auth.organization_id, auth.user_id)
+    extra = {"category_id": category} if category else None
+    return await service.export_all(search=search, status=status, extra_filters=extra)
 
 
 @router.get("/items/{item_id}", response_class=HTMLResponse)
@@ -273,8 +287,8 @@ async def bulk_deactivate_items(
 def list_transactions(
     request: Request,
     auth: WebAuthContext = Depends(require_inventory_access),
-    search: Optional[str] = None,
-    transaction_type: Optional[str] = None,
+    search: str | None = None,
+    transaction_type: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -298,8 +312,8 @@ def list_transactions(
 def list_categories(
     request: Request,
     auth: WebAuthContext = Depends(require_inventory_access),
-    search: Optional[str] = None,
-    status: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, ge=10, le=500),
     db: Session = Depends(get_db),
@@ -330,11 +344,11 @@ def create_category(
     cogs_account_id: str = Form(...),
     revenue_account_id: str = Form(...),
     inventory_adjustment_account_id: str = Form(...),
-    reorder_point: Optional[str] = Form(default=None),
-    minimum_stock: Optional[str] = Form(default=None),
-    description: Optional[str] = Form(default=None),
-    parent_category_id: Optional[str] = Form(default=None),
-    purchase_variance_account_id: Optional[str] = Form(default=None),
+    reorder_point: str | None = Form(default=None),
+    minimum_stock: str | None = Form(default=None),
+    description: str | None = Form(default=None),
+    parent_category_id: str | None = Form(default=None),
+    purchase_variance_account_id: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Create a new item category."""
@@ -378,11 +392,11 @@ def update_category(
     cogs_account_id: str = Form(...),
     revenue_account_id: str = Form(...),
     inventory_adjustment_account_id: str = Form(...),
-    reorder_point: Optional[str] = Form(default=None),
-    minimum_stock: Optional[str] = Form(default=None),
-    description: Optional[str] = Form(default=None),
-    parent_category_id: Optional[str] = Form(default=None),
-    purchase_variance_account_id: Optional[str] = Form(default=None),
+    reorder_point: str | None = Form(default=None),
+    minimum_stock: str | None = Form(default=None),
+    description: str | None = Form(default=None),
+    parent_category_id: str | None = Form(default=None),
+    purchase_variance_account_id: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Update an item category."""
@@ -427,8 +441,8 @@ def toggle_category_status(
 def list_warehouses(
     request: Request,
     auth: WebAuthContext = Depends(require_inventory_access),
-    search: Optional[str] = None,
-    status: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, ge=10, le=500),
     db: Session = Depends(get_db),
@@ -455,20 +469,20 @@ def create_warehouse(
     auth: WebAuthContext = Depends(require_inventory_access),
     warehouse_code: str = Form(...),
     warehouse_name: str = Form(...),
-    description: Optional[str] = Form(default=None),
-    contact_name: Optional[str] = Form(default=None),
-    contact_phone: Optional[str] = Form(default=None),
-    contact_email: Optional[str] = Form(default=None),
-    address_line1: Optional[str] = Form(default=None),
-    address_line2: Optional[str] = Form(default=None),
-    address_city: Optional[str] = Form(default=None),
-    address_state: Optional[str] = Form(default=None),
-    address_postal_code: Optional[str] = Form(default=None),
-    address_country: Optional[str] = Form(default=None),
-    is_receiving: Optional[str] = Form(default=None),
-    is_shipping: Optional[str] = Form(default=None),
-    is_consignment: Optional[str] = Form(default=None),
-    is_transit: Optional[str] = Form(default=None),
+    description: str | None = Form(default=None),
+    contact_name: str | None = Form(default=None),
+    contact_phone: str | None = Form(default=None),
+    contact_email: str | None = Form(default=None),
+    address_line1: str | None = Form(default=None),
+    address_line2: str | None = Form(default=None),
+    address_city: str | None = Form(default=None),
+    address_state: str | None = Form(default=None),
+    address_postal_code: str | None = Form(default=None),
+    address_country: str | None = Form(default=None),
+    is_receiving: str | None = Form(default=None),
+    is_shipping: str | None = Form(default=None),
+    is_consignment: str | None = Form(default=None),
+    is_transit: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Create a new warehouse."""
@@ -524,20 +538,20 @@ def update_warehouse(
     auth: WebAuthContext = Depends(require_inventory_access),
     warehouse_code: str = Form(...),
     warehouse_name: str = Form(...),
-    description: Optional[str] = Form(default=None),
-    contact_name: Optional[str] = Form(default=None),
-    contact_phone: Optional[str] = Form(default=None),
-    contact_email: Optional[str] = Form(default=None),
-    address_line1: Optional[str] = Form(default=None),
-    address_line2: Optional[str] = Form(default=None),
-    address_city: Optional[str] = Form(default=None),
-    address_state: Optional[str] = Form(default=None),
-    address_postal_code: Optional[str] = Form(default=None),
-    address_country: Optional[str] = Form(default=None),
-    is_receiving: Optional[str] = Form(default=None),
-    is_shipping: Optional[str] = Form(default=None),
-    is_consignment: Optional[str] = Form(default=None),
-    is_transit: Optional[str] = Form(default=None),
+    description: str | None = Form(default=None),
+    contact_name: str | None = Form(default=None),
+    contact_phone: str | None = Form(default=None),
+    contact_email: str | None = Form(default=None),
+    address_line1: str | None = Form(default=None),
+    address_line2: str | None = Form(default=None),
+    address_city: str | None = Form(default=None),
+    address_state: str | None = Form(default=None),
+    address_postal_code: str | None = Form(default=None),
+    address_country: str | None = Form(default=None),
+    is_receiving: str | None = Form(default=None),
+    is_shipping: str | None = Form(default=None),
+    is_consignment: str | None = Form(default=None),
+    is_transit: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Update a warehouse."""
@@ -602,9 +616,9 @@ def create_receipt_transaction(
     quantity: str = Form(...),
     unit_cost: str = Form(...),
     transaction_date: str = Form(...),
-    reference: Optional[str] = Form(default=None),
-    notes: Optional[str] = Form(default=None),
-    lot_number: Optional[str] = Form(default=None),
+    reference: str | None = Form(default=None),
+    notes: str | None = Form(default=None),
+    lot_number: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Create a manual inventory receipt."""
@@ -643,9 +657,9 @@ def create_issue_transaction(
     quantity: str = Form(...),
     unit_cost: str = Form(...),
     transaction_date: str = Form(...),
-    reference: Optional[str] = Form(default=None),
-    notes: Optional[str] = Form(default=None),
-    lot_number: Optional[str] = Form(default=None),
+    reference: str | None = Form(default=None),
+    notes: str | None = Form(default=None),
+    lot_number: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Create a manual inventory issue."""
@@ -684,9 +698,9 @@ def create_transfer_transaction(
     to_warehouse_id: str = Form(...),
     quantity: str = Form(...),
     transaction_date: str = Form(...),
-    reference: Optional[str] = Form(default=None),
-    notes: Optional[str] = Form(default=None),
-    lot_number: Optional[str] = Form(default=None),
+    reference: str | None = Form(default=None),
+    notes: str | None = Form(default=None),
+    lot_number: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Create an inventory transfer."""
@@ -726,7 +740,7 @@ def create_adjustment_transaction(
     transaction_date: str = Form(...),
     adjustment_type: str = Form(...),
     reason: str = Form(...),
-    reference: Optional[str] = Form(default=None),
+    reference: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Create an inventory adjustment."""
@@ -753,11 +767,11 @@ def create_adjustment_transaction(
 @router.get("/material-requests", response_class=HTMLResponse)
 def material_request_list(
     request: Request,
-    status: Optional[str] = None,
-    request_type: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    project_id: Optional[str] = None,
+    status: str | None = None,
+    request_type: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    project_id: str | None = None,
     page: int = 1,
     limit: int = 50,
     auth: WebAuthContext = Depends(require_inventory_access),
@@ -852,8 +866,8 @@ async def create_material_request(
 @router.get("/material-requests/reports/summary", response_class=HTMLResponse)
 def material_request_report(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     group_by: str = Query(default="status", pattern="^(status|type)$"),
     auth: WebAuthContext = Depends(require_inventory_access),
     db: Session = Depends(get_db),
@@ -1076,8 +1090,8 @@ def reverse_transaction(
 def list_counts(
     request: Request,
     auth: WebAuthContext = Depends(require_inventory_access),
-    status: Optional[str] = None,
-    search: Optional[str] = None,
+    status: str | None = None,
+    search: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -1208,8 +1222,8 @@ async def record_count_line(
 def list_boms(
     request: Request,
     auth: WebAuthContext = Depends(require_inventory_access),
-    search: Optional[str] = None,
-    status: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -1277,8 +1291,8 @@ def bom_detail(
 def list_price_lists(
     request: Request,
     auth: WebAuthContext = Depends(require_inventory_access),
-    search: Optional[str] = None,
-    list_type: Optional[str] = None,
+    search: str | None = None,
+    list_type: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -1330,9 +1344,9 @@ async def create_price_list(
 def list_lots(
     request: Request,
     auth: WebAuthContext = Depends(require_inventory_access),
-    search: Optional[str] = None,
-    status: Optional[str] = None,
-    warehouse: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
+    warehouse: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -1401,10 +1415,10 @@ def inventory_reports_hub(
 def stock_on_hand_report(
     request: Request,
     auth: WebAuthContext = Depends(require_inventory_access),
-    warehouse: Optional[str] = None,
-    category: Optional[str] = None,
-    show_zero: Optional[str] = None,
-    format: Optional[str] = None,
+    warehouse: str | None = None,
+    category: str | None = None,
+    show_zero: str | None = None,
+    format: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):

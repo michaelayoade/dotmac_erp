@@ -4,7 +4,6 @@ Warehouse Model - Inventory Schema.
 
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -47,22 +46,22 @@ class Warehouse(Base):
 
     warehouse_code: Mapped[str] = mapped_column(String(30), nullable=False)
     warehouse_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Location linkage
-    location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    location_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.location.location_id"),
         nullable=True,
     )
 
     # Address
-    address: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    address: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     # Contact
-    contact_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    contact_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    contact_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    contact_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    contact_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Type flags
     is_receiving: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -71,7 +70,7 @@ class Warehouse(Base):
     is_transit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Default cost center
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -83,7 +82,7 @@ class Warehouse(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

@@ -1,5 +1,6 @@
 {% extends "inventory/base_inventory.html" %}
 
+{% from "components/macros.html" import status_badge, empty_state %}
 {% block page_title %}Material Request Report{% endblock %}
 
 {% block breadcrumbs %}
@@ -237,39 +238,21 @@
                             </a>
                         </td>
                         <td>
-                            {% if req.request_type == 'PURCHASE' %}
-                            <span class="badge badge-info">Purchase</span>
-                            {% elif req.request_type == 'TRANSFER' %}
-                            <span class="badge badge-warning">Transfer</span>
-                            {% elif req.request_type == 'ISSUE' %}
-                            <span class="badge badge-success">Issue</span>
-                            {% elif req.request_type == 'MANUFACTURE' %}
-                            <span class="badge badge-violet">Manufacture</span>
-                            {% endif %}
+                            {{ status_badge(req.request_type) }}
                         </td>
                         <td class="text-slate-500">{{ req.schedule_date or '-' }}</td>
                         <td class="text-slate-500">{{ req.requested_by_name or '-' }}</td>
                         <td class="text-center">
-                            <span class="inline-flex items-center justify-center min-w-[24px] h-6 px-2 rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-medium text-slate-600 dark:text-slate-300">
-                                {{ req.item_count }}
-                            </span>
+                            {{ status_badge(req.item_count, size="sm") }}
                         </td>
                         <td>
-                            {% if req.status == 'DRAFT' %}
-                            <span class="badge badge-neutral">Draft</span>
-                            {% elif req.status == 'SUBMITTED' %}
-                            <span class="badge badge-warning">Submitted</span>
-                            {% elif req.status == 'PARTIALLY_ORDERED' %}
-                            <span class="badge badge-info">Partially Ordered</span>
-                            {% elif req.status == 'ORDERED' %}
-                            <span class="badge badge-primary">Ordered</span>
-                            {% elif req.status == 'ISSUED' %}
-                            <span class="badge badge-success">Issued</span>
-                            {% elif req.status == 'TRANSFERRED' %}
-                            <span class="badge badge-teal">Transferred</span>
-                            {% elif req.status == 'CANCELLED' %}
-                            <span class="badge badge-neutral">Cancelled</span>
-                            {% endif %}
+                            {{ status_badge(req.status) }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No recent_requests found", "There are no recent_requests to display.") }}
                         </td>
                     </tr>
                     {% endfor %}

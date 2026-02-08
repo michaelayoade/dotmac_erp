@@ -4,7 +4,6 @@ Requisition Schemas.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -16,16 +15,16 @@ class RequisitionLineCreate(BaseModel):
     """Schema for creating a requisition line."""
 
     line_number: int = Field(ge=1)
-    item_id: Optional[UUID] = None
+    item_id: UUID | None = None
     description: str
     quantity: Decimal = Field(gt=0)
-    uom: Optional[str] = None
+    uom: str | None = None
     estimated_unit_price: Decimal = Field(ge=0)
     estimated_amount: Decimal = Field(ge=0)
-    expense_account_id: Optional[UUID] = None
-    cost_center_id: Optional[UUID] = None
-    project_id: Optional[UUID] = None
-    delivery_date: Optional[date] = None
+    expense_account_id: UUID | None = None
+    cost_center_id: UUID | None = None
+    project_id: UUID | None = None
+    delivery_date: date | None = None
 
 
 class RequisitionLineResponse(BaseModel):
@@ -36,16 +35,16 @@ class RequisitionLineResponse(BaseModel):
     line_id: UUID
     requisition_id: UUID
     line_number: int
-    item_id: Optional[UUID] = None
+    item_id: UUID | None = None
     description: str
     quantity: Decimal
-    uom: Optional[str] = None
+    uom: str | None = None
     estimated_unit_price: Decimal
     estimated_amount: Decimal
-    expense_account_id: Optional[UUID] = None
-    cost_center_id: Optional[UUID] = None
-    project_id: Optional[UUID] = None
-    delivery_date: Optional[date] = None
+    expense_account_id: UUID | None = None
+    cost_center_id: UUID | None = None
+    project_id: UUID | None = None
+    delivery_date: date | None = None
 
 
 class RequisitionCreate(BaseModel):
@@ -54,21 +53,21 @@ class RequisitionCreate(BaseModel):
     requisition_number: str = Field(max_length=30)
     requisition_date: date
     requester_id: UUID
-    department_id: Optional[UUID] = None
+    department_id: UUID | None = None
     urgency: UrgencyLevel = UrgencyLevel.NORMAL
-    justification: Optional[str] = None
+    justification: str | None = None
     currency_code: str = Field(default="NGN", max_length=3)
-    material_request_id: Optional[UUID] = None
-    plan_item_id: Optional[UUID] = None
-    lines: List[RequisitionLineCreate] = Field(default_factory=list)
+    material_request_id: UUID | None = None
+    plan_item_id: UUID | None = None
+    lines: list[RequisitionLineCreate] = Field(default_factory=list)
 
 
 class RequisitionUpdate(BaseModel):
     """Schema for updating a requisition."""
 
-    urgency: Optional[UrgencyLevel] = None
-    justification: Optional[str] = None
-    department_id: Optional[UUID] = None
+    urgency: UrgencyLevel | None = None
+    justification: str | None = None
+    department_id: UUID | None = None
 
 
 class RequisitionResponse(BaseModel):
@@ -81,20 +80,20 @@ class RequisitionResponse(BaseModel):
     requisition_number: str
     requisition_date: date
     requester_id: UUID
-    department_id: Optional[UUID] = None
+    department_id: UUID | None = None
     status: RequisitionStatus
     urgency: UrgencyLevel
-    justification: Optional[str] = None
+    justification: str | None = None
     total_estimated_amount: Decimal
     currency_code: str
     budget_verified: bool
-    budget_verified_by_id: Optional[UUID] = None
-    budget_verified_at: Optional[datetime] = None
-    material_request_id: Optional[UUID] = None
-    plan_item_id: Optional[UUID] = None
-    approved_by_user_id: Optional[UUID] = None
-    approved_at: Optional[datetime] = None
+    budget_verified_by_id: UUID | None = None
+    budget_verified_at: datetime | None = None
+    material_request_id: UUID | None = None
+    plan_item_id: UUID | None = None
+    approved_by_user_id: UUID | None = None
+    approved_at: datetime | None = None
     created_by_user_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    lines: List[RequisitionLineResponse] = Field(default_factory=list)
+    updated_at: datetime | None = None
+    lines: list[RequisitionLineResponse] = Field(default_factory=list)

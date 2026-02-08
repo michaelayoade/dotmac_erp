@@ -3,8 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
-from app.models.domain_settings import SettingDomain
-from app.models.domain_settings import SettingValueType
+from app.models.domain_settings import SettingDomain, SettingValueType
 
 
 class DomainSettingBase(BaseModel):

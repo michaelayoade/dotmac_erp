@@ -6,15 +6,15 @@ Handles policy violations, queries, hearings, and outcomes.
 """
 
 from app.models.people.discipline.case import (
-    DisciplinaryCase,
     CaseStatus,
-    ViolationType,
+    DisciplinaryCase,
     SeverityLevel,
+    ViolationType,
 )
-from app.models.people.discipline.case_witness import CaseWitness
-from app.models.people.discipline.case_action import CaseAction, ActionType
+from app.models.people.discipline.case_action import ActionType, CaseAction
 from app.models.people.discipline.case_document import CaseDocument, DocumentType
 from app.models.people.discipline.case_response import CaseResponse
+from app.models.people.discipline.case_witness import CaseWitness
 
 __all__ = [
     "DisciplinaryCase",

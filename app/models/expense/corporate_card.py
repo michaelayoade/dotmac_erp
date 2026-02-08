@@ -28,8 +28,8 @@ from app.db import Base
 from app.models.mixins import AuditMixin, ERPNextSyncMixin
 
 if TYPE_CHECKING:
-    from app.models.people.hr.employee import Employee
     from app.models.expense.expense_claim import ExpenseClaim
+    from app.models.people.hr.employee import Employee
 
 
 class CardTransactionStatus(str, enum.Enum):
@@ -84,37 +84,37 @@ class CorporateCard(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         comment="CREDIT, DEBIT, PREPAID",
     )
-    issuer: Mapped[Optional[str]] = mapped_column(
+    issuer: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Bank or card issuer",
     )
 
     # Assignment (optional for unassigned cards)
-    employee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    employee_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
     )
-    assigned_date: Mapped[Optional[date]] = mapped_column(
+    assigned_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    expiry_date: Mapped[Optional[date]] = mapped_column(
+    expiry_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
 
     # Limits
-    credit_limit: Mapped[Optional[Decimal]] = mapped_column(
+    credit_limit: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
     )
-    single_transaction_limit: Mapped[Optional[Decimal]] = mapped_column(
+    single_transaction_limit: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
     )
-    monthly_limit: Mapped[Optional[Decimal]] = mapped_column(
+    monthly_limit: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
     )
@@ -124,7 +124,7 @@ class CorporateCard(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # GL Integration
-    liability_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    liability_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,
@@ -135,11 +135,11 @@ class CorporateCard(Base, AuditMixin, ERPNextSyncMixin):
     is_active: Mapped[bool] = mapped_column(
         default=True,
     )
-    deactivated_on: Mapped[Optional[date]] = mapped_column(
+    deactivated_on: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    deactivation_reason: Mapped[Optional[str]] = mapped_column(
+    deactivation_reason: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
     )
@@ -149,7 +149,7 @@ class CorporateCard(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )
@@ -205,7 +205,7 @@ class CardTransaction(Base, AuditMixin):
         Date,
         nullable=False,
     )
-    posting_date: Mapped[Optional[date]] = mapped_column(
+    posting_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -213,7 +213,7 @@ class CardTransaction(Base, AuditMixin):
         String(200),
         nullable=False,
     )
-    merchant_category: Mapped[Optional[str]] = mapped_column(
+    merchant_category: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
@@ -227,18 +227,18 @@ class CardTransaction(Base, AuditMixin):
         String(3),
         default="NGN",
     )
-    original_currency: Mapped[Optional[str]] = mapped_column(
+    original_currency: Mapped[str | None] = mapped_column(
         String(3),
         nullable=True,
         comment="If foreign currency transaction",
     )
-    original_amount: Mapped[Optional[Decimal]] = mapped_column(
+    original_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
     )
 
     # Reference
-    external_reference: Mapped[Optional[str]] = mapped_column(
+    external_reference: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Bank reference number",
@@ -251,12 +251,12 @@ class CardTransaction(Base, AuditMixin):
     )
 
     # Matching
-    expense_claim_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    expense_claim_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("expense.expense_claim.claim_id"),
         nullable=True,
     )
-    matched_on: Mapped[Optional[date]] = mapped_column(
+    matched_on: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -270,11 +270,11 @@ class CardTransaction(Base, AuditMixin):
     )
 
     # Notes
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -284,7 +284,7 @@ class CardTransaction(Base, AuditMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

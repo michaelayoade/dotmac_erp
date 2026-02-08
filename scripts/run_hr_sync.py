@@ -3,9 +3,9 @@
 Run ERPNext HR sync directly (not as a Celery task).
 """
 
-import sys
-import os
 import logging
+import os
+import sys
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -23,13 +23,13 @@ logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 from app.db import SessionLocal
 from app.models.finance.core_org.organization import Organization
+from app.models.sync import IntegrationType
 from app.services.erpnext.client import ERPNextConfig
 from app.services.erpnext.sync.orchestrator import (
     ERPNextSyncOrchestrator,
     MigrationConfig,
     SyncType,
 )
-from app.models.sync import IntegrationType
 
 
 def _get_erpnext_config(db, org):

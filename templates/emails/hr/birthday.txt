@@ -1,0 +1,6 @@
+{% extends "emails/base_email.txt" %}
+{% block content %}Hi {{ manager_first }},
+
+This is a friendly reminder that {{ employee_name }}'s birthday is {{ timing }}.
+
+Consider wishing them a happy birthday!{% endblock %}

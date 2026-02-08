@@ -23,7 +23,7 @@ Usage::
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -38,10 +38,10 @@ def fire_workflow_event(
     entity_id: UUID,
     event: str,
     *,
-    old_values: Optional[Dict[str, Any]] = None,
-    new_values: Optional[Dict[str, Any]] = None,
-    changed_fields: Optional[List[str]] = None,
-    user_id: Optional[UUID] = None,
+    old_values: dict[str, Any] | None = None,
+    new_values: dict[str, Any] | None = None,
+    changed_fields: list[str] | None = None,
+    user_id: UUID | None = None,
 ) -> None:
     """Fire a workflow event, matching and executing any applicable rules.
 

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import UTC
 from datetime import date as date_type
 from math import ceil
-from typing import Optional
 
-from fastapi import Request, UploadFile
+from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -61,11 +61,11 @@ class OperationsInventoryWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        status: Optional[str] = None,
-        request_type: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        project_id: Optional[str] = None,
+        status: str | None = None,
+        request_type: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        project_id: str | None = None,
         page: int = 1,
         limit: int = 50,
     ) -> HTMLResponse:
@@ -172,8 +172,8 @@ class OperationsInventoryWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
         group_by: str = "status",
     ) -> HTMLResponse:
         """Material request summary report page."""
@@ -457,8 +457,8 @@ class OperationsInventoryWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        status: Optional[str] = None,
-        search: Optional[str] = None,
+        status: str | None = None,
+        search: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Stock counts list page."""
@@ -569,8 +569,8 @@ class OperationsInventoryWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
-        status: Optional[str] = None,
+        search: str | None = None,
+        status: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Bill of Materials list page."""
@@ -680,8 +680,8 @@ class OperationsInventoryWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
-        list_type: Optional[str] = None,
+        search: str | None = None,
+        list_type: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Price lists page."""
@@ -778,9 +778,9 @@ class OperationsInventoryWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
-        status: Optional[str] = None,
-        warehouse: Optional[str] = None,
+        search: str | None = None,
+        status: str | None = None,
+        warehouse: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Lots and serial numbers list page."""
@@ -1121,7 +1121,6 @@ class OperationsInventoryWebService:
         bom_type_str = _safe_form_text(form.get("bom_type") or "ASSEMBLY")
         finished_item_id = _safe_form_text(form.get("finished_item_id"))
         quantity_str = _safe_form_text(form.get("quantity") or "1")
-        warehouse_id = _safe_form_text(form.get("warehouse_id")) or None
         description = _safe_form_text(form.get("description")) or None
         components_json = _safe_form_text(form.get("components_json") or "[]")
 
@@ -1247,7 +1246,7 @@ class OperationsInventoryWebService:
         if count.warehouse_id:
             wh = db.get(Warehouse, count.warehouse_id)
             if wh:
-                count.warehouse = wh  # type: ignore[assignment]
+                count.warehouse = wh
 
         # Load count lines with related item and warehouse
         lines_raw = InventoryCountService.list_lines(
@@ -1279,8 +1278,8 @@ class OperationsInventoryWebService:
 
         # Attach item/warehouse to each line for template access
         for line in lines_raw:
-            line.item = items_map.get(line.item_id)  # type: ignore[attr-defined]
-            line.warehouse = wh_map.get(line.warehouse_id)  # type: ignore[attr-defined]
+            line.item = items_map.get(line.item_id)
+            line.warehouse = wh_map.get(line.warehouse_id)
 
         # Get summary stats
         try:
@@ -1491,10 +1490,10 @@ class OperationsInventoryWebService:
 
         # Load the finished item
         finished_item = db.get(Item, bom.item_id) if bom.item_id else None
-        bom.finished_item = finished_item  # type: ignore[attr-defined]
+        bom.finished_item = finished_item
 
         # Provide template-expected aliases
-        bom.quantity = bom.output_quantity  # type: ignore[attr-defined]
+        bom.quantity = bom.output_quantity
 
         # Load component items in batch
         comp_item_ids = {c.component_item_id for c in bom.components}
@@ -1510,16 +1509,16 @@ class OperationsInventoryWebService:
         # Attach component_item + scrap_percentage alias to each component
         estimated_cost = Decimal("0")
         for comp in bom.components:
-            comp.component_item = comp_items_map.get(comp.component_item_id)  # type: ignore[attr-defined]
-            comp.scrap_percentage = comp.scrap_percent  # type: ignore[attr-defined]
-            if comp.component_item:  # type: ignore[attr-defined]
+            comp.component_item = comp_items_map.get(comp.component_item_id)
+            comp.scrap_percentage = comp.scrap_percent
+            if comp.component_item:
                 item_cost = getattr(
                     comp.component_item, "standard_cost", None
-                ) or Decimal("0")  # type: ignore[attr-defined]
+                ) or Decimal("0")
                 estimated_cost += (comp.quantity or Decimal("0")) * item_cost
 
-        bom.estimated_cost = estimated_cost  # type: ignore[attr-defined]
-        bom.scrap_percentage = Decimal("0")  # type: ignore[attr-defined]
+        bom.estimated_cost = estimated_cost
+        bom.scrap_percentage = Decimal("0")
 
         # Recent transactions for the finished item
         recent_transactions: list = []
@@ -1563,7 +1562,6 @@ class OperationsInventoryWebService:
     ) -> HTMLResponse | RedirectResponse:
         """Lot detail page."""
         from datetime import datetime as dt_cls
-        from datetime import timezone
         from uuid import UUID as UUID_Type
 
         from app.models.inventory.inventory_lot import InventoryLot
@@ -1584,9 +1582,13 @@ class OperationsInventoryWebService:
 
         # Load related item and warehouse
         if lot.item_id:
-            lot.item = db.get(Item, lot.item_id)  # type: ignore[assignment]
+            item = db.get(Item, lot.item_id)
+            if item:
+                lot.item = item
         if lot.warehouse_id:
-            lot.warehouse = db.get(Warehouse, lot.warehouse_id)  # type: ignore[assignment]
+            warehouse = db.get(Warehouse, lot.warehouse_id)
+            if warehouse:
+                lot.warehouse = warehouse
 
         # Recent transactions for this lot
         transactions = list(
@@ -1605,7 +1607,7 @@ class OperationsInventoryWebService:
             {
                 "lot": lot,
                 "transactions": transactions,
-                "now": dt_cls.now(timezone.utc),
+                "now": dt_cls.now(UTC),
             }
         )
         return templates.TemplateResponse(request, "inventory/lot_detail.html", context)
@@ -1820,10 +1822,10 @@ class OperationsInventoryWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        warehouse: Optional[str] = None,
-        category: Optional[str] = None,
-        show_zero: Optional[str] = None,
-        format: Optional[str] = None,
+        warehouse: str | None = None,
+        category: str | None = None,
+        show_zero: str | None = None,
+        format: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Stock on hand report page."""
@@ -1836,6 +1838,8 @@ class OperationsInventoryWebService:
 
         context = base_context(request, auth, "Stock on Hand", "reports")
         org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=400, detail="Organization is required")
         per_page = 50
         include_zero = show_zero in ("true", "1", "on")
 

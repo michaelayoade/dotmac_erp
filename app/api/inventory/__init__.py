@@ -7,19 +7,16 @@ Inventory API endpoints for item management, transactions, and costing.
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
-from app.services.auth_dependencies import require_tenant_permission
-from app.services.feature_flags import require_feature, FEATURE_INVENTORY
 from app.api.finance.utils import parse_enum
-from app.models.inventory.inventory_transaction import TransactionType
 from app.config import settings
 from app.db import SessionLocal
+from app.models.inventory.inventory_transaction import TransactionType
 from app.schemas.finance.common import ListResponse, PostingResultSchema
 from app.schemas.inventory import (
     AddLayerCreate,
@@ -38,17 +35,18 @@ from app.schemas.inventory import (
     TransactionCreate,
     TransactionRead,
 )
+from app.services.auth_dependencies import require_tenant_permission
+from app.services.feature_flags import FEATURE_INVENTORY, require_feature
 from app.services.inventory import (
-    item_service,
-    item_category_service,
-    inventory_transaction_service,
+    ItemCategoryInput,
+    ItemInput,
+    TransactionInput,
     inv_posting_adapter,
     inventory_balance_service,
-    ItemInput,
-    ItemCategoryInput,
-    TransactionInput,
+    inventory_transaction_service,
+    item_category_service,
+    item_service,
 )
-
 
 router = APIRouter(
     prefix="/inventory",
@@ -101,18 +99,19 @@ def create_item_category(
 @router.get("/categories/{category_id}", response_model=ItemCategoryRead)
 def get_item_category(
     category_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("inventory:categories:read")),
     db: Session = Depends(get_db),
 ):
     """Get an item category by ID."""
-    return item_category_service.get(db, str(category_id))
+    return item_category_service.get(db, str(category_id), organization_id)
 
 
 @router.get("/categories", response_model=ListResponse[ItemCategoryRead])
 def list_item_categories(
     organization_id: UUID = Depends(require_organization_id),
-    is_active: Optional[bool] = None,
-    search: Optional[str] = Query(default=None, description="Search by code or name"),
+    is_active: bool | None = None,
+    search: str | None = Query(default=None, description="Search by code or name"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("inventory:categories:read")),
@@ -181,23 +180,24 @@ def create_inventory_item(
 @router.get("/items/{item_id}", response_model=InventoryItemRead)
 def get_inventory_item(
     item_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("inventory:items:read")),
     db: Session = Depends(get_db),
 ):
     """Get an inventory item by ID."""
-    return item_service.get(db, str(item_id))
+    return item_service.get(db, str(item_id), organization_id)
 
 
 @router.get("/items", response_model=ListResponse[InventoryItemRead])
 def list_inventory_items(
     organization_id: UUID = Depends(require_organization_id),
-    category_id: Optional[UUID] = Query(
+    category_id: UUID | None = Query(
         default=None, description="Filter by item category"
     ),
-    is_active: Optional[bool] = None,
-    is_purchaseable: Optional[bool] = None,
-    is_saleable: Optional[bool] = None,
-    search: Optional[str] = Query(
+    is_active: bool | None = None,
+    is_purchaseable: bool | None = None,
+    is_saleable: bool | None = None,
+    search: str | None = Query(
         default=None, description="Search by code, name, or barcode"
     ),
     limit: int = Query(default=50, ge=1, le=200),
@@ -244,8 +244,9 @@ def create_inventory_transaction(
     db: Session = Depends(get_db),
 ):
     """Create an inventory transaction."""
-    from app.models.inventory.inventory_transaction import TransactionType as TxnType
     from datetime import datetime
+
+    from app.models.inventory.inventory_transaction import TransactionType as TxnType
 
     # Map transaction type string to enum
     txn_type = TxnType(payload.transaction_type)
@@ -283,21 +284,22 @@ def create_inventory_transaction(
 @router.get("/transactions/{transaction_id}", response_model=TransactionRead)
 def get_inventory_transaction(
     transaction_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("inventory:transactions:read")),
     db: Session = Depends(get_db),
 ):
     """Get an inventory transaction by ID."""
-    return inventory_transaction_service.get(db, str(transaction_id))
+    return inventory_transaction_service.get(db, str(transaction_id), organization_id)
 
 
 @router.get("/transactions", response_model=ListResponse[TransactionRead])
 def list_inventory_transactions(
     organization_id: UUID = Depends(require_organization_id),
-    item_id: Optional[UUID] = None,
-    warehouse_id: Optional[UUID] = None,
-    transaction_type: Optional[str] = None,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
+    item_id: UUID | None = None,
+    warehouse_id: UUID | None = None,
+    transaction_type: str | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("inventory:transactions:read")),
@@ -352,7 +354,7 @@ def post_inventory_transaction(
 def get_item_stock_balance(
     item_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    warehouse_id: Optional[UUID] = None,
+    warehouse_id: UUID | None = None,
     auth: dict = Depends(require_tenant_permission("inventory:stock:read")),
     db: Session = Depends(get_db),
 ):
@@ -452,8 +454,8 @@ def allocate_stock(
     reference_type: str = Query(..., description="e.g., SALES_ORDER"),
     reference_id: UUID = Query(...),
     organization_id: UUID = Depends(require_organization_id),
-    warehouse_id: Optional[UUID] = None,
-    lot_id: Optional[UUID] = None,
+    warehouse_id: UUID | None = None,
+    lot_id: UUID | None = None,
     auth: dict = Depends(require_tenant_permission("inventory:stock:allocate")),
     db: Session = Depends(get_db),
 ):
@@ -476,8 +478,8 @@ def deallocate_stock(
     item_id: UUID = Query(...),
     quantity: Decimal = Query(...),
     organization_id: UUID = Depends(require_organization_id),
-    warehouse_id: Optional[UUID] = None,
-    lot_id: Optional[UUID] = None,
+    warehouse_id: UUID | None = None,
+    lot_id: UUID | None = None,
     auth: dict = Depends(require_tenant_permission("inventory:stock:allocate")),
     db: Session = Depends(get_db),
 ):
@@ -493,7 +495,7 @@ def deallocate_stock(
     return {"success": success}
 
 
-from app.services.inventory import fifo_valuation_service
+from app.services.inventory import fifo_valuation_service  # noqa: E402
 
 
 @router.post("/fifo/add-layer", status_code=status.HTTP_201_CREATED)
@@ -583,7 +585,10 @@ def get_fifo_inventory(
     return fifo_valuation_service.get_fifo_inventory(db, organization_id, item_id)
 
 
-from app.services.inventory import lot_serial_service, LotInput
+from app.services.inventory import (  # noqa: E402
+    LotInput,
+    lot_serial_service,
+)
 
 
 @router.post("/lots", response_model=LotRead, status_code=status.HTTP_201_CREATED)
@@ -637,19 +642,20 @@ def get_expired_lots(
 @router.get("/lots/{lot_id}", response_model=LotRead)
 def get_lot(
     lot_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("inventory:lots:read")),
     db: Session = Depends(get_db),
 ):
     """Get a lot by ID."""
-    return lot_serial_service.get(db, str(lot_id))
+    return lot_serial_service.get(db, str(lot_id), organization_id)
 
 
 @router.get("/lots", response_model=ListResponse[LotRead])
 def list_lots(
     organization_id: UUID = Depends(require_organization_id),
-    item_id: Optional[UUID] = None,
-    is_quarantined: Optional[bool] = None,
-    has_expiry: Optional[bool] = None,
+    item_id: UUID | None = None,
+    is_quarantined: bool | None = None,
+    has_expiry: bool | None = None,
     include_zero_quantity: bool = Query(default=False),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
@@ -674,66 +680,74 @@ def list_lots(
 def allocate_from_lot(
     lot_id: UUID,
     quantity: Decimal = Query(...),
-    reference: Optional[str] = None,
+    reference: str | None = None,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("inventory:lots:allocate")),
     db: Session = Depends(get_db),
 ):
     """Allocate quantity from a lot."""
-    return lot_serial_service.allocate_from_lot(db, lot_id, quantity, reference)
+    return lot_serial_service.allocate_from_lot(
+        db, organization_id, lot_id, quantity, reference
+    )
 
 
 @router.post("/lots/{lot_id}/deallocate", response_model=LotRead)
 def deallocate_from_lot(
     lot_id: UUID,
     quantity: Decimal = Query(...),
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("inventory:lots:allocate")),
     db: Session = Depends(get_db),
 ):
     """Release allocation from a lot."""
-    return lot_serial_service.deallocate_from_lot(db, lot_id, quantity)
+    return lot_serial_service.deallocate_from_lot(db, organization_id, lot_id, quantity)
 
 
 @router.post("/lots/{lot_id}/consume", response_model=LotRead)
 def consume_from_lot(
     lot_id: UUID,
     quantity: Decimal = Query(...),
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("inventory:lots:allocate")),
     db: Session = Depends(get_db),
 ):
     """Consume quantity from a lot."""
-    return lot_serial_service.consume_from_lot(db, lot_id, quantity)
+    return lot_serial_service.consume_from_lot(db, organization_id, lot_id, quantity)
 
 
 @router.post("/lots/{lot_id}/quarantine", response_model=LotRead)
 def quarantine_lot(
     lot_id: UUID,
     reason: str = Query(...),
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("inventory:lots:quarantine")),
     db: Session = Depends(get_db),
 ):
     """Place a lot in quarantine."""
-    return lot_serial_service.quarantine_lot(db, lot_id, reason)
+    return lot_serial_service.quarantine_lot(db, organization_id, lot_id, reason)
 
 
 @router.post("/lots/{lot_id}/release-quarantine", response_model=LotRead)
 def release_quarantine(
     lot_id: UUID,
     qc_status: str = Query(default="PASSED"),
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("inventory:lots:quarantine")),
     db: Session = Depends(get_db),
 ):
     """Release a lot from quarantine."""
-    return lot_serial_service.release_quarantine(db, lot_id, qc_status)
+    return lot_serial_service.release_quarantine(db, organization_id, lot_id, qc_status)
 
 
 @router.get("/lots/{lot_id}/traceability", response_model=LotTraceabilityRead)
 def get_lot_traceability(
     lot_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("inventory:lots:read")),
     db: Session = Depends(get_db),
 ):
     """Get traceability information for a lot."""
-    return lot_serial_service.get_traceability(db, lot_id)
+    return lot_serial_service.get_traceability(db, organization_id, lot_id)
 
 
 # Note: /lots/expiring and /lots/expired routes moved to earlier in file for proper route matching

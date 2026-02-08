@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}Performance Trends{% endblock %}
 
 {% block breadcrumbs %}
@@ -123,7 +124,7 @@
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Cycle Details</h2>
         </div>
         {% if report.cycles %}
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
@@ -153,7 +154,7 @@
                             {% elif c.status == 'DRAFT' %}
                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300">Draft</span>
                             {% else %}
-                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800 dark:bg-rose-900/30 dark:text-rose-300">{{ c.status }}</span>
+                            {{ status_badge(c.status, size="sm") }}
                             {% endif %}
                         </td>
                         <td class="px-5 py-3 text-right text-sm text-slate-700 dark:text-slate-300">{{ c.total_appraisals }}</td>

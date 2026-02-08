@@ -5,19 +5,18 @@ Handles incident reporting, investigation, and resolution.
 """
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.models.finance.audit.audit_log import AuditAction
 from app.models.fleet.enums import IncidentSeverity, IncidentStatus, IncidentType
 from app.models.fleet.vehicle import Vehicle
 from app.models.fleet.vehicle_incident import VehicleIncident
 from app.schemas.fleet.incident import IncidentCreate, IncidentResolve, IncidentUpdate
-from app.models.finance.audit.audit_log import AuditAction
 from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import (
     NotFoundError,
@@ -32,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 # Valid incident status transitions
-INCIDENT_STATUS_TRANSITIONS: Dict[IncidentStatus, set] = {
+INCIDENT_STATUS_TRANSITIONS: dict[IncidentStatus, set] = {
     IncidentStatus.REPORTED: {
         IncidentStatus.INVESTIGATING,
         IncidentStatus.INSURANCE_FILED,
@@ -63,7 +62,7 @@ class IncidentService:
         self.db = db
         self.organization_id = organization_id
 
-    def get_by_id(self, incident_id: UUID) -> Optional[VehicleIncident]:
+    def get_by_id(self, incident_id: UUID) -> VehicleIncident | None:
         """Get incident by ID."""
         return self.db.get(VehicleIncident, incident_id)
 
@@ -79,14 +78,14 @@ class IncidentService:
     def list_incidents(
         self,
         *,
-        vehicle_id: Optional[UUID] = None,
-        driver_id: Optional[UUID] = None,
-        status: Optional[IncidentStatus] = None,
-        incident_type: Optional[IncidentType] = None,
-        severity: Optional[IncidentSeverity] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
-        params: Optional[PaginationParams] = None,
+        vehicle_id: UUID | None = None,
+        driver_id: UUID | None = None,
+        status: IncidentStatus | None = None,
+        incident_type: IncidentType | None = None,
+        severity: IncidentSeverity | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        params: PaginationParams | None = None,
     ) -> PaginatedResult[VehicleIncident]:
         """List incidents with filtering."""
         stmt = (
@@ -126,9 +125,7 @@ class IncidentService:
 
         return paginate(self.db, stmt, params)
 
-    def get_open_incidents(
-        self, *, limit: Optional[int] = None
-    ) -> List[VehicleIncident]:
+    def get_open_incidents(self, *, limit: int | None = None) -> list[VehicleIncident]:
         """Get all open (non-closed) incidents."""
         stmt = (
             select(VehicleIncident)
@@ -325,7 +322,7 @@ class IncidentService:
         """Soft delete an incident."""
         incident = self.get_or_raise(incident_id)
         incident.is_deleted = True
-        incident.deleted_at = datetime.now(timezone.utc)
+        incident.deleted_at = datetime.now(UTC)
 
         fire_audit_event(
             self.db,
@@ -340,7 +337,7 @@ class IncidentService:
         logger.info("Soft deleted incident %s", incident_id)
         return incident
 
-    def get_cost_summary(self, vehicle_id: Optional[UUID] = None) -> dict:
+    def get_cost_summary(self, vehicle_id: UUID | None = None) -> dict:
         """Get incident cost summary using SQL aggregation."""
         base_filter = (
             VehicleIncident.organization_id == self.organization_id,

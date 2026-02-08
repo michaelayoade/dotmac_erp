@@ -6,7 +6,7 @@ Links employees to shift patterns for their department.
 
 import uuid
 from datetime import date, datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
@@ -25,8 +25,8 @@ from app.models.people.base import AuditMixin
 
 if TYPE_CHECKING:
     from app.models.finance.core_org.organization import Organization
-    from app.models.people.hr.employee import Employee
     from app.models.people.hr.department import Department
+    from app.models.people.hr.employee import Employee
     from app.models.people.scheduling.shift_pattern import ShiftPattern
 
 
@@ -106,7 +106,7 @@ class ShiftPatternAssignment(Base, AuditMixin):
         nullable=False,
         comment="Start date for this assignment",
     )
-    effective_to: Mapped[Optional[date]] = mapped_column(
+    effective_to: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="End date (null = ongoing)",
@@ -123,7 +123,7 @@ class ShiftPatternAssignment(Base, AuditMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

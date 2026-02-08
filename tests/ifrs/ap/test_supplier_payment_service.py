@@ -10,10 +10,10 @@ from uuid import uuid4
 import pytest
 
 from tests.ifrs.ap.conftest import (
+    MockAPPaymentAllocation,
     MockSupplier,
     MockSupplierInvoice,
     MockSupplierPayment,
-    MockAPPaymentAllocation,
 )
 
 
@@ -40,13 +40,13 @@ class TestCreateSupplierPayment:
 
     def test_create_payment_success(self, mock_db, org_id, user_id):
         """Test successful payment creation."""
-        from app.services.finance.ap.supplier_payment import (
-            SupplierPaymentService,
-            SupplierPaymentInput,
-            PaymentAllocationInput,
-        )
-        from app.models.finance.ap.supplier_payment import APPaymentMethod
         from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus
+        from app.models.finance.ap.supplier_payment import APPaymentMethod
+        from app.services.finance.ap.supplier_payment import (
+            PaymentAllocationInput,
+            SupplierPaymentInput,
+            SupplierPaymentService,
+        )
 
         supplier = MockSupplier(organization_id=org_id)
 
@@ -106,7 +106,7 @@ class TestCreateSupplierPayment:
                             "app.services.finance.ap.supplier_payment.SequenceService.get_next_number",
                             return_value="PAY-0001",
                         ):
-                            result = SupplierPaymentService.create_payment(
+                            SupplierPaymentService.create_payment(
                                 mock_db, org_id, payment_input, user_id
                             )
 
@@ -116,11 +116,12 @@ class TestCreateSupplierPayment:
     def test_create_payment_invalid_supplier_fails(self, mock_db, org_id, user_id):
         """Test that invalid supplier fails validation."""
         from fastapi import HTTPException
-        from app.services.finance.ap.supplier_payment import (
-            SupplierPaymentService,
-            SupplierPaymentInput,
-        )
+
         from app.models.finance.ap.supplier_payment import APPaymentMethod
+        from app.services.finance.ap.supplier_payment import (
+            SupplierPaymentInput,
+            SupplierPaymentService,
+        )
 
         mock_db.get.return_value = None  # Supplier not found
 
@@ -148,8 +149,8 @@ class TestApproveSupplierPayment:
 
     def test_approve_pending_payment(self, mock_db, org_id, user_id):
         """Test approving a pending payment."""
-        from app.services.finance.ap.supplier_payment import SupplierPaymentService
         from app.models.finance.ap.supplier_payment import APPaymentStatus
+        from app.services.finance.ap.supplier_payment import SupplierPaymentService
 
         creator_id = uuid4()
         payment = MockSupplierPayment(
@@ -170,8 +171,9 @@ class TestApproveSupplierPayment:
     def test_self_approval_fails_sod(self, mock_db, org_id):
         """Test that self-approval fails segregation of duties."""
         from fastapi import HTTPException
-        from app.services.finance.ap.supplier_payment import SupplierPaymentService
+
         from app.models.finance.ap.supplier_payment import APPaymentStatus
+        from app.services.finance.ap.supplier_payment import SupplierPaymentService
 
         creator_id = uuid4()
         payment = MockSupplierPayment(
@@ -196,8 +198,8 @@ class TestPostSupplierPayment:
 
     def test_post_approved_payment(self, mock_db, org_id, user_id):
         """Test posting an approved payment."""
-        from app.services.finance.ap.supplier_payment import SupplierPaymentService
         from app.models.finance.ap.supplier_payment import APPaymentStatus
+        from app.services.finance.ap.supplier_payment import SupplierPaymentService
 
         payment = MockSupplierPayment(
             organization_id=org_id,
@@ -225,8 +227,8 @@ class TestVoidSupplierPayment:
 
     def test_void_draft_payment(self, mock_db, org_id, user_id):
         """Test voiding a draft payment."""
-        from app.services.finance.ap.supplier_payment import SupplierPaymentService
         from app.models.finance.ap.supplier_payment import APPaymentStatus
+        from app.services.finance.ap.supplier_payment import SupplierPaymentService
 
         payment = MockSupplierPayment(
             organization_id=org_id,
@@ -245,8 +247,9 @@ class TestVoidSupplierPayment:
     def test_void_cleared_payment_fails(self, mock_db, org_id, user_id):
         """Test that voiding cleared payment fails."""
         from fastapi import HTTPException
-        from app.services.finance.ap.supplier_payment import SupplierPaymentService
+
         from app.models.finance.ap.supplier_payment import APPaymentStatus
+        from app.services.finance.ap.supplier_payment import SupplierPaymentService
 
         payment = MockSupplierPayment(
             organization_id=org_id,
@@ -281,6 +284,7 @@ class TestGetSupplierPayment:
     def test_get_nonexistent_raises(self, mock_db):
         """Test getting non-existent payment raises exception."""
         from fastapi import HTTPException
+
         from app.services.finance.ap.supplier_payment import SupplierPaymentService
 
         mock_db.get.return_value = None
@@ -297,8 +301,8 @@ class TestListSupplierPayments:
 
     def test_list_with_filters(self, mock_db, org_id):
         """Test listing payments with filters."""
-        from app.services.finance.ap.supplier_payment import SupplierPaymentService
         from app.models.finance.ap.supplier_payment import APPaymentStatus
+        from app.services.finance.ap.supplier_payment import SupplierPaymentService
 
         payments = [MockSupplierPayment(organization_id=org_id)]
         # list() now uses db.scalars(select(...).where(...).order_by(...).limit().offset()).all()

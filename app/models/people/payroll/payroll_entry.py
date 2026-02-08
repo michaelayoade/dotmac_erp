@@ -103,15 +103,15 @@ class PayrollEntry(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
     )
 
     # Period identification
-    payroll_year: Mapped[Optional[int]] = mapped_column(
+    payroll_year: Mapped[int | None] = mapped_column(
         nullable=True,
         comment="Year of the payroll period",
     )
-    payroll_month: Mapped[Optional[int]] = mapped_column(
+    payroll_month: Mapped[int | None] = mapped_column(
         nullable=True,
         comment="Month of the payroll period (1-12)",
     )
-    entry_name: Mapped[Optional[str]] = mapped_column(
+    entry_name: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Human-readable name for this payroll run",
@@ -128,25 +128,25 @@ class PayrollEntry(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
     )
 
     # Filters
-    department_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    department_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.department.department_id"),
         nullable=True,
         comment="Filter by department",
     )
-    designation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    designation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.designation.designation_id"),
         nullable=True,
         comment="Filter by designation",
     )
-    source_bank_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    source_bank_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("banking.bank_accounts.bank_account_id"),
         nullable=True,
         comment="Payment bank account for bank upload",
     )
-    expense_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    expense_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,
@@ -185,33 +185,33 @@ class PayrollEntry(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
     )
 
     # Payslip email tracking
-    payslips_email_status: Mapped[Optional[str]] = mapped_column(
+    payslips_email_status: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
     )
-    payslips_email_queued_at: Mapped[Optional[datetime]] = mapped_column(
+    payslips_email_queued_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
     )
-    payslips_email_queued_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    payslips_email_queued_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,
     )
-    payslips_email_total_count: Mapped[Optional[int]] = mapped_column(
+    payslips_email_total_count: Mapped[int | None] = mapped_column(
         nullable=True,
     )
-    payslips_email_processed_count: Mapped[Optional[int]] = mapped_column(
+    payslips_email_processed_count: Mapped[int | None] = mapped_column(
         nullable=True,
     )
-    payslips_email_error_count: Mapped[Optional[int]] = mapped_column(
+    payslips_email_error_count: Mapped[int | None] = mapped_column(
         nullable=True,
     )
-    payslips_email_last_run_at: Mapped[Optional[datetime]] = mapped_column(
+    payslips_email_last_run_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
     )
 
     # GL Integration (consolidated posting)
-    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.journal_entry.journal_entry_id"),
         nullable=True,
@@ -219,7 +219,7 @@ class PayrollEntry(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
     )
 
     # Notes
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -229,7 +229,7 @@ class PayrollEntry(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

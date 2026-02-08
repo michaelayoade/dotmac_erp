@@ -6,7 +6,7 @@ Provides context and update functions for settings UI pages.
 
 import logging
 import uuid
-from typing import Any, Optional, cast
+from typing import Any, TypedDict, cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,7 +19,11 @@ from app.schemas.settings import DomainSettingUpdate
 from app.services.email import SMTPConfig
 from app.services.formatting_context import (
     COMMON_TIMEZONES,
+)
+from app.services.formatting_context import (
     DATE_FORMAT_CHOICES as DATE_FORMATS,
+)
+from app.services.formatting_context import (
     NUMBER_FORMAT_CHOICES as NUMBER_FORMATS,
 )
 from app.services.settings_spec import (
@@ -31,7 +35,14 @@ from app.services.settings_spec import (
 
 logger = logging.getLogger(__name__)
 
-EMAIL_MODULE_SETTINGS = [
+
+class EmailModuleSetting(TypedDict):
+    key: str
+    label: str
+    module: EmailModule
+
+
+EMAIL_MODULE_SETTINGS: list[EmailModuleSetting] = [
     {"key": "support", "label": "Support", "module": EmailModule.SUPPORT},
     {
         "key": "people_payroll",
@@ -78,6 +89,13 @@ SEQUENCE_TYPE_LABELS = {
     SequenceType.SUPPORT_TICKET: "Support Ticket",
     SequenceType.PROJECT: "Project",
     SequenceType.TASK: "Task",
+    SequenceType.MATERIAL_REQUEST: "Material Request",
+    SequenceType.CUSTOMER: "Customer Code",
+    SequenceType.EMPLOYEE: "Employee Code",
+    SequenceType.LEAVE_APPLICATION: "Leave Application",
+    SequenceType.SALARY_SLIP: "Salary Slip",
+    SequenceType.PAYROLL_ENTRY: "Payroll Entry",
+    SequenceType.EXPENSE_INVOICE: "Expense Invoice",
 }
 
 RESET_FREQUENCY_LABELS = {
@@ -115,7 +133,7 @@ class SettingsWebService:
         db: AsyncSession,
         organization_id: uuid.UUID,
         data: dict[str, Any],
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Update organization profile."""
         result = await db.execute(
             select(Organization).where(Organization.organization_id == organization_id)
@@ -221,7 +239,7 @@ class SettingsWebService:
         db: AsyncSession,
         organization_id: uuid.UUID,
         sequence_id: uuid.UUID,
-    ) -> tuple[dict[str, Any], Optional[str]]:
+    ) -> tuple[dict[str, Any], str | None]:
         """
         Get context for numbering sequence edit page.
 
@@ -257,7 +275,7 @@ class SettingsWebService:
         include_month: bool,
         year_format: int,
         reset_frequency: str,
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Update a numbering sequence configuration.
 
@@ -289,7 +307,7 @@ class SettingsWebService:
         db: AsyncSession,
         sequence_id: uuid.UUID,
         new_value: int,
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Reset a sequence counter to a specific value.
 
@@ -367,7 +385,7 @@ class SettingsWebService:
 
     def update_email_settings(
         self, db, organization_id: uuid.UUID, data: dict[str, Any]
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Update email settings."""
         service = DOMAIN_SETTINGS_SERVICE.get(SettingDomain.email)
         if not service:
@@ -605,7 +623,7 @@ class SettingsWebService:
 
     def update_automation_settings(
         self, db, organization_id: uuid.UUID, data: dict[str, Any]
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Update automation settings."""
         service = DOMAIN_SETTINGS_SERVICE.get(SettingDomain.automation)
         if not service:
@@ -659,7 +677,7 @@ class SettingsWebService:
 
     def toggle_feature(
         self, db, organization_id: uuid.UUID, key: str, enabled: bool
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Toggle a feature flag."""
         spec = get_spec(SettingDomain.features, key)
         if not spec:
@@ -697,7 +715,7 @@ class SettingsWebService:
 
     def update_reporting_settings(
         self, db, organization_id: uuid.UUID, data: dict[str, Any]
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Update reporting settings."""
         service = DOMAIN_SETTINGS_SERVICE.get(SettingDomain.reporting)
         if not service:
@@ -767,7 +785,7 @@ class SettingsWebService:
 
     def update_payroll_settings(
         self, db, organization_id: uuid.UUID, data: dict[str, Any]
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Update payroll settings."""
         from app.services.settings_spec import coerce_value
 
@@ -899,7 +917,7 @@ class SettingsWebService:
 
     def update_payments_settings(
         self, db, organization_id: uuid.UUID, data: dict[str, Any]
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Update payments settings."""
         from app.services.settings_spec import coerce_value
 

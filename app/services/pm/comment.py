@@ -6,7 +6,7 @@ Handles comments for projects and tasks.
 
 import logging
 import uuid
-from typing import Iterable, List
+from collections.abc import Iterable
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -27,7 +27,7 @@ class PMCommentService:
         entity_id: uuid.UUID,
         include_internal: bool = True,
         include_deleted: bool = False,
-    ) -> List[PMComment]:
+    ) -> list[PMComment]:
         """List comments for a project or task."""
         query = select(PMComment).where(
             PMComment.organization_id == organization_id,
@@ -103,7 +103,7 @@ class PMCommentService:
         self,
         db: Session,
         comment_ids: Iterable[uuid.UUID],
-    ) -> List[PMCommentAttachment]:
+    ) -> list[PMCommentAttachment]:
         """Return attachment links for the provided comment IDs."""
         ids = list(comment_ids)
         if not ids:

@@ -5,7 +5,6 @@ Inventory Valuation Model - Inventory Schema.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Date,
@@ -69,7 +68,7 @@ class InventoryValuation(Base):
         ForeignKey("inv.warehouse.warehouse_id"),
         nullable=False,
     )
-    lot_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    lot_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -84,19 +83,19 @@ class InventoryValuation(Base):
     costing_method: Mapped[str] = mapped_column(String(30), nullable=False)
 
     # Net realizable value (IAS 2)
-    estimated_selling_price: Mapped[Optional[Decimal]] = mapped_column(
+    estimated_selling_price: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
-    estimated_costs_to_complete: Mapped[Optional[Decimal]] = mapped_column(
+    estimated_costs_to_complete: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
-    estimated_selling_costs: Mapped[Optional[Decimal]] = mapped_column(
+    estimated_selling_costs: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
-    net_realizable_value: Mapped[Optional[Decimal]] = mapped_column(
+    net_realizable_value: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
@@ -114,7 +113,7 @@ class InventoryValuation(Base):
     )
 
     # Write-down journal
-    write_down_journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    write_down_journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )

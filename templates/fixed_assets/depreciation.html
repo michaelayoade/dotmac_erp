@@ -57,6 +57,12 @@
                         <td class="table-cell-amount text-slate-900 dark:text-white">{{ run.total_depreciation }}</td>
                         <td class="text-sm text-slate-600 dark:text-slate-400">{{ run.created_at }}</td>
                     </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No depreciation_runs found", "There are no depreciation_runs to display.") }}
+                        </td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>

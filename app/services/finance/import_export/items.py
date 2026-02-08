@@ -5,7 +5,7 @@ Imports inventory items from CSV data into the IFRS-based inventory system.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -43,16 +43,16 @@ class ItemCategoryImporter(BaseImporter[ItemCategory]):
         self.cogs_account_id = cogs_account_id
         self.revenue_account_id = revenue_account_id
         self.adjustment_account_id = adjustment_account_id
-        self._category_cache: Dict[str, UUID] = {}
+        self._category_cache: dict[str, UUID] = {}
 
-    def get_field_mappings(self) -> List[FieldMapping]:
+    def get_field_mappings(self) -> list[FieldMapping]:
         return []
 
-    def get_unique_key(self, row: Dict[str, Any]) -> str:
+    def get_unique_key(self, row: dict[str, Any]) -> str:
         value = row.get("Category Name") or row.get("Item Group") or "Default"
         return str(value).strip()
 
-    def check_duplicate(self, row: Dict[str, Any]) -> Optional[ItemCategory]:
+    def check_duplicate(self, row: dict[str, Any]) -> ItemCategory | None:
         category_name = self.get_unique_key(row)
         category_code = self._make_category_code(category_name)
 
@@ -71,7 +71,7 @@ class ItemCategoryImporter(BaseImporter[ItemCategory]):
 
         return existing
 
-    def create_entity(self, row: Dict[str, Any]) -> ItemCategory:
+    def create_entity(self, row: dict[str, Any]) -> ItemCategory:
         category_name = self.get_unique_key(row)
         category_code = self._make_category_code(category_name)
 
@@ -94,11 +94,11 @@ class ItemCategoryImporter(BaseImporter[ItemCategory]):
     def _make_category_code(self, name: str) -> str:
         return name.upper().replace(" ", "_")[:30]
 
-    def get_category_id(self, category_name: str) -> Optional[UUID]:
+    def get_category_id(self, category_name: str) -> UUID | None:
         code = self._make_category_code(category_name)
         return self._category_cache.get(code)
 
-    def ensure_categories(self, rows: List[Dict[str, Any]]) -> None:
+    def ensure_categories(self, rows: list[dict[str, Any]]) -> None:
         """Ensure all required categories exist."""
         unique_categories = set()
         for row in rows:
@@ -157,7 +157,7 @@ class ItemImporter(BaseImporter[Item]):
             adjustment_account_id,
         )
 
-    def get_field_mappings(self) -> List[FieldMapping]:
+    def get_field_mappings(self) -> list[FieldMapping]:
         """Define flexible field mappings supporting various CSV formats."""
         return [
             # Name mappings - try multiple common column names
@@ -290,7 +290,7 @@ class ItemImporter(BaseImporter[Item]):
             FieldMapping("Weight Unit", "weight_uom", required=False),
         ]
 
-    def get_unique_key(self, row: Dict[str, Any]) -> str:
+    def get_unique_key(self, row: dict[str, Any]) -> str:
         """Unique key is item code or SKU."""
         code = str(
             row.get("Item Code") or row.get("SKU") or row.get("Product Code") or ""
@@ -303,7 +303,7 @@ class ItemImporter(BaseImporter[Item]):
         ).strip()
         return name
 
-    def check_duplicate(self, row: Dict[str, Any]) -> Optional[Item]:
+    def check_duplicate(self, row: dict[str, Any]) -> Item | None:
         """Check if item already exists."""
         key = self.get_unique_key(row)
         if not key:
@@ -334,7 +334,7 @@ class ItemImporter(BaseImporter[Item]):
 
         return existing
 
-    def create_entity(self, row: Dict[str, Any]) -> Item:
+    def create_entity(self, row: dict[str, Any]) -> Item:
         """Create a new item from transformed row data."""
         # Get item name (try multiple fields)
         item_name = str(
@@ -468,7 +468,7 @@ class ItemImporter(BaseImporter[Item]):
             self.result.add_error(0, f"File not found: {file_path}", None)
             return self.result
 
-        with open(file_path, "r", encoding=self.config.encoding) as f:
+        with open(file_path, encoding=self.config.encoding) as f:
             reader = csv.DictReader(f)
             rows = list(reader)
 

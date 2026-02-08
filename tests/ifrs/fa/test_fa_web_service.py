@@ -3,7 +3,7 @@ Tests for FixedAssetWebService.
 """
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -48,16 +48,16 @@ class TestFAWebServiceHelpers:
 
     def test_parse_status_valid(self):
         """Test status parsing with valid value."""
-        from app.services.fixed_assets.web import _parse_status
         from app.models.fixed_assets.asset import AssetStatus
+        from app.services.fixed_assets.web import _parse_status
 
         result = _parse_status("ACTIVE")
         assert result == AssetStatus.ACTIVE
 
     def test_parse_status_lowercase(self):
         """Test status parsing with lowercase value."""
-        from app.services.fixed_assets.web import _parse_status
         from app.models.fixed_assets.asset import AssetStatus
+        from app.services.fixed_assets.web import _parse_status
 
         result = _parse_status("active")
         assert result == AssetStatus.ACTIVE
@@ -144,7 +144,7 @@ class MockDepreciationRun:
         self.status = kwargs.get("status", DepreciationRunStatus.DRAFT)
         self.assets_processed = kwargs.get("assets_processed", 10)
         self.total_depreciation = kwargs.get("total_depreciation", Decimal("1000.00"))
-        self.created_at = kwargs.get("created_at", datetime.now(timezone.utc))
+        self.created_at = kwargs.get("created_at", datetime.now(UTC))
 
 
 class MockFiscalPeriod:

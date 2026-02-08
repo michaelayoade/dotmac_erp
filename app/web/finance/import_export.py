@@ -4,17 +4,13 @@ Import/Export Web Routes.
 HTML template routes for data import functionality.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
-from app.web.deps import get_db, require_finance_access, WebAuthContext, base_context
 from app.services.finance.import_export.web import import_web_service
-
-templates = Jinja2Templates(directory="templates")
+from app.templates import templates
+from app.web.deps import WebAuthContext, base_context, get_db, require_finance_access
 
 router = APIRouter(prefix="/import", tags=["import-web"])
 
@@ -272,8 +268,8 @@ async def execute_import(
     request: Request,
     entity_type: str,
     file: UploadFile = File(...),
-    skip_duplicates: Optional[str] = Form(default=None),
-    dry_run: Optional[str] = Form(default=None),
+    skip_duplicates: str | None = Form(default=None),
+    dry_run: str | None = Form(default=None),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):

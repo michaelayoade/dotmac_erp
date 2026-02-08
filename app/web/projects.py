@@ -5,8 +5,7 @@ HTML template routes for project management including tasks, milestones,
 resources, and time tracking.
 """
 
-from typing import Optional
-
+import logging
 from datetime import date, timedelta
 from decimal import Decimal
 
@@ -21,24 +20,25 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import DataError, IntegrityError
+from sqlalchemy.orm import Session
 
 from app.services.common import (
-    coerce_uuid,
     NotFoundError,
-    ValidationError,
     PaginationParams,
+    ValidationError,
+    coerce_uuid,
 )
 from app.templates import templates
 from app.web.deps import (
+    WebAuthContext,
     base_context,
     get_db,
     require_projects_access,
-    WebAuthContext,
 )
 
 router = APIRouter(prefix="/projects", tags=["projects-web"])
+logger = logging.getLogger(__name__)
 
 
 # ============================================================================
@@ -46,7 +46,7 @@ router = APIRouter(prefix="/projects", tags=["projects-web"])
 # ============================================================================
 
 
-def _safe_date(value: str) -> Optional[date]:
+def _safe_date(value: str) -> date | None:
     """Safely parse a date string, returning None if invalid."""
     if not value or not value.strip():
         return None
@@ -86,14 +86,14 @@ def _safe_form_text(value: object) -> str:
     return str(value)
 
 
-def _normalize_uploads(files: Optional[list[UploadFile]]) -> list[UploadFile]:
+def _normalize_uploads(files: list[UploadFile] | None) -> list[UploadFile]:
     """Return only real uploaded files with filenames."""
     if not files:
         return []
     return [f for f in files if getattr(f, "filename", None)]
 
 
-def _safe_decimal(value: str, default: Optional[Decimal] = None) -> Optional[Decimal]:
+def _safe_decimal(value: str, default: Decimal | None = None) -> Decimal | None:
     """Safely parse a decimal string, returning default if invalid."""
     if not value or not value.strip():
         return default
@@ -133,6 +133,8 @@ def _project_type_duration_days(project_type):
 
 def _get_services(db: Session, org_id):
     """Get all PM services."""
+    from uuid import UUID
+
     from app.services.pm import (
         DashboardService,
         GanttService,
@@ -141,7 +143,6 @@ def _get_services(db: Session, org_id):
         TaskService,
         TimeEntryService,
     )
-    from uuid import UUID
 
     org_uuid = UUID(str(org_id)) if not isinstance(org_id, UUID) else org_id
     return {
@@ -156,8 +157,9 @@ def _get_services(db: Session, org_id):
 
 def _get_projects(db: Session, org_id):
     """Get all projects for the organization."""
-    from app.models.finance.core_org.project import Project
     from sqlalchemy import select
+
+    from app.models.finance.core_org.project import Project
 
     stmt = (
         select(Project)
@@ -169,8 +171,9 @@ def _get_projects(db: Session, org_id):
 
 def _get_project_templates(db: Session, org_id):
     """Get all project templates for the organization."""
-    from app.models.pm.project_template import ProjectTemplate
     from sqlalchemy import select
+
+    from app.models.pm.project_template import ProjectTemplate
 
     stmt = (
         select(ProjectTemplate)
@@ -182,8 +185,9 @@ def _get_project_templates(db: Session, org_id):
 
 def _resolve_project_template(db: Session, org_id, template_ref: str):
     """Resolve project template by UUID."""
-    from app.models.pm.project_template import ProjectTemplate
     from sqlalchemy import select
+
+    from app.models.pm.project_template import ProjectTemplate
 
     try:
         template_uuid = coerce_uuid(template_ref)
@@ -200,11 +204,12 @@ def _resolve_project_template(db: Session, org_id, template_ref: str):
 
 def _template_tasks_payload(db: Session, template_id):
     """Build client-side payload for template task editor."""
+    from sqlalchemy import select
+
     from app.models.pm.project_template_task import (
         ProjectTemplateTask,
         ProjectTemplateTaskDependency,
     )
-    from sqlalchemy import select
 
     tasks = list(
         db.scalars(
@@ -251,6 +256,8 @@ def _template_tasks_payload(db: Session, template_id):
 
 def _apply_project_template(db: Session, org_id, project, template_id):
     """Create project tasks from a template (one-time on project creation)."""
+    from sqlalchemy import select
+
     from app.models.finance.core_config import SequenceType
     from app.models.pm.project_template_task import (
         ProjectTemplateTask,
@@ -258,7 +265,6 @@ def _apply_project_template(db: Session, org_id, project, template_id):
     )
     from app.models.pm.task_dependency import TaskDependency
     from app.services.finance.common.numbering import SyncNumberingService
-    from sqlalchemy import select
 
     services = _get_services(db, org_id)
     numbering_service = SyncNumberingService(db)
@@ -317,8 +323,9 @@ def _apply_project_template(db: Session, org_id, project, template_id):
 
 def _get_tickets(db: Session, org_id):
     """Get open/active tickets for task linking."""
-    from app.models.support.ticket import Ticket, TicketStatus
     from sqlalchemy import select
+
+    from app.models.support.ticket import Ticket, TicketStatus
 
     stmt = (
         select(Ticket)
@@ -336,9 +343,10 @@ def _get_tickets(db: Session, org_id):
 
 def _get_employees(db: Session, org_id):
     """Get all employees for the organization."""
-    from app.models.people.hr.employee import Employee
-    from sqlalchemy.orm import joinedload
     from sqlalchemy import select
+    from sqlalchemy.orm import joinedload
+
+    from app.models.people.hr.employee import Employee
 
     stmt = (
         select(Employee)
@@ -354,8 +362,9 @@ def _get_employees(db: Session, org_id):
 
 def _resolve_project_ref(db: Session, org_id, project_ref: str):
     """Resolve project by UUID or project_code."""
-    from app.models.finance.core_org.project import Project
     from sqlalchemy import select
+
+    from app.models.finance.core_org.project import Project
 
     org_uuid = coerce_uuid(org_id)
     try:
@@ -385,8 +394,9 @@ def _project_url(project) -> str:
 
 def _resolve_task_ref(db: Session, org_id, project_id, task_ref: str):
     """Resolve task by UUID or task_code."""
-    from app.models.pm import Task
     from sqlalchemy import select
+
+    from app.models.pm import Task
 
     org_uuid = coerce_uuid(org_id)
     project_uuid = coerce_uuid(project_id)
@@ -441,14 +451,15 @@ def _ensure_task_code(db: Session, org_id, task):
 def list_projects(
     request: Request,
     auth: WebAuthContext = Depends(require_projects_access),
-    search: Optional[str] = None,
-    status: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
     """Projects list page."""
+    from sqlalchemy import func, select
+
     from app.models.finance.core_org.project import Project, ProjectStatus
-    from sqlalchemy import select, func
 
     org_id = coerce_uuid(auth.organization_id)
 
@@ -528,13 +539,14 @@ def new_project_form(
     db: Session = Depends(get_db),
 ):
     """New project form page."""
+    from sqlalchemy import select
+
+    from app.models.finance.ar.customer import Customer
     from app.models.finance.core_org.project import (
+        ProjectPriority,
         ProjectStatus,
         ProjectType,
-        ProjectPriority,
     )
-    from app.models.finance.ar.customer import Customer
-    from sqlalchemy import select
 
     org_id = coerce_uuid(auth.organization_id)
 
@@ -576,13 +588,14 @@ def edit_project_form(
     db: Session = Depends(get_db),
 ):
     """Edit project form page."""
+    from sqlalchemy import select
+
+    from app.models.finance.ar.customer import Customer
     from app.models.finance.core_org.project import (
+        ProjectPriority,
         ProjectStatus,
         ProjectType,
-        ProjectPriority,
     )
-    from app.models.finance.ar.customer import Customer
-    from sqlalchemy import select
 
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
@@ -672,6 +685,7 @@ async def create_project_template(
     """Create a new project template with ordered tasks."""
     import json
     import logging
+
     from app.models.finance.core_org.project import ProjectType
     from app.models.pm.project_template import ProjectTemplate
     from app.models.pm.project_template_task import (
@@ -773,9 +787,12 @@ def project_template_detail(
     db: Session = Depends(get_db),
 ):
     """Project template detail page."""
-    from app.models.pm.project_template_task import ProjectTemplateTask
-    from app.models.pm.project_template_task import ProjectTemplateTaskDependency
     from sqlalchemy import select
+
+    from app.models.pm.project_template_task import (
+        ProjectTemplateTask,
+        ProjectTemplateTaskDependency,
+    )
 
     org_id = coerce_uuid(auth.organization_id)
     template = _resolve_project_template(db, org_id, template_id)
@@ -824,6 +841,7 @@ def edit_project_template_form(
 ):
     """Edit project template form page."""
     import json
+
     from app.models.finance.core_org.project import ProjectType
 
     org_id = coerce_uuid(auth.organization_id)
@@ -855,7 +873,9 @@ async def update_project_template(
 ):
     """Update a project template and its tasks."""
     import json
+
     from sqlalchemy import delete, select
+
     from app.models.finance.core_org.project import ProjectType
     from app.models.pm.project_template_task import (
         ProjectTemplateTask,
@@ -978,13 +998,13 @@ async def update_project_template(
 def global_task_list(
     request: Request,
     auth: WebAuthContext = Depends(require_projects_access),
-    status: Optional[str] = None,
-    priority: Optional[str] = None,
-    project_id: Optional[str] = None,
+    status: str | None = None,
+    priority: str | None = None,
+    project_id: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Global task list page."""
-    from app.models.pm.task import TaskStatus, TaskPriority
+    from app.models.pm.task import TaskPriority, TaskStatus
 
     org_id = coerce_uuid(auth.organization_id)
     services = _get_services(db, org_id)
@@ -1021,7 +1041,7 @@ def global_task_new_form(
     db: Session = Depends(get_db),
 ):
     """Global new task form page."""
-    from app.models.pm.task import TaskStatus, TaskPriority
+    from app.models.pm.task import TaskPriority, TaskStatus
 
     org_id = coerce_uuid(auth.organization_id)
     context = {
@@ -1210,9 +1230,9 @@ async def add_project_comment(
     db: Session = Depends(get_db),
 ):
     """Add a comment to a project."""
+    from app.models.pm.comment import PMCommentAttachment
     from app.services.pm.attachment import project_attachment_service
     from app.services.pm.comment import comment_service
-    from app.models.pm.comment import PMCommentAttachment
 
     org_id = coerce_uuid(auth.organization_id)
     user_id = coerce_uuid(auth.user_id)
@@ -1316,16 +1336,18 @@ async def create_project(
 ):
     """Create a new project."""
     import logging
+
+    from sqlalchemy import select
+
+    from app.models.finance.ar.customer import Customer
+    from app.models.finance.core_config import SequenceType
     from app.models.finance.core_org.project import (
         Project,
+        ProjectPriority,
         ProjectStatus,
         ProjectType,
-        ProjectPriority,
     )
-    from app.models.finance.core_config import SequenceType
     from app.services.finance.common.numbering import SyncNumberingService
-    from app.models.finance.ar.customer import Customer
-    from sqlalchemy import select
 
     org_id = coerce_uuid(auth.organization_id)
 
@@ -1619,9 +1641,9 @@ async def update_project(
 ):
     """Update an existing project."""
     from app.models.finance.core_org.project import (
+        ProjectPriority,
         ProjectStatus,
         ProjectType,
-        ProjectPriority,
     )
 
     org_id = coerce_uuid(auth.organization_id)
@@ -1721,8 +1743,8 @@ def project_tasks(
     request: Request,
     project_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    status: Optional[str] = None,
-    priority: Optional[str] = None,
+    status: str | None = None,
+    priority: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -1906,9 +1928,9 @@ async def add_task_comment(
     db: Session = Depends(get_db),
 ):
     """Add a comment to a task."""
+    from app.models.pm.comment import PMCommentAttachment
     from app.services.pm.attachment import project_attachment_service
     from app.services.pm.comment import comment_service
-    from app.models.pm.comment import PMCommentAttachment
 
     org_id = coerce_uuid(auth.organization_id)
     user_id = coerce_uuid(auth.user_id)
@@ -2132,7 +2154,7 @@ def delete_task_attachment(
 def new_task_form(
     request: Request,
     project_id: str,
-    parent_task_id: Optional[str] = None,
+    parent_task_id: str | None = None,
     auth: WebAuthContext = Depends(require_projects_access),
     db: Session = Depends(get_db),
 ):
@@ -2198,8 +2220,8 @@ def create_task(
     db: Session = Depends(get_db),
 ):
     """Create a new task."""
-    from app.models.pm import TaskPriority, TaskStatus
     from app.models.finance.core_config import SequenceType
+    from app.models.pm import TaskPriority, TaskStatus
     from app.services.finance.common.numbering import SyncNumberingService
 
     org_id = coerce_uuid(auth.organization_id)
@@ -2337,10 +2359,10 @@ def update_task(
     project_id: str,
     task_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
-    task_name: Optional[str] = Form(default=None),
+    task_name: str | None = Form(default=None),
     description: str = Form(default=""),
-    status: Optional[str] = Form(default=None),
-    priority: Optional[str] = Form(default=None),
+    status: str | None = Form(default=None),
+    priority: str | None = Form(default=None),
     parent_task_id: str = Form(default=""),
     assigned_to_id: str = Form(default=""),
     ticket_id: str = Form(default=""),
@@ -2676,6 +2698,7 @@ def bulk_update_task_status(
                 task_uuid = coerce_uuid(task_id)
                 services["task"].update_task(task_uuid, {"status": status_enum})
             except Exception:
+                logger.exception("bulk_update_tasks: failed for task_id=%s", task_id)
                 continue
 
     db.commit()
@@ -2710,6 +2733,7 @@ def bulk_delete_tasks(
                 task_uuid = coerce_uuid(task_id)
                 services["task"].delete_task(task_uuid)
             except Exception:
+                logger.exception("bulk_delete_tasks: failed for task_id=%s", task_id)
                 continue
 
     db.commit()
@@ -2964,8 +2988,8 @@ def delete_resource_allocation(
 def resource_utilization_report(
     request: Request,
     auth: WebAuthContext = Depends(require_projects_access),
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Resource utilization report across all projects."""
@@ -3020,6 +3044,10 @@ def resource_utilization_report(
                 )
                 total_utilization += util["utilization_percent"]
         except Exception:
+            logger.exception(
+                "utilization_by_employee: failed for employee_id=%s",
+                emp.employee_id,
+            )
             continue
 
     # Calculate averages and flags
@@ -3056,6 +3084,10 @@ def resource_utilization_report(
                         }
                     )
             except Exception:
+                logger.exception(
+                    "utilization_by_project: failed for project_id=%s",
+                    proj.project_id,
+                )
                 continue
 
     context = {
@@ -3268,10 +3300,10 @@ def project_time_entries(
     project_id: str,
     auth: WebAuthContext = Depends(require_projects_access),
     page: int = Query(default=1, ge=1),
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    billable: Optional[str] = None,
-    billing_status: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    billable: str | None = None,
+    billing_status: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Project time entries page."""
@@ -3368,7 +3400,7 @@ def project_time_entries(
 def new_time_entry_form(
     request: Request,
     project_id: str,
-    task_id: Optional[str] = None,
+    task_id: str | None = None,
     auth: WebAuthContext = Depends(require_projects_access),
     db: Session = Depends(get_db),
 ):
@@ -3468,8 +3500,9 @@ def edit_time_entry_form(
     db: Session = Depends(get_db),
 ):
     """Edit time entry form page."""
-    from app.models.pm import TimeEntry, BillingStatus
     from sqlalchemy import select
+
+    from app.models.pm import BillingStatus, TimeEntry
 
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
@@ -3660,6 +3693,9 @@ def bulk_bill_time_entries(
             try:
                 entry_uuids.append(coerce_uuid(entry_id))
             except Exception:
+                logger.exception(
+                    "bulk_bill_time_entries: failed for entry_id=%s", entry_id
+                )
                 continue
 
     if entry_uuids:
@@ -3681,7 +3717,7 @@ def bulk_bill_time_entries(
 def employee_timesheet(
     request: Request,
     auth: WebAuthContext = Depends(require_projects_access),
-    week_start: Optional[str] = None,
+    week_start: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Employee weekly timesheet page."""
@@ -3935,6 +3971,7 @@ def download_project_attachment(
 ):
     """Download project attachment."""
     from fastapi.responses import FileResponse
+
     from app.services.pm.attachment import project_attachment_service
 
     org_id = coerce_uuid(auth.organization_id)

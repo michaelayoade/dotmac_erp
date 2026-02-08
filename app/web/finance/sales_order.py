@@ -4,15 +4,12 @@ Sales Order Web Routes.
 HTML template routes for sales order management.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.ar.web import sales_order_web_service
-from app.web.deps import get_db, require_finance_access, WebAuthContext
-
+from app.web.deps import WebAuthContext, get_db, require_finance_access
 
 router = APIRouter(prefix="/sales-orders", tags=["sales-orders-web"])
 
@@ -26,10 +23,10 @@ router = APIRouter(prefix="/sales-orders", tags=["sales-orders-web"])
 @router.get("/", response_class=HTMLResponse)
 def sales_order_list(
     request: Request,
-    status: Optional[str] = None,
-    customer_id: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    status: str | None = None,
+    customer_id: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -47,8 +44,8 @@ def sales_order_list(
 @router.get("/new", response_class=HTMLResponse)
 def new_so_form(
     request: Request,
-    customer_id: Optional[str] = None,
-    quote_id: Optional[str] = None,
+    customer_id: str | None = None,
+    quote_id: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -63,21 +60,21 @@ def create_sales_order(
     request: Request,
     customer_id: str = Form(...),
     order_date: str = Form(...),
-    currency_code: Optional[str] = Form(None),
-    customer_po_number: Optional[str] = Form(None),
-    requested_date: Optional[str] = Form(None),
-    promised_date: Optional[str] = Form(None),
-    payment_terms_id: Optional[str] = Form(None),
-    ship_to_name: Optional[str] = Form(None),
-    ship_to_address: Optional[str] = Form(None),
-    ship_to_city: Optional[str] = Form(None),
-    ship_to_state: Optional[str] = Form(None),
-    ship_to_postal_code: Optional[str] = Form(None),
-    ship_to_country: Optional[str] = Form(None),
-    shipping_method: Optional[str] = Form(None),
-    allow_partial_shipment: Optional[str] = Form(None),
-    customer_notes: Optional[str] = Form(None),
-    internal_notes: Optional[str] = Form(None),
+    currency_code: str | None = Form(None),
+    customer_po_number: str | None = Form(None),
+    requested_date: str | None = Form(None),
+    promised_date: str | None = Form(None),
+    payment_terms_id: str | None = Form(None),
+    ship_to_name: str | None = Form(None),
+    ship_to_address: str | None = Form(None),
+    ship_to_city: str | None = Form(None),
+    ship_to_state: str | None = Form(None),
+    ship_to_postal_code: str | None = Form(None),
+    ship_to_country: str | None = Form(None),
+    shipping_method: str | None = Form(None),
+    allow_partial_shipment: str | None = Form(None),
+    customer_notes: str | None = Form(None),
+    internal_notes: str | None = Form(None),
     lines_json: str = Form("[]"),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -166,7 +163,7 @@ def confirm_order(
 def cancel_order(
     request: Request,
     so_id: str,
-    reason: Optional[str] = Form(None),
+    reason: str | None = Form(None),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -228,10 +225,10 @@ def create_shipment(
     request: Request,
     so_id: str,
     shipment_date: str = Form(...),
-    carrier: Optional[str] = Form(None),
-    tracking_number: Optional[str] = Form(None),
-    shipping_method: Optional[str] = Form(None),
-    notes: Optional[str] = Form(None),
+    carrier: str | None = Form(None),
+    tracking_number: str | None = Form(None),
+    shipping_method: str | None = Form(None),
+    notes: str | None = Form(None),
     line_quantities_json: str = Form("[]"),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),

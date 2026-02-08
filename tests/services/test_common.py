@@ -13,8 +13,7 @@ from unittest.mock import MagicMock
 import pytest
 from fastapi import HTTPException
 
-from app.services.common import coerce_uuid, apply_ordering, apply_pagination
-
+from app.services.common import apply_ordering, apply_pagination, coerce_uuid
 
 # ============ TestCoerceUuid ============
 
@@ -163,7 +162,7 @@ class TestApplyPagination:
         mock_query.limit.return_value = limited_query
         limited_query.offset.return_value = offset_query
 
-        result = apply_pagination(mock_query, limit=0, offset=0)
+        apply_pagination(mock_query, limit=0, offset=0)
 
         mock_query.limit.assert_called_once_with(0)
         limited_query.offset.assert_called_once_with(0)
@@ -177,7 +176,7 @@ class TestApplyPagination:
         mock_query.limit.return_value = limited_query
         limited_query.offset.return_value = offset_query
 
-        result = apply_pagination(mock_query, limit=50, offset=10000)
+        apply_pagination(mock_query, limit=50, offset=10000)
 
         mock_query.limit.assert_called_once_with(50)
         limited_query.offset.assert_called_once_with(10000)

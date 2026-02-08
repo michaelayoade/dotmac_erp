@@ -5,12 +5,13 @@ Shared posting utilities for GL adapters.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.models.finance.gl.journal_entry import JournalEntry
 from app.services.finance.gl.journal import JournalInput, JournalService
 from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
 
@@ -20,8 +21,8 @@ class PostingResult:
     """Result of a posting operation."""
 
     success: bool
-    journal_entry_id: Optional[UUID] = None
-    posting_batch_id: Optional[UUID] = None
+    journal_entry_id: UUID | None = None
+    posting_batch_id: UUID | None = None
     message: str = ""
 
 
@@ -48,7 +49,7 @@ class BasePostingAdapter:
         posted_by_user_id: UUID,
         *,
         error_prefix: str = "Journal creation failed",
-    ) -> tuple[Optional[object], Optional[PostingResult]]:
+    ) -> tuple[JournalEntry, PostingResult | None]:
         try:
             journal = JournalService.create_journal(
                 db, organization_id, journal_input, posted_by_user_id
@@ -61,7 +62,7 @@ class BasePostingAdapter:
             )
             return journal, None
         except HTTPException as exc:
-            return None, PostingResult(
+            return cast(JournalEntry, None), PostingResult(
                 success=False,
                 message=f"{error_prefix}: {exc.detail}",
             )
@@ -75,7 +76,7 @@ class BasePostingAdapter:
         posting_date,
         idempotency_key: str,
         source_module: str,
-        correlation_id: Optional[str],
+        correlation_id: str | None,
         posted_by_user_id: UUID,
         success_message: str = "Posted successfully",
         error_prefix: str = "Ledger posting failed",

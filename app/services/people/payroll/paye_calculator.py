@@ -36,7 +36,6 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -54,7 +53,7 @@ class TaxBandBreakdown:
 
     band_name: str
     min_amount: Decimal
-    max_amount: Optional[Decimal]
+    max_amount: Decimal | None
     rate: Decimal
     taxable_in_band: Decimal
     tax_amount: Decimal
@@ -119,9 +118,9 @@ class PAYEBreakdown:
     effective_rate: Decimal = Decimal("0")
 
     # Employee profile info
-    employee_id: Optional[UUID] = None
-    tin: Optional[str] = None
-    tax_state: Optional[str] = None
+    employee_id: UUID | None = None
+    tin: str | None = None
+    tax_state: str | None = None
     is_tax_exempt: bool = False
 
     @property
@@ -264,7 +263,7 @@ class PAYECalculator:
         band_def: dict,
         organization_id: UUID,
         effective_from: date,
-        created_by_id: Optional[UUID] = None,
+        created_by_id: UUID | None = None,
     ) -> TaxBand:
         """
         Create a TaxBand instance from a band definition dict.
@@ -288,14 +287,14 @@ class PAYECalculator:
         organization_id: UUID,
         gross_monthly: Decimal,
         basic_monthly: Decimal,
-        employee_id: Optional[UUID] = None,
-        annual_rent: Optional[Decimal] = None,
+        employee_id: UUID | None = None,
+        annual_rent: Decimal | None = None,
         rent_verified: bool = False,
-        pension_rate: Optional[Decimal] = None,
-        employer_pension_rate: Optional[Decimal] = None,
-        nhf_rate: Optional[Decimal] = None,
-        nhis_rate: Optional[Decimal] = None,
-        as_of_date: Optional[date] = None,
+        pension_rate: Decimal | None = None,
+        employer_pension_rate: Decimal | None = None,
+        nhf_rate: Decimal | None = None,
+        nhis_rate: Decimal | None = None,
+        as_of_date: date | None = None,
     ) -> PAYEBreakdown:
         """
         Calculate PAYE tax for given income.
@@ -465,7 +464,7 @@ class PAYECalculator:
 
     def _get_tax_profile(
         self, organization_id: UUID, employee_id: UUID, as_of_date: date
-    ) -> Optional[EmployeeTaxProfile]:
+    ) -> EmployeeTaxProfile | None:
         """Get the active tax profile for an employee."""
         return (
             self.db.query(EmployeeTaxProfile)
@@ -522,8 +521,8 @@ class PAYECalculator:
     def seed_nta_2025_bands(
         self,
         organization_id: UUID,
-        effective_from: Optional[date] = None,
-        created_by_id: Optional[UUID] = None,
+        effective_from: date | None = None,
+        created_by_id: UUID | None = None,
     ) -> list[TaxBand]:
         """
         Seed default NTA 2025 tax bands for an organization.

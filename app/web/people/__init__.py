@@ -18,17 +18,17 @@ Route structure:
 
 from fastapi import APIRouter
 
+from app.web.people.attendance import router as attendance_router
 from app.web.people.dashboard import router as dashboard_router
 from app.web.people.hr import router as hr_router
-from app.web.people.payroll import router as payroll_router
 from app.web.people.leave import router as leave_router
-from app.web.people.attendance import router as attendance_router
-from app.web.people.scheduling import router as scheduling_router
-from app.web.people.training import router as training_router
+from app.web.people.payroll import router as payroll_router
 from app.web.people.perf import router as perf_router
 from app.web.people.recruit import router as recruit_router
+from app.web.people.scheduling import router as scheduling_router
 from app.web.people.self_service import router as self_service_router
 from app.web.people.settings import router as settings_router
+from app.web.people.training import router as training_router
 
 # Create main people web router
 router = APIRouter(prefix="/people", tags=["people-web"])

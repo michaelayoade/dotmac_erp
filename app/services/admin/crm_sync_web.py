@@ -7,11 +7,10 @@ Provides data and operations for the CRM sync management UI.
 import logging
 import secrets
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
-from urllib.parse import quote_plus
+from datetime import UTC, datetime
+from urllib.parse import quote_plus, urlencode
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
@@ -40,10 +39,10 @@ class CRMSyncWebService:
     def _base_context(
         self,
         request: Request,
-        auth: Optional[WebAuthContext],
+        auth: WebAuthContext | None,
         title: str,
         active_tab: str = "dashboard",
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> dict:
         """Build base context for templates."""
         org_branding = None
@@ -68,16 +67,24 @@ class CRMSyncWebService:
     def _require_admin(
         self,
         request: Request,
-        auth: Optional[WebAuthContext],
-    ) -> Optional[HTMLResponse | RedirectResponse]:
+        auth: WebAuthContext | None,
+    ) -> HTMLResponse | RedirectResponse | None:
         """Check if user is admin, return error response if not."""
         if not auth or not auth.is_authenticated:
-            return RedirectResponse(url="/login?next=/admin/sync/crm", status_code=302)
+            next_path = request.url.path
+            if request.url.query:
+                next_path = f"{next_path}?{request.url.query}"
+            return RedirectResponse(
+                url=f"/admin/login?{urlencode({'next': next_path})}",
+                status_code=302,
+            )
+        if not auth.is_admin:
+            raise HTTPException(status_code=403, detail="Admin access required")
         return None
 
     def _get_crm_config(
         self, db: Session, org_id: uuid.UUID
-    ) -> Optional[IntegrationConfig]:
+    ) -> IntegrationConfig | None:
         """Get CRM integration config for organization."""
         stmt = select(IntegrationConfig).where(
             IntegrationConfig.organization_id == org_id,
@@ -85,7 +92,7 @@ class CRMSyncWebService:
         )
         return db.scalar(stmt)
 
-    def _get_service_api_key(self, db: Session, org_id: uuid.UUID) -> Optional[ApiKey]:
+    def _get_service_api_key(self, db: Session, org_id: uuid.UUID) -> ApiKey | None:
         """Get the CRM service API key for organization."""
         # Look for API key with label matching CRM service pattern
         stmt = (
@@ -145,7 +152,7 @@ class CRMSyncWebService:
         self,
         request: Request,
         db: Session,
-        auth: Optional[WebAuthContext],
+        auth: WebAuthContext | None,
     ) -> HTMLResponse | RedirectResponse:
         """Render CRM sync dashboard page."""
         error_response = self._require_admin(request, auth)
@@ -196,7 +203,7 @@ class CRMSyncWebService:
         self,
         request: Request,
         db: Session,
-        auth: Optional[WebAuthContext],
+        auth: WebAuthContext | None,
     ) -> HTMLResponse | RedirectResponse:
         """Render CRM config page."""
         error_response = self._require_admin(request, auth)
@@ -230,7 +237,7 @@ class CRMSyncWebService:
         self,
         request: Request,
         db: Session,
-        auth: Optional[WebAuthContext],
+        auth: WebAuthContext | None,
         is_active: bool,
         sync_projects: bool,
         sync_tickets: bool,
@@ -261,7 +268,7 @@ class CRMSyncWebService:
             db.add(config)
         else:
             config.is_active = is_active
-            config.updated_at = datetime.now(timezone.utc)
+            config.updated_at = datetime.now(UTC)
 
         # Store sync settings in company field as JSON-like string
         sync_settings = []
@@ -285,7 +292,7 @@ class CRMSyncWebService:
         self,
         request: Request,
         db: Session,
-        auth: Optional[WebAuthContext],
+        auth: WebAuthContext | None,
     ) -> Response:
         """Generate a new API key for CRM sync."""
         error_response = self._require_admin(request, auth)
@@ -316,7 +323,7 @@ class CRMSyncWebService:
 
         for key in existing_keys:
             key.is_active = False
-            key.revoked_at = datetime.now(timezone.utc)
+            key.revoked_at = datetime.now(UTC)
             logger.info("Revoked old CRM API key: %s", key.id)
 
         # Generate new API key
@@ -325,7 +332,7 @@ class CRMSyncWebService:
 
         new_key = ApiKey(
             person_id=person_id,
-            label=f"dotmac-crm-service-{datetime.now(timezone.utc).strftime('%Y%m%d')}",
+            label=f"dotmac-crm-service-{datetime.now(UTC).strftime('%Y%m%d')}",
             key_hash=key_hash,
             is_active=True,
         )
@@ -334,18 +341,29 @@ class CRMSyncWebService:
 
         logger.info("Generated new CRM API key for org %s: %s", org_id, new_key.id)
 
-        # Store the raw key in session for one-time display
-        # We'll use a query param to show it (in production, use secure session)
-        return RedirectResponse(
-            url=f"/admin/sync/crm/config?success={quote_plus('API key generated')}&new_key={raw_key}",
-            status_code=302,
+        # Render config page directly with the raw key in context (not in URL).
+        # The key is shown once and never stored in browser history or server logs.
+        context = self._base_context(
+            request, auth, "CRM Integration Settings", "config", db
+        )
+        context["config"] = self._get_crm_config(db, org_id)
+        context["api_key"] = new_key
+        context["has_api_key"] = True
+        context["api_key_masked"] = f"****{key_hash[-8:]}"
+        context["api_key_created_at"] = new_key.created_at
+        context["api_key_last_used"] = new_key.last_used_at
+        context["new_api_key"] = raw_key  # One-time display in template
+        context["success"] = "API key generated. Copy it now — it won't be shown again."
+
+        return templates.TemplateResponse(
+            request, "admin/sync/crm/config.html", context
         )
 
     def revoke_api_key_response(
         self,
         request: Request,
         db: Session,
-        auth: Optional[WebAuthContext],
+        auth: WebAuthContext | None,
     ) -> Response:
         """Revoke the CRM service API key."""
         error_response = self._require_admin(request, auth)
@@ -362,7 +380,7 @@ class CRMSyncWebService:
         api_key = self._get_service_api_key(db, org_id)
         if api_key:
             api_key.is_active = False
-            api_key.revoked_at = datetime.now(timezone.utc)
+            api_key.revoked_at = datetime.now(UTC)
             db.commit()
             logger.info("Revoked CRM API key: %s", api_key.id)
 
@@ -377,10 +395,10 @@ class CRMSyncWebService:
         self,
         request: Request,
         db: Session,
-        auth: Optional[WebAuthContext],
-        entity_type: Optional[str] = None,
-        status: Optional[str] = None,
-        search: Optional[str] = None,
+        auth: WebAuthContext | None,
+        entity_type: str | None = None,
+        status: str | None = None,
+        search: str | None = None,
         page: int = 1,
     ) -> HTMLResponse | RedirectResponse:
         """Render synced entities list."""
@@ -459,7 +477,7 @@ class CRMSyncWebService:
         self,
         request: Request,
         db: Session,
-        auth: Optional[WebAuthContext],
+        auth: WebAuthContext | None,
     ) -> HTMLResponse | RedirectResponse:
         """Render inventory push management page."""
         from app.config import settings
@@ -514,7 +532,7 @@ class CRMSyncWebService:
         self,
         request: Request,
         db: Session,
-        auth: Optional[WebAuthContext],
+        auth: WebAuthContext | None,
         push_type: str = "full",
         include_zero_stock: bool = False,
     ) -> RedirectResponse:
@@ -563,7 +581,7 @@ class CRMSyncWebService:
         self,
         request: Request,
         db: Session,
-        auth: Optional[WebAuthContext],
+        auth: WebAuthContext | None,
     ) -> RedirectResponse:
         """Test CRM inventory webhook connectivity."""
         error_response = self._require_admin(request, auth)

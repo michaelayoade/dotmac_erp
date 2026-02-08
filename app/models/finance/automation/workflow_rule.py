@@ -7,7 +7,7 @@ Defines rules for automated workflow triggers and actions.
 import enum
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -126,7 +126,7 @@ class WorkflowRule(Base):
 
     # Rule identification
     rule_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Trigger configuration
     entity_type: Mapped[WorkflowEntityType] = mapped_column(
@@ -175,13 +175,13 @@ class WorkflowRule(Base):
         default=True,
         comment="Execute action asynchronously via Celery",
     )
-    cooldown_seconds: Mapped[Optional[int]] = mapped_column(
+    cooldown_seconds: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         default=None,
         comment="Minimum seconds between executions for the same entity",
     )
-    schedule_config: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    schedule_config: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         default=None,
@@ -204,7 +204,7 @@ class WorkflowRule(Base):
         nullable=False,
         default=0,
     )
-    last_executed_at: Mapped[Optional[datetime]] = mapped_column(
+    last_executed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -226,11 +226,11 @@ class WorkflowRule(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -246,4 +246,6 @@ class WorkflowRule(Base):
 
 
 # Forward reference
-from app.models.finance.automation.workflow_execution import WorkflowExecution  # noqa: E402
+from app.models.finance.automation.workflow_execution import (  # noqa: E402
+    WorkflowExecution,
+)

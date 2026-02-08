@@ -4,7 +4,6 @@ Milestone API Endpoints.
 REST API for milestone management.
 """
 
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -44,8 +43,8 @@ def get_db():
 @router.get("", response_model=MilestoneListResponse)
 def list_milestones(
     organization_id: UUID = Depends(require_organization_id),
-    project_id: Optional[UUID] = None,
-    status: Optional[str] = None,
+    project_id: UUID | None = None,
+    status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -87,10 +86,10 @@ def create_milestone(
     return MilestoneRead.model_validate(milestone)
 
 
-@router.get("/upcoming", response_model=List[MilestoneWithDetails])
+@router.get("/upcoming", response_model=list[MilestoneWithDetails])
 def get_upcoming_milestones(
     organization_id: UUID = Depends(require_organization_id),
-    project_id: Optional[UUID] = None,
+    project_id: UUID | None = None,
     days: int = Query(30, ge=1, le=365),
     db: Session = Depends(get_db),
 ):
@@ -124,10 +123,10 @@ def get_upcoming_milestones(
     ]
 
 
-@router.get("/overdue", response_model=List[MilestoneWithDetails])
+@router.get("/overdue", response_model=list[MilestoneWithDetails])
 def get_overdue_milestones(
     organization_id: UUID = Depends(require_organization_id),
-    project_id: Optional[UUID] = None,
+    project_id: UUID | None = None,
     db: Session = Depends(get_db),
 ):
     """Get overdue milestones."""

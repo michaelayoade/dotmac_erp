@@ -11,7 +11,6 @@ import logging
 import uuid
 from dataclasses import replace
 from pathlib import Path
-from typing import Optional
 
 from app.config import settings
 from app.services.file_upload import (
@@ -79,8 +78,8 @@ class ResumeService:
             )
 
     def validate_file(
-        self, filename: str, file_size: int, file_data: Optional[bytes] = None
-    ) -> tuple[bool, Optional[str]]:
+        self, filename: str, file_size: int, file_data: bytes | None = None
+    ) -> tuple[bool, str | None]:
         """
         Validate a file for upload.
 
@@ -145,7 +144,7 @@ class ResumeService:
 
         return file_id, upload_result.relative_path
 
-    def get_resume_path(self, org_id: uuid.UUID, file_id: str) -> Optional[Path]:
+    def get_resume_path(self, org_id: uuid.UUID, file_id: str) -> Path | None:
         """
         Get the full path to a resume file.
 
@@ -185,7 +184,7 @@ class ResumeService:
             return True
         return False
 
-    def get_resume_url(self, org_id: uuid.UUID, file_id: str) -> Optional[str]:
+    def get_resume_url(self, org_id: uuid.UUID, file_id: str) -> str | None:
         """
         Get the URL for accessing a resume file.
 

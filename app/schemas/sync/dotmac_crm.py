@@ -4,11 +4,9 @@ DotMac CRM Sync Schemas - Pydantic models for CRM sync API.
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
-
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 # ============ Inbound Sync Payloads (CRM → ERP) ============
 
@@ -18,16 +16,16 @@ class CRMProjectPayload(BaseModel):
 
     crm_id: str = Field(..., description="UUID from CRM")
     name: str = Field(..., max_length=160)
-    code: Optional[str] = Field(None, max_length=80)
-    project_type: Optional[str] = Field(None, max_length=80)
+    code: str | None = Field(None, max_length=80)
+    project_type: str | None = Field(None, max_length=80)
     status: str = Field("active", description="active, completed, cancelled, archived")
-    region: Optional[str] = Field(None, max_length=80)
-    description: Optional[str] = None
-    start_at: Optional[datetime] = None
-    due_at: Optional[datetime] = None
-    customer_name: Optional[str] = Field(None, max_length=200)
-    customer_crm_id: Optional[str] = Field(None, max_length=36)
-    metadata: Optional[dict] = None
+    region: str | None = Field(None, max_length=80)
+    description: str | None = None
+    start_at: datetime | None = None
+    due_at: datetime | None = None
+    customer_name: str | None = Field(None, max_length=200)
+    customer_crm_id: str | None = Field(None, max_length=36)
+    metadata: dict | None = None
 
 
 class CRMTicketPayload(BaseModel):
@@ -35,13 +33,13 @@ class CRMTicketPayload(BaseModel):
 
     crm_id: str = Field(..., description="UUID from CRM")
     subject: str = Field(..., max_length=255)
-    ticket_number: Optional[str] = Field(None, max_length=40)
-    ticket_type: Optional[str] = Field(None, max_length=80)
+    ticket_number: str | None = Field(None, max_length=40)
+    ticket_type: str | None = Field(None, max_length=80)
     status: str = Field("active", description="active, completed, cancelled")
-    priority: Optional[str] = Field(None, max_length=40)
-    customer_name: Optional[str] = Field(None, max_length=200)
-    customer_crm_id: Optional[str] = Field(None, max_length=36)
-    metadata: Optional[dict] = None
+    priority: str | None = Field(None, max_length=40)
+    customer_name: str | None = Field(None, max_length=200)
+    customer_crm_id: str | None = Field(None, max_length=36)
+    metadata: dict | None = None
 
 
 class CRMWorkOrderPayload(BaseModel):
@@ -49,23 +47,23 @@ class CRMWorkOrderPayload(BaseModel):
 
     crm_id: str = Field(..., description="UUID from CRM")
     title: str = Field(..., max_length=200)
-    work_type: Optional[str] = Field(None, max_length=80)
+    work_type: str | None = Field(None, max_length=80)
     status: str = Field("active", description="active, completed, cancelled")
-    priority: Optional[str] = Field(None, max_length=40)
-    project_crm_id: Optional[str] = Field(None, description="Links to CRM project")
-    ticket_crm_id: Optional[str] = Field(None, description="Links to CRM ticket")
-    assigned_employee_email: Optional[str] = Field(None, max_length=255)
-    scheduled_start: Optional[datetime] = None
-    scheduled_end: Optional[datetime] = None
-    metadata: Optional[dict] = None
+    priority: str | None = Field(None, max_length=40)
+    project_crm_id: str | None = Field(None, description="Links to CRM project")
+    ticket_crm_id: str | None = Field(None, description="Links to CRM ticket")
+    assigned_employee_email: str | None = Field(None, max_length=255)
+    scheduled_start: datetime | None = None
+    scheduled_end: datetime | None = None
+    metadata: dict | None = None
 
 
 class BulkSyncRequest(BaseModel):
     """Bulk sync request from DotMac CRM."""
 
-    projects: list[CRMProjectPayload] = Field(default_factory=list)
-    tickets: list[CRMTicketPayload] = Field(default_factory=list)
-    work_orders: list[CRMWorkOrderPayload] = Field(default_factory=list)
+    projects: list[CRMProjectPayload] = Field(default_factory=list, max_length=500)
+    tickets: list[CRMTicketPayload] = Field(default_factory=list, max_length=500)
+    work_orders: list[CRMWorkOrderPayload] = Field(default_factory=list, max_length=500)
 
 
 class SyncError(BaseModel):
@@ -100,8 +98,8 @@ class CRMSyncMappingRead(BaseModel):
     local_entity_id: UUID
     crm_status: str
     display_name: str
-    display_code: Optional[str] = None
-    customer_name: Optional[str] = None
+    display_code: str | None = None
+    customer_name: str | None = None
     synced_at: datetime
 
 
@@ -114,9 +112,9 @@ class CRMProjectRead(BaseModel):
     crm_id: str
     local_entity_id: UUID
     name: str
-    code: Optional[str] = None
+    code: str | None = None
     status: str
-    customer_name: Optional[str] = None
+    customer_name: str | None = None
 
 
 class CRMTicketRead(BaseModel):
@@ -128,9 +126,9 @@ class CRMTicketRead(BaseModel):
     crm_id: str
     local_entity_id: UUID
     subject: str
-    ticket_number: Optional[str] = None
+    ticket_number: str | None = None
     status: str
-    customer_name: Optional[str] = None
+    customer_name: str | None = None
 
 
 class CRMWorkOrderRead(BaseModel):
@@ -143,8 +141,8 @@ class CRMWorkOrderRead(BaseModel):
     local_entity_id: UUID
     title: str
     status: str
-    project_name: Optional[str] = None
-    ticket_subject: Optional[str] = None
+    project_name: str | None = None
+    ticket_subject: str | None = None
 
 
 # ============ Expense Totals (ERP → CRM) ============
@@ -163,9 +161,9 @@ class ExpenseTotals(BaseModel):
 class ExpenseTotalsRequest(BaseModel):
     """Request for expense totals."""
 
-    project_crm_ids: list[str] = Field(default_factory=list)
-    ticket_crm_ids: list[str] = Field(default_factory=list)
-    work_order_crm_ids: list[str] = Field(default_factory=list)
+    project_crm_ids: list[str] = Field(default_factory=list, max_length=200)
+    ticket_crm_ids: list[str] = Field(default_factory=list, max_length=200)
+    work_order_crm_ids: list[str] = Field(default_factory=list, max_length=200)
 
 
 class ExpenseTotalsResponse(BaseModel):
@@ -183,22 +181,34 @@ class InventoryItemStock(BaseModel):
     item_id: UUID
     item_code: str
     item_name: str
-    description: Optional[str] = None
-    category_code: Optional[str] = None
-    category_name: Optional[str] = None
+    description: str | None = None
+    category_code: str | None = None
+    category_name: str | None = None
     base_uom: str
-    # Aliases for Omni ERP client compatibility
-    stock_uom: str
     quantity_on_hand: Decimal
     quantity_reserved: Decimal
     quantity_available: Decimal
-    on_hand: Decimal
-    reserved: Decimal
-    reorder_point: Optional[Decimal] = None
-    list_price: Optional[Decimal] = None
+    reorder_point: Decimal | None = None
+    list_price: Decimal | None = None
     currency_code: str = "NGN"
-    barcode: Optional[str] = None
+    barcode: str | None = None
     is_below_reorder: bool = False
+
+    # Computed aliases for CRM client backward compatibility
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def stock_uom(self) -> str:
+        return self.base_uom
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def on_hand(self) -> Decimal:
+        return self.quantity_on_hand
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def reserved(self) -> Decimal:
+        return self.quantity_reserved
 
 
 class WarehouseStock(BaseModel):
@@ -218,17 +228,17 @@ class InventoryItemDetail(BaseModel):
     item_id: UUID
     item_code: str
     item_name: str
-    description: Optional[str] = None
-    category_code: Optional[str] = None
-    category_name: Optional[str] = None
+    description: str | None = None
+    category_code: str | None = None
+    category_name: str | None = None
     base_uom: str
     total_on_hand: Decimal
     total_reserved: Decimal
     total_available: Decimal
-    reorder_point: Optional[Decimal] = None
-    list_price: Optional[Decimal] = None
+    reorder_point: Decimal | None = None
+    list_price: Decimal | None = None
     currency_code: str = "NGN"
-    barcode: Optional[str] = None
+    barcode: str | None = None
     warehouses: list[WarehouseStock] = Field(default_factory=list)
 
 

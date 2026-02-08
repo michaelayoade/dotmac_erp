@@ -7,7 +7,6 @@ Tests for search inputs and filter controls across list pages.
 import pytest
 from playwright.sync_api import expect
 
-
 # =============================================================================
 # Search Functionality Tests
 # =============================================================================
@@ -65,7 +64,7 @@ class TestSearchFunctionality:
             no_results = authenticated_page.locator(
                 "text=No suppliers, text=No results, text=No data, text=Nothing found, .empty-state"
             )
-            empty_table = authenticated_page.locator("table tbody tr")
+            authenticated_page.locator("table tbody tr")
 
             # Either no results message or empty table
             if no_results.count() > 0:
@@ -108,7 +107,7 @@ class TestSearchFunctionality:
             status_filter.first.select_option(index=1)
             authenticated_page.wait_for_load_state("networkidle")
 
-            filter_value = status_filter.first.input_value()
+            status_filter.first.input_value()
 
         # Now apply search
         search = authenticated_page.locator(
@@ -121,7 +120,7 @@ class TestSearchFunctionality:
 
             # Check if filter is still applied
             if status_filter.count() > 0:
-                current_filter = status_filter.first.input_value()
+                status_filter.first.input_value()
                 # Filter should be preserved
                 expect(authenticated_page.locator("main")).to_be_visible()
 
@@ -167,7 +166,6 @@ class TestFilterFunctionality:
 
         if status_filter.count() > 0:
             # Get initial state
-            initial_url = authenticated_page.url
 
             # Change filter
             options = status_filter.first.locator("option")
@@ -313,8 +311,6 @@ class TestSearchFilterIntegration:
         authenticated_page.goto(f"{base_url}/ap/suppliers")
         authenticated_page.wait_for_load_state("networkidle")
 
-        initial_url = authenticated_page.url
-
         status_filter = authenticated_page.locator("select[name='status'], #status")
         if status_filter.count() > 0:
             options = status_filter.first.locator("option")
@@ -323,7 +319,6 @@ class TestSearchFilterIntegration:
                 authenticated_page.wait_for_load_state("networkidle")
 
                 # URL should have filter parameter
-                current_url = authenticated_page.url
                 # Filter parameter might be in URL
                 expect(authenticated_page.locator("main")).to_be_visible()
 

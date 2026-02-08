@@ -5,11 +5,12 @@ Revises: add_numbering_sequence_columns, add_organization_settings_columns
 Create Date: 2025-02-15
 """
 
-from alembic import op
-from app.alembic_utils import ensure_enum
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import UUID
+
+from alembic import op
+from app.alembic_utils import ensure_enum
 
 # revision identifiers, used by Alembic.
 revision = "add_inventory_extensions"

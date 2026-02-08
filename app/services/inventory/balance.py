@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Optional, cast
+from typing import cast
 from uuid import UUID
 
 from sqlalchemy import and_, case, func, or_
@@ -36,8 +36,8 @@ class InventoryBalance:
     item_id: UUID
     item_code: str
     item_name: str
-    warehouse_id: Optional[UUID]
-    warehouse_code: Optional[str]
+    warehouse_id: UUID | None
+    warehouse_code: str | None
     quantity_on_hand: Decimal
     quantity_reserved: Decimal
     quantity_available: Decimal
@@ -55,9 +55,9 @@ class ItemStockSummary:
     total_on_hand: Decimal
     total_reserved: Decimal
     total_available: Decimal
-    reorder_point: Optional[Decimal]
-    minimum_stock: Optional[Decimal]
-    maximum_stock: Optional[Decimal]
+    reorder_point: Decimal | None
+    minimum_stock: Decimal | None
+    maximum_stock: Decimal | None
     below_reorder: bool
     below_minimum: bool
     above_maximum: bool
@@ -74,10 +74,10 @@ class LowStockItem:
     quantity_on_hand: Decimal
     quantity_available: Decimal
     reorder_point: Decimal
-    reorder_quantity: Optional[Decimal]
+    reorder_quantity: Decimal | None
     suggested_order_qty: Decimal
-    default_supplier_id: Optional[UUID]
-    lead_time_days: Optional[int]
+    default_supplier_id: UUID | None
+    lead_time_days: int | None
 
 
 class InventoryBalanceService:
@@ -92,7 +92,7 @@ class InventoryBalanceService:
         db: Session,
         organization_id: UUID,
         item_id: UUID,
-        warehouse_id: Optional[UUID] = None,
+        warehouse_id: UUID | None = None,
     ) -> Decimal:
         """
         Calculate on-hand quantity from transactions.
@@ -157,7 +157,7 @@ class InventoryBalanceService:
         db: Session,
         organization_id: UUID,
         item_id: UUID,
-        warehouse_id: Optional[UUID] = None,
+        warehouse_id: UUID | None = None,
     ) -> Decimal:
         """
         Calculate reserved quantity from lot allocations.
@@ -201,7 +201,7 @@ class InventoryBalanceService:
         db: Session,
         organization_id: UUID,
         item_id: UUID,
-        warehouse_id: Optional[UUID] = None,
+        warehouse_id: UUID | None = None,
     ) -> Decimal:
         """
         Calculate available quantity (on-hand minus reserved).
@@ -228,8 +228,8 @@ class InventoryBalanceService:
         db: Session,
         organization_id: UUID,
         item_id: UUID,
-        warehouse_id: Optional[UUID] = None,
-    ) -> Optional[InventoryBalance]:
+        warehouse_id: UUID | None = None,
+    ) -> InventoryBalance | None:
         """
         Get full inventory balance for an item.
 
@@ -248,7 +248,6 @@ class InventoryBalanceService:
         item = db.get(Item, itm_id)
         if not item or item.organization_id != org_id:
             return None
-        category = db.get(ItemCategory, item.category_id)
 
         warehouse = None
         if warehouse_id:
@@ -282,7 +281,7 @@ class InventoryBalanceService:
         db: Session,
         organization_id: UUID,
         item_id: UUID,
-    ) -> Optional[ItemStockSummary]:
+    ) -> ItemStockSummary | None:
         """
         Get stock summary across all warehouses for an item.
 
@@ -300,6 +299,8 @@ class InventoryBalanceService:
         item = db.get(Item, itm_id)
         if not item or item.organization_id != org_id:
             return None
+
+        category = db.get(ItemCategory, item.category_id) if item.category_id else None
 
         # Get all warehouses with inventory for this item
         warehouse_ids = (
@@ -379,6 +380,32 @@ class InventoryBalanceService:
         """
         org_id = coerce_uuid(organization_id)
 
+        stock_filters = [
+            and_(
+                Item.reorder_point.isnot(None),
+                Item.reorder_point > 0,
+            ),
+            and_(
+                Item.reorder_point.is_(None),
+                ItemCategory.reorder_point.isnot(None),
+                ItemCategory.reorder_point > 0,
+            ),
+        ]
+        if include_below_minimum:
+            stock_filters.extend(
+                [
+                    and_(
+                        Item.minimum_stock.isnot(None),
+                        Item.minimum_stock > 0,
+                    ),
+                    and_(
+                        Item.minimum_stock.is_(None),
+                        ItemCategory.minimum_stock.isnot(None),
+                        ItemCategory.minimum_stock > 0,
+                    ),
+                ]
+            )
+
         # Get items with reorder point or minimum stock (item-level or category fallback)
         items = (
             db.query(Item, ItemCategory)
@@ -388,28 +415,7 @@ class InventoryBalanceService:
                     Item.organization_id == org_id,
                     Item.is_active == True,
                     Item.track_inventory == True,
-                    or_(
-                        and_(
-                            Item.reorder_point.isnot(None),
-                            Item.reorder_point > 0,
-                        ),
-                        and_(
-                            Item.reorder_point.is_(None),
-                            ItemCategory.reorder_point.isnot(None),
-                            ItemCategory.reorder_point > 0,
-                        ),
-                        and_(
-                            include_below_minimum,
-                            Item.minimum_stock.isnot(None),
-                            Item.minimum_stock > 0,
-                        ),
-                        and_(
-                            include_below_minimum,
-                            Item.minimum_stock.is_(None),
-                            ItemCategory.minimum_stock.isnot(None),
-                            ItemCategory.minimum_stock > 0,
-                        ),
-                    ),
+                    or_(*stock_filters),
                 )
             )
             .all()
@@ -478,6 +484,108 @@ class InventoryBalanceService:
         return low_stock
 
     @staticmethod
+    def get_batch_stock_levels(
+        db: Session,
+        organization_id: UUID,
+        item_ids: list[UUID],
+        warehouse_id: UUID | None = None,
+    ) -> dict[UUID, tuple[Decimal, Decimal]]:
+        """
+        Get on-hand and reserved quantities for multiple items in 2 queries.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            item_ids: Items to check
+            warehouse_id: Optional warehouse filter
+
+        Returns:
+            Dict mapping item_id -> (on_hand, reserved)
+        """
+        if not item_ids:
+            return {}
+
+        org_id = coerce_uuid(organization_id)
+
+        # Query 1: on-hand per item
+        on_hand_expr = func.sum(
+            case(
+                (
+                    InventoryTransaction.transaction_type.in_(
+                        [
+                            TransactionType.RECEIPT,
+                            TransactionType.RETURN,
+                            TransactionType.ASSEMBLY,
+                        ]
+                    ),
+                    InventoryTransaction.quantity,
+                ),
+                (
+                    InventoryTransaction.transaction_type.in_(
+                        [
+                            TransactionType.ISSUE,
+                            TransactionType.SALE,
+                            TransactionType.SCRAP,
+                            TransactionType.DISASSEMBLY,
+                        ]
+                    ),
+                    -InventoryTransaction.quantity,
+                ),
+                else_=InventoryTransaction.quantity,
+            )
+        )
+
+        on_hand_query = db.query(InventoryTransaction.item_id, on_hand_expr).filter(
+            and_(
+                InventoryTransaction.organization_id == org_id,
+                InventoryTransaction.item_id.in_(item_ids),
+            )
+        )
+        if warehouse_id:
+            on_hand_query = on_hand_query.filter(
+                InventoryTransaction.warehouse_id == coerce_uuid(warehouse_id)
+            )
+        on_hand_query = on_hand_query.group_by(InventoryTransaction.item_id)
+
+        on_hand_map: dict[UUID, Decimal] = {
+            row[0]: row[1] or Decimal("0") for row in on_hand_query.all()
+        }
+
+        # Query 2: reserved per item
+        reserved_query = db.query(
+            InventoryLot.item_id,
+            func.sum(InventoryLot.quantity_allocated),
+        ).filter(
+            and_(
+                InventoryLot.organization_id == org_id,
+                InventoryLot.item_id.in_(item_ids),
+                InventoryLot.is_active == True,
+            )
+        )
+        if warehouse_id:
+            wh_id = coerce_uuid(warehouse_id)
+            reserved_query = reserved_query.filter(
+                or_(
+                    InventoryLot.warehouse_id == wh_id,
+                    InventoryLot.warehouse_id.is_(None),
+                )
+            )
+        reserved_query = reserved_query.group_by(InventoryLot.item_id)
+
+        reserved_map: dict[UUID, Decimal] = {
+            row[0]: row[1] or Decimal("0") for row in reserved_query.all()
+        }
+
+        # Merge into result
+        result: dict[UUID, tuple[Decimal, Decimal]] = {}
+        for iid in item_ids:
+            result[iid] = (
+                on_hand_map.get(iid, Decimal("0")),
+                reserved_map.get(iid, Decimal("0")),
+            )
+        return result
+
+    @staticmethod
     def get_warehouse_inventory(
         db: Session,
         organization_id: UUID,
@@ -527,8 +635,8 @@ class InventoryBalanceService:
         quantity: Decimal,
         reference_type: str,
         reference_id: UUID,
-        warehouse_id: Optional[UUID] = None,
-        lot_id: Optional[UUID] = None,
+        warehouse_id: UUID | None = None,
+        lot_id: UUID | None = None,
     ) -> bool:
         """
         Allocate (reserve) inventory for a sales order or other document.
@@ -561,7 +669,7 @@ class InventoryBalanceService:
             return False
 
         item = db.get(Item, itm_id)
-        if not item:
+        if not item or item.organization_id != org_id:
             return False
 
         # For lot-tracked items, allocate from lot
@@ -574,6 +682,10 @@ class InventoryBalanceService:
             lot = db.get(InventoryLot, coerce_uuid(lot_id))
             if not lot or lot.item_id != itm_id:
                 return False
+            if hasattr(lot, "_sa_instance_state"):
+                lot_org_id = getattr(lot, "organization_id", None)
+                if lot_org_id and lot_org_id != org_id:
+                    return False
 
             if lot.quantity_available < quantity:
                 return False
@@ -641,8 +753,8 @@ class InventoryBalanceService:
         organization_id: UUID,
         item_id: UUID,
         quantity: Decimal,
-        lot_id: Optional[UUID] = None,
-        warehouse_id: Optional[UUID] = None,
+        lot_id: UUID | None = None,
+        warehouse_id: UUID | None = None,
     ) -> bool:
         """
         Release an allocation.
@@ -664,6 +776,10 @@ class InventoryBalanceService:
             lot = db.get(InventoryLot, coerce_uuid(lot_id))
             if not lot or lot.item_id != itm_id:
                 return False
+            if hasattr(lot, "_sa_instance_state"):
+                lot_org_id = getattr(lot, "organization_id", None)
+                if lot_org_id and lot_org_id != org_id:
+                    return False
 
             current_allocated = lot.quantity_allocated or Decimal("0")
             lot.quantity_allocated = max(Decimal("0"), current_allocated - quantity)

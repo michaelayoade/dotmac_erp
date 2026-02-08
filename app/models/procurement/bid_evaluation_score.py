@@ -6,7 +6,7 @@ Per-vendor, per-criterion scores in a bid evaluation.
 
 import uuid
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     ForeignKey,
@@ -76,7 +76,7 @@ class BidEvaluationScore(Base):
         nullable=False,
         comment="weight * score / 100",
     )
-    comments: Mapped[Optional[str]] = mapped_column(
+    comments: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )

@@ -7,7 +7,7 @@ Tracks documents generated from templates for audit trail and retrieval.
 import enum
 import uuid
 from datetime import date, datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import (
     Date,
@@ -99,7 +99,7 @@ class GeneratedDocument(Base):
     )
 
     # Document metadata
-    document_number: Mapped[Optional[str]] = mapped_column(
+    document_number: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Document reference number, e.g., OFFER-2024-0001",
@@ -109,7 +109,7 @@ class GeneratedDocument(Base):
         nullable=False,
         default=date.today,
     )
-    document_title: Mapped[Optional[str]] = mapped_column(
+    document_title: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
         comment="Human-readable document title",
@@ -120,34 +120,34 @@ class GeneratedDocument(Base):
         Enum(OutputFormat, name="generated_doc_output_format"),
         nullable=False,
     )
-    file_path: Mapped[Optional[str]] = mapped_column(
+    file_path: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
         comment="Storage path for file-based output",
     )
-    file_size_bytes: Mapped[Optional[int]] = mapped_column(
+    file_size_bytes: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
     )
-    content_hash: Mapped[Optional[str]] = mapped_column(
+    content_hash: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,
         comment="SHA256 hash for integrity verification",
     )
 
     # Email-specific fields
-    sent_to: Mapped[Optional[str]] = mapped_column(
+    sent_to: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
         comment="Recipient email address",
     )
-    sent_at: Mapped[Optional[datetime]] = mapped_column(
+    sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
     # Context snapshot for audit/debugging
-    context_snapshot: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    context_snapshot: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Key data values at generation time",
@@ -159,7 +159,7 @@ class GeneratedDocument(Base):
         nullable=False,
         default=DocumentStatus.DRAFT,
     )
-    superseded_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    superseded_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("automation.generated_document.document_id"),
         nullable=True,

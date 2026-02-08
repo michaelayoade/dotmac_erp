@@ -10,10 +10,10 @@ from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     DateTime,
     ForeignKey,
     String,
-    Boolean,
     func,
     text,
 )
@@ -23,9 +23,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
 if TYPE_CHECKING:
-    from app.models.support.ticket import Ticket
-    from app.models.support.comment import TicketComment
     from app.models.person import Person
+    from app.models.support.comment import TicketComment
+    from app.models.support.ticket import Ticket
 
 
 class TicketAttachment(Base):
@@ -56,7 +56,7 @@ class TicketAttachment(Base):
     )
 
     # Optional link to comment (if attached via comment)
-    comment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    comment_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("support.ticket_comment.comment_id", ondelete="SET NULL"),
         nullable=True,
@@ -85,14 +85,14 @@ class TicketAttachment(Base):
     )
 
     # Thumbnail for images
-    thumbnail_path: Mapped[Optional[str]] = mapped_column(
+    thumbnail_path: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
         comment="Path to thumbnail (for images)",
     )
 
     # Uploader
-    uploaded_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    uploaded_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,

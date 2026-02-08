@@ -12,7 +12,6 @@ Includes:
 
 import uuid
 from datetime import date
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -21,7 +20,7 @@ def generate_employee_code(
     db: Session,
     organization_id: uuid.UUID,
     prefix: str = "EMP",
-    year: Optional[int] = None,
+    year: int | None = None,
 ) -> str:
     """
     Generate a unique employee code.
@@ -63,7 +62,7 @@ def calculate_workdays(start_date: date, end_date: date) -> int:
     if end_date < start_date:
         return 0
 
-    total_days = (end_date - start_date).days + 1
+    (end_date - start_date).days + 1
     workdays = 0
 
     current = start_date

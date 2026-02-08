@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -53,9 +53,9 @@ def test_verify_payment_rejects_amount_mismatch():
             "app.services.finance.payments.payment_service.PaystackClient",
             return_value=client_cm,
         ),
+        pytest.raises(HTTPException) as excinfo,
     ):
-        with pytest.raises(HTTPException) as excinfo:
-            svc.verify_payment_by_reference("REF-1", PaystackConfig("sk", "pk", "wh"))
+        svc.verify_payment_by_reference("REF-1", PaystackConfig("sk", "pk", "wh"))
 
     assert excinfo.value.status_code == 400
     assert intent.status == PaymentIntentStatus.FAILED
@@ -104,7 +104,7 @@ def test_expired_invoice_intent_allows_new_payment():
     expired_intent = SimpleNamespace(
         intent_id=uuid.uuid4(),
         status=PaymentIntentStatus.PENDING,
-        expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+        expires_at=datetime.now(UTC) - timedelta(minutes=1),
     )
 
     query = MagicMock()

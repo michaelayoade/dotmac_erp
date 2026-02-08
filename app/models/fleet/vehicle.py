@@ -7,7 +7,7 @@ Core entity representing vehicles in the organization's fleet.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     Boolean,
@@ -104,12 +104,12 @@ class Vehicle(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
         nullable=False,
         comment="License plate / registration number",
     )
-    vin: Mapped[Optional[str]] = mapped_column(
+    vin: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Vehicle Identification Number (chassis number)",
     )
-    engine_number: Mapped[Optional[str]] = mapped_column(
+    engine_number: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Engine serial number",
@@ -133,7 +133,7 @@ class Vehicle(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
         nullable=False,
         comment="Manufacturing year",
     )
-    color: Mapped[Optional[str]] = mapped_column(
+    color: Mapped[str | None] = mapped_column(
         String(30),
         nullable=True,
     )
@@ -143,12 +143,12 @@ class Vehicle(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
     fuel_type: Mapped[FuelType] = mapped_column(
         default=FuelType.PETROL,
     )
-    transmission: Mapped[Optional[str]] = mapped_column(
+    transmission: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="MANUAL, AUTOMATIC, CVT, etc.",
     )
-    engine_capacity_cc: Mapped[Optional[int]] = mapped_column(
+    engine_capacity_cc: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Engine capacity in cubic centimeters",
@@ -158,11 +158,11 @@ class Vehicle(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
         nullable=False,
         default=5,
     )
-    fuel_tank_capacity_liters: Mapped[Optional[Decimal]] = mapped_column(
+    fuel_tank_capacity_liters: Mapped[Decimal | None] = mapped_column(
         Numeric(6, 2),
         nullable=True,
     )
-    expected_fuel_efficiency: Mapped[Optional[Decimal]] = mapped_column(
+    expected_fuel_efficiency: Mapped[Decimal | None] = mapped_column(
         Numeric(6, 2),
         nullable=True,
         comment="Expected km/liter",
@@ -174,27 +174,27 @@ class Vehicle(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
     ownership_type: Mapped[OwnershipType] = mapped_column(
         default=OwnershipType.OWNED,
     )
-    purchase_date: Mapped[Optional[date]] = mapped_column(
+    purchase_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    purchase_price: Mapped[Optional[Decimal]] = mapped_column(
+    purchase_price: Mapped[Decimal | None] = mapped_column(
         Numeric(18, 2),
         nullable=True,
     )
-    lease_start_date: Mapped[Optional[date]] = mapped_column(
+    lease_start_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    lease_end_date: Mapped[Optional[date]] = mapped_column(
+    lease_end_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    lease_monthly_cost: Mapped[Optional[Decimal]] = mapped_column(
+    lease_monthly_cost: Mapped[Decimal | None] = mapped_column(
         Numeric(18, 2),
         nullable=True,
     )
-    vendor_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    vendor_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("ap.supplier.supplier_id"),
         nullable=True,
@@ -207,19 +207,19 @@ class Vehicle(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
     assignment_type: Mapped[AssignmentType] = mapped_column(
         default=AssignmentType.POOL,
     )
-    assigned_employee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    assigned_employee_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
         comment="Current assigned employee (for PERSONAL type)",
     )
-    assigned_department_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    assigned_department_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.department.department_id"),
         nullable=True,
         comment="Current assigned department",
     )
-    assigned_cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    assigned_cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.cost_center.cost_center_id"),
         nullable=True,
@@ -237,7 +237,7 @@ class Vehicle(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
         default=0,
         comment="Current odometer reading in kilometers",
     )
-    last_odometer_date: Mapped[Optional[date]] = mapped_column(
+    last_odometer_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -248,15 +248,15 @@ class Vehicle(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
         nullable=False,
         default=False,
     )
-    gps_device_id: Mapped[Optional[str]] = mapped_column(
+    gps_device_id: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
     )
-    last_known_location: Mapped[Optional[str]] = mapped_column(
+    last_known_location: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
     )
-    last_location_update: Mapped[Optional[datetime]] = mapped_column(
+    last_location_update: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -264,19 +264,19 @@ class Vehicle(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
     # ─────────────────────────────────────────────────────────────
     # Disposal
     # ─────────────────────────────────────────────────────────────
-    disposal_date: Mapped[Optional[date]] = mapped_column(
+    disposal_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    disposal_method: Mapped[Optional[DisposalMethod]] = mapped_column(
+    disposal_method: Mapped[DisposalMethod | None] = mapped_column(
         nullable=True,
     )
-    disposal_amount: Mapped[Optional[Decimal]] = mapped_column(
+    disposal_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(18, 2),
         nullable=True,
         comment="Sale/scrap value received",
     )
-    disposal_notes: Mapped[Optional[str]] = mapped_column(
+    disposal_notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -284,7 +284,7 @@ class Vehicle(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
     # ─────────────────────────────────────────────────────────────
     # Notes
     # ─────────────────────────────────────────────────────────────
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -298,7 +298,7 @@ class Vehicle(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
         lazy="joined",
     )
 
-    assignments: Mapped[List["VehicleAssignment"]] = relationship(
+    assignments: Mapped[list["VehicleAssignment"]] = relationship(
         "VehicleAssignment",
         back_populates="vehicle",
         cascade="all, delete-orphan",
@@ -306,14 +306,14 @@ class Vehicle(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
         lazy="selectin",
     )
 
-    documents: Mapped[List["VehicleDocument"]] = relationship(
+    documents: Mapped[list["VehicleDocument"]] = relationship(
         "VehicleDocument",
         back_populates="vehicle",
         cascade="all, delete-orphan",
         lazy="selectin",
     )
 
-    maintenance_records: Mapped[List["MaintenanceRecord"]] = relationship(
+    maintenance_records: Mapped[list["MaintenanceRecord"]] = relationship(
         "MaintenanceRecord",
         back_populates="vehicle",
         cascade="all, delete-orphan",
@@ -321,7 +321,7 @@ class Vehicle(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
         lazy="dynamic",
     )
 
-    fuel_logs: Mapped[List["FuelLogEntry"]] = relationship(
+    fuel_logs: Mapped[list["FuelLogEntry"]] = relationship(
         "FuelLogEntry",
         back_populates="vehicle",
         cascade="all, delete-orphan",
@@ -329,7 +329,7 @@ class Vehicle(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
         lazy="dynamic",
     )
 
-    incidents: Mapped[List["VehicleIncident"]] = relationship(
+    incidents: Mapped[list["VehicleIncident"]] = relationship(
         "VehicleIncident",
         back_populates="vehicle",
         cascade="all, delete-orphan",
@@ -337,7 +337,7 @@ class Vehicle(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
         lazy="dynamic",
     )
 
-    reservations: Mapped[List["VehicleReservation"]] = relationship(
+    reservations: Mapped[list["VehicleReservation"]] = relationship(
         "VehicleReservation",
         back_populates="vehicle",
         cascade="all, delete-orphan",

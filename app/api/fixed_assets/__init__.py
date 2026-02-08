@@ -6,7 +6,6 @@ Fixed Assets API endpoints for asset management, depreciation, and disposals.
 
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -14,22 +13,21 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
-from app.services.auth_dependencies import require_tenant_permission
-from app.services.feature_flags import require_feature, FEATURE_FIXED_ASSETS
 from app.api.finance.utils import parse_enum
 from app.db import SessionLocal
-from app.schemas.finance.common import ListResponse, PostingResultSchema
 from app.models.fixed_assets.asset import AssetStatus
+from app.models.fixed_assets.asset_disposal import DisposalType
+from app.schemas.finance.common import ListResponse, PostingResultSchema
+from app.services.auth_dependencies import require_tenant_permission
+from app.services.feature_flags import FEATURE_FIXED_ASSETS, require_feature
 from app.services.fixed_assets import (
+    AssetInput,
+    DisposalInput,
+    asset_disposal_service,
     asset_service,
     depreciation_service,
     fa_posting_adapter,
-    asset_disposal_service,
-    DisposalInput,
-    AssetInput,
 )
-from app.models.fixed_assets.asset_disposal import DisposalType
-
 
 router = APIRouter(
     prefix="/fixed-assets",
@@ -62,12 +60,12 @@ class AssetCreate(BaseModel):
     acquisition_date: date
     acquisition_cost: Decimal
     currency_code: str = Field(max_length=3)
-    useful_life_months: Optional[int] = None
+    useful_life_months: int | None = None
     residual_value: Decimal = Decimal("0")
-    depreciation_method: Optional[str] = "STRAIGHT_LINE"
-    location_id: Optional[UUID] = None
-    cost_center_id: Optional[UUID] = None
-    description: Optional[str] = None
+    depreciation_method: str | None = "STRAIGHT_LINE"
+    location_id: UUID | None = None
+    cost_center_id: UUID | None = None
+    description: str | None = None
 
 
 class AssetRead(BaseModel):
@@ -94,7 +92,7 @@ class DepreciationRunCreate(BaseModel):
     """Depreciation run request."""
 
     fiscal_period_id: UUID
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class DepreciationRunRead(BaseModel):
@@ -105,7 +103,7 @@ class DepreciationRunRead(BaseModel):
     run_id: UUID
     fiscal_period_id: UUID
     run_number: int
-    run_description: Optional[str] = None
+    run_description: str | None = None
     total_depreciation: Decimal
     assets_processed: int
     status: str
@@ -119,14 +117,14 @@ class DisposalCreate(BaseModel):
     disposal_type: str = Field(max_length=30)
     disposal_proceeds: Decimal = Decimal("0")
     costs_of_disposal: Decimal = Decimal("0")
-    buyer_name: Optional[str] = None
-    buyer_reference: Optional[str] = None
-    invoice_number: Optional[str] = None
-    disposal_reason: Optional[str] = None
-    authorization_reference: Optional[str] = None
-    trade_in_asset_id: Optional[UUID] = None
-    insurance_claim_reference: Optional[str] = None
-    insurance_proceeds: Optional[Decimal] = None
+    buyer_name: str | None = None
+    buyer_reference: str | None = None
+    invoice_number: str | None = None
+    disposal_reason: str | None = None
+    authorization_reference: str | None = None
+    trade_in_asset_id: UUID | None = None
+    insurance_claim_reference: str | None = None
+    insurance_proceeds: Decimal | None = None
 
 
 class DisposalRead(BaseModel):
@@ -183,19 +181,20 @@ def create_asset(
 @router.get("/assets/{asset_id}", response_model=AssetRead)
 def get_asset(
     asset_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("fa:assets:read")),
     db: Session = Depends(get_db),
 ):
     """Get a fixed asset by ID."""
-    return asset_service.get(db, str(asset_id))
+    return asset_service.get(db, str(asset_id), organization_id)
 
 
 @router.get("/assets", response_model=ListResponse[AssetRead])
 def list_assets(
     organization_id: UUID = Depends(require_organization_id),
-    asset_category_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    location_id: Optional[UUID] = None,
+    asset_category_id: UUID | None = None,
+    status: str | None = None,
+    location_id: UUID | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("fa:assets:read")),
@@ -223,8 +222,8 @@ def list_assets(
 def capitalize_asset(
     asset_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    in_service_date: Optional[date] = None,
-    depreciation_start_date: Optional[date] = None,
+    in_service_date: date | None = None,
+    depreciation_start_date: date | None = None,
     auth: dict = Depends(require_tenant_permission("fa:assets:capitalize")),
     db: Session = Depends(get_db),
 ):
@@ -245,7 +244,7 @@ def post_asset_acquisition(
     organization_id: UUID = Depends(require_organization_id),
     posted_by_user_id: UUID = Query(...),
     credit_account_id: UUID = Query(...),
-    description: Optional[str] = None,
+    description: str | None = None,
     auth: dict = Depends(require_tenant_permission("fa:assets:post")),
     db: Session = Depends(get_db),
 ):
@@ -302,7 +301,7 @@ def run_depreciation(
 @router.get("/depreciation/runs", response_model=ListResponse[DepreciationRunRead])
 def list_depreciation_runs(
     organization_id: UUID = Depends(require_organization_id),
-    fiscal_period_id: Optional[UUID] = None,
+    fiscal_period_id: UUID | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("fa:depreciation:read")),

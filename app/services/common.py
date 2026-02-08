@@ -10,7 +10,7 @@ This module provides:
 import logging
 import uuid
 from dataclasses import dataclass, field
-from typing import Generic, List, Optional, TypeVar
+from typing import Generic, TypeVar
 
 from fastapi import HTTPException
 from sqlalchemy import func, select
@@ -172,7 +172,7 @@ class PaginatedResult(Generic[T]):
         limit: Current limit.
     """
 
-    items: List[T] = field(default_factory=list)
+    items: list[T] = field(default_factory=list)
     total: int = 0
     offset: int = 0
     limit: int = 50
@@ -205,7 +205,7 @@ class PaginatedResult(Generic[T]):
 def paginate(
     db: Session,
     stmt: Select,
-    params: Optional[PaginationParams] = None,
+    params: PaginationParams | None = None,
     *,
     count_column=None,
 ) -> PaginatedResult:

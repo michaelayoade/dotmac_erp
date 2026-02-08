@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, empty_state %}
 
 {% block page_title %}Payroll Variance{% endblock %}
 
@@ -71,7 +71,7 @@
     </div>
 
     <div class="card overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
@@ -90,6 +90,12 @@
                         <td class="px-4 py-3 text-right font-mono text-sm text-slate-600 dark:text-slate-400">&#x20A6;{{ "{:,.2f}".format(row.previous.net) }}</td>
                         <td class="px-4 py-3 text-right font-mono text-sm text-slate-600 dark:text-slate-400">&#x20A6;{{ "{:,.2f}".format(row.current.net) }}</td>
                         <td class="px-4 py-3 text-right font-mono text-sm {{ 'text-emerald-600 dark:text-emerald-400' if row.delta.net >= 0 else 'text-rose-600 dark:text-rose-400' }}">&#x20A6;{{ "{:,.2f}".format(row.delta.net) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No rows found", "There are no rows to display.") }}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

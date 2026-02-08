@@ -1,5 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}Remita RRRs{% endblock %}
 
 {% block breadcrumbs %}
@@ -57,6 +58,7 @@
         <div class="flex items-center gap-2">
             {% if pending_count > 0 and is_configured %}
             <form method="POST" action="/finance/remita/refresh-all" class="inline">
+                {{ request.state.csrf_form | safe }}
                 <button type="submit"
                         class="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -105,7 +107,7 @@
 
     <!-- RRR Table -->
     <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead class="bg-slate-50 dark:bg-slate-800">
                     <tr>
@@ -143,9 +145,7 @@
                                 'failed': 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
                                 'cancelled': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400'
                             } %}
-                            <span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium {{ status_colors.get(rrr.status.value, 'bg-slate-100 text-slate-700') }}">
-                                {{ rrr.status.value | title }}
-                            </span>
+                            {{ status_badge(rrr.status.value, size="sm") }}
                         </td>
                         <td class="whitespace-nowrap px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
                             {{ rrr.generated_at.strftime('%Y-%m-%d %H:%M') }}

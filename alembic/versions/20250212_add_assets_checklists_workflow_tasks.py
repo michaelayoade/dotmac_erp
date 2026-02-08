@@ -5,11 +5,11 @@ Revises: 20250212_add_hr_lifecycle_tables
 Create Date: 2025-02-12 00:00:00.000000
 """
 
-from alembic import op
-from app.alembic_utils import ensure_enum
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
+from alembic import op
+from app.alembic_utils import ensure_enum
 
 revision = "20250212_add_assets_checklists_workflow_tasks"
 down_revision = "20250212_add_hr_lifecycle_tables"

@@ -6,8 +6,7 @@ soft delete, optimistic locking, and sync tracking.
 """
 
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
@@ -57,13 +56,13 @@ class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
         comment="When the record was created",
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
-        onupdate=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(UTC),
         comment="When the record was last updated",
     )
 
@@ -87,13 +86,13 @@ class AuditMixin:
         model.set_updated_by(user_id)
     """
 
-    created_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,
         comment="User who created this record",
     )
-    updated_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    updated_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,
@@ -155,11 +154,11 @@ class SoftDeleteMixin:
         default=False,
         index=True,
     )
-    deleted_at: Mapped[Optional[datetime]] = mapped_column(
+    deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    deleted_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    deleted_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,
@@ -183,14 +182,14 @@ class SoftDeleteMixin:
         """
         return cls.is_deleted.is_(False)
 
-    def mark_deleted(self, deleted_by_id: Optional[uuid.UUID] = None) -> None:
+    def mark_deleted(self, deleted_by_id: uuid.UUID | None = None) -> None:
         """Mark this record as soft-deleted.
 
         Args:
             deleted_by_id: Optional user ID who performed the deletion
         """
         self.is_deleted = True
-        self.deleted_at = datetime.now(timezone.utc)
+        self.deleted_at = datetime.now(UTC)
         if deleted_by_id:
             self.deleted_by_id = deleted_by_id
 
@@ -209,11 +208,11 @@ class StatusTrackingMixin:
     approval workflows.
     """
 
-    status_changed_at: Mapped[Optional[datetime]] = mapped_column(
+    status_changed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    status_changed_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    status_changed_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,
@@ -228,13 +227,13 @@ class ERPNextSyncMixin:
     supports ongoing synchronization if needed.
     """
 
-    erpnext_id: Mapped[Optional[str]] = mapped_column(
+    erpnext_id: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
         index=True,
         comment="ERPNext document name for migration/sync",
     )
-    last_synced_at: Mapped[Optional[datetime]] = mapped_column(
+    last_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="Last synchronization timestamp",

@@ -5,7 +5,7 @@ Provides methods to build template context for fleet management pages.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import inspect
@@ -52,7 +52,7 @@ class FleetWebService:
             logger.exception("Failed to inspect fleet schema tables")
             return False
 
-    def _empty_list_context(self) -> Dict[str, Any]:
+    def _empty_list_context(self) -> dict[str, Any]:
         return {
             "total": 0,
             "page": 1,
@@ -65,7 +65,7 @@ class FleetWebService:
     # Dashboard
     # ─────────────────────────────────────────────────────────────
 
-    def dashboard_context(self, organization_id: UUID) -> Dict[str, Any]:
+    def dashboard_context(self, organization_id: UUID) -> dict[str, Any]:
         """Build context for fleet dashboard page."""
         if not self._fleet_tables_ready():
             return {
@@ -123,12 +123,12 @@ class FleetWebService:
         self,
         organization_id: UUID,
         *,
-        status: Optional[str] = None,
-        vehicle_type: Optional[str] = None,
-        department_id: Optional[UUID] = None,
+        status: str | None = None,
+        vehicle_type: str | None = None,
+        department_id: UUID | None = None,
         offset: int = 0,
         limit: int = 25,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for vehicles list page."""
         if not self._fleet_tables_ready():
             context = self._empty_list_context()
@@ -182,8 +182,8 @@ class FleetWebService:
     def vehicle_form_context(
         self,
         organization_id: UUID,
-        vehicle_id: Optional[UUID] = None,
-    ) -> Dict[str, Any]:
+        vehicle_id: UUID | None = None,
+    ) -> dict[str, Any]:
         """Build context for vehicle create/edit form."""
         if not self._fleet_tables_ready():
             return {
@@ -194,7 +194,7 @@ class FleetWebService:
                 "vehicle": None,
             }
         org_id = coerce_uuid(organization_id)
-        context: Dict[str, Any] = {
+        context: dict[str, Any] = {
             "vehicle_types": [t.value for t in VehicleType],
             "fuel_types": [f.value for f in FuelType],
             "ownership_types": [o.value for o in OwnershipType],
@@ -212,7 +212,7 @@ class FleetWebService:
         self,
         organization_id: UUID,
         vehicle_id: UUID,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for vehicle detail page."""
         if not self._fleet_tables_ready():
             raise NotFoundError("Fleet module not initialized.")
@@ -288,12 +288,12 @@ class FleetWebService:
         self,
         organization_id: UUID,
         *,
-        vehicle_id: Optional[UUID] = None,
-        status: Optional[str] = None,
-        maintenance_type: Optional[str] = None,
+        vehicle_id: UUID | None = None,
+        status: str | None = None,
+        maintenance_type: str | None = None,
         offset: int = 0,
         limit: int = 25,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for maintenance list page."""
         if not self._fleet_tables_ready():
             context = self._empty_list_context()
@@ -340,8 +340,8 @@ class FleetWebService:
         self,
         organization_id: UUID,
         *,
-        vehicle_id: Optional[UUID] = None,
-    ) -> Dict[str, Any]:
+        vehicle_id: UUID | None = None,
+    ) -> dict[str, Any]:
         """Build context for maintenance create form."""
         if not self._fleet_tables_ready():
             return {
@@ -358,7 +358,7 @@ class FleetWebService:
             params=PaginationParams(limit=200),
         )
 
-        context: Dict[str, Any] = {
+        context: dict[str, Any] = {
             "vehicles": vehicles_result.items,
             "maintenance_types": [t.value for t in MaintenanceType],
             "selected_vehicle_id": vehicle_id,
@@ -370,7 +370,7 @@ class FleetWebService:
         self,
         organization_id: UUID,
         record_id: UUID,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for maintenance detail page."""
         if not self._fleet_tables_ready():
             raise NotFoundError("Fleet module not initialized.")
@@ -391,10 +391,10 @@ class FleetWebService:
         self,
         organization_id: UUID,
         *,
-        vehicle_id: Optional[UUID] = None,
+        vehicle_id: UUID | None = None,
         offset: int = 0,
         limit: int = 25,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for fuel logs page."""
         if not self._fleet_tables_ready():
             context = self._empty_list_context()
@@ -435,8 +435,8 @@ class FleetWebService:
         self,
         organization_id: UUID,
         *,
-        vehicle_id: Optional[UUID] = None,
-    ) -> Dict[str, Any]:
+        vehicle_id: UUID | None = None,
+    ) -> dict[str, Any]:
         """Build context for fuel log create form."""
         if not self._fleet_tables_ready():
             return {
@@ -466,12 +466,12 @@ class FleetWebService:
         self,
         organization_id: UUID,
         *,
-        vehicle_id: Optional[UUID] = None,
-        status: Optional[str] = None,
-        severity: Optional[str] = None,
+        vehicle_id: UUID | None = None,
+        status: str | None = None,
+        severity: str | None = None,
         offset: int = 0,
         limit: int = 25,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for incidents list page."""
         if not self._fleet_tables_ready():
             context = self._empty_list_context()
@@ -525,8 +525,8 @@ class FleetWebService:
         self,
         organization_id: UUID,
         *,
-        vehicle_id: Optional[UUID] = None,
-    ) -> Dict[str, Any]:
+        vehicle_id: UUID | None = None,
+    ) -> dict[str, Any]:
         """Build context for incident report form."""
         if not self._fleet_tables_ready():
             return {
@@ -554,7 +554,7 @@ class FleetWebService:
         self,
         organization_id: UUID,
         incident_id: UUID,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for incident detail page."""
         if not self._fleet_tables_ready():
             raise NotFoundError("Fleet module not initialized.")
@@ -575,11 +575,11 @@ class FleetWebService:
         self,
         organization_id: UUID,
         *,
-        vehicle_id: Optional[UUID] = None,
-        status: Optional[str] = None,
+        vehicle_id: UUID | None = None,
+        status: str | None = None,
         offset: int = 0,
         limit: int = 25,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for reservations list page."""
         if not self._fleet_tables_ready():
             context = self._empty_list_context()
@@ -634,7 +634,7 @@ class FleetWebService:
     def reservation_form_context(
         self,
         organization_id: UUID,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for reservation create form."""
         if not self._fleet_tables_ready():
             return {"pool_vehicles": []}
@@ -656,7 +656,7 @@ class FleetWebService:
         self,
         organization_id: UUID,
         reservation_id: UUID,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for reservation detail page."""
         if not self._fleet_tables_ready():
             raise NotFoundError("Fleet module not initialized.")
@@ -677,13 +677,13 @@ class FleetWebService:
         self,
         organization_id: UUID,
         *,
-        vehicle_id: Optional[UUID] = None,
-        document_type: Optional[str] = None,
+        vehicle_id: UUID | None = None,
+        document_type: str | None = None,
         expired_only: bool = False,
         expiring_soon: bool = False,
         offset: int = 0,
         limit: int = 25,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for documents list page."""
         if not self._fleet_tables_ready():
             context = self._empty_list_context()
@@ -734,8 +734,8 @@ class FleetWebService:
         self,
         organization_id: UUID,
         *,
-        vehicle_id: Optional[UUID] = None,
-    ) -> Dict[str, Any]:
+        vehicle_id: UUID | None = None,
+    ) -> dict[str, Any]:
         """Build context for document create form."""
         if not self._fleet_tables_ready():
             return {
@@ -761,7 +761,7 @@ class FleetWebService:
         self,
         organization_id: UUID,
         document_id: UUID,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Build context for document detail page."""
         if not self._fleet_tables_ready():
             raise NotFoundError("Fleet module not initialized.")

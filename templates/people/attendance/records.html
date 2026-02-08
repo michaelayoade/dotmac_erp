@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}Attendance{% endblock %}
 
 {% block breadcrumbs %}
@@ -91,9 +92,9 @@
             <form method="post" action="/people/attendance/records/bulk-mark">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-                <div class="space-y-5">
+                <div class="space-y-6">
                     {# Date and Status #}
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label for="bulk_date" class="form-label required">Date</label>
                             <input type="date" name="attendance_date" id="bulk_date" required class="form-input w-full" value="{{ today }}">
@@ -228,7 +229,7 @@
 
     {% if records %}
     <div class="card overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
@@ -263,7 +264,7 @@
                         </td>
                         <td class="px-4 py-3 text-right text-sm font-mono">
                             {% if rec.overtime_hours and rec.overtime_hours > 0 %}
-                            <span class="text-amber-600 dark:text-amber-400 font-medium">+{{ rec.overtime_hours | format_number(2) }}</span>
+                            <span class="font-mono tabular-nums text-amber-600 dark:text-amber-400 font-medium">+{{ rec.overtime_hours | format_number(2) }}</span>
                             {% else %}
                             <span class="text-slate-400">-</span>
                             {% endif %}
@@ -282,7 +283,7 @@
                             {% elif rec.status == "WORK_FROM_HOME" %}
                             <span class="inline-flex rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">WFH</span>
                             {% else %}
-                            <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">{{ rec.status }}</span>
+                            {{ status_badge(rec.status, size="sm") }}
                             {% endif %}
                         </td>
                         <td class="px-4 py-3 text-right">

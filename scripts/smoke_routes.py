@@ -11,7 +11,6 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-
 DEFAULT_ROUTES = [
     "/health",
     "/login",
@@ -77,7 +76,7 @@ def login(base_url: str, username: str, password: str, timeout: int) -> str | No
 def load_routes(path: str | None) -> list[str]:
     if not path:
         return DEFAULT_ROUTES
-    with open(path, "r", encoding="utf-8") as handle:
+    with open(path, encoding="utf-8") as handle:
         return [
             line.strip()
             for line in handle
@@ -126,9 +125,7 @@ def load_routes_from_openapi(
                     value = "2024-01-01"
                 elif schema_format == "date-time":
                     value = "2024-01-01T00:00:00Z"
-                elif schema_type == "integer":
-                    value = 1
-                elif schema_type == "number":
+                elif schema_type == "integer" or schema_type == "number":
                     value = 1
                 elif schema_type == "boolean":
                     value = True

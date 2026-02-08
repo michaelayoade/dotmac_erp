@@ -7,7 +7,6 @@ Defines work shift schedules.
 import uuid
 from datetime import datetime, time
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -66,7 +65,7 @@ class ShiftType(Base, AuditMixin, ERPNextSyncMixin):
         String(100),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -101,7 +100,7 @@ class ShiftType(Base, AuditMixin, ERPNextSyncMixin):
         Boolean,
         default=True,
     )
-    half_day_threshold_hours: Mapped[Optional[Decimal]] = mapped_column(
+    half_day_threshold_hours: Mapped[Decimal | None] = mapped_column(
         Numeric(4, 2),
         nullable=True,
         comment="Hours after which half-day is marked",
@@ -112,7 +111,7 @@ class ShiftType(Base, AuditMixin, ERPNextSyncMixin):
         Boolean,
         default=False,
     )
-    overtime_threshold_hours: Mapped[Optional[Decimal]] = mapped_column(
+    overtime_threshold_hours: Mapped[Decimal | None] = mapped_column(
         Numeric(4, 2),
         nullable=True,
         comment="Hours after which overtime starts",
@@ -135,7 +134,7 @@ class ShiftType(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

@@ -10,8 +10,8 @@ import pytest
 from fastapi import HTTPException
 
 from app.services.finance.tax.tax_period import (
-    TaxPeriodService,
     TaxPeriodInput,
+    TaxPeriodService,
 )
 
 
@@ -92,7 +92,7 @@ class TestTaxPeriodServiceCreatePeriod:
             due_date=date(2024, 3, 1),
         )
 
-        result = TaxPeriodService.create_period(mock_db, org_id, input_data)
+        TaxPeriodService.create_period(mock_db, org_id, input_data)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -204,7 +204,7 @@ class TestTaxPeriodServiceGeneratePeriods:
         mock_query.first.side_effect = [mock_jurisdiction, None] * 12  # For each month
         mock_db.query.return_value = mock_query
 
-        result = TaxPeriodService.generate_periods(
+        TaxPeriodService.generate_periods(
             db=mock_db,
             organization_id=org_id,
             jurisdiction_id=jur_id,
@@ -232,7 +232,7 @@ class TestTaxPeriodServiceGeneratePeriods:
         mock_query.first.side_effect = [mock_jurisdiction, None] * 4  # For each quarter
         mock_db.query.return_value = mock_query
 
-        result = TaxPeriodService.generate_periods(
+        TaxPeriodService.generate_periods(
             db=mock_db,
             organization_id=org_id,
             jurisdiction_id=jur_id,
@@ -259,7 +259,7 @@ class TestTaxPeriodServiceGeneratePeriods:
         mock_query.first.side_effect = [mock_jurisdiction, None]
         mock_db.query.return_value = mock_query
 
-        result = TaxPeriodService.generate_periods(
+        TaxPeriodService.generate_periods(
             db=mock_db,
             organization_id=org_id,
             jurisdiction_id=jur_id,
@@ -293,7 +293,7 @@ class TestTaxPeriodServiceFileExtension:
         mock_query.first.return_value = mock_period
         mock_db.query.return_value = mock_query
 
-        result = TaxPeriodService.file_extension(
+        TaxPeriodService.file_extension(
             db=mock_db,
             organization_id=org_id,
             period_id=period_id,
@@ -389,7 +389,7 @@ class TestTaxPeriodServiceStatusTransitions:
         mock_query.first.return_value = mock_period
         mock_db.query.return_value = mock_query
 
-        result = TaxPeriodService.mark_filed(mock_db, org_id, uuid4())
+        TaxPeriodService.mark_filed(mock_db, org_id, uuid4())
 
         assert mock_period.status == TaxPeriodStatus.FILED
         mock_db.commit.assert_called_once()
@@ -427,7 +427,7 @@ class TestTaxPeriodServiceStatusTransitions:
         mock_query.first.return_value = mock_period
         mock_db.query.return_value = mock_query
 
-        result = TaxPeriodService.mark_paid(mock_db, org_id, uuid4())
+        TaxPeriodService.mark_paid(mock_db, org_id, uuid4())
 
         assert mock_period.status == TaxPeriodStatus.PAID
 
@@ -443,7 +443,7 @@ class TestTaxPeriodServiceStatusTransitions:
         mock_query.first.return_value = mock_period
         mock_db.query.return_value = mock_query
 
-        result = TaxPeriodService.close_period(mock_db, org_id, uuid4())
+        TaxPeriodService.close_period(mock_db, org_id, uuid4())
 
         assert mock_period.status == TaxPeriodStatus.CLOSED
 
@@ -521,8 +521,8 @@ class TestTaxPeriodServiceQueries:
     def test_list_periods_with_filters(self, mock_db):
         """Test listing periods with filters."""
         from app.models.finance.tax.tax_period import (
-            TaxPeriodStatus,
             TaxPeriodFrequency,
+            TaxPeriodStatus,
         )
 
         periods = [MockTaxPeriod(), MockTaxPeriod()]

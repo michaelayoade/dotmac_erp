@@ -8,7 +8,7 @@ Updates and deletes should be blocked via database trigger.
 import enum
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import (
     DateTime,
@@ -69,28 +69,28 @@ class AuditLog(Base):
         Enum(AuditAction, name="audit_action"),
         nullable=False,
     )
-    old_values: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    new_values: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    changed_fields: Mapped[Optional[list[str]]] = mapped_column(
+    old_values: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    new_values: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    changed_fields: Mapped[list[str] | None] = mapped_column(
         ARRAY(Text),
         nullable=True,
     )
 
     # Actor
-    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    ip_address: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
-    user_agent: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    session_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
+    session_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
 
     # Context
-    correlation_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Timestamp
     occurred_at: Mapped[datetime] = mapped_column(
@@ -100,7 +100,7 @@ class AuditLog(Base):
     )
 
     # Tamper detection (optional)
-    hash_chain: Mapped[Optional[str]] = mapped_column(
+    hash_chain: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,
         comment="SHA256(prev_hash + record_payload)",

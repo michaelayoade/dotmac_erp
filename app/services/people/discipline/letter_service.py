@@ -7,7 +7,6 @@ Wraps DocumentGeneratorService with discipline-specific context building.
 
 import logging
 from datetime import date
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -73,7 +72,7 @@ class DisciplineLetterService:
         self.db = db
         self._doc_service = DocumentGeneratorService(db)
 
-    def get_case_with_relations(self, case_id: UUID) -> Optional[DisciplinaryCase]:
+    def get_case_with_relations(self, case_id: UUID) -> DisciplinaryCase | None:
         """
         Get a disciplinary case with all related data loaded.
 
@@ -98,12 +97,12 @@ class DisciplineLetterService:
         *,
         signatory_name: str,
         signatory_title: str,
-        template_name: Optional[str] = None,
-        organization_name: Optional[str] = None,
-        organization_address: Optional[str] = None,
-        organization_logo_url: Optional[str] = None,
-        response_instructions: Optional[str] = None,
-        policy_violated: Optional[str] = None,
+        template_name: str | None = None,
+        organization_name: str | None = None,
+        organization_address: str | None = None,
+        organization_logo_url: str | None = None,
+        response_instructions: str | None = None,
+        policy_violated: str | None = None,
     ) -> tuple[bytes, GeneratedDocument]:
         """
         Generate a query (show cause) letter PDF.
@@ -214,12 +213,12 @@ class DisciplineLetterService:
         signatory_title: str,
         expected_improvement: str,
         consequences_if_repeated: str,
-        template_name: Optional[str] = None,
-        organization_name: Optional[str] = None,
-        organization_address: Optional[str] = None,
-        organization_logo_url: Optional[str] = None,
-        improvement_deadline: Optional[date] = None,
-        appeal_instructions: Optional[str] = None,
+        template_name: str | None = None,
+        organization_name: str | None = None,
+        organization_address: str | None = None,
+        organization_logo_url: str | None = None,
+        improvement_deadline: date | None = None,
+        appeal_instructions: str | None = None,
     ) -> tuple[bytes, GeneratedDocument]:
         """
         Generate a warning letter PDF for a specific action.
@@ -332,11 +331,11 @@ class DisciplineLetterService:
         *,
         signatory_name: str,
         signatory_title: str,
-        template_name: Optional[str] = None,
-        organization_name: Optional[str] = None,
-        organization_address: Optional[str] = None,
-        organization_logo_url: Optional[str] = None,
-        appeal_instructions: Optional[str] = None,
+        template_name: str | None = None,
+        organization_name: str | None = None,
+        organization_address: str | None = None,
+        organization_logo_url: str | None = None,
+        appeal_instructions: str | None = None,
     ) -> tuple[bytes, GeneratedDocument]:
         """
         Generate a decision letter PDF for a case.
@@ -442,13 +441,13 @@ class DisciplineLetterService:
         signatory_name: str,
         signatory_title: str,
         case_summary: str,
-        template_name: Optional[str] = None,
-        organization_name: Optional[str] = None,
-        organization_address: Optional[str] = None,
-        organization_logo_url: Optional[str] = None,
-        items_to_return: Optional[list[str]] = None,
-        return_deadline: Optional[date] = None,
-        appeal_instructions: Optional[str] = None,
+        template_name: str | None = None,
+        organization_name: str | None = None,
+        organization_address: str | None = None,
+        organization_logo_url: str | None = None,
+        items_to_return: list[str] | None = None,
+        return_deadline: date | None = None,
+        appeal_instructions: str | None = None,
     ) -> tuple[bytes, GeneratedDocument]:
         """
         Generate a termination letter PDF for a disciplinary termination.
@@ -568,11 +567,11 @@ class DisciplineLetterService:
         *,
         signatory_name: str,
         signatory_title: str,
-        organization_name: Optional[str] = None,
-        organization_address: Optional[str] = None,
-        organization_logo_url: Optional[str] = None,
-        response_instructions: Optional[str] = None,
-        policy_violated: Optional[str] = None,
+        organization_name: str | None = None,
+        organization_address: str | None = None,
+        organization_logo_url: str | None = None,
+        response_instructions: str | None = None,
+        policy_violated: str | None = None,
     ) -> QueryLetterContext:
         """Build query letter context from case data."""
         employee = case.employee
@@ -621,11 +620,11 @@ class DisciplineLetterService:
         signatory_title: str,
         expected_improvement: str,
         consequences_if_repeated: str,
-        organization_name: Optional[str] = None,
-        organization_address: Optional[str] = None,
-        organization_logo_url: Optional[str] = None,
-        improvement_deadline: Optional[date] = None,
-        appeal_instructions: Optional[str] = None,
+        organization_name: str | None = None,
+        organization_address: str | None = None,
+        organization_logo_url: str | None = None,
+        improvement_deadline: date | None = None,
+        appeal_instructions: str | None = None,
     ) -> WarningLetterContext:
         """Build warning letter context from case and action data."""
         employee = case.employee
@@ -699,10 +698,10 @@ class DisciplineLetterService:
         *,
         signatory_name: str,
         signatory_title: str,
-        organization_name: Optional[str] = None,
-        organization_address: Optional[str] = None,
-        organization_logo_url: Optional[str] = None,
-        appeal_instructions: Optional[str] = None,
+        organization_name: str | None = None,
+        organization_address: str | None = None,
+        organization_logo_url: str | None = None,
+        appeal_instructions: str | None = None,
     ) -> DecisionLetterContext:
         """Build decision letter context from case data."""
         employee = case.employee
@@ -769,12 +768,12 @@ class DisciplineLetterService:
         signatory_name: str,
         signatory_title: str,
         case_summary: str,
-        organization_name: Optional[str] = None,
-        organization_address: Optional[str] = None,
-        organization_logo_url: Optional[str] = None,
-        items_to_return: Optional[list[str]] = None,
-        return_deadline: Optional[date] = None,
-        appeal_instructions: Optional[str] = None,
+        organization_name: str | None = None,
+        organization_address: str | None = None,
+        organization_logo_url: str | None = None,
+        items_to_return: list[str] | None = None,
+        return_deadline: date | None = None,
+        appeal_instructions: str | None = None,
     ) -> DisciplineTerminationLetterContext:
         """Build termination letter context from case and action data."""
         employee = case.employee

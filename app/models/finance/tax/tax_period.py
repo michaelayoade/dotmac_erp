@@ -5,7 +5,6 @@ Tax Period Model - Tax Schema.
 import enum
 import uuid
 from datetime import date, datetime
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -68,7 +67,7 @@ class TaxPeriod(Base):
         ForeignKey("tax.tax_jurisdiction.jurisdiction_id"),
         nullable=False,
     )
-    fiscal_period_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    fiscal_period_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -92,14 +91,14 @@ class TaxPeriod(Base):
     is_extension_filed: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
-    extended_due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    extended_due_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

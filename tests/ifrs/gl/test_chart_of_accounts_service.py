@@ -7,8 +7,8 @@ from uuid import uuid4
 import pytest
 
 from app.services.finance.gl.chart_of_accounts import (
-    ChartOfAccountsService,
     AccountInput,
+    ChartOfAccountsService,
 )
 from tests.ifrs.gl.conftest import (
     MockAccount,
@@ -47,7 +47,7 @@ class TestCreateAccount:
         # No existing account
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        result = service.create_account(mock_db, org_id, sample_account_input)
+        service.create_account(mock_db, org_id, sample_account_input)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -83,7 +83,7 @@ class TestCreateAccount:
         )
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        result = service.create_account(mock_db, org_id, input_data)
+        service.create_account(mock_db, org_id, input_data)
 
         mock_db.add.assert_called_once()
 

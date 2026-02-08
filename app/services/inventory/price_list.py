@@ -6,11 +6,11 @@ Manages price lists, pricing tiers, and resolves effective prices for items.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -33,12 +33,12 @@ class PriceListInput:
     price_list_name: str
     price_list_type: PriceListType
     currency_code: str
-    description: Optional[str] = None
-    effective_from: Optional[date] = None
-    effective_to: Optional[date] = None
+    description: str | None = None
+    effective_from: date | None = None
+    effective_to: date | None = None
     priority: int = 0
-    base_price_list_id: Optional[UUID] = None
-    markup_percent: Optional[Decimal] = None
+    base_price_list_id: UUID | None = None
+    markup_percent: Decimal | None = None
     is_default: bool = False
 
 
@@ -50,10 +50,10 @@ class PriceListItemInput:
     unit_price: Decimal
     currency_code: str
     min_quantity: Decimal = Decimal("1")
-    discount_percent: Optional[Decimal] = None
-    discount_amount: Optional[Decimal] = None
-    effective_from: Optional[date] = None
-    effective_to: Optional[date] = None
+    discount_percent: Decimal | None = None
+    discount_amount: Decimal | None = None
+    effective_from: date | None = None
+    effective_to: date | None = None
 
 
 @dataclass
@@ -63,10 +63,10 @@ class ResolvedPrice:
     item_id: UUID
     unit_price: Decimal
     currency_code: str
-    price_list_id: Optional[UUID]
-    price_list_code: Optional[str]
-    discount_percent: Optional[Decimal]
-    discount_amount: Optional[Decimal]
+    price_list_id: UUID | None
+    price_list_code: str | None
+    discount_percent: Decimal | None
+    discount_amount: Decimal | None
     net_price: Decimal
     quantity_break: Decimal
     source: str  # "PRICE_LIST", "ITEM_LIST_PRICE", "ITEM_AVERAGE_COST"
@@ -295,10 +295,10 @@ class PriceListService(ListResponseMixin):
         organization_id: UUID,
         item_id: UUID,
         quantity: Decimal = Decimal("1"),
-        price_list_id: Optional[UUID] = None,
+        price_list_id: UUID | None = None,
         price_list_type: PriceListType = PriceListType.SALES,
-        as_of_date: Optional[date] = None,
-        currency_code: Optional[str] = None,
+        as_of_date: date | None = None,
+        currency_code: str | None = None,
     ) -> ResolvedPrice:
         """
         Resolve the effective price for an item.
@@ -471,7 +471,7 @@ class PriceListService(ListResponseMixin):
         item_id: UUID,
         quantity: Decimal,
         check_date: date,
-    ) -> Optional[Decimal]:
+    ) -> Decimal | None:
         """Get price from base price list."""
         item_price = (
             db.query(PriceListItem)
@@ -511,13 +511,13 @@ class PriceListService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        price_list_type: Optional[PriceListType] = None,
-        is_active: Optional[bool] = None,
-        currency_code: Optional[str] = None,
+        organization_id: str | None = None,
+        price_list_type: PriceListType | None = None,
+        is_active: bool | None = None,
+        currency_code: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[PriceList]:
+    ) -> builtins.list[PriceList]:
         """List price lists with optional filters."""
         query = db.query(PriceList)
 
@@ -542,10 +542,10 @@ class PriceListService(ListResponseMixin):
     def list_items(
         db: Session,
         price_list_id: str,
-        item_id: Optional[str] = None,
+        item_id: str | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[PriceListItem]:
+    ) -> builtins.list[PriceListItem]:
         """List items in a price list."""
         pl_id = coerce_uuid(price_list_id)
 

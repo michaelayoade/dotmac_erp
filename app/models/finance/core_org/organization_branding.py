@@ -12,7 +12,6 @@ This model enables multi-tenant branding with:
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -78,32 +77,32 @@ class OrganizationBranding(Base):
     # ─────────────────────────────────────────────────────────────────
     # Identity
     # ─────────────────────────────────────────────────────────────────
-    display_name: Mapped[Optional[str]] = mapped_column(
+    display_name: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
         comment="Display name (can differ from legal name)",
     )
-    tagline: Mapped[Optional[str]] = mapped_column(
+    tagline: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
         comment="Brand tagline or slogan",
     )
-    logo_url: Mapped[Optional[str]] = mapped_column(
+    logo_url: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
         comment="Primary logo URL (for light backgrounds)",
     )
-    logo_dark_url: Mapped[Optional[str]] = mapped_column(
+    logo_dark_url: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
         comment="Logo for dark mode/backgrounds",
     )
-    favicon_url: Mapped[Optional[str]] = mapped_column(
+    favicon_url: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
         comment="Browser favicon URL",
     )
-    brand_mark: Mapped[Optional[str]] = mapped_column(
+    brand_mark: Mapped[str | None] = mapped_column(
         String(4),
         nullable=True,
         comment="2-4 letter mark (auto-derived from name if empty)",
@@ -112,17 +111,17 @@ class OrganizationBranding(Base):
     # ─────────────────────────────────────────────────────────────────
     # Primary Color Palette
     # ─────────────────────────────────────────────────────────────────
-    primary_color: Mapped[Optional[str]] = mapped_column(
+    primary_color: Mapped[str | None] = mapped_column(
         String(7),
         nullable=True,
         comment="Primary brand color (hex #RRGGBB)",
     )
-    primary_light: Mapped[Optional[str]] = mapped_column(
+    primary_light: Mapped[str | None] = mapped_column(
         String(7),
         nullable=True,
         comment="Light variant (auto-calculated if empty)",
     )
-    primary_dark: Mapped[Optional[str]] = mapped_column(
+    primary_dark: Mapped[str | None] = mapped_column(
         String(7),
         nullable=True,
         comment="Dark variant (auto-calculated if empty)",
@@ -131,17 +130,17 @@ class OrganizationBranding(Base):
     # ─────────────────────────────────────────────────────────────────
     # Accent Color Palette
     # ─────────────────────────────────────────────────────────────────
-    accent_color: Mapped[Optional[str]] = mapped_column(
+    accent_color: Mapped[str | None] = mapped_column(
         String(7),
         nullable=True,
         comment="Secondary accent color (hex)",
     )
-    accent_light: Mapped[Optional[str]] = mapped_column(
+    accent_light: Mapped[str | None] = mapped_column(
         String(7),
         nullable=True,
         comment="Light accent variant",
     )
-    accent_dark: Mapped[Optional[str]] = mapped_column(
+    accent_dark: Mapped[str | None] = mapped_column(
         String(7),
         nullable=True,
         comment="Dark accent variant",
@@ -150,17 +149,17 @@ class OrganizationBranding(Base):
     # ─────────────────────────────────────────────────────────────────
     # Semantic Color Overrides (optional)
     # ─────────────────────────────────────────────────────────────────
-    success_color: Mapped[Optional[str]] = mapped_column(
+    success_color: Mapped[str | None] = mapped_column(
         String(7),
         nullable=True,
         comment="Success/positive color (default: emerald)",
     )
-    warning_color: Mapped[Optional[str]] = mapped_column(
+    warning_color: Mapped[str | None] = mapped_column(
         String(7),
         nullable=True,
         comment="Warning color (default: amber)",
     )
-    danger_color: Mapped[Optional[str]] = mapped_column(
+    danger_color: Mapped[str | None] = mapped_column(
         String(7),
         nullable=True,
         comment="Danger/error color (default: rose)",
@@ -169,17 +168,17 @@ class OrganizationBranding(Base):
     # ─────────────────────────────────────────────────────────────────
     # Typography
     # ─────────────────────────────────────────────────────────────────
-    font_family_display: Mapped[Optional[str]] = mapped_column(
+    font_family_display: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Heading/display font (Google Fonts name)",
     )
-    font_family_body: Mapped[Optional[str]] = mapped_column(
+    font_family_body: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Body text font",
     )
-    font_family_mono: Mapped[Optional[str]] = mapped_column(
+    font_family_mono: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Monospace font for numbers/code",
@@ -188,7 +187,7 @@ class OrganizationBranding(Base):
     # ─────────────────────────────────────────────────────────────────
     # UI Style Preferences
     # ─────────────────────────────────────────────────────────────────
-    border_radius: Mapped[Optional[BorderRadiusStyle]] = mapped_column(
+    border_radius: Mapped[BorderRadiusStyle | None] = mapped_column(
         Enum(
             BorderRadiusStyle,
             name="border_radius_style",
@@ -199,7 +198,7 @@ class OrganizationBranding(Base):
         default=BorderRadiusStyle.ROUNDED,
         comment="Border radius preset",
     )
-    button_style: Mapped[Optional[ButtonStyle]] = mapped_column(
+    button_style: Mapped[ButtonStyle | None] = mapped_column(
         Enum(
             ButtonStyle,
             name="button_style",
@@ -210,7 +209,7 @@ class OrganizationBranding(Base):
         default=ButtonStyle.GRADIENT,
         comment="Button styling preset",
     )
-    sidebar_style: Mapped[Optional[SidebarStyle]] = mapped_column(
+    sidebar_style: Mapped[SidebarStyle | None] = mapped_column(
         Enum(
             SidebarStyle,
             name="sidebar_style",
@@ -225,7 +224,7 @@ class OrganizationBranding(Base):
     # ─────────────────────────────────────────────────────────────────
     # Advanced Customization
     # ─────────────────────────────────────────────────────────────────
-    custom_css: Mapped[Optional[str]] = mapped_column(
+    custom_css: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Custom CSS injected after generated styles",
@@ -245,12 +244,12 @@ class OrganizationBranding(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
     )
-    created_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id", ondelete="SET NULL"),
         nullable=True,

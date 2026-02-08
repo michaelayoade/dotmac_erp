@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import HTTPException, UploadFile
 
 from app.config import settings
+from app.services.upload_utils import write_upload_to_path
 
 
 def get_allowed_types() -> set[str]:
@@ -24,21 +25,16 @@ async def save_avatar(file: UploadFile, person_id: str) -> str:
     validate_avatar(file)
 
     upload_dir = Path(settings.avatar_upload_dir)
-    upload_dir.mkdir(parents=True, exist_ok=True)
-
     ext = _get_extension(file.content_type or "image/jpeg")
     filename = f"{person_id}_{uuid.uuid4().hex[:8]}{ext}"
     file_path = upload_dir / filename
-
-    content = await file.read()
-    if len(content) > settings.avatar_max_size_bytes:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File too large. Maximum size: {settings.avatar_max_size_bytes // 1024 // 1024}MB",
-        )
-
-    with open(file_path, "wb") as f:
-        f.write(content)
+    max_mb = settings.avatar_max_size_bytes // 1024 // 1024
+    await write_upload_to_path(
+        file,
+        file_path,
+        settings.avatar_max_size_bytes,
+        error_detail=f"File too large. Maximum size: {max_mb}MB",
+    )
 
     return f"{settings.avatar_url_prefix}/{filename}"
 

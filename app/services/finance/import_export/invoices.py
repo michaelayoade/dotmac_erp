@@ -7,7 +7,7 @@ Imports customer invoices from CSV data into the AR system.
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -62,10 +62,10 @@ class InvoiceImporter(BaseImporter[Invoice]):
         super().__init__(db, config)
         self.ar_control_account_id = ar_control_account_id
         self.default_revenue_account_id = default_revenue_account_id
-        self._customer_cache: Dict[str, UUID] = {}
+        self._customer_cache: dict[str, UUID] = {}
         self._invoice_number_counter = 0
 
-    def get_field_mappings(self) -> List[FieldMapping]:
+    def get_field_mappings(self) -> list[FieldMapping]:
         """Define flexible field mappings supporting various CSV formats."""
         return [
             # Invoice header
@@ -240,7 +240,7 @@ class InvoiceImporter(BaseImporter[Invoice]):
             ),
         ]
 
-    def get_unique_key(self, row: Dict[str, Any]) -> str:
+    def get_unique_key(self, row: dict[str, Any]) -> str:
         """Unique key is invoice number."""
         return (
             row.get("Invoice Number")
@@ -250,11 +250,11 @@ class InvoiceImporter(BaseImporter[Invoice]):
             or ""
         ).strip()
 
-    def _import_rows(self, rows: List[Dict[str, Any]]) -> None:
+    def _import_rows(self, rows: list[dict[str, Any]]) -> None:
         """Import rows grouped by invoice number to preserve multi-line invoices."""
         from collections import defaultdict
 
-        groups: dict[str, list[Dict[str, Any]]] = defaultdict(list)
+        groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for row in rows:
             key = self.get_unique_key(row)
             if not key:
@@ -303,8 +303,8 @@ class InvoiceImporter(BaseImporter[Invoice]):
 
     def _build_invoice_from_rows(
         self,
-        header: Dict[str, Any],
-        line_rows: List[Dict[str, Any]],
+        header: dict[str, Any],
+        line_rows: list[dict[str, Any]],
     ) -> Invoice:
         """Create a single invoice with multiple lines from grouped rows."""
         invoice_number = (
@@ -412,7 +412,7 @@ class InvoiceImporter(BaseImporter[Invoice]):
         invoice.lines = lines
         return invoice
 
-    def check_duplicate(self, row: Dict[str, Any]) -> Optional[Invoice]:
+    def check_duplicate(self, row: dict[str, Any]) -> Invoice | None:
         """Check if invoice already exists."""
         invoice_number = self.get_unique_key(row)
         if not invoice_number:
@@ -427,7 +427,7 @@ class InvoiceImporter(BaseImporter[Invoice]):
 
         return existing
 
-    def validate_row(self, row: Dict[str, Any], row_num: int) -> bool:
+    def validate_row(self, row: dict[str, Any], row_num: int) -> bool:
         """Validate row data."""
         is_valid = super().validate_row(row, row_num)
 
@@ -469,7 +469,7 @@ class InvoiceImporter(BaseImporter[Invoice]):
 
         return is_valid
 
-    def create_entity(self, row: Dict[str, Any]) -> Invoice:
+    def create_entity(self, row: dict[str, Any]) -> Invoice:
         """Create a new invoice from transformed row data."""
         # Get invoice number
         invoice_number = (
@@ -567,7 +567,7 @@ class InvoiceImporter(BaseImporter[Invoice]):
 
     def _create_invoice_line(
         self,
-        row: Dict[str, Any],
+        row: dict[str, Any],
         line_number: int,
         fallback_amount: Decimal | None = None,
     ) -> InvoiceLine:

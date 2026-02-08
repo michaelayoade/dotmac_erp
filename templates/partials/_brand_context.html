@@ -6,6 +6,7 @@
 {% set brand_name = brand_data.name | default((organization.legal_name if organization and organization.legal_name else (organization.name if organization and organization.name else (title | default("Dotmac", true)))), true) %}
 {% set brand_tagline = brand_data.tagline | default("", true) %}
 {% set brand_logo_url = brand_data.logo_url | default("", true) %}
+{% set brand_logo_dark_url = brand_data.logo_dark_url | default("", true) %}
 {% set brand_mark = brand_data.mark | default((brand_name[:2] | upper) if brand_name else "DM", true) %}
 {% set report_logo_url = (org_branding.report_logo_url if org_branding is defined and org_branding and org_branding.report_logo_url else "") %}
 {% set document_logo_url = report_logo_url or brand_logo_url %}

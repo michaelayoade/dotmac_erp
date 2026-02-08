@@ -5,7 +5,6 @@ REST API for resource allocation and utilization.
 """
 
 from datetime import date
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -49,9 +48,9 @@ def get_db():
 @router.get("", response_model=ResourceAllocationListResponse)
 def list_allocations(
     organization_id: UUID = Depends(require_organization_id),
-    project_id: Optional[UUID] = None,
-    employee_id: Optional[UUID] = None,
-    is_active: Optional[bool] = None,
+    project_id: UUID | None = None,
+    employee_id: UUID | None = None,
+    is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),

@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 from datetime import time as datetime_time
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -44,7 +44,7 @@ class ShiftTypeSyncService(BaseSyncService[ShiftType]):
         self._mapping = ShiftTypeMapping()
         self._shift_type_cache: dict[str, ShiftType] = {}
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         if since:
             yield from client.get_modified_since(
                 doctype="Shift Type",
@@ -114,7 +114,7 @@ class ShiftTypeSyncService(BaseSyncService[ShiftType]):
     def get_entity_id(self, entity: ShiftType) -> uuid.UUID:
         return entity.shift_type_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[ShiftType]:
+    def find_existing_entity(self, source_name: str) -> ShiftType | None:
         if source_name in self._shift_type_cache:
             return self._shift_type_cache[source_name]
 
@@ -144,7 +144,7 @@ class AttendanceSyncService(BaseSyncService[Attendance]):
         self._mapping = AttendanceMapping()
         self._attendance_cache: dict[str, Attendance] = {}
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         if since:
             yield from client.get_modified_since(
                 doctype="Attendance",
@@ -157,8 +157,8 @@ class AttendanceSyncService(BaseSyncService[Attendance]):
         return self._mapping.transform_record(record)
 
     def _resolve_entity_id(
-        self, source_name: Optional[str], source_doctype: str
-    ) -> Optional[uuid.UUID]:
+        self, source_name: str | None, source_doctype: str
+    ) -> uuid.UUID | None:
         if not source_name:
             return None
 
@@ -242,7 +242,7 @@ class AttendanceSyncService(BaseSyncService[Attendance]):
     def get_entity_id(self, entity: Attendance) -> uuid.UUID:
         return entity.attendance_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[Attendance]:
+    def find_existing_entity(self, source_name: str) -> Attendance | None:
         if source_name in self._attendance_cache:
             return self._attendance_cache[source_name]
 

@@ -4,7 +4,6 @@ Cost Center Model - Core Org.
 
 import uuid
 from datetime import date, datetime
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -49,12 +48,12 @@ class CostCenter(Base):
     cost_center_name: Mapped[str] = mapped_column(String(100), nullable=False)
 
     # Relationships
-    business_unit_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    business_unit_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.business_unit.business_unit_id"),
         nullable=True,
     )
-    manager_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    manager_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -66,7 +65,7 @@ class CostCenter(Base):
         nullable=False,
         server_default=func.current_date(),
     )
-    effective_to: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

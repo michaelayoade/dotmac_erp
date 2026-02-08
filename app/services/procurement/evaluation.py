@@ -5,9 +5,8 @@ Business logic for bid evaluation and scoring.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -32,7 +31,7 @@ class BidEvaluationService:
         self,
         organization_id: UUID,
         evaluation_id: UUID,
-    ) -> Optional[BidEvaluation]:
+    ) -> BidEvaluation | None:
         """Get an evaluation by ID."""
         stmt = select(BidEvaluation).where(
             BidEvaluation.organization_id == organization_id,
@@ -44,11 +43,12 @@ class BidEvaluationService:
         self,
         organization_id: UUID,
         *,
-        rfq_id: Optional[UUID] = None,
-        status: Optional[str] = None,
+        rfq_id: UUID | None = None,
+        status: str | None = None,
+        search: str | None = None,
         offset: int = 0,
         limit: int = 25,
-    ) -> Tuple[List[BidEvaluation], int]:
+    ) -> tuple[list[BidEvaluation], int]:
         """List evaluations with filters."""
         base = select(BidEvaluation).where(
             BidEvaluation.organization_id == organization_id,
@@ -57,6 +57,10 @@ class BidEvaluationService:
             base = base.where(BidEvaluation.rfq_id == rfq_id)
         if status:
             base = base.where(BidEvaluation.status == EvaluationStatus(status))
+        if search:
+            base = base.where(
+                BidEvaluation.evaluation_report.ilike(f"%{search}%"),
+            )
 
         total = self.db.scalar(select(func.count()).select_from(base.subquery()))
         items = list(
@@ -162,7 +166,7 @@ class BidEvaluationService:
 
         evaluation.status = EvaluationStatus.APPROVED
         evaluation.approved_by_user_id = approved_by_user_id
-        evaluation.approved_at = datetime.now(timezone.utc)
+        evaluation.approved_at = datetime.now(UTC)
         self.db.flush()
         logger.info("Approved evaluation %s", evaluation_id)
         return evaluation

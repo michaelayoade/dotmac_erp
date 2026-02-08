@@ -7,7 +7,7 @@ Defines organization-wide appraisal periods.
 import enum
 import uuid
 from datetime import date, datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Date,
@@ -80,7 +80,7 @@ class AppraisalCycle(Base, AuditMixin, ERPNextSyncMixin):
         String(200),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -110,15 +110,15 @@ class AppraisalCycle(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # Phase deadlines
-    self_assessment_deadline: Mapped[Optional[date]] = mapped_column(
+    self_assessment_deadline: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    manager_review_deadline: Mapped[Optional[date]] = mapped_column(
+    manager_review_deadline: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    calibration_deadline: Mapped[Optional[date]] = mapped_column(
+    calibration_deadline: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -143,7 +143,7 @@ class AppraisalCycle(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

@@ -5,16 +5,15 @@ Tests posting inventory transactions (receipts, issues, adjustments) to the GL.
 """
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-
+from app.models.inventory.inventory_transaction import TransactionType
 from app.services.inventory.inv_posting_adapter import (
     INVPostingAdapter,
     INVPostingResult,
 )
-from app.models.inventory.inventory_transaction import TransactionType
 
 
 class MockItem:
@@ -83,7 +82,7 @@ class MockInventoryTransaction:
         self.transaction_id = transaction_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
         self.transaction_type = transaction_type
-        self.transaction_date = transaction_date or datetime.now(timezone.utc)
+        self.transaction_date = transaction_date or datetime.now(UTC)
         self.item_id = item_id or uuid.uuid4()
         self.warehouse_id = warehouse_id or uuid.uuid4()
         self.quantity = quantity

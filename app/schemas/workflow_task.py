@@ -3,7 +3,6 @@ Workflow task schemas.
 """
 
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -22,14 +21,14 @@ class WorkflowTaskRead(BaseModel):
     source_id: UUID
     module: str
     title: str
-    description: Optional[str] = None
-    action_url: Optional[str] = None
-    assignee_employee_id: Optional[UUID] = None
+    description: str | None = None
+    action_url: str | None = None
+    assignee_employee_id: UUID | None = None
     status: WorkflowTaskStatus
     priority: WorkflowTaskPriority
-    due_at: Optional[datetime] = None
+    due_at: datetime | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class WorkflowTaskStatusUpdate(BaseModel):

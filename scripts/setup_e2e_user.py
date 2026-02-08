@@ -20,11 +20,10 @@ import uuid
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.db import SessionLocal
-from app.models.person import Person
 from app.models.auth import UserCredential
-from app.models.rbac import Role, PersonRole
+from app.models.person import Person
+from app.models.rbac import PersonRole, Role
 from app.services.auth_flow import hash_password
-
 
 # Default test credentials
 DEFAULT_USERNAME = "e2e_testuser"

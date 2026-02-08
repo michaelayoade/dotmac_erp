@@ -6,11 +6,8 @@ Provides view-focused data and operations for AR sales order web routes.
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import date, datetime
-from decimal import Decimal
-from typing import Optional
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -27,7 +24,6 @@ from app.services.common import coerce_uuid
 from app.services.finance.ar.sales_order import sales_order_service
 from app.services.finance.common import format_currency, format_date
 from app.services.finance.platform.currency_context import get_currency_context
-from app.services.finance.platform.org_context import org_context_service
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -164,10 +160,10 @@ class SalesOrderWebService:
     def list_context(
         db: Session,
         organization_id: str,
-        status: Optional[str] = None,
-        customer_id: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        status: str | None = None,
+        customer_id: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict:
         """Get context for sales order listing page."""
         logger.debug(
@@ -440,84 +436,53 @@ class SalesOrderWebService:
         customer_id: str,
         order_date: str,
         lines_json: str,
-        currency_code: Optional[str] = None,
-        customer_po_number: Optional[str] = None,
-        requested_date: Optional[str] = None,
-        promised_date: Optional[str] = None,
-        payment_terms_id: Optional[str] = None,
-        ship_to_name: Optional[str] = None,
-        ship_to_address: Optional[str] = None,
-        ship_to_city: Optional[str] = None,
-        ship_to_state: Optional[str] = None,
-        ship_to_postal_code: Optional[str] = None,
-        ship_to_country: Optional[str] = None,
-        shipping_method: Optional[str] = None,
+        currency_code: str | None = None,
+        customer_po_number: str | None = None,
+        requested_date: str | None = None,
+        promised_date: str | None = None,
+        payment_terms_id: str | None = None,
+        ship_to_name: str | None = None,
+        ship_to_address: str | None = None,
+        ship_to_city: str | None = None,
+        ship_to_state: str | None = None,
+        ship_to_postal_code: str | None = None,
+        ship_to_country: str | None = None,
+        shipping_method: str | None = None,
         allow_partial_shipment: bool = False,
-        customer_notes: Optional[str] = None,
-        internal_notes: Optional[str] = None,
-    ) -> tuple[Optional[SalesOrder], Optional[str]]:
+        customer_notes: str | None = None,
+        internal_notes: str | None = None,
+    ) -> tuple[SalesOrder | None, str | None]:
         """Create a new sales order. Returns (order, error)."""
         logger.debug(
             "create_sales_order: org=%s customer=%s", organization_id, customer_id
         )
         try:
-            lines = json.loads(lines_json) if lines_json else []
-            if not lines:
-                return None, "Please add at least one order line."
-
-            line_errors = []
-            for idx, line in enumerate(lines, start=1):
-                if not (line.get("item_code") or line.get("item_id")):
-                    line_errors.append(f"Line {idx}: product/item is required.")
-                if not line.get("description"):
-                    line_errors.append(f"Line {idx}: description is required.")
-            if line_errors:
-                return None, " ".join(line_errors)
-
-            # Get default currency if not provided
-            if not currency_code:
-                currency_code = org_context_service.get_functional_currency(
-                    db,
-                    coerce_uuid(organization_id),
-                )
-
-            # Parse dates
-            order_dt = datetime.strptime(order_date, "%Y-%m-%d").date()
-            requested_dt = (
-                datetime.strptime(requested_date, "%Y-%m-%d").date()
-                if requested_date
-                else None
-            )
-            promised_dt = (
-                datetime.strptime(promised_date, "%Y-%m-%d").date()
-                if promised_date
-                else None
-            )
-
-            so = sales_order_service.create(
+            payload = {
+                "customer_id": customer_id,
+                "order_date": order_date,
+                "lines_json": lines_json,
+                "currency_code": currency_code,
+                "customer_po_number": customer_po_number,
+                "requested_date": requested_date,
+                "promised_date": promised_date,
+                "payment_terms_id": payment_terms_id,
+                "ship_to_name": ship_to_name,
+                "ship_to_address": ship_to_address,
+                "ship_to_city": ship_to_city,
+                "ship_to_state": ship_to_state,
+                "ship_to_postal_code": ship_to_postal_code,
+                "ship_to_country": ship_to_country,
+                "shipping_method": shipping_method,
+                "allow_partial_shipment": allow_partial_shipment,
+                "customer_notes": customer_notes,
+                "internal_notes": internal_notes,
+            }
+            so = sales_order_service.create_from_payload(
                 db,
                 organization_id=organization_id,
-                customer_id=customer_id,
-                order_date=order_dt,
-                created_by=user_id,
-                currency_code=currency_code,
-                customer_po_number=customer_po_number,
-                requested_date=requested_dt,
-                promised_date=promised_dt,
-                payment_terms_id=payment_terms_id if payment_terms_id else None,
-                ship_to_name=ship_to_name,
-                ship_to_address=ship_to_address,
-                ship_to_city=ship_to_city,
-                ship_to_state=ship_to_state,
-                ship_to_postal_code=ship_to_postal_code,
-                ship_to_country=ship_to_country,
-                shipping_method=shipping_method,
-                allow_partial_shipment=allow_partial_shipment,
-                customer_notes=customer_notes,
-                internal_notes=internal_notes,
-                lines=lines,
+                user_id=user_id,
+                payload=payload,
             )
-            db.commit()
             logger.info(
                 "create_sales_order: created %s for org %s",
                 so.so_number,
@@ -526,7 +491,6 @@ class SalesOrderWebService:
             return so, None
 
         except Exception as e:
-            db.rollback()
             logger.exception("create_sales_order: failed for org %s", organization_id)
             return None, str(e)
 
@@ -538,45 +502,32 @@ class SalesOrderWebService:
         so_id: str,
         shipment_date: str,
         line_quantities_json: str,
-        carrier: Optional[str] = None,
-        tracking_number: Optional[str] = None,
-        shipping_method: Optional[str] = None,
-        notes: Optional[str] = None,
-    ) -> tuple[Optional[object], Optional[str]]:
+        carrier: str | None = None,
+        tracking_number: str | None = None,
+        shipping_method: str | None = None,
+        notes: str | None = None,
+    ) -> tuple[object | None, str | None]:
         """Create a shipment for a sales order. Returns (shipment, error)."""
         logger.debug("create_shipment: org=%s so=%s", organization_id, so_id)
         try:
-            line_quantities = (
-                json.loads(line_quantities_json) if line_quantities_json else []
-            )
-
-            # Filter out zero quantities
-            line_quantities = [
-                lq for lq in line_quantities if Decimal(str(lq.get("quantity", 0))) > 0
-            ]
-
-            if not line_quantities:
-                return None, "No items to ship"
-
-            shipment_dt = datetime.strptime(shipment_date, "%Y-%m-%d").date()
-
-            shipment = sales_order_service.create_shipment(
+            payload = {
+                "line_quantities_json": line_quantities_json,
+                "shipment_date": shipment_date,
+                "carrier": carrier,
+                "tracking_number": tracking_number,
+                "shipping_method": shipping_method,
+                "notes": notes,
+            }
+            shipment = sales_order_service.create_shipment_from_payload(
                 db,
                 so_id=so_id,
-                shipment_date=shipment_dt,
-                created_by=user_id,
-                line_quantities=line_quantities,
-                carrier=carrier,
-                tracking_number=tracking_number,
-                shipping_method=shipping_method,
-                notes=notes,
+                user_id=user_id,
+                payload=payload,
             )
-            db.commit()
             logger.info("create_shipment: created shipment for SO %s", so_id)
             return shipment, None
 
         except Exception as e:
-            db.rollback()
             logger.exception("create_shipment: failed for SO %s", so_id)
             return None, str(e)
 
@@ -589,10 +540,10 @@ class SalesOrderWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        status: Optional[str],
-        customer_id: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        status: str | None,
+        customer_id: str | None,
+        start_date: str | None,
+        end_date: str | None,
     ) -> HTMLResponse:
         """Render sales order list page."""
         context = base_context(request, auth, "Sales Orders", "sales-orders")
@@ -615,8 +566,8 @@ class SalesOrderWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        customer_id: Optional[str] = None,
-        quote_id: Optional[str] = None,
+        customer_id: str | None = None,
+        quote_id: str | None = None,
     ) -> HTMLResponse:
         """Render new sales order form page."""
         context = base_context(request, auth, "New Sales Order", "sales-orders")
@@ -636,21 +587,21 @@ class SalesOrderWebService:
         customer_id: str,
         order_date: str,
         lines_json: str,
-        currency_code: Optional[str] = None,
-        customer_po_number: Optional[str] = None,
-        requested_date: Optional[str] = None,
-        promised_date: Optional[str] = None,
-        payment_terms_id: Optional[str] = None,
-        ship_to_name: Optional[str] = None,
-        ship_to_address: Optional[str] = None,
-        ship_to_city: Optional[str] = None,
-        ship_to_state: Optional[str] = None,
-        ship_to_postal_code: Optional[str] = None,
-        ship_to_country: Optional[str] = None,
-        shipping_method: Optional[str] = None,
+        currency_code: str | None = None,
+        customer_po_number: str | None = None,
+        requested_date: str | None = None,
+        promised_date: str | None = None,
+        payment_terms_id: str | None = None,
+        ship_to_name: str | None = None,
+        ship_to_address: str | None = None,
+        ship_to_city: str | None = None,
+        ship_to_state: str | None = None,
+        ship_to_postal_code: str | None = None,
+        ship_to_country: str | None = None,
+        shipping_method: str | None = None,
         allow_partial_shipment: bool = False,
-        customer_notes: Optional[str] = None,
-        internal_notes: Optional[str] = None,
+        customer_notes: str | None = None,
+        internal_notes: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Handle sales order creation form submission."""
         so, error = self.create_sales_order(
@@ -720,9 +671,8 @@ class SalesOrderWebService:
         """Handle submit sales order action."""
         try:
             sales_order_service.submit(db, so_id, str(auth.user_id))
-            db.commit()
         except Exception:
-            db.rollback()
+            logger.exception("submit_response: failed")
         return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
 
     def approve_response(
@@ -731,9 +681,8 @@ class SalesOrderWebService:
         """Handle approve sales order action."""
         try:
             sales_order_service.approve(db, so_id, str(auth.user_id))
-            db.commit()
         except Exception:
-            db.rollback()
+            logger.exception("approve_response: failed")
         return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
 
     def confirm_response(
@@ -742,9 +691,8 @@ class SalesOrderWebService:
         """Handle confirm sales order action."""
         try:
             sales_order_service.confirm(db, so_id)
-            db.commit()
         except Exception:
-            db.rollback()
+            logger.exception("confirm_response: failed")
         return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
 
     def cancel_response(
@@ -753,14 +701,13 @@ class SalesOrderWebService:
         auth: WebAuthContext,
         db: Session,
         so_id: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> RedirectResponse:
         """Handle cancel sales order action."""
         try:
             sales_order_service.cancel(db, so_id, str(auth.user_id), reason)
-            db.commit()
         except Exception:
-            db.rollback()
+            logger.exception("cancel_response: failed")
         return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
 
     def hold_response(
@@ -769,9 +716,8 @@ class SalesOrderWebService:
         """Handle hold sales order action."""
         try:
             sales_order_service.hold(db, so_id, str(auth.user_id))
-            db.commit()
         except Exception:
-            db.rollback()
+            logger.exception("hold_response: failed")
         return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
 
     def release_response(
@@ -780,9 +726,8 @@ class SalesOrderWebService:
         """Handle release sales order from hold action."""
         try:
             sales_order_service.release_hold(db, so_id, str(auth.user_id))
-            db.commit()
         except Exception:
-            db.rollback()
+            logger.exception("release_response: failed")
         return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
 
     def create_invoice_response(
@@ -793,12 +738,11 @@ class SalesOrderWebService:
             invoice = sales_order_service.create_invoice_from_so(
                 db, so_id, str(auth.user_id)
             )
-            db.commit()
             return RedirectResponse(
                 url=f"/ar/invoices/{invoice.invoice_id}", status_code=303
             )
         except Exception:
-            db.rollback()
+            logger.exception("create_invoice_response: failed")
             return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
 
     def shipment_form_response(
@@ -825,10 +769,10 @@ class SalesOrderWebService:
         so_id: str,
         shipment_date: str,
         line_quantities_json: str,
-        carrier: Optional[str] = None,
-        tracking_number: Optional[str] = None,
-        shipping_method: Optional[str] = None,
-        notes: Optional[str] = None,
+        carrier: str | None = None,
+        tracking_number: str | None = None,
+        shipping_method: str | None = None,
+        notes: str | None = None,
     ) -> RedirectResponse:
         """Handle shipment creation form submission."""
         _, error = self.create_shipment(
@@ -857,12 +801,11 @@ class SalesOrderWebService:
         """Handle mark shipment as delivered action."""
         try:
             shipment = sales_order_service.mark_delivered(db, shipment_id)
-            db.commit()
             return RedirectResponse(
                 url=f"/sales-orders/{shipment.so_id}", status_code=303
             )
         except Exception:
-            db.rollback()
+            logger.exception("mark_delivered_response: failed")
             return RedirectResponse(url="/sales-orders", status_code=303)
 
 

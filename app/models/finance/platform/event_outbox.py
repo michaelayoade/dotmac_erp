@@ -65,7 +65,7 @@ class EventOutbox(Base):
         nullable=False,
         server_default=func.now(),
     )
-    published_at: Mapped[Optional[datetime]] = mapped_column(
+    published_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -87,7 +87,7 @@ class EventOutbox(Base):
 
     # Correlation
     correlation_id: Mapped[str] = mapped_column(String(100), nullable=False)
-    causation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    causation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("platform.event_outbox.event_id"),
         nullable=True,
@@ -111,11 +111,11 @@ class EventOutbox(Base):
         default=EventStatus.PENDING,
     )
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    next_retry_at: Mapped[Optional[datetime]] = mapped_column(
+    next_retry_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Metadata
     created_at: Mapped[datetime] = mapped_column(

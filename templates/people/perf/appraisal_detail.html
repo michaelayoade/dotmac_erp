@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 
+{% from "components/macros.html" import status_badge, empty_state %}
 {% block page_title %}Appraisal Details{% endblock %}
 
 {% block breadcrumbs %}
@@ -81,9 +82,7 @@
                     'COMPLETED': 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
                     'CANCELLED': 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
                 } %}
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium {{ status_colors.get(appraisal.status.value, 'bg-slate-100 text-slate-700') }}">
-                    {{ appraisal.status.value | replace('_', ' ') | title }}
-                </span>
+                {{ status_badge(appraisal.status.value) }}
             </div>
         </div>
     </div>
@@ -207,7 +206,7 @@
         <div class="card-header">
             <h3 class="font-medium text-slate-900 dark:text-white">KRA Scores</h3>
         </div>
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
@@ -230,6 +229,12 @@
                         <td class="px-4 py-3 text-sm text-right text-slate-600 dark:text-slate-400">{{ score.manager_rating or '-' }}</td>
                         <td class="px-4 py-3 text-sm text-right text-slate-900 dark:text-white font-medium">{{ score.final_rating or '-' }}</td>
                         <td class="px-4 py-3 text-sm text-right text-slate-900 dark:text-white font-mono">{{ score.weighted_score or '-' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No appraisal found", "There are no appraisal to display.") }}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

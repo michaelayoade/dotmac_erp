@@ -5,9 +5,9 @@ Revises: 20260125_add_hr_asset_promotion_transfer_erpnext_fields
 Create Date: 2026-01-25
 """
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260125_add_hr_checklist_jobdesc_erpnext_fields"

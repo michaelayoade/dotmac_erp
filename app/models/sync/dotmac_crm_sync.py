@@ -7,7 +7,6 @@ Maps CRM entity IDs to local ERP entities (Project, Ticket, Task).
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     DateTime,
@@ -121,19 +120,19 @@ class CRMSyncMapping(Base):
         nullable=False,
         comment="Name/subject/title from CRM for display",
     )
-    display_code: Mapped[Optional[str]] = mapped_column(
+    display_code: Mapped[str | None] = mapped_column(
         String(80),
         nullable=True,
         comment="Code/number from CRM",
     )
-    customer_name: Mapped[Optional[str]] = mapped_column(
+    customer_name: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
         comment="Customer name from CRM",
     )
 
     # Full CRM data cache (for detailed views)
-    crm_data: Mapped[Optional[dict]] = mapped_column(
+    crm_data: Mapped[dict | None] = mapped_column(
         JSON,
         nullable=True,
         comment="Full payload from CRM for reference",
@@ -145,14 +144,14 @@ class CRMSyncMapping(Base):
         nullable=False,
         server_default=func.now(),
     )
-    crm_updated_at: Mapped[Optional[datetime]] = mapped_column(
+    crm_updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="Last update time in CRM",
     )
 
     # Error tracking
-    last_error: Mapped[Optional[str]] = mapped_column(
+    last_error: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -163,7 +162,7 @@ class CRMSyncMapping(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

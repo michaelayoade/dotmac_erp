@@ -4,19 +4,22 @@ Shared state machine helper for workflow transitions.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from enum import Enum
-from typing import Iterable
+from typing import Generic, TypeVar
 
 from app.services.common import ValidationError
 
+E = TypeVar("E", bound=Enum)
 
-class StateMachine:
+
+class StateMachine(Generic[E]):
     """Validate transitions for Enum-based workflows."""
 
-    def __init__(self, transitions: dict[Enum, Iterable[Enum]]):
+    def __init__(self, transitions: Mapping[E, Iterable[E]]):
         self.transitions = transitions
 
-    def validate(self, current: Enum, target: Enum) -> None:
+    def validate(self, current: E, target: E) -> None:
         if target not in self.transitions.get(current, []):
             current_value = getattr(current, "value", current)
             target_value = getattr(target, "value", target)

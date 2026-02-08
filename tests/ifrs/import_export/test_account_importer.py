@@ -11,13 +11,12 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.services.finance.import_export.accounts import (
-    AccountCategoryImporter,
-    AccountImporter,
     ZOHO_ACCOUNT_TYPE_MAPPING,
     ZOHO_SUBLEDGER_MAPPING,
+    AccountCategoryImporter,
+    AccountImporter,
 )
 from app.services.finance.import_export.base import ImportConfig
-
 
 # ============ Fixtures ============
 
@@ -59,8 +58,8 @@ class TestZohoAccountTypeMapping:
 
     def test_revenue_accounts_map_to_revenue_category(self):
         """Revenue-type accounts should map to REVENUE IFRS category."""
-        from app.models.finance.gl.account_category import IFRSCategory
         from app.models.finance.gl.account import NormalBalance
+        from app.models.finance.gl.account_category import IFRSCategory
 
         for zoho_type in ["Income", "Other Income"]:
             ifrs_category, normal_balance = ZOHO_ACCOUNT_TYPE_MAPPING[zoho_type]
@@ -69,8 +68,8 @@ class TestZohoAccountTypeMapping:
 
     def test_expense_accounts_map_to_expenses_category(self):
         """Expense-type accounts should map to EXPENSES IFRS category."""
-        from app.models.finance.gl.account_category import IFRSCategory
         from app.models.finance.gl.account import NormalBalance
+        from app.models.finance.gl.account_category import IFRSCategory
 
         for zoho_type in ["Expense", "Other Expense", "Cost Of Goods Sold"]:
             ifrs_category, normal_balance = ZOHO_ACCOUNT_TYPE_MAPPING[zoho_type]
@@ -79,8 +78,8 @@ class TestZohoAccountTypeMapping:
 
     def test_asset_accounts_map_to_assets_category(self):
         """Asset-type accounts should map to ASSETS IFRS category."""
-        from app.models.finance.gl.account_category import IFRSCategory
         from app.models.finance.gl.account import NormalBalance
+        from app.models.finance.gl.account_category import IFRSCategory
 
         asset_types = [
             "Cash",
@@ -99,8 +98,8 @@ class TestZohoAccountTypeMapping:
 
     def test_liability_accounts_map_to_liabilities_category(self):
         """Liability-type accounts should map to LIABILITIES IFRS category."""
-        from app.models.finance.gl.account_category import IFRSCategory
         from app.models.finance.gl.account import NormalBalance
+        from app.models.finance.gl.account_category import IFRSCategory
 
         liability_types = [
             "Accounts Payable",
@@ -116,8 +115,8 @@ class TestZohoAccountTypeMapping:
 
     def test_equity_accounts_map_to_equity_category(self):
         """Equity-type accounts should map to EQUITY IFRS category."""
-        from app.models.finance.gl.account_category import IFRSCategory
         from app.models.finance.gl.account import NormalBalance
+        from app.models.finance.gl.account_category import IFRSCategory
 
         ifrs_category, normal_balance = ZOHO_ACCOUNT_TYPE_MAPPING["Equity"]
         assert ifrs_category == IFRSCategory.EQUITY
@@ -218,7 +217,7 @@ class TestAccountCategoryImporter:
         importer = AccountCategoryImporter(mock_db, import_config)
         row = {"Account Type": "Bank"}
 
-        category = importer.create_entity(row)
+        importer.create_entity(row)
 
         # Should have called AccountCategory constructor
         assert mock_category_cls.called

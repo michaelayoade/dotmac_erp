@@ -14,7 +14,6 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -29,7 +28,7 @@ logger = logging.getLogger(__name__)
 class TaxBandValidationError:
     """Details about a tax band validation error."""
 
-    band_id: Optional[UUID]
+    band_id: UUID | None
     band_name: str
     error_type: str
     message: str
@@ -65,7 +64,7 @@ class TaxBandService:
     def get_active_bands(
         self,
         organization_id: UUID,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
     ) -> list[TaxBand]:
         """
         Get active tax bands for an organization, ordered by sequence.
@@ -158,7 +157,7 @@ class TaxBandService:
     def validate_band_set(
         self,
         organization_id: UUID,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
     ) -> TaxBandValidationResult:
         """
         Validate the complete set of tax bands for an organization.
@@ -269,10 +268,10 @@ class TaxBandService:
         self,
         organization_id: UUID,
         min_amount: Decimal,
-        max_amount: Optional[Decimal],
+        max_amount: Decimal | None,
         rate: Decimal,
         name: str,
-        exclude_band_id: Optional[UUID] = None,
+        exclude_band_id: UUID | None = None,
     ) -> TaxBandValidationResult:
         """
         Validate a new or updated tax band against existing bands.

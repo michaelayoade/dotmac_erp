@@ -7,7 +7,7 @@ Syncs ERPNext Issue (or HD Ticket) DocType to DotMac support.ticket.
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -65,7 +65,7 @@ class TicketSyncService(BaseSyncService[Ticket]):
         "modified",
     ]
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         """
         Fetch issues/tickets from ERPNext.
 
@@ -115,7 +115,7 @@ class TicketSyncService(BaseSyncService[Ticket]):
     def transform_record(self, record: dict[str, Any]) -> dict[str, Any]:
         return self._mapping.transform_record(record)
 
-    def _resolve_project_id(self, source_name: Optional[str]) -> Optional[uuid.UUID]:
+    def _resolve_project_id(self, source_name: str | None) -> uuid.UUID | None:
         """Resolve project ID from ERPNext project name."""
         if not source_name:
             return None
@@ -135,7 +135,7 @@ class TicketSyncService(BaseSyncService[Ticket]):
             return sync_entity.target_id
         return None
 
-    def _resolve_customer_id(self, source_name: Optional[str]) -> Optional[uuid.UUID]:
+    def _resolve_customer_id(self, source_name: str | None) -> uuid.UUID | None:
         """Resolve customer ID from ERPNext customer name."""
         if not source_name:
             return None
@@ -155,7 +155,7 @@ class TicketSyncService(BaseSyncService[Ticket]):
             return sync_entity.target_id
         return None
 
-    def _resolve_employee_by_email(self, email: Optional[str]) -> Optional[uuid.UUID]:
+    def _resolve_employee_by_email(self, email: str | None) -> uuid.UUID | None:
         """
         Resolve employee ID from email address.
 
@@ -201,7 +201,7 @@ class TicketSyncService(BaseSyncService[Ticket]):
         customer_source = data.pop("_customer_source_name", None)
         owner_email = data.pop("_owner_email", None)
         data.pop("_source_modified", None)
-        source_name = data.pop("_source_name", None)
+        data.pop("_source_name", None)
         ticket_number = data["ticket_number"]
 
         # Resolve project reference
@@ -347,7 +347,7 @@ class TicketSyncService(BaseSyncService[Ticket]):
     def get_entity_id(self, entity: Ticket) -> uuid.UUID:
         return entity.ticket_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[Ticket]:
+    def find_existing_entity(self, source_name: str) -> Ticket | None:
         # Ensure source_name is always a string (ERPNext may return numeric IDs as int)
         source_name_str = str(source_name) if source_name is not None else ""
 

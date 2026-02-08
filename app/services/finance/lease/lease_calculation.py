@@ -217,7 +217,7 @@ class LeaseCalculationService(ListResponseMixin):
         # Calculate current vs non-current portion
         # Current portion = payments due within 12 months
         periods_in_year = min(periods_per_year, total_periods)
-        first_year_payments = contract.base_payment_amount * Decimal(periods_in_year)
+        contract.base_payment_amount * Decimal(periods_in_year)
 
         # Rough estimate of current portion (principal portion of first year payments)
         # More accurate would require full amortization schedule

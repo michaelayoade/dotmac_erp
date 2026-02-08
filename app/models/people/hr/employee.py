@@ -34,26 +34,26 @@ from app.models.people.base import (
 )
 
 if TYPE_CHECKING:
-    from app.models.person import Person
-    from app.models.finance.core_org.organization import Organization
     from app.models.finance.core_org.cost_center import CostCenter
     from app.models.finance.core_org.location import Location
+    from app.models.finance.core_org.organization import Organization
     from app.models.finance.gl.account import Account
     from app.models.people.attendance.shift_type import ShiftType
+    from app.models.people.discipline.case import DisciplinaryCase
     from app.models.people.hr.department import Department
     from app.models.people.hr.designation import Designation
-    from app.models.people.hr.employment_type import EmploymentType
-    from app.models.people.hr.employee_grade import EmployeeGrade
-    from app.models.support.ticket import Ticket
-    from app.models.support.team import SupportTeamMember
     from app.models.people.hr.employee_extended import (
-        EmployeeDocument,
-        EmployeeQualification,
         EmployeeCertification,
         EmployeeDependent,
+        EmployeeDocument,
+        EmployeeQualification,
         EmployeeSkill,
     )
-    from app.models.people.discipline.case import DisciplinaryCase
+    from app.models.people.hr.employee_grade import EmployeeGrade
+    from app.models.people.hr.employment_type import EmploymentType
+    from app.models.person import Person
+    from app.models.support.team import SupportTeamMember
+    from app.models.support.ticket import Ticket
 
 
 class EmployeeStatus(str, enum.Enum):
@@ -170,106 +170,111 @@ class Employee(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin, VersionMixin
     )
 
     # Personal information (supplements Person)
-    gender: Mapped[Optional[Gender]] = mapped_column(
+    gender: Mapped[Gender | None] = mapped_column(
         Enum(Gender, name="hr_gender"),
         nullable=True,
     )
-    date_of_birth: Mapped[Optional[date]] = mapped_column(
+    date_of_birth: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    personal_email: Mapped[Optional[str]] = mapped_column(
+    personal_email: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
         comment="Personal email (separate from work email on Person)",
     )
-    personal_phone: Mapped[Optional[str]] = mapped_column(
+    personal_phone: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
     )
-    emergency_contact_name: Mapped[Optional[str]] = mapped_column(
+    emergency_contact_name: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
-    emergency_contact_phone: Mapped[Optional[str]] = mapped_column(
+    emergency_contact_phone: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
     )
 
     # Extended personal information (ERPNext sync fields)
-    marital_status: Mapped[Optional[MaritalStatus]] = mapped_column(
+    marital_status: Mapped[MaritalStatus | None] = mapped_column(
         Enum(MaritalStatus, name="hr_marital_status"),
         nullable=True,
     )
-    blood_group: Mapped[Optional[BloodGroup]] = mapped_column(
+    blood_group: Mapped[BloodGroup | None] = mapped_column(
         Enum(BloodGroup, name="hr_blood_group"),
         nullable=True,
     )
 
     # Address information (JSONB for flexible structure)
-    current_address: Mapped[Optional[dict]] = mapped_column(
+    current_address: Mapped[dict | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Current residential address",
     )
-    permanent_address: Mapped[Optional[dict]] = mapped_column(
+    permanent_address: Mapped[dict | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Permanent address",
     )
 
     # Passport information
-    passport_number: Mapped[Optional[str]] = mapped_column(
+    passport_number: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
     )
-    passport_valid_upto: Mapped[Optional[date]] = mapped_column(
+    passport_valid_upto: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
 
     # Housing
-    current_accommodation_type: Mapped[Optional[AccommodationType]] = mapped_column(
+    current_accommodation_type: Mapped[AccommodationType | None] = mapped_column(
         Enum(AccommodationType, name="hr_accommodation_type"),
         nullable=True,
     )
 
     # Organization structure
-    department_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    department_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.department.department_id"),
         nullable=True,
     )
-    designation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    designation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.designation.designation_id"),
         nullable=True,
     )
-    employment_type_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    employment_type_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employment_type.employment_type_id"),
         nullable=True,
     )
-    grade_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    grade_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee_grade.grade_id"),
         nullable=True,
     )
 
     # Reporting hierarchy
-    reports_to_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    reports_to_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("hr.employee.employee_id"),
+        nullable=True,
+    )
+    expense_approver_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
     )
 
     # Attendance / geolocation defaults
-    assigned_location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    assigned_location_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.location.location_id"),
         nullable=True,
     )
-    default_shift_type_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    default_shift_type_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("attendance.shift_type.shift_type_id"),
         nullable=True,
@@ -280,15 +285,15 @@ class Employee(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin, VersionMixin
         Date,
         nullable=False,
     )
-    date_of_leaving: Mapped[Optional[date]] = mapped_column(
+    date_of_leaving: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    probation_end_date: Mapped[Optional[date]] = mapped_column(
+    probation_end_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    confirmation_date: Mapped[Optional[date]] = mapped_column(
+    confirmation_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -301,13 +306,13 @@ class Employee(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin, VersionMixin
     )
 
     # GL Integration
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.cost_center.cost_center_id"),
         nullable=True,
         comment="Default cost center for salary expenses",
     )
-    default_payroll_payable_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    default_payroll_payable_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,
@@ -315,43 +320,43 @@ class Employee(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin, VersionMixin
     )
 
     # Bank details (for payroll disbursement)
-    bank_name: Mapped[Optional[str]] = mapped_column(
+    bank_name: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
-    bank_account_number: Mapped[Optional[str]] = mapped_column(
+    bank_account_number: Mapped[str | None] = mapped_column(
         String(30),
         nullable=True,
     )
-    bank_account_name: Mapped[Optional[str]] = mapped_column(
+    bank_account_name: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
-    bank_branch_code: Mapped[Optional[str]] = mapped_column(
+    bank_branch_code: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
     )
 
     # Compensation
-    ctc: Mapped[Optional[Decimal]] = mapped_column(
+    ctc: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 2),
         nullable=True,
         comment="Cost to Company (annual)",
     )
-    salary_mode: Mapped[Optional[SalaryMode]] = mapped_column(
+    salary_mode: Mapped[SalaryMode | None] = mapped_column(
         Enum(SalaryMode, name="hr_salary_mode"),
         nullable=True,
         comment="Salary payment mode (Bank/Cash/Cheque)",
     )
 
     # Notes
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Batch operation tracking (for audit trail of bulk imports/scripts)
-    batch_operation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    batch_operation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("batch_operations.id", ondelete="SET NULL"),
         nullable=True,
@@ -362,7 +367,7 @@ class Employee(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin, VersionMixin
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )
@@ -400,6 +405,11 @@ class Employee(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin, VersionMixin
         "Employee",
         remote_side=[employee_id],
         foreign_keys=[reports_to_id],
+    )
+    expense_approver: Mapped[Optional["Employee"]] = relationship(
+        "Employee",
+        remote_side=[employee_id],
+        foreign_keys=[expense_approver_id],
     )
     direct_reports: Mapped[list["Employee"]] = relationship(
         "Employee",
@@ -483,28 +493,28 @@ class Employee(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin, VersionMixin
         return self.person.name
 
     @property
-    def work_email(self) -> Optional[str]:
+    def work_email(self) -> str | None:
         """Get employee's work email from linked Person."""
         if self.person:
             return self.person.email
         return None
 
     @property
-    def first_name(self) -> Optional[str]:
+    def first_name(self) -> str | None:
         """Get employee's first name from linked Person."""
         if self.person:
             return self.person.first_name
         return None
 
     @property
-    def last_name(self) -> Optional[str]:
+    def last_name(self) -> str | None:
         """Get employee's last name from linked Person."""
         if self.person:
             return self.person.last_name
         return None
 
     @property
-    def display_name(self) -> Optional[str]:
+    def display_name(self) -> str | None:
         """Get employee's display name from linked Person."""
         if self.person:
             return self.person.display_name

@@ -7,7 +7,6 @@ from __future__ import annotations
 import logging
 from calendar import monthrange
 from datetime import date, timedelta
-from typing import Optional
 from urllib.parse import quote
 
 from fastapi import Request
@@ -120,9 +119,9 @@ class RunWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        status: Optional[str] = None,
-        year: Optional[int] = None,
-        month: Optional[int] = None,
+        status: str | None = None,
+        year: int | None = None,
+        month: int | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Render payroll runs list page."""
@@ -302,7 +301,7 @@ class RunWebService:
     ) -> HTMLResponse | RedirectResponse:
         """Create new payroll run."""
         org_id = coerce_uuid(auth.organization_id)
-        user_id = coerce_uuid(auth.user_id)
+        coerce_uuid(auth.user_id)
 
         form = getattr(request.state, "csrf_form", None)
         if form is None:
@@ -385,8 +384,8 @@ class RunWebService:
         auth: WebAuthContext,
         db: Session,
         entry_id: str,
-        success: Optional[str] = None,
-        error: Optional[str] = None,
+        success: str | None = None,
+        error: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Render payroll run detail page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -573,7 +572,7 @@ class RunWebService:
         auth: WebAuthContext,
         db: Session,
         entry_id: str,
-        posting_date: Optional[str] = None,
+        posting_date: str | None = None,
     ) -> RedirectResponse:
         """Post payroll run to GL."""
         org_id = coerce_uuid(auth.organization_id)
@@ -724,7 +723,7 @@ class RunWebService:
         auth: WebAuthContext,
         db: Session,
         entry_id: str,
-        source_account_id: Optional[str] = None,
+        source_account_id: str | None = None,
     ):
         """
         Generate bank upload file for payroll run (Zenith Bank format).

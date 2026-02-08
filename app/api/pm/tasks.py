@@ -4,7 +4,6 @@ Task API Endpoints.
 REST API for task management.
 """
 
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -48,11 +47,11 @@ def get_db():
 @router.get("", response_model=TaskListResponse)
 def list_tasks(
     organization_id: UUID = Depends(require_organization_id),
-    project_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    priority: Optional[str] = None,
-    assigned_to_id: Optional[UUID] = None,
-    parent_task_id: Optional[UUID] = None,
+    project_id: UUID | None = None,
+    status: str | None = None,
+    priority: str | None = None,
+    assigned_to_id: UUID | None = None,
+    parent_task_id: UUID | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),

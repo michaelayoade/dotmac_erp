@@ -10,12 +10,12 @@ from uuid import uuid4
 import pytest
 
 from app.services.inventory.lot_serial import (
-    LotSerialService,
     LotInput,
+    LotSerialService,
 )
 from tests.ifrs.inv.conftest import (
-    MockItem,
     MockInventoryLot,
+    MockItem,
 )
 
 
@@ -62,7 +62,7 @@ class TestCreateLot:
             None,  # No existing lot
         ]
 
-        result = service.create_lot(mock_db, org_id, sample_lot_input)
+        service.create_lot(mock_db, org_id, sample_lot_input)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()

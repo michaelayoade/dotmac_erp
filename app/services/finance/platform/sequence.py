@@ -1,17 +1,18 @@
 """
 SequenceService - Atomic document number generation.
 
-Provides gap-free, thread-safe sequence numbers with optional
-fiscal year reset capability.
+.. deprecated::
+    Use ``SyncNumberingService`` from ``app.services.finance.common.numbering``
+    for new code. This class delegates ``get_next_number()`` to it and remains
+    for backward compatibility of ``configure_sequence()``, ``reset_sequence()``,
+    and read helpers.
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.core_config.numbering_sequence import (
@@ -28,8 +29,9 @@ class SequenceService(ListResponseMixin):
     """
     Service for atomic document number generation.
 
-    Provides gap-free, thread-safe sequence numbers with optional
-    fiscal year reset capability.
+    .. deprecated::
+        Prefer ``SyncNumberingService`` for new code.  ``get_next_number``
+        now delegates to it.  Other methods are kept for backward compat.
     """
 
     @staticmethod
@@ -37,82 +39,45 @@ class SequenceService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         sequence_type: SequenceType,
-        fiscal_year_id: Optional[UUID] = None,
+        fiscal_year_id: UUID | None = None,
     ) -> str:
         """
         Get the next number in a sequence atomically.
 
-        Uses SELECT FOR UPDATE to ensure thread-safety.
-        This method does not commit; callers should commit as part of the
-        surrounding transaction to preserve gap-free behavior.
+        Delegates to SyncNumberingService which handles auto-init,
+        date-aware reset, and SELECT FOR UPDATE locking.
 
         Args:
             db: Database session
             organization_id: Organization scope
             sequence_type: Type of sequence (INVOICE, JOURNAL, etc.)
-            fiscal_year_id: Optional fiscal year for year-specific sequences
+            fiscal_year_id: Deprecated — ignored, kept for backward compat
 
         Returns:
-            Formatted sequence number (e.g., "INV-000001")
-
-        Raises:
-            HTTPException(404): If sequence not configured
+            Formatted sequence number (e.g., "INV202602-0001")
         """
-        org_id = coerce_uuid(organization_id)
-        fy_id = coerce_uuid(fiscal_year_id) if fiscal_year_id else None
-
-        # Use FOR UPDATE to lock the row
-        query = db.query(NumberingSequence).filter(
-            and_(
-                NumberingSequence.organization_id == org_id,
-                NumberingSequence.sequence_type == sequence_type,
+        if fiscal_year_id is not None:
+            logger.debug(
+                "fiscal_year_id param is deprecated and ignored; "
+                "SyncNumberingService handles resets automatically"
             )
+
+        from app.services.finance.common.numbering import SyncNumberingService
+
+        return SyncNumberingService(db).generate_next_number(
+            coerce_uuid(organization_id), sequence_type
         )
-
-        if fy_id:
-            sequence = (
-                query.filter(NumberingSequence.fiscal_year_id == fy_id)
-                .with_for_update()
-                .first()
-            )
-        else:
-            sequence = None
-
-        if not sequence:
-            sequence = (
-                query.filter(NumberingSequence.fiscal_year_id.is_(None))
-                .with_for_update()
-                .first()
-            )
-
-        if not sequence:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Sequence not configured for {sequence_type.value}",
-            )
-
-        # Increment the number
-        sequence.current_number += 1
-        sequence.last_used_at = datetime.now(timezone.utc)
-
-        db.flush()
-
-        # Format the number
-        number_str = str(sequence.current_number).zfill(sequence.min_digits)
-        result = f"{sequence.prefix or ''}{number_str}{sequence.suffix or ''}"
-
-        return result
 
     @staticmethod
     def configure_sequence(
         db: Session,
         organization_id: UUID,
         sequence_type: SequenceType,
-        prefix: Optional[str] = None,
-        suffix: Optional[str] = None,
+        prefix: str | None = None,
+        suffix: str | None = None,
         min_digits: int = 6,
         fiscal_year_reset: bool = False,
-        fiscal_year_id: Optional[UUID] = None,
+        fiscal_year_id: UUID | None = None,
         start_number: int = 0,
     ) -> NumberingSequence:
         """
@@ -136,19 +101,17 @@ class SequenceService(ListResponseMixin):
         fy_id = coerce_uuid(fiscal_year_id) if fiscal_year_id else None
 
         # Check if sequence already exists
-        query = db.query(NumberingSequence).filter(
-            and_(
-                NumberingSequence.organization_id == org_id,
-                NumberingSequence.sequence_type == sequence_type,
-            )
+        stmt = select(NumberingSequence).where(
+            NumberingSequence.organization_id == org_id,
+            NumberingSequence.sequence_type == sequence_type,
         )
 
         if fy_id:
-            query = query.filter(NumberingSequence.fiscal_year_id == fy_id)
+            stmt = stmt.where(NumberingSequence.fiscal_year_id == fy_id)
         else:
-            query = query.filter(NumberingSequence.fiscal_year_id.is_(None))
+            stmt = stmt.where(NumberingSequence.fiscal_year_id.is_(None))
 
-        existing = query.first()
+        existing = db.scalar(stmt)
 
         if existing:
             # Update existing sequence
@@ -158,8 +121,7 @@ class SequenceService(ListResponseMixin):
                 existing.suffix = suffix
             existing.min_digits = min_digits
             existing.fiscal_year_reset = fiscal_year_reset
-            db.commit()
-            db.refresh(existing)
+            db.flush()
             return existing
 
         # Create new sequence
@@ -175,8 +137,7 @@ class SequenceService(ListResponseMixin):
         )
 
         db.add(sequence)
-        db.commit()
-        db.refresh(sequence)
+        db.flush()
         return sequence
 
     @staticmethod
@@ -207,37 +168,26 @@ class SequenceService(ListResponseMixin):
         fy_id = coerce_uuid(fiscal_year_id)
 
         # Get the base sequence configuration (without fiscal year)
-        base_sequence = (
-            db.query(NumberingSequence)
-            .filter(
-                and_(
-                    NumberingSequence.organization_id == org_id,
-                    NumberingSequence.sequence_type == sequence_type,
-                    NumberingSequence.fiscal_year_id.is_(None),
-                )
-            )
-            .first()
+        base_stmt = select(NumberingSequence).where(
+            NumberingSequence.organization_id == org_id,
+            NumberingSequence.sequence_type == sequence_type,
+            NumberingSequence.fiscal_year_id.is_(None),
         )
+        base_sequence = db.scalar(base_stmt)
 
         # Check if sequence for this fiscal year already exists
-        fy_sequence = (
-            db.query(NumberingSequence)
-            .filter(
-                and_(
-                    NumberingSequence.organization_id == org_id,
-                    NumberingSequence.sequence_type == sequence_type,
-                    NumberingSequence.fiscal_year_id == fy_id,
-                )
-            )
-            .first()
+        fy_stmt = select(NumberingSequence).where(
+            NumberingSequence.organization_id == org_id,
+            NumberingSequence.sequence_type == sequence_type,
+            NumberingSequence.fiscal_year_id == fy_id,
         )
+        fy_sequence = db.scalar(fy_stmt)
 
         if fy_sequence:
             # Reset existing sequence
             fy_sequence.current_number = start_number
             fy_sequence.last_used_at = None
-            db.commit()
-            db.refresh(fy_sequence)
+            db.flush()
             return fy_sequence
 
         # Create new fiscal year sequence (copying settings from base if available)
@@ -257,8 +207,7 @@ class SequenceService(ListResponseMixin):
         )
 
         db.add(sequence)
-        db.commit()
-        db.refresh(sequence)
+        db.flush()
         return sequence
 
     @staticmethod
@@ -266,7 +215,7 @@ class SequenceService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         sequence_type: SequenceType,
-        fiscal_year_id: Optional[UUID] = None,
+        fiscal_year_id: UUID | None = None,
     ) -> int:
         """
         Get the current number without incrementing.
@@ -286,19 +235,17 @@ class SequenceService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         fy_id = coerce_uuid(fiscal_year_id) if fiscal_year_id else None
 
-        query = db.query(NumberingSequence).filter(
-            and_(
-                NumberingSequence.organization_id == org_id,
-                NumberingSequence.sequence_type == sequence_type,
-            )
+        stmt = select(NumberingSequence).where(
+            NumberingSequence.organization_id == org_id,
+            NumberingSequence.sequence_type == sequence_type,
         )
 
         if fy_id:
-            query = query.filter(NumberingSequence.fiscal_year_id == fy_id)
+            stmt = stmt.where(NumberingSequence.fiscal_year_id == fy_id)
         else:
-            query = query.filter(NumberingSequence.fiscal_year_id.is_(None))
+            stmt = stmt.where(NumberingSequence.fiscal_year_id.is_(None))
 
-        sequence = query.first()
+        sequence = db.scalar(stmt)
 
         if not sequence:
             raise HTTPException(
@@ -312,6 +259,7 @@ class SequenceService(ListResponseMixin):
     def get(
         db: Session,
         sequence_id: str,
+        organization_id: UUID | None = None,
     ) -> NumberingSequence:
         """
         Get a sequence by ID.
@@ -329,17 +277,21 @@ class SequenceService(ListResponseMixin):
         sequence = db.get(NumberingSequence, coerce_uuid(sequence_id))
         if not sequence:
             raise HTTPException(status_code=404, detail="Sequence not found")
+        if organization_id is not None and sequence.organization_id != coerce_uuid(
+            organization_id
+        ):
+            raise HTTPException(status_code=404, detail="Sequence not found")
         return sequence
 
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        sequence_type: Optional[SequenceType] = None,
-        fiscal_year_id: Optional[str] = None,
+        organization_id: str | None = None,
+        sequence_type: SequenceType | None = None,
+        fiscal_year_id: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[NumberingSequence]:
+    ) -> list[NumberingSequence]:
         """
         List numbering sequences.
 
@@ -354,30 +306,31 @@ class SequenceService(ListResponseMixin):
         Returns:
             List of NumberingSequence objects
         """
-        query = db.query(NumberingSequence)
+        stmt = select(NumberingSequence)
 
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 NumberingSequence.organization_id == coerce_uuid(organization_id)
             )
 
         if sequence_type:
-            query = query.filter(NumberingSequence.sequence_type == sequence_type)
+            stmt = stmt.where(NumberingSequence.sequence_type == sequence_type)
 
         if fiscal_year_id:
-            query = query.filter(
+            stmt = stmt.where(
                 NumberingSequence.fiscal_year_id == coerce_uuid(fiscal_year_id)
             )
 
-        query = query.order_by(NumberingSequence.sequence_type)
-        return query.limit(limit).offset(offset).all()
+        stmt = stmt.order_by(NumberingSequence.sequence_type)
+        stmt = stmt.limit(limit).offset(offset)
+        return list(db.scalars(stmt).all())
 
     @staticmethod
     def preview_next_number(
         db: Session,
         organization_id: UUID,
         sequence_type: SequenceType,
-        fiscal_year_id: Optional[UUID] = None,
+        fiscal_year_id: UUID | None = None,
     ) -> str:
         """
         Preview what the next number would be without incrementing.
@@ -397,19 +350,17 @@ class SequenceService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         fy_id = coerce_uuid(fiscal_year_id) if fiscal_year_id else None
 
-        query = db.query(NumberingSequence).filter(
-            and_(
-                NumberingSequence.organization_id == org_id,
-                NumberingSequence.sequence_type == sequence_type,
-            )
+        stmt = select(NumberingSequence).where(
+            NumberingSequence.organization_id == org_id,
+            NumberingSequence.sequence_type == sequence_type,
         )
 
         if fy_id:
-            query = query.filter(NumberingSequence.fiscal_year_id == fy_id)
+            stmt = stmt.where(NumberingSequence.fiscal_year_id == fy_id)
         else:
-            query = query.filter(NumberingSequence.fiscal_year_id.is_(None))
+            stmt = stmt.where(NumberingSequence.fiscal_year_id.is_(None))
 
-        sequence = query.first()
+        sequence = db.scalar(stmt)
 
         if not sequence:
             raise HTTPException(

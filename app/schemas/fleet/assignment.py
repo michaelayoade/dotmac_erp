@@ -5,7 +5,6 @@ Schemas for vehicle assignment API endpoints.
 """
 
 from datetime import date, datetime
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -19,23 +18,23 @@ class AssignmentBase(BaseModel):
     vehicle_id: UUID
     assignment_type: AssignmentType
     start_date: date
-    start_odometer: Optional[int] = Field(default=None, ge=0)
-    reason: Optional[str] = Field(default=None, max_length=200)
-    notes: Optional[str] = None
+    start_odometer: int | None = Field(default=None, ge=0)
+    reason: str | None = Field(default=None, max_length=200)
+    notes: str | None = None
 
 
 class AssignmentCreate(AssignmentBase):
     """Create assignment request."""
 
-    employee_id: Optional[UUID] = None
-    department_id: Optional[UUID] = None
+    employee_id: UUID | None = None
+    department_id: UUID | None = None
 
 
 class AssignmentUpdate(BaseModel):
     """Update assignment request."""
 
-    reason: Optional[str] = Field(default=None, max_length=200)
-    notes: Optional[str] = None
+    reason: str | None = Field(default=None, max_length=200)
+    notes: str | None = None
 
 
 class AssignmentRead(AssignmentBase):
@@ -45,13 +44,13 @@ class AssignmentRead(AssignmentBase):
 
     assignment_id: UUID
     organization_id: UUID
-    employee_id: Optional[UUID] = None
-    department_id: Optional[UUID] = None
-    end_date: Optional[date] = None
-    end_odometer: Optional[int] = None
+    employee_id: UUID | None = None
+    department_id: UUID | None = None
+    end_date: date | None = None
+    end_odometer: int | None = None
     is_active: bool = True
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class AssignmentBrief(BaseModel):
@@ -63,7 +62,7 @@ class AssignmentBrief(BaseModel):
     vehicle_id: UUID
     assignment_type: AssignmentType
     start_date: date
-    end_date: Optional[date] = None
+    end_date: date | None = None
     is_active: bool = True
 
 
@@ -72,25 +71,25 @@ class AssignmentWithDetails(AssignmentRead):
 
     model_config = ConfigDict(from_attributes=True)
 
-    employee_name: Optional[str] = None
-    department_name: Optional[str] = None
-    vehicle_name: Optional[str] = None
-    distance_traveled: Optional[int] = None
-    duration_days: Optional[int] = None
+    employee_name: str | None = None
+    department_name: str | None = None
+    vehicle_name: str | None = None
+    distance_traveled: int | None = None
+    duration_days: int | None = None
 
 
 class AssignmentEnd(BaseModel):
     """Request to end an assignment."""
 
-    end_date: Optional[date] = None
-    end_odometer: Optional[int] = Field(default=None, ge=0)
-    reason: Optional[str] = Field(default=None, max_length=200)
+    end_date: date | None = None
+    end_odometer: int | None = Field(default=None, ge=0)
+    reason: str | None = Field(default=None, max_length=200)
 
 
 class AssignmentListResponse(BaseModel):
     """Paginated assignment list response."""
 
-    items: List[AssignmentBrief]
+    items: list[AssignmentBrief]
     total: int
     offset: int
     limit: int

@@ -9,14 +9,14 @@ from uuid import uuid4
 import pytest
 
 from app.services.finance.ar.customer import (
-    CustomerService,
     CustomerInput,
+    CustomerService,
 )
 from tests.ifrs.ar.conftest import (
     MockCustomer,
-    MockRiskCategory,
     MockInvoice,
     MockInvoiceStatus,
+    MockRiskCategory,
 )
 
 
@@ -75,9 +75,7 @@ class TestCreateCustomer:
             )
             MockCustomerClass.return_value = mock_customer
 
-            result = CustomerService.create_customer(
-                mock_db, org_id, sample_customer_input
-            )
+            CustomerService.create_customer(mock_db, org_id, sample_customer_input)
 
             mock_db.add.assert_called_once()
             mock_db.commit.assert_called_once()
@@ -124,14 +122,16 @@ class TestUpdateCustomer:
         mock_query.first.return_value = None  # No duplicate
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.finance.ar.customer.Customer"):
-            with patch(
+        with (
+            patch("app.services.finance.ar.customer.Customer"),
+            patch(
                 "app.services.finance.common.helpers.get_model_pk_column",
                 return_value="customer_id",
-            ):
-                result = CustomerService.update_customer(
-                    mock_db, org_id, customer.customer_id, sample_customer_input
-                )
+            ),
+        ):
+            result = CustomerService.update_customer(
+                mock_db, org_id, customer.customer_id, sample_customer_input
+            )
 
         mock_db.commit.assert_called()
         assert result.customer_code == sample_customer_input.customer_code
@@ -435,16 +435,18 @@ class TestListCustomers:
         mock_query.all.return_value = customers
         mock_db.query.return_value = mock_query
 
-        with patch("app.services.finance.ar.customer.Customer"):
-            with patch(
+        with (
+            patch("app.services.finance.ar.customer.Customer"),
+            patch(
                 "app.services.finance.ar.customer.apply_search_filter",
                 return_value=mock_query,
-            ):
-                result = CustomerService.list(
-                    mock_db,
-                    organization_id=str(org_id),
-                    search="Acme",
-                )
+            ),
+        ):
+            result = CustomerService.list(
+                mock_db,
+                organization_id=str(org_id),
+                search="Acme",
+            )
 
         assert result == customers
 

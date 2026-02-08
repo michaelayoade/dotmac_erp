@@ -6,10 +6,10 @@ Manages deferred tax basis tracking, temporary differences, and movements.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -34,14 +34,14 @@ class DeferredTaxBasisInput:
     difference_type: DifferenceType
     source_type: str
     applicable_tax_rate: Decimal
-    description: Optional[str] = None
-    source_id: Optional[UUID] = None
-    gl_account_id: Optional[UUID] = None
+    description: str | None = None
+    source_id: UUID | None = None
+    gl_account_id: UUID | None = None
     accounting_base: Decimal = Decimal("0")
     tax_base: Decimal = Decimal("0")
     is_recognized: bool = True
-    recognition_probability: Optional[Decimal] = None
-    expected_reversal_year: Optional[int] = None
+    recognition_probability: Decimal | None = None
+    expected_reversal_year: int | None = None
     is_current_year_reversal: bool = False
 
 
@@ -231,7 +231,7 @@ class DeferredTaxService(ListResponseMixin):
         basis_id: UUID,
         accounting_base: Decimal,
         tax_base: Decimal,
-        tax_rate: Optional[Decimal] = None,
+        tax_rate: Decimal | None = None,
     ) -> DeferredTaxCalculationResult:
         """
         Update a deferred tax basis with new values.
@@ -312,7 +312,7 @@ class DeferredTaxService(ListResponseMixin):
         tax_base_closing: Decimal,
         tax_rate_closing: Decimal,
         movement_category: str,
-        movement_description: Optional[str] = None,
+        movement_description: str | None = None,
         deferred_tax_movement_oci: Decimal = Decimal("0"),
         deferred_tax_movement_equity: Decimal = Decimal("0"),
     ) -> DeferredTaxMovementResult:
@@ -462,7 +462,7 @@ class DeferredTaxService(ListResponseMixin):
     def get_summary(
         db: Session,
         organization_id: UUID,
-        jurisdiction_id: Optional[UUID] = None,
+        jurisdiction_id: UUID | None = None,
     ) -> DeferredTaxSummary:
         """
         Get deferred tax summary.
@@ -573,25 +573,30 @@ class DeferredTaxService(ListResponseMixin):
     def get(
         db: Session,
         basis_id: str,
+        organization_id: UUID | None = None,
     ) -> DeferredTaxBasis:
         """Get a deferred tax basis by ID."""
         basis = db.get(DeferredTaxBasis, coerce_uuid(basis_id))
         if not basis:
+            raise HTTPException(status_code=404, detail="Deferred tax basis not found")
+        if organization_id is not None and basis.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Deferred tax basis not found")
         return basis
 
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        jurisdiction_id: Optional[str] = None,
-        difference_type: Optional[DifferenceType] = None,
-        is_asset: Optional[bool] = None,
-        asset_liability_type: Optional[str] = None,
-        is_active: Optional[bool] = None,
+        organization_id: str | None = None,
+        jurisdiction_id: str | None = None,
+        difference_type: DifferenceType | None = None,
+        is_asset: bool | None = None,
+        asset_liability_type: str | None = None,
+        is_active: bool | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[DeferredTaxBasis]:
+    ) -> builtins.list[DeferredTaxBasis]:
         """List deferred tax bases with optional filters."""
         query = db.query(DeferredTaxBasis)
 
@@ -630,7 +635,7 @@ class DeferredTaxService(ListResponseMixin):
         basis_id: str,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[DeferredTaxMovement]:
+    ) -> builtins.list[DeferredTaxMovement]:
         """List movements for a deferred tax basis."""
         return (
             db.query(DeferredTaxMovement)

@@ -6,10 +6,11 @@ Handles all HTTP communication with Splynx API for ISP billing data.
 
 import base64
 import logging
+from collections.abc import Generator
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
-from typing import Any, Generator, Optional
+from typing import Any
 
 import httpx
 
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 class SplynxError(Exception):
     """Splynx API error."""
 
-    def __init__(self, message: str, status_code: Optional[int] = None):
+    def __init__(self, message: str, status_code: int | None = None):
         super().__init__(message)
         self.message = message
         self.status_code = status_code
@@ -95,14 +96,14 @@ class SplynxCustomer:
     status: str  # active, inactive, blocked
     partner_id: int
     location_id: int
-    street_1: Optional[str] = None
-    street_2: Optional[str] = None
-    city: Optional[str] = None
-    zip_code: Optional[str] = None
-    date_add: Optional[str] = None
-    company: Optional[str] = None
-    billing_type: Optional[str] = None
-    category: Optional[str] = None
+    street_1: str | None = None
+    street_2: str | None = None
+    city: str | None = None
+    zip_code: str | None = None
+    date_add: str | None = None
+    company: str | None = None
+    billing_type: str | None = None
+    category: str | None = None
 
 
 @dataclass
@@ -119,9 +120,9 @@ class SplynxInvoice:
     total_due: Decimal  # 'due' in API
     currency: str = "NGN"
     items: list[dict[str, Any]] = field(default_factory=list)
-    note: Optional[str] = None
-    memo: Optional[str] = None
-    payment_id: Optional[int] = None
+    note: str | None = None
+    memo: str | None = None
+    payment_id: int | None = None
 
 
 @dataclass
@@ -131,7 +132,7 @@ class SplynxPaymentMethod:
     id: int
     name: str
     is_active: bool
-    accounting_bank_account_id: Optional[int] = None
+    accounting_bank_account_id: int | None = None
 
 
 @dataclass
@@ -141,13 +142,13 @@ class SplynxPayment:
     id: int
     customer_id: int
     customer_name: str
-    invoice_id: Optional[int]
+    invoice_id: int | None
     date: str
     amount: Decimal
     payment_type: int  # Payment method ID
-    receipt_number: Optional[str] = None
-    comment: Optional[str] = None
-    reference: Optional[str] = None  # field_1 often contains bank reference
+    receipt_number: str | None = None
+    comment: str | None = None
+    reference: str | None = None  # field_1 often contains bank reference
 
 
 @dataclass
@@ -161,7 +162,7 @@ class SplynxCreditNote:
     date_created: str
     total: Decimal
     status: str
-    note: Optional[str] = None
+    note: str | None = None
     items: list[dict[str, Any]] = field(default_factory=list)
 
 
@@ -179,9 +180,9 @@ class SplynxClient:
 
     API_VERSION = "2.0"
 
-    def __init__(self, config: Optional[SplynxConfig] = None):
+    def __init__(self, config: SplynxConfig | None = None):
         self.config = config or SplynxConfig.from_settings()
-        self._client: Optional[httpx.Client] = None
+        self._client: httpx.Client | None = None
 
     def __enter__(self) -> "SplynxClient":
         return self
@@ -218,11 +219,11 @@ class SplynxClient:
         self,
         method: str,
         endpoint: str,
-        params: Optional[dict[str, Any]] = None,
-        json: Optional[dict[str, Any]] = None,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | None = None,
     ) -> Any:
         """Make an HTTP request with error handling and retries."""
-        last_error: Optional[Exception] = None
+        last_error: Exception | None = None
 
         for attempt in range(self.config.max_retries):
             try:
@@ -296,7 +297,7 @@ class SplynxClient:
     def _paginate(
         self,
         endpoint: str,
-        params: Optional[dict[str, Any]] = None,
+        params: dict[str, Any] | None = None,
         page_size: int = 100,
         page_delay: float = 0.0,
     ) -> Generator[dict[str, Any], None, None]:
@@ -336,8 +337,7 @@ class SplynxClient:
             if not items:
                 break
 
-            for item in items:
-                yield item
+            yield from items
 
             if len(items) < page_size:
                 break
@@ -350,9 +350,9 @@ class SplynxClient:
 
     def get_customers(
         self,
-        date_from: Optional[date] = None,
-        date_to: Optional[date] = None,
-        status: Optional[str] = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        status: str | None = None,
     ) -> Generator[SplynxCustomer, None, None]:
         """
         Fetch all customers with optional filters.
@@ -421,10 +421,10 @@ class SplynxClient:
 
     def get_invoices(
         self,
-        date_from: Optional[date] = None,
-        date_to: Optional[date] = None,
-        status: Optional[str] = None,
-        customer_id: Optional[int] = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        status: str | None = None,
+        customer_id: int | None = None,
     ) -> Generator[SplynxInvoice, None, None]:
         """
         Fetch all invoices with optional filters.
@@ -517,9 +517,9 @@ class SplynxClient:
 
     def get_payments(
         self,
-        date_from: Optional[date] = None,
-        date_to: Optional[date] = None,
-        customer_id: Optional[int] = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        customer_id: int | None = None,
     ) -> Generator[SplynxPayment, None, None]:
         """
         Fetch all payments with optional filters.
@@ -561,9 +561,9 @@ class SplynxClient:
 
     def get_credit_notes(
         self,
-        date_from: Optional[date] = None,
-        date_to: Optional[date] = None,
-        customer_id: Optional[int] = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        customer_id: int | None = None,
     ) -> Generator[SplynxCreditNote, None, None]:
         """
         Fetch all credit notes with optional filters.

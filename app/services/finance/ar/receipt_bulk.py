@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 from uuid import UUID
 
+from fastapi import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -31,6 +32,8 @@ class ARReceiptBulkService(BulkActionService[CustomerPayment]):
     model = CustomerPayment
     id_field = "payment_id"
     org_field = "organization_id"
+    search_fields = ["receipt_number", "reference"]
+    date_field = "payment_date"
 
     # Fields to export in CSV
     export_fields = [
@@ -93,6 +96,26 @@ class ARReceiptBulkService(BulkActionService[CustomerPayment]):
 
         return (True, "")
 
+    _customer_names: dict[str, str] | None = None
+
+    def _resolve_customer_name(self, customer_id: object) -> str:
+        """Batch-resolve customer names on first call, then use cache."""
+        if self._customer_names is None:
+            from app.models.finance.ar.customer import Customer
+
+            rows = (
+                self.db.query(
+                    Customer.customer_id,
+                    Customer.trading_name,
+                    Customer.legal_name,
+                )
+                .filter(Customer.organization_id == self.organization_id)
+                .all()
+            )
+            self._customer_names = {str(r[0]): r[1] or r[2] or "" for r in rows}
+        customer_key = str(customer_id)
+        return self._customer_names.get(customer_key) or customer_key
+
     def _get_export_value(self, entity: CustomerPayment, field_name: str) -> str:
         """Handle special field formatting for receipt export."""
         if field_name == "status":
@@ -102,8 +125,7 @@ class ARReceiptBulkService(BulkActionService[CustomerPayment]):
         if field_name == "payment_date":
             return entity.payment_date.isoformat() if entity.payment_date else ""
         if field_name == "customer_name":
-            # This would need a join - for now return customer_id
-            return str(entity.customer_id) if entity.customer_id else ""
+            return self._resolve_customer_name(entity.customer_id)
 
         return str(super()._get_export_value(entity, field_name))
 
@@ -111,6 +133,37 @@ class ARReceiptBulkService(BulkActionService[CustomerPayment]):
         """Get receipt export filename."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return f"ar_receipts_export_{timestamp}.csv"
+
+    async def export_all(
+        self,
+        search: str = "",
+        status: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        extra_filters: dict[str, object] | None = None,
+        format: str = "csv",
+    ) -> Response:
+        """
+        Export all receipts matching filters to CSV.
+        """
+        from app.services.finance.ar.receipt_query import build_receipt_query
+
+        customer_id = ""
+        if extra_filters:
+            customer_id = str(extra_filters.get("customer_id") or "")
+
+        query = build_receipt_query(
+            db=self.db,
+            organization_id=str(self.organization_id),
+            search=search,
+            customer_id=customer_id or None,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        entities = query.all()
+        return self._build_csv(entities)
 
 
 def get_ar_receipt_bulk_service(

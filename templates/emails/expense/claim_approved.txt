@@ -1,0 +1,14 @@
+{% extends "emails/base_email.txt" %}
+{% block content %}Hi {{ first_name }},
+
+Your expense claim has been approved!
+{% if approver_name %}Approved by: {{ approver_name }}{% endif %}
+
+Claim Number: {{ claim_number }}
+Approved Amount: {{ currency }} {{ amount }}
+Purpose: {{ purpose }}
+
+{% if advance_note %}Note: {{ advance_note }}
+{% endif %}Your claim will now be processed for reimbursement.
+
+View claim at: {{ claim_url }}{% endblock %}

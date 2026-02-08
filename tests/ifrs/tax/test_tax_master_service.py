@@ -20,7 +20,7 @@ class TestTaxCodeService:
 
     def test_create_tax_code_success(self, mock_db, org_id, mock_jurisdiction):
         """Test successful tax code creation."""
-        from app.services.finance.tax.tax_master import TaxCodeService, TaxCodeInput
+        from app.services.finance.tax.tax_master import TaxCodeInput, TaxCodeService
 
         # No existing tax code
         mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -34,7 +34,7 @@ class TestTaxCodeService:
             effective_from=date(2024, 1, 1),
         )
 
-        result = TaxCodeService.create_tax_code(mock_db, org_id, input_data)
+        TaxCodeService.create_tax_code(mock_db, org_id, input_data)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -42,8 +42,9 @@ class TestTaxCodeService:
 
     def test_create_tax_code_duplicate(self, mock_db, org_id, mock_jurisdiction):
         """Test tax code creation with duplicate code fails."""
-        from app.services.finance.tax.tax_master import TaxCodeService, TaxCodeInput
         from fastapi import HTTPException
+
+        from app.services.finance.tax.tax_master import TaxCodeInput, TaxCodeService
 
         existing = MockTaxCode(organization_id=org_id)
         mock_db.query.return_value.filter.return_value.first.return_value = existing
@@ -88,8 +89,9 @@ class TestTaxCodeService:
 
     def test_calculate_tax_code_not_found(self, mock_db, org_id):
         """Test tax calculation fails when tax code not found."""
-        from app.services.finance.tax.tax_master import TaxCodeService
         from fastapi import HTTPException
+
+        from app.services.finance.tax.tax_master import TaxCodeService
 
         mock_db.get.return_value = None
 
@@ -106,8 +108,9 @@ class TestTaxCodeService:
 
     def test_calculate_tax_code_inactive(self, mock_db, org_id, mock_tax_code):
         """Test tax calculation fails when tax code is inactive."""
-        from app.services.finance.tax.tax_master import TaxCodeService
         from fastapi import HTTPException
+
+        from app.services.finance.tax.tax_master import TaxCodeService
 
         mock_tax_code.is_active = False
         mock_db.get.return_value = mock_tax_code
@@ -126,8 +129,9 @@ class TestTaxCodeService:
 
     def test_calculate_tax_before_effective_date(self, mock_db, org_id, mock_tax_code):
         """Test tax calculation fails for date before effective date."""
-        from app.services.finance.tax.tax_master import TaxCodeService
         from fastapi import HTTPException
+
+        from app.services.finance.tax.tax_master import TaxCodeService
 
         mock_tax_code.effective_from = date(2024, 1, 1)
         mock_db.get.return_value = mock_tax_code
@@ -202,8 +206,9 @@ class TestTaxCodeService:
 
     def test_get_tax_code_not_found(self, mock_db):
         """Test getting non-existent tax code raises HTTPException."""
-        from app.services.finance.tax.tax_master import TaxCodeService
         from fastapi import HTTPException
+
+        from app.services.finance.tax.tax_master import TaxCodeService
 
         mock_db.get.return_value = None
 
@@ -241,8 +246,8 @@ class TestTaxJurisdictionService:
     def test_create_jurisdiction_success(self, mock_db, org_id):
         """Test successful jurisdiction creation."""
         from app.services.finance.tax.tax_master import (
-            TaxJurisdictionService,
             TaxJurisdictionInput,
+            TaxJurisdictionService,
         )
 
         mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -262,18 +267,19 @@ class TestTaxJurisdictionService:
             deferred_tax_expense_account_id=uuid.uuid4(),
         )
 
-        result = TaxJurisdictionService.create_jurisdiction(mock_db, org_id, input_data)
+        TaxJurisdictionService.create_jurisdiction(mock_db, org_id, input_data)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
 
     def test_create_jurisdiction_duplicate(self, mock_db, org_id):
         """Test jurisdiction creation with duplicate code fails."""
-        from app.services.finance.tax.tax_master import (
-            TaxJurisdictionService,
-            TaxJurisdictionInput,
-        )
         from fastapi import HTTPException
+
+        from app.services.finance.tax.tax_master import (
+            TaxJurisdictionInput,
+            TaxJurisdictionService,
+        )
 
         existing = MockTaxJurisdiction(organization_id=org_id)
         mock_db.query.return_value.filter.return_value.first.return_value = existing
@@ -313,8 +319,9 @@ class TestTaxJurisdictionService:
 
     def test_get_jurisdiction_not_found(self, mock_db):
         """Test getting non-existent jurisdiction raises HTTPException."""
-        from app.services.finance.tax.tax_master import TaxJurisdictionService
         from fastapi import HTTPException
+
+        from app.services.finance.tax.tax_master import TaxJurisdictionService
 
         mock_db.get.return_value = None
 

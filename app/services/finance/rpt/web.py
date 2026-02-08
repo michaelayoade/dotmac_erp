@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Optional, cast
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 if TYPE_CHECKING:
@@ -95,9 +95,9 @@ class ReportsWebService:
     def _category_balances(
         db: Session,
         organization_id: str,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-        as_of_date: Optional[date] = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        as_of_date: date | None = None,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
 
@@ -215,8 +215,8 @@ class ReportsWebService:
     def dashboard_context(
         db: Session,
         organization_id: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict:
         """Get context for reports dashboard with key summaries."""
         from app.models.finance.tax.tax_period import TaxPeriod, TaxPeriodStatus
@@ -590,7 +590,7 @@ class ReportsWebService:
     def trial_balance_context(
         db: Session,
         organization_id: str,
-        as_of_date: Optional[str] = None,
+        as_of_date: str | None = None,
     ) -> dict:
         """Get context for trial balance report."""
         org_id = coerce_uuid(organization_id)
@@ -705,8 +705,8 @@ class ReportsWebService:
     def income_statement_context(
         db: Session,
         organization_id: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict:
         """Get context for income statement report."""
         org_id = coerce_uuid(organization_id)
@@ -800,7 +800,7 @@ class ReportsWebService:
     def balance_sheet_context(
         db: Session,
         organization_id: str,
-        as_of_date: Optional[str] = None,
+        as_of_date: str | None = None,
     ) -> dict:
         """Get context for balance sheet report."""
         org_id = coerce_uuid(organization_id)
@@ -926,7 +926,7 @@ class ReportsWebService:
     def ap_aging_context(
         db: Session,
         organization_id: str,
-        as_of_date: Optional[str] = None,
+        as_of_date: str | None = None,
     ) -> dict:
         """Get context for AP aging report."""
         org_id = coerce_uuid(organization_id)
@@ -1048,7 +1048,7 @@ class ReportsWebService:
     def ar_aging_context(
         db: Session,
         organization_id: str,
-        as_of_date: Optional[str] = None,
+        as_of_date: str | None = None,
     ) -> dict:
         """Get context for AR aging report."""
         org_id = coerce_uuid(organization_id)
@@ -1172,9 +1172,9 @@ class ReportsWebService:
     def general_ledger_context(
         db: Session,
         organization_id: str,
-        account_id: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        account_id: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict:
         """Get context for general ledger detail report."""
         from app.models.finance.gl.journal_entry import JournalEntry
@@ -1275,8 +1275,8 @@ class ReportsWebService:
     def tax_summary_context(
         db: Session,
         organization_id: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict:
         """Get context for tax summary report."""
         today = date.today()
@@ -1342,8 +1342,8 @@ class ReportsWebService:
     def expense_summary_context(
         db: Session,
         organization_id: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict:
         """Get context for expense summary report."""
         org_id = coerce_uuid(organization_id)
@@ -1428,8 +1428,8 @@ class ReportsWebService:
     def cash_flow_context(
         db: Session,
         organization_id: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict:
         """Get context for cash flow summary report."""
         org_id = coerce_uuid(organization_id)
@@ -1528,8 +1528,8 @@ class ReportsWebService:
     def changes_in_equity_context(
         db: Session,
         organization_id: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict:
         """Get context for statement of changes in equity."""
         org_id = coerce_uuid(organization_id)
@@ -1683,10 +1683,10 @@ class ReportsWebService:
     def budget_vs_actual_context(
         db: Session,
         organization_id: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        budget_id: Optional[str] = None,
-        budget_code: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        budget_id: str | None = None,
+        budget_code: str | None = None,
     ) -> dict:
         """Get context for budget vs actual report."""
         from app.models.finance.gl.budget import Budget, BudgetStatus
@@ -1729,7 +1729,7 @@ class ReportsWebService:
         budget_lines = budget_query.all()
 
         budget_totals: dict[UUID, dict[str, Any]] = {}
-        for line, budget, account in budget_lines:
+        for line, _budget, account in budget_lines:
             budget_totals.setdefault(
                 account.account_id,
                 {
@@ -1827,9 +1827,9 @@ class ReportsWebService:
     def dashboard_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
-        start_date: Optional[str],
-        end_date: Optional[str],
+        auth: WebAuthContext,
+        start_date: str | None,
+        end_date: str | None,
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
@@ -1850,8 +1850,8 @@ class ReportsWebService:
     def trial_balance_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
-        as_of_date: Optional[str],
+        auth: WebAuthContext,
+        as_of_date: str | None,
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
@@ -1871,9 +1871,9 @@ class ReportsWebService:
     def income_statement_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
-        start_date: Optional[str],
-        end_date: Optional[str],
+        auth: WebAuthContext,
+        start_date: str | None,
+        end_date: str | None,
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
@@ -1894,8 +1894,8 @@ class ReportsWebService:
     def balance_sheet_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
-        as_of_date: Optional[str],
+        auth: WebAuthContext,
+        as_of_date: str | None,
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
@@ -1917,8 +1917,8 @@ class ReportsWebService:
     def ap_aging_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
-        as_of_date: Optional[str],
+        auth: WebAuthContext,
+        as_of_date: str | None,
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
@@ -1938,8 +1938,8 @@ class ReportsWebService:
     def ar_aging_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
-        as_of_date: Optional[str],
+        auth: WebAuthContext,
+        as_of_date: str | None,
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
@@ -1959,10 +1959,10 @@ class ReportsWebService:
     def general_ledger_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
-        account_id: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        auth: WebAuthContext,
+        account_id: str | None,
+        start_date: str | None,
+        end_date: str | None,
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
@@ -1984,9 +1984,9 @@ class ReportsWebService:
     def tax_summary_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
-        start_date: Optional[str],
-        end_date: Optional[str],
+        auth: WebAuthContext,
+        start_date: str | None,
+        end_date: str | None,
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
@@ -2007,9 +2007,9 @@ class ReportsWebService:
     def expense_summary_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
-        start_date: Optional[str],
-        end_date: Optional[str],
+        auth: WebAuthContext,
+        start_date: str | None,
+        end_date: str | None,
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
@@ -2030,9 +2030,9 @@ class ReportsWebService:
     def cash_flow_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
-        start_date: Optional[str],
-        end_date: Optional[str],
+        auth: WebAuthContext,
+        start_date: str | None,
+        end_date: str | None,
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
@@ -2053,9 +2053,9 @@ class ReportsWebService:
     def changes_in_equity_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
-        start_date: Optional[str],
-        end_date: Optional[str],
+        auth: WebAuthContext,
+        start_date: str | None,
+        end_date: str | None,
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context
@@ -2076,11 +2076,11 @@ class ReportsWebService:
     def budget_vs_actual_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
-        start_date: Optional[str],
-        end_date: Optional[str],
-        budget_id: Optional[str],
-        budget_code: Optional[str],
+        auth: WebAuthContext,
+        start_date: str | None,
+        end_date: str | None,
+        budget_id: str | None,
+        budget_code: str | None,
         db: Session,
     ) -> HTMLResponse:
         from app.web.deps import base_context

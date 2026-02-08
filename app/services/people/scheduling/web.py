@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date
-from typing import Any, Optional, cast
+from typing import Any, cast
 from urllib.parse import quote
 from uuid import UUID
 
@@ -41,7 +41,7 @@ class SchedulingWebService:
     """Web service methods for scheduling pages."""
 
     @staticmethod
-    def _parse_date(value: Optional[str]) -> Optional[date]:
+    def _parse_date(value: str | None) -> date | None:
         if not value:
             return None
         try:
@@ -50,7 +50,7 @@ class SchedulingWebService:
             return None
 
     @staticmethod
-    def _parse_uuid(value: Optional[str]) -> Optional[UUID]:
+    def _parse_uuid(value: str | None) -> UUID | None:
         if not value:
             return None
         try:
@@ -108,8 +108,8 @@ class SchedulingWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str],
-        is_active: Optional[str],
+        search: str | None,
+        is_active: str | None,
         page: int,
     ) -> HTMLResponse:
         """Shift patterns list page."""
@@ -426,7 +426,7 @@ class SchedulingWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        department_id: Optional[str],
+        department_id: str | None,
         page: int,
     ) -> HTMLResponse:
         """Pattern assignments list page."""
@@ -618,8 +618,8 @@ class SchedulingWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        department_id: Optional[str],
-        year_month: Optional[str],
+        department_id: str | None,
+        year_month: str | None,
         page: int,
     ) -> HTMLResponse:
         """Schedules list/calendar page."""
@@ -830,7 +830,7 @@ class SchedulingWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        status: Optional[str],
+        status: str | None,
         page: int,
     ) -> HTMLResponse:
         """Swap requests list page."""

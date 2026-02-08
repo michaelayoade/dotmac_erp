@@ -10,7 +10,6 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import func
@@ -64,10 +63,10 @@ class TaxTransactionDetail:
     tax_amount: Decimal
     currency_code: str
     source_document_type: str
-    source_document_id: Optional[UUID]
-    reference: Optional[str]
-    counterparty_name: Optional[str]
-    counterparty_tax_id: Optional[str]
+    source_document_id: UUID | None
+    reference: str | None
+    counterparty_name: str | None
+    counterparty_tax_id: str | None
 
 
 @dataclass
@@ -169,7 +168,7 @@ class TaxReportService:
 
         # Aggregate by tax type
         type_data: dict[TaxType, dict] = {}
-        for tax_type, txn_type, total_tax, total_base, count in results:
+        for tax_type, txn_type, total_tax, _total_base, count in results:
             if tax_type not in type_data:
                 type_data[tax_type] = {
                     "output": Decimal("0"),
@@ -230,7 +229,7 @@ class TaxReportService:
         organization_id: UUID,
         start_date: date,
         end_date: date,
-        tax_type: Optional[TaxType] = None,
+        tax_type: TaxType | None = None,
     ) -> list[TaxCodeSummary]:
         """
         Get tax summary grouped by tax code.
@@ -395,7 +394,7 @@ class TaxReportService:
         """
         org_id = coerce_uuid(organization_id)
 
-        def _source_module(source_document_type: Optional[str]) -> str:
+        def _source_module(source_document_type: str | None) -> str:
             if not source_document_type:
                 return "OTHER"
             prefix = source_document_type.split("_", 1)[0]
@@ -530,8 +529,8 @@ class TaxReportService:
         organization_id: UUID,
         start_date: date,
         end_date: date,
-        tax_type: Optional[TaxType] = None,
-        transaction_type: Optional[TaxTransactionType] = None,
+        tax_type: TaxType | None = None,
+        transaction_type: TaxTransactionType | None = None,
         limit: int = 1000,
         offset: int = 0,
     ) -> list[TaxTransactionDetail]:

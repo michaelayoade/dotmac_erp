@@ -10,10 +10,11 @@ import logging
 from datetime import datetime
 from uuid import UUID
 
+from fastapi import Response
 from sqlalchemy.orm import Session
 
+from app.models.inventory.inventory_transaction import InventoryTransaction
 from app.models.inventory.item import Item
-from app.models.inventory.transaction import InventoryTransaction
 from app.services.bulk_actions import BulkActionService
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ class ItemBulkService(BulkActionService[Item]):
 
     model = Item
     id_field = "item_id"
+    search_fields = ["item_code", "item_name", "description"]
     org_field = "organization_id"
 
     # Fields to export in CSV
@@ -83,6 +85,37 @@ class ItemBulkService(BulkActionService[Item]):
         """Get item export filename."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return f"items_export_{timestamp}.csv"
+
+    async def export_all(
+        self,
+        search: str = "",
+        status: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        extra_filters: dict[str, object] | None = None,
+        format: str = "csv",
+    ) -> Response:
+        """
+        Export all items matching filters to CSV.
+        """
+        from app.services.inventory.item_query import build_item_query
+
+        category = ""
+        if extra_filters:
+            category = str(
+                extra_filters.get("category") or extra_filters.get("category_id") or ""
+            )
+
+        query = build_item_query(
+            db=self.db,
+            organization_id=str(self.organization_id),
+            search=search,
+            category=category or None,
+            status=status,
+        )
+
+        entities = query.all()
+        return self._build_csv(entities)
 
 
 def get_item_bulk_service(

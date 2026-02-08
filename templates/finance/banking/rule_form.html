@@ -4,322 +4,359 @@
 
 {% block breadcrumbs %}
 <nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/finance/banking/accounts" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Banking</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <a href="/finance/banking/rules" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Rules</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if rule else "New" }}</span>
+    <ol class="flex items-center gap-2">
+        <li class="flex items-center gap-2">
+            <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </li>
+        <li class="flex items-center gap-2">
+            <a href="/finance/banking/accounts" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Banking</a>
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </li>
+        <li class="flex items-center gap-2">
+            <a href="/finance/banking/rules" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Rules</a>
+            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </li>
+        <li><span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ "Edit" if rule else "New" }}</span></li>
+    </ol>
 </nav>
 {% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-3xl">
-    <form method="post"
-          action="{{ '/api/v1/banking/rules/' + rule.rule_id|string if rule else '/api/v1/banking/rules' }}"
-          hx-post="{{ '/api/v1/banking/rules/' + rule.rule_id|string if rule else '/api/v1/banking/rules' }}"
-          hx-swap="none"
-          hx-on::after-request="if(event.detail.successful) window.location.href='/finance/banking/rules'"
-          class="space-y-6"
-          x-data="ruleForm()">
+<div class="mx-auto max-w-3xl"
+     x-data='ruleConditionBuilder({{ (rule.conditions if rule and rule.conditions else {"operator":"AND","rules":[]}) | tojson }})'>
 
-        <!-- Basic Information -->
+    {% if error %}
+    <div class="mb-6 rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-400">
+        <div class="flex items-center gap-2">
+            <svg class="h-5 w-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+            </svg>
+            {{ error }}
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post"
+          action="{{ '/finance/banking/rules/' + rule.rule_id|string + '/edit' if rule else '/finance/banking/rules/new' }}"
+          class="space-y-6">
+        {{ request.state.csrf_form | safe }}
+
+        {# ── Basic Information ────────────────────────────────── #}
         <div class="card p-6">
             <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Basic Information</h3>
-
             <div class="grid gap-4 sm:grid-cols-2">
                 <div class="sm:col-span-2">
-                    <label for="rule_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Rule Name *</label>
+                    <label for="rule_name" class="form-label">Rule Name <span class="text-rose-500">*</span></label>
                     <input type="text" id="rule_name" name="rule_name" required
-                           value="{{ rule.rule_name if rule else '' }}"
+                           value="{{ (form_data.rule_name if form_data else rule.rule_name) if (form_data or rule) else '' }}"
                            placeholder="e.g., Categorize Amazon Purchases"
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                           class="form-input mt-1">
                 </div>
                 <div class="sm:col-span-2">
-                    <label for="description" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Description</label>
+                    <label for="description" class="form-label">Description</label>
                     <input type="text" id="description" name="description"
-                           value="{{ rule.description if rule else '' }}"
+                           value="{{ (form_data.description if form_data else rule.description) if (form_data or rule) else '' }}"
                            placeholder="Describe what this rule does..."
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                           class="form-input mt-1">
                 </div>
                 <div>
-                    <label for="priority" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Priority *</label>
+                    <label for="priority" class="form-label">Priority <span class="text-rose-500">*</span></label>
                     <input type="number" id="priority" name="priority" required min="1" max="999"
-                           value="{{ rule.priority if rule else 100 }}"
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                           value="{{ (form_data.priority if form_data else rule.priority) if (form_data or rule) else 100 }}"
+                           class="form-input mt-1">
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        Lower numbers = higher priority. Rules are evaluated in order.
+                        Lower numbers = higher priority.
                     </p>
                 </div>
-                <div>
-                    <label for="bank_account_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Bank Account</label>
-                    <select id="bank_account_id" name="bank_account_id"
-                            class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                        <option value="">All Bank Accounts</option>
-                        {% for account in bank_accounts %}
-                        <option value="{{ account.bank_account_id }}" {{ 'selected' if rule and rule.bank_account_id == account.bank_account_id else '' }}>
-                            {{ account.bank_name }} - {{ account.account_name }}
-                        </option>
-                        {% endfor %}
-                    </select>
-                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        Optionally limit this rule to a specific bank account.
-                    </p>
+                <div class="flex items-center gap-3 self-center pt-4">
+                    <input type="checkbox" id="is_active" name="is_active"
+                           {{ 'checked' if (not rule) or (rule and rule.is_active) else '' }}
+                           class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+                    <label for="is_active" class="form-label mb-0">Rule is Active</label>
                 </div>
             </div>
         </div>
 
-        <!-- Rule Type & Conditions -->
+        {# ── Matching Conditions (Visual Builder) ─────────────── #}
         <div class="card p-6">
-            <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Matching Conditions</h3>
+            <div class="mb-4 flex items-center justify-between">
+                <h3 class="text-lg font-medium text-slate-900 dark:text-white">Matching Conditions</h3>
+                <button type="button" @click="addCondition()"
+                        class="inline-flex items-center gap-1.5 rounded-lg border border-teal-300 bg-white px-3 py-1.5 text-xs font-medium text-teal-700 transition-colors hover:bg-teal-50 dark:border-teal-700 dark:bg-slate-800 dark:text-teal-400 dark:hover:bg-slate-700">
+                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    Add Condition
+                </button>
+            </div>
 
+            {# AND / OR toggle (only visible with 2+ conditions) #}
+            <div x-show="conditions.length > 1" x-transition class="mb-4">
+                <div class="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-100 dark:bg-slate-800">
+                    <button type="button"
+                            @click="operator = 'AND'"
+                            :class="operator === 'AND' ? 'bg-white dark:bg-slate-700 shadow-sm text-teal-700 dark:text-teal-400' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'"
+                            class="rounded-md px-3 py-1 text-xs font-medium transition-all">
+                        Match ALL (AND)
+                    </button>
+                    <button type="button"
+                            @click="operator = 'OR'"
+                            :class="operator === 'OR' ? 'bg-white dark:bg-slate-700 shadow-sm text-teal-700 dark:text-teal-400' : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'"
+                            class="rounded-md px-3 py-1 text-xs font-medium transition-all">
+                        Match ANY (OR)
+                    </button>
+                </div>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    <span x-show="operator === 'AND'">Transaction must satisfy <strong>every</strong> condition.</span>
+                    <span x-show="operator === 'OR'">Transaction matches if <strong>any</strong> condition is met.</span>
+                </p>
+            </div>
+
+            {# Empty state #}
+            <div x-show="conditions.length === 0" class="rounded-lg border-2 border-dashed border-slate-200 dark:border-slate-700 p-8 text-center">
+                <svg class="mx-auto h-8 w-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                </svg>
+                <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No conditions added yet.</p>
+                <p class="text-xs text-slate-400 dark:text-slate-500">Click "Add Condition" to start building your rule.</p>
+            </div>
+
+            {# Condition rows #}
             <div class="space-y-4">
-                <div>
-                    <label for="rule_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Rule Type *</label>
-                    <select id="rule_type" name="rule_type" required x-model="ruleType"
-                            class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                        {% for t in rule_types %}
-                        <option value="{{ t }}" {{ 'selected' if rule and rule.rule_type == t else '' }}>{{ t | replace('_', ' ') | title }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <!-- Payee Match Conditions -->
-                <div x-show="ruleType === 'PAYEE_MATCH'" class="space-y-4">
-                    <div>
-                        <label for="condition_payee_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Match Payee</label>
-                        <select id="condition_payee_id" name="condition_payee_id"
-                                class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                            <option value="">Select Payee</option>
-                            {% for payee in payees %}
-                            <option value="{{ payee.payee_id }}">{{ payee.payee_name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-
-                <!-- Description Contains Conditions -->
-                <div x-show="ruleType === 'DESCRIPTION_CONTAINS'" class="space-y-4">
-                    <div>
-                        <label for="condition_keywords" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Keywords (comma separated)</label>
-                        <input type="text" id="condition_keywords" name="condition_keywords"
-                               placeholder="e.g., AMAZON, AMZN, AWS"
-                               class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                            Match if description contains any of these keywords (case-insensitive).
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Description Regex Conditions -->
-                <div x-show="ruleType === 'DESCRIPTION_REGEX'" class="space-y-4">
-                    <div>
-                        <label for="condition_pattern" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Regex Pattern</label>
-                        <input type="text" id="condition_pattern" name="condition_pattern"
-                               placeholder="e.g., ^PAYROLL.*CORP$"
-                               class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-mono focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                            Match if description matches this regular expression (case-insensitive).
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Amount Range Conditions -->
-                <div x-show="ruleType === 'AMOUNT_RANGE'" class="space-y-4">
-                    <div class="grid gap-4 sm:grid-cols-2">
-                        <div>
-                            <label for="condition_min_amount" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Minimum Amount</label>
-                            <input type="number" id="condition_min_amount" name="condition_min_amount" step="0.01" min="0"
-                                   placeholder="0.00"
-                                   class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                <template x-for="(cond, idx) in conditions" :key="cond.id">
+                    <div class="relative rounded-lg border border-slate-200 bg-slate-50/50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+                        {# Operator connector label between cards #}
+                        <div x-show="idx > 0" class="absolute -top-3 left-6">
+                            <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-600 dark:bg-slate-700 dark:text-slate-400"
+                                  x-text="operator"></span>
                         </div>
-                        <div>
-                            <label for="condition_max_amount" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Maximum Amount</label>
-                            <input type="number" id="condition_max_amount" name="condition_max_amount" step="0.01" min="0"
-                                   placeholder="No limit"
-                                   class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+
+                        <div class="flex items-start gap-3">
+                            {# Condition type selector #}
+                            <div class="min-w-0 flex-1 space-y-4">
+                                <div>
+                                    <label class="form-label text-xs" x-bind:for="'cond_type_' + cond.id">Condition Type</label>
+                                    <select x-model="cond.type"
+                                            @change="resetConditionParams(cond)"
+                                            x-bind:id="'cond_type_' + cond.id"
+                                            class="form-select mt-1 text-sm">
+                                        <option value="DESCRIPTION_CONTAINS">Description Contains</option>
+                                        <option value="PAYEE_MATCH">Payee Match</option>
+                                        <option value="AMOUNT_RANGE">Amount Range</option>
+                                        <option value="DESCRIPTION_REGEX">Description Regex</option>
+                                        <option value="REFERENCE_MATCH">Reference Match</option>
+                                    </select>
+                                </div>
+
+                                {# ── DESCRIPTION_CONTAINS params ── #}
+                                <div x-show="cond.type === 'DESCRIPTION_CONTAINS'">
+                                    <label class="form-label text-xs">Keywords (comma separated)</label>
+                                    <input type="text" x-model="cond.params.keywords"
+                                           placeholder="e.g., AMAZON, AMZN, AWS"
+                                           class="form-input mt-1 text-sm">
+                                    <p class="mt-1 text-xs text-slate-400 dark:text-slate-500">Case-insensitive. Match if description contains any keyword.</p>
+                                </div>
+
+                                {# ── PAYEE_MATCH params ── #}
+                                <div x-show="cond.type === 'PAYEE_MATCH'">
+                                    <label class="form-label text-xs">Payee Name Pattern</label>
+                                    <input type="text" x-model="cond.params.payee_name"
+                                           placeholder="e.g., Amazon or AMZN*"
+                                           class="form-input mt-1 text-sm">
+                                    <p class="mt-1 text-xs text-slate-400 dark:text-slate-500">Match payee/payer field on the transaction.</p>
+                                </div>
+
+                                {# ── AMOUNT_RANGE params ── #}
+                                <div x-show="cond.type === 'AMOUNT_RANGE'" class="grid gap-3 sm:grid-cols-3">
+                                    <div>
+                                        <label class="form-label text-xs">Direction</label>
+                                        <select x-model="cond.params.direction" class="form-select mt-1 text-sm">
+                                            <option value="">Any</option>
+                                            <option value="credit">Inflow (Credit)</option>
+                                            <option value="debit">Outflow (Debit)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="form-label text-xs">Min Amount</label>
+                                        <input type="number" x-model="cond.params.min_amount" step="0.01" min="0"
+                                               placeholder="0.00" class="form-input mt-1 text-sm font-mono">
+                                    </div>
+                                    <div>
+                                        <label class="form-label text-xs">Max Amount</label>
+                                        <input type="number" x-model="cond.params.max_amount" step="0.01" min="0"
+                                               placeholder="No limit" class="form-input mt-1 text-sm font-mono">
+                                    </div>
+                                </div>
+
+                                {# ── DESCRIPTION_REGEX params ── #}
+                                <div x-show="cond.type === 'DESCRIPTION_REGEX'">
+                                    <label class="form-label text-xs">Regex Pattern</label>
+                                    <input type="text" x-model="cond.params.pattern"
+                                           placeholder="e.g., ^PAYROLL.*CORP$"
+                                           class="form-input mt-1 text-sm font-mono">
+                                    <p class="mt-1 text-xs text-slate-400 dark:text-slate-500">Case-insensitive regular expression.</p>
+                                </div>
+
+                                {# ── REFERENCE_MATCH params ── #}
+                                <div x-show="cond.type === 'REFERENCE_MATCH'">
+                                    <label class="form-label text-xs">Reference Pattern</label>
+                                    <input type="text" x-model="cond.params.pattern"
+                                           placeholder="e.g., INV-\\d+ or TRF.*"
+                                           class="form-input mt-1 text-sm font-mono">
+                                    <p class="mt-1 text-xs text-slate-400 dark:text-slate-500">Regex matched against reference, bank reference, and check number.</p>
+                                </div>
+                            </div>
+
+                            {# Remove button #}
+                            <button type="button" @click="removeCondition(idx)"
+                                    class="mt-6 shrink-0 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/20 dark:hover:text-rose-400"
+                                    aria-label="Remove condition">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                </svg>
+                            </button>
                         </div>
                     </div>
-                </div>
+                </template>
+            </div>
 
-                <!-- Reference Match Conditions -->
-                <div x-show="ruleType === 'REFERENCE_MATCH'" class="space-y-4">
-                    <div>
-                        <label for="condition_reference_pattern" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Reference Pattern</label>
-                        <input type="text" id="condition_reference_pattern" name="condition_reference_pattern"
-                               placeholder="e.g., INV-*"
-                               class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                        <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                            Match if reference field matches this pattern. Use * as wildcard.
-                        </p>
-                    </div>
-                </div>
+            {# Hidden input that serializes conditions JSON for form submission #}
+            <input type="hidden" name="conditions_json" :value="conditionsJson">
 
-                <!-- Combined Conditions -->
-                <div x-show="ruleType === 'COMBINED'" class="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/50">
-                    <p class="text-sm text-slate-600 dark:text-slate-400">
-                        Combined rules use JSON conditions. Enter conditions in JSON format:
-                    </p>
-                    <div>
-                        <label for="conditions_json" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Conditions (JSON)</label>
-                        <textarea id="conditions_json" name="conditions_json" rows="4"
-                                  placeholder='{"keywords": ["AMAZON", "AWS"], "min_amount": 100}'
-                                  class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-mono focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{{ rule.conditions | tojson if rule and rule.conditions else '' }}</textarea>
-                    </div>
+            {# Transaction type filter #}
+            <div class="mt-4 grid gap-4 sm:grid-cols-2 border-t border-slate-200 pt-4 dark:border-slate-700">
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="applies_to_credits" name="applies_to_credits"
+                           {{ 'checked' if (not rule) or (rule and rule.applies_to_credits) else '' }}
+                           class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+                    <label for="applies_to_credits" class="text-sm font-medium text-slate-700 dark:text-slate-300">Apply to Credits (deposits)</label>
                 </div>
-
-                <!-- Transaction Type Filter -->
-                <div class="grid gap-4 sm:grid-cols-2 border-t border-slate-200 pt-4 dark:border-slate-700">
-                    <div class="flex items-center gap-3">
-                        <input type="checkbox" id="applies_to_credits" name="applies_to_credits"
-                               {{ 'checked' if (not rule) or (rule and rule.applies_to_credits) else '' }}
-                               class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500">
-                        <label for="applies_to_credits" class="text-sm font-medium text-slate-700 dark:text-slate-300">Apply to Credits (deposits)</label>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <input type="checkbox" id="applies_to_debits" name="applies_to_debits"
-                               {{ 'checked' if (not rule) or (rule and rule.applies_to_debits) else '' }}
-                               class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500">
-                        <label for="applies_to_debits" class="text-sm font-medium text-slate-700 dark:text-slate-300">Apply to Debits (payments)</label>
-                    </div>
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="applies_to_debits" name="applies_to_debits"
+                           {{ 'checked' if (not rule) or (rule and rule.applies_to_debits) else '' }}
+                           class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+                    <label for="applies_to_debits" class="text-sm font-medium text-slate-700 dark:text-slate-300">Apply to Debits (payments)</label>
                 </div>
             </div>
         </div>
 
-        <!-- Action -->
+        {# ── Applies To ──────────────────────────────────────── #}
         <div class="card p-6">
+            <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Applies To</h3>
+            <div>
+                <label for="bank_account_id" class="form-label">Bank Account</label>
+                <select id="bank_account_id" name="bank_account_id" class="form-select mt-1">
+                    <option value="">All Bank Accounts</option>
+                    {% for ba in bank_accounts %}
+                    <option value="{{ ba.value }}" {{ 'selected' if rule and rule.bank_account_id == ba.value else '' }}>
+                        {{ ba.label }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    Optionally limit this rule to a specific bank account.
+                </p>
+            </div>
+        </div>
+
+        {# ── Action ──────────────────────────────────────────── #}
+        <div class="card p-6" x-data='{ actionType: "{{ rule.action if rule else "CATEGORIZE" }}" }'>
             <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Action</h3>
-
             <div class="space-y-4">
                 <div>
-                    <label for="action" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Action Type *</label>
-                    <select id="action" name="action" required x-model="actionType"
-                            class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                    <label for="action" class="form-label">Action Type <span class="text-rose-500">*</span></label>
+                    <select id="action" name="action" required x-model="actionType" class="form-select mt-1">
                         {% for a in actions %}
-                        <option value="{{ a }}" {{ 'selected' if rule and rule.action == a else '' }}>{{ a | replace('_', ' ') | title }}</option>
+                        <option value="{{ a.value }}" {{ 'selected' if rule and rule.action == a.value else '' }}>{{ a.label }}</option>
                         {% endfor %}
                     </select>
                 </div>
 
-                <!-- Categorize Action -->
-                <div x-show="actionType === 'CATEGORIZE'" class="grid gap-4 sm:grid-cols-2">
+                {# GL Account + Tax Code (only for CATEGORIZE) #}
+                <div x-show="actionType === 'CATEGORIZE'" x-transition class="grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label for="target_account_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Target GL Account *</label>
-                        <select id="target_account_id" name="target_account_id"
-                                class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                        <label for="target_account_id" class="form-label">Target GL Account <span class="text-rose-500">*</span></label>
+                        <select id="target_account_id" name="target_account_id" class="form-select mt-1">
                             <option value="">Select GL Account</option>
-                            {% for gl in gl_accounts %}
-                            <option value="{{ gl.account_id }}" {{ 'selected' if rule and rule.target_account_id == gl.account_id else '' }}>
-                                {{ gl.account_code }} - {{ gl.account_name }}
+                            {% for gl in accounts %}
+                            <option value="{{ gl.value }}" {{ 'selected' if rule and rule.target_account_id == gl.value else '' }}>
+                                {{ gl.label }}
                             </option>
                             {% endfor %}
                         </select>
                     </div>
                     <div>
-                        <label for="tax_code_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Tax Code</label>
-                        <select id="tax_code_id" name="tax_code_id"
-                                class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                        <label for="tax_code_id" class="form-label">Tax Code</label>
+                        <select id="tax_code_id" name="tax_code_id" class="form-select mt-1">
                             <option value="">No Tax Code</option>
-                            {% for tax in tax_codes %}
-                            <option value="{{ tax.tax_code_id }}" {{ 'selected' if rule and rule.tax_code_id == tax.tax_code_id else '' }}>
-                                {{ tax.code }} - {{ tax.name }}
+                            {% for tc in tax_codes %}
+                            <option value="{{ tc.value }}" {{ 'selected' if rule and rule.tax_code_id == tc.value else '' }}>
+                                {{ tc.label }}
                             </option>
                             {% endfor %}
                         </select>
-                    </div>
-                </div>
-
-                <!-- Split Action -->
-                <div x-show="actionType === 'SPLIT'" class="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/50">
-                    <p class="text-sm text-slate-600 dark:text-slate-400">
-                        Configure how to split the transaction amount across multiple accounts:
-                    </p>
-                    <div>
-                        <label for="split_config" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Split Configuration (JSON)</label>
-                        <textarea id="split_config" name="split_config" rows="4"
-                                  placeholder='[{"account_id": "uuid", "percentage": 50}, {"account_id": "uuid", "percentage": 50}]'
-                                  class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-mono focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{{ rule.split_config | tojson if rule and rule.split_config else '' }}</textarea>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Automation Settings -->
+        {# ── Automation ──────────────────────────────────────── #}
         <div class="card p-6">
             <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Automation</h3>
-
             <div class="space-y-4">
                 <div class="flex items-center gap-3">
                     <input type="checkbox" id="auto_apply" name="auto_apply"
                            {{ 'checked' if rule and rule.auto_apply else '' }}
-                           class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500">
+                           class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
                     <div>
                         <label for="auto_apply" class="text-sm font-medium text-slate-700 dark:text-slate-300">Auto-Apply</label>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">Automatically apply this rule when confidence is above threshold</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Automatically apply when confidence exceeds threshold</p>
                     </div>
                 </div>
-
                 <div>
-                    <label for="min_confidence" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Minimum Confidence (%)</label>
+                    <label for="min_confidence" class="form-label">Minimum Confidence (%)</label>
                     <input type="number" id="min_confidence" name="min_confidence" min="0" max="100"
                            value="{{ rule.min_confidence if rule else 80 }}"
-                           class="mt-1 w-32 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                           class="form-input mt-1 w-32">
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
                         Only auto-apply when match confidence is at least this percentage.
                     </p>
                 </div>
-
-                <div class="flex items-center gap-3 border-t border-slate-200 pt-4 dark:border-slate-700">
-                    <input type="checkbox" id="is_active" name="is_active"
-                           {{ 'checked' if (not rule) or (rule and rule.is_active) else '' }}
-                           class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500">
-                    <label for="is_active" class="text-sm font-medium text-slate-700 dark:text-slate-300">Rule is Active</label>
-                </div>
             </div>
         </div>
 
-        <!-- Statistics (Edit mode only) -->
+        {# ── Statistics (edit mode) ──────────────────────────── #}
         {% if rule %}
         <div class="card p-6">
             <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Statistics</h3>
             <div class="grid gap-4 sm:grid-cols-4">
                 <div>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">Total Matches</p>
-                    <p class="text-lg font-semibold text-slate-900 dark:text-white">{{ rule.match_count | default(0) }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Total Matches</p>
+                    <p class="text-lg font-semibold font-mono text-slate-900 dark:text-white">{{ rule.match_count if rule.match_count else 0 }}</p>
                 </div>
                 <div>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">Applied</p>
-                    <p class="text-lg font-semibold text-emerald-600 dark:text-emerald-400">{{ rule.success_count | default(0) }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Applied</p>
+                    <p class="text-lg font-semibold font-mono text-emerald-600 dark:text-emerald-400">{{ rule.success_count if rule.success_count else 0 }}</p>
                 </div>
                 <div>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">Rejected</p>
-                    <p class="text-lg font-semibold text-rose-600 dark:text-rose-400">{{ rule.reject_count | default(0) }}</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Rejected</p>
+                    <p class="text-lg font-semibold font-mono text-rose-600 dark:text-rose-400">{{ rule.reject_count if rule.reject_count else 0 }}</p>
                 </div>
                 <div>
-                    <p class="text-sm text-slate-500 dark:text-slate-400">Created</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Created</p>
                     <p class="text-lg font-semibold text-slate-900 dark:text-white">
-                        {{ rule.created_at.strftime('%Y-%m-%d') if rule.created_at else '-' }}
+                        {{ rule.created_at | format_date if rule.created_at else '-' }}
                     </p>
                 </div>
             </div>
         </div>
         {% endif %}
 
-        <!-- Actions -->
-        <div class="flex items-center justify-end gap-4">
-            <a href="/finance/banking/rules"
-               class="btn btn-secondary">
-                Cancel
-            </a>
-            <button type="submit"
-                    class="btn btn-primary">
+        {# ── Form Actions ────────────────────────────────────── #}
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
+            <a href="/finance/banking/rules" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">
                 {{ "Update Rule" if rule else "Create Rule" }}
             </button>
         </div>
@@ -327,11 +364,110 @@
 </div>
 
 <script>
-function ruleForm() {
-    return {
-        ruleType: '{{ rule.rule_type if rule else "DESCRIPTION_CONTAINS" }}',
-        actionType: '{{ rule.action if rule else "CATEGORIZE" }}'
+function ruleConditionBuilder(initialConditions) {
+    // initialConditions is the COMBINED-format object:
+    // { operator: "AND"|"OR", rules: [{type: "...", conditions: {...}}, ...] }
+    const loaded = initialConditions || { operator: 'AND', rules: [] };
+
+    // Convert server rules into builder-friendly condition objects
+    const conditions = (loaded.rules || []).map(function(sr, i) {
+        return {
+            id: i + 1,
+            type: sr.type || 'DESCRIPTION_CONTAINS',
+            params: _extractParams(sr.type, sr.conditions || {})
+        };
+    });
+
+    function _extractParams(type, conds) {
+        switch (type) {
+            case 'DESCRIPTION_CONTAINS':
+                // keywords can be array or comma string; also check legacy "text"
+                var kw = conds.keywords || conds.text;
+                if (Array.isArray(kw)) kw = kw.join(', ');
+                return { keywords: kw || '' };
+            case 'PAYEE_MATCH':
+                // patterns is an array; payee_name is single legacy field
+                var patterns = conds.patterns || [];
+                var pn = Array.isArray(patterns) ? patterns.join(', ') : (conds.payee_name || '');
+                return { payee_name: pn };
+            case 'AMOUNT_RANGE':
+                return {
+                    direction: conds.transaction_type || '',
+                    min_amount: conds.min != null ? String(conds.min) : (conds.min_amount != null ? String(conds.min_amount) : ''),
+                    max_amount: conds.max != null ? String(conds.max) : (conds.max_amount != null ? String(conds.max_amount) : '')
+                };
+            case 'DESCRIPTION_REGEX':
+                return { pattern: conds.pattern || '' };
+            case 'REFERENCE_MATCH':
+                return { pattern: conds.pattern || '' };
+            default:
+                return {};
+        }
     }
+
+    return {
+        operator: loaded.operator || 'AND',
+        conditions: conditions,
+        _nextId: conditions.length + 1,
+
+        addCondition() {
+            this.conditions.push({
+                id: this._nextId++,
+                type: 'DESCRIPTION_CONTAINS',
+                params: { keywords: '' }
+            });
+        },
+
+        removeCondition(idx) {
+            this.conditions.splice(idx, 1);
+        },
+
+        resetConditionParams(cond) {
+            switch (cond.type) {
+                case 'DESCRIPTION_CONTAINS':
+                    cond.params = { keywords: '' }; break;
+                case 'PAYEE_MATCH':
+                    cond.params = { payee_name: '' }; break;
+                case 'AMOUNT_RANGE':
+                    cond.params = { direction: '', min_amount: '', max_amount: '' }; break;
+                case 'DESCRIPTION_REGEX':
+                    cond.params = { pattern: '' }; break;
+                case 'REFERENCE_MATCH':
+                    cond.params = { pattern: '' }; break;
+                default:
+                    cond.params = {};
+            }
+        },
+
+        get conditionsJson() {
+            var rules = this.conditions.map(function(c) {
+                var conditions = {};
+                switch (c.type) {
+                    case 'DESCRIPTION_CONTAINS':
+                        // Backend expects "text" key
+                        var raw = (c.params.keywords || '').trim();
+                        conditions.text = raw;
+                        break;
+                    case 'PAYEE_MATCH':
+                        // Backend expects "patterns" array
+                        var pn = (c.params.payee_name || '').trim();
+                        conditions.patterns = pn ? pn.split(/\s*,\s*/).filter(Boolean) : [];
+                        break;
+                    case 'AMOUNT_RANGE':
+                        if (c.params.min_amount !== '') conditions.min = parseFloat(c.params.min_amount);
+                        if (c.params.max_amount !== '') conditions.max = parseFloat(c.params.max_amount);
+                        if (c.params.direction) conditions.transaction_type = c.params.direction;
+                        break;
+                    case 'DESCRIPTION_REGEX':
+                    case 'REFERENCE_MATCH':
+                        conditions.pattern = (c.params.pattern || '').trim();
+                        break;
+                }
+                return { type: c.type, conditions: conditions };
+            });
+            return JSON.stringify({ operator: this.operator, rules: rules });
+        }
+    };
 }
 </script>
 {% endblock %}

@@ -1,6 +1,5 @@
 import uuid
 
-
 from tests.conftest import DEFAULT_TEST_ORG_ID
 
 

@@ -30,6 +30,7 @@
     {% if payment.status == 'DRAFT' %}
     <form method="POST" action="/finance/ap/payments/{{ payment.payment_id }}/delete"
           onsubmit="return confirm('Are you sure you want to delete this payment? This action cannot be undone.');">
+        {{ request.state.csrf_form | safe }}
         <button type="submit"
                 class="btn btn-danger">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,7 +86,7 @@
             </div>
             <div>
                 <p class="text-xs uppercase tracking-wide text-slate-500">Method</p>
-                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ payment.payment_method }}</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ payment.payment_method | replace('_', ' ') | title }}</p>
             </div>
             <div>
                 <p class="text-xs uppercase tracking-wide text-slate-500">Reference</p>

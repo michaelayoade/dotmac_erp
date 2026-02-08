@@ -3,20 +3,17 @@ Fixtures for Fixed Assets (FA) Module Tests.
 """
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
-
 
 # ============ Import Actual Enums ============
 from app.models.fixed_assets.asset import AssetStatus as MockAssetStatus
 from app.models.fixed_assets.asset_category import (
     DepreciationMethod as MockDepreciationMethod,
 )
-
 
 # ============ Mock Models ============
 
@@ -30,8 +27,8 @@ class MockAssetCategory:
         organization_id: uuid.UUID = None,
         category_code: str = "EQUIPMENT",
         category_name: str = "Office Equipment",
-        description: Optional[str] = None,
-        parent_category_id: Optional[uuid.UUID] = None,
+        description: str | None = None,
+        parent_category_id: uuid.UUID | None = None,
         depreciation_method: MockDepreciationMethod = MockDepreciationMethod.STRAIGHT_LINE,
         useful_life_months: int = 60,
         residual_value_percent: Decimal = Decimal("0"),
@@ -39,13 +36,13 @@ class MockAssetCategory:
         accumulated_depreciation_account_id: uuid.UUID = None,
         depreciation_expense_account_id: uuid.UUID = None,
         gain_loss_disposal_account_id: uuid.UUID = None,
-        revaluation_surplus_account_id: Optional[uuid.UUID] = None,
-        impairment_loss_account_id: Optional[uuid.UUID] = None,
+        revaluation_surplus_account_id: uuid.UUID | None = None,
+        impairment_loss_account_id: uuid.UUID | None = None,
         capitalization_threshold: Decimal = Decimal("1000"),
         revaluation_model_allowed: bool = False,
         is_active: bool = True,
         created_at: datetime = None,
-        updated_at: Optional[datetime] = None,
+        updated_at: datetime | None = None,
         **kwargs,
     ):
         self.category_id = category_id or uuid.uuid4()
@@ -74,7 +71,7 @@ class MockAssetCategory:
         self.capitalization_threshold = capitalization_threshold
         self.revaluation_model_allowed = revaluation_model_allowed
         self.is_active = is_active
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -89,46 +86,46 @@ class MockAsset:
         organization_id: uuid.UUID = None,
         asset_number: str = "FA-0001",
         asset_name: str = "Office Computer",
-        description: Optional[str] = None,
+        description: str | None = None,
         category_id: uuid.UUID = None,
-        location_id: Optional[uuid.UUID] = None,
-        cost_center_id: Optional[uuid.UUID] = None,
-        custodian_user_id: Optional[uuid.UUID] = None,
+        location_id: uuid.UUID | None = None,
+        cost_center_id: uuid.UUID | None = None,
+        custodian_user_id: uuid.UUID | None = None,
         acquisition_date: date = None,
-        in_service_date: Optional[date] = None,
+        in_service_date: date | None = None,
         acquisition_cost: Decimal = Decimal("5000.00"),
         currency_code: str = "USD",
         functional_currency_cost: Decimal = None,
-        source_type: Optional[str] = None,
-        source_document_id: Optional[uuid.UUID] = None,
-        supplier_id: Optional[uuid.UUID] = None,
-        invoice_reference: Optional[str] = None,
+        source_type: str | None = None,
+        source_document_id: uuid.UUID | None = None,
+        supplier_id: uuid.UUID | None = None,
+        invoice_reference: str | None = None,
         depreciation_method: str = MockDepreciationMethod.STRAIGHT_LINE.value,
         useful_life_months: int = 60,
         remaining_life_months: int = 60,
         residual_value: Decimal = Decimal("0"),
-        depreciation_start_date: Optional[date] = None,
+        depreciation_start_date: date | None = None,
         accumulated_depreciation: Decimal = Decimal("0"),
         net_book_value: Decimal = None,
-        revalued_amount: Optional[Decimal] = None,
+        revalued_amount: Decimal | None = None,
         impairment_loss: Decimal = Decimal("0"),
         status: MockAssetStatus = MockAssetStatus.DRAFT,
-        cash_generating_unit_id: Optional[uuid.UUID] = None,
-        serial_number: Optional[str] = None,
-        barcode: Optional[str] = None,
-        manufacturer: Optional[str] = None,
-        model: Optional[str] = None,
-        warranty_expiry_date: Optional[date] = None,
-        insured_value: Optional[Decimal] = None,
-        insurance_policy_number: Optional[str] = None,
-        disposal_date: Optional[date] = None,
-        disposal_proceeds: Optional[Decimal] = None,
-        disposal_gain_loss: Optional[Decimal] = None,
+        cash_generating_unit_id: uuid.UUID | None = None,
+        serial_number: str | None = None,
+        barcode: str | None = None,
+        manufacturer: str | None = None,
+        model: str | None = None,
+        warranty_expiry_date: date | None = None,
+        insured_value: Decimal | None = None,
+        insurance_policy_number: str | None = None,
+        disposal_date: date | None = None,
+        disposal_proceeds: Decimal | None = None,
+        disposal_gain_loss: Decimal | None = None,
         is_component_parent: bool = False,
-        parent_asset_id: Optional[uuid.UUID] = None,
+        parent_asset_id: uuid.UUID | None = None,
         created_by_user_id: uuid.UUID = None,
         created_at: datetime = None,
-        updated_at: Optional[datetime] = None,
+        updated_at: datetime | None = None,
         **kwargs,
     ):
         self.asset_id = asset_id or uuid.uuid4()
@@ -175,7 +172,7 @@ class MockAsset:
         self.is_component_parent = is_component_parent
         self.parent_asset_id = parent_asset_id
         self.created_by_user_id = created_by_user_id or uuid.uuid4()
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -191,11 +188,11 @@ class MockDepreciationRun:
         run_number: str = "DEP-2024-01",
         fiscal_period_id: uuid.UUID = None,
         run_date: date = None,
-        description: Optional[str] = None,
+        description: str | None = None,
         status: str = "DRAFT",
         total_depreciation: Decimal = Decimal("0"),
         asset_count: int = 0,
-        posted_journal_id: Optional[uuid.UUID] = None,
+        posted_journal_id: uuid.UUID | None = None,
         created_by_user_id: uuid.UUID = None,
         created_at: datetime = None,
         **kwargs,
@@ -211,7 +208,7 @@ class MockDepreciationRun:
         self.asset_count = asset_count
         self.posted_journal_id = posted_journal_id
         self.created_by_user_id = created_by_user_id or uuid.uuid4()
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -264,10 +261,10 @@ class MockAssetDisposal:
         net_proceeds: Decimal = Decimal("1000.00"),
         net_book_value_at_disposal: Decimal = Decimal("800.00"),
         gain_loss_on_disposal: Decimal = Decimal("200.00"),
-        reason: Optional[str] = None,
-        buyer_name: Optional[str] = None,
+        reason: str | None = None,
+        buyer_name: str | None = None,
         status: str = "DRAFT",
-        posted_journal_id: Optional[uuid.UUID] = None,
+        posted_journal_id: uuid.UUID | None = None,
         created_by_user_id: uuid.UUID = None,
         created_at: datetime = None,
         **kwargs,
@@ -287,7 +284,7 @@ class MockAssetDisposal:
         self.status = status
         self.posted_journal_id = posted_journal_id
         self.created_by_user_id = created_by_user_id or uuid.uuid4()
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -308,10 +305,10 @@ class MockAssetRevaluation:
         deficit_to_pl: Decimal = Decimal("0"),
         prior_deficit_reversed: Decimal = Decimal("0"),
         prior_surplus_reversed: Decimal = Decimal("0"),
-        appraiser_name: Optional[str] = None,
-        valuation_method: Optional[str] = None,
+        appraiser_name: str | None = None,
+        valuation_method: str | None = None,
         status: str = "DRAFT",
-        posted_journal_id: Optional[uuid.UUID] = None,
+        posted_journal_id: uuid.UUID | None = None,
         created_by_user_id: uuid.UUID = None,
         created_at: datetime = None,
         **kwargs,
@@ -332,7 +329,7 @@ class MockAssetRevaluation:
         self.status = status
         self.posted_journal_id = posted_journal_id
         self.created_by_user_id = created_by_user_id or uuid.uuid4()
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         for k, v in kwargs.items():
             setattr(self, k, v)
 

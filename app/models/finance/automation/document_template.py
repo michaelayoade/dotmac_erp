@@ -7,7 +7,7 @@ Customizable templates for documents (invoices, quotes, etc.) and emails.
 import enum
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -123,7 +123,7 @@ class DocumentTemplate(Base):
         nullable=False,
     )
     template_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Template content (Jinja2)
     template_content: Mapped[str] = mapped_column(
@@ -133,19 +133,19 @@ class DocumentTemplate(Base):
     )
 
     # Styling
-    css_styles: Mapped[Optional[str]] = mapped_column(
+    css_styles: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="CSS styles for the template",
     )
 
     # Header/Footer configuration
-    header_config: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    header_config: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Header config: logo, company name, address, etc.",
     )
-    footer_config: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    footer_config: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Footer config: terms, bank details, signature, etc.",
@@ -164,19 +164,19 @@ class DocumentTemplate(Base):
         default="portrait",
         comment="portrait or landscape",
     )
-    page_margins: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    page_margins: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Margins: top, right, bottom, left",
     )
 
     # Email-specific settings
-    email_subject: Mapped[Optional[str]] = mapped_column(
+    email_subject: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
         comment="Email subject template (Jinja2)",
     )
-    email_from_name: Mapped[Optional[str]] = mapped_column(
+    email_from_name: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
@@ -211,11 +211,11 @@ class DocumentTemplate(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

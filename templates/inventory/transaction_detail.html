@@ -1,5 +1,6 @@
 {% extends "inventory/base_inventory.html" %}
 
+{% from "components/macros.html" import status_badge, empty_state %}
 {% block page_title %}Transaction {{ transaction.reference or transaction.transaction_id[:8] }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -20,6 +21,7 @@
 {% if not transaction.is_reversed and not transaction.reversed_by_id %}
 <form method="post" action="/inventory/transactions/{{ transaction.transaction_id }}/reverse"
       onsubmit="return confirm('Are you sure you want to reverse this transaction? This will create an offsetting entry.');">
+    {{ request.state.csrf_form | safe }}
     <button type="submit" class="btn btn-secondary text-rose-600 hover:text-rose-700 hover:border-rose-300">
         <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/>
@@ -52,9 +54,7 @@
                         'SCRAP': 'bg-slate-100 text-slate-700',
                         'COUNT_ADJUSTMENT': 'bg-orange-100 text-orange-700'
                     } %}
-                    <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium {{ type_colors.get(transaction.transaction_type.value, 'bg-slate-100 text-slate-700') }}">
-                        {{ transaction.transaction_type.value | replace('_', ' ') | title }}
-                    </span>
+                    {{ status_badge(transaction.transaction_type.value) }}
                     {% if transaction.is_reversed %}
                     <span class="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
                         Reversed
@@ -214,15 +214,15 @@
         <div class="border-b border-slate-200 dark:border-slate-700 px-6 py-4">
             <h3 class="font-semibold text-slate-900 dark:text-white">Related Transactions</h3>
         </div>
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="table-ledger">
                 <thead>
                     <tr>
                         <th scope="col">Date</th>
                         <th scope="col">Type</th>
                         <th scope="col">Reference</th>
-                        <th scope="col" class="text-right">Quantity</th>
-                        <th scope="col" class="text-right">Value</th>
+                        <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider">Quantity</th>
+                        <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider">Value</th>
                         <th scope="col">Relationship</th>
                     </tr>
                 </thead>
@@ -236,6 +236,12 @@
                         <td class="text-right font-mono">{{ '{:,.2f}'.format(txn.quantity or 0) }}</td>
                         <td class="text-right font-mono">{{ '{:,.2f}'.format(txn.total_cost or 0) }}</td>
                         <td class="text-xs text-slate-500">{{ txn.relationship_type or 'Related' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No related_transactions found", "There are no related_transactions to display.") }}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

@@ -90,7 +90,7 @@ class Appraisal(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
     )
 
     # Template
-    template_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    template_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("perf.appraisal_template.template_id"),
         nullable=True,
@@ -111,85 +111,85 @@ class Appraisal(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
     )
 
     # Self Assessment
-    self_assessment_date: Mapped[Optional[date]] = mapped_column(
+    self_assessment_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    self_overall_rating: Mapped[Optional[int]] = mapped_column(
+    self_overall_rating: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Employee's self-rating (1-5)",
     )
-    self_summary: Mapped[Optional[str]] = mapped_column(
+    self_summary: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    achievements: Mapped[Optional[str]] = mapped_column(
+    achievements: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    challenges: Mapped[Optional[str]] = mapped_column(
+    challenges: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    development_needs: Mapped[Optional[str]] = mapped_column(
+    development_needs: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Manager Review
-    manager_review_date: Mapped[Optional[date]] = mapped_column(
+    manager_review_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    manager_overall_rating: Mapped[Optional[int]] = mapped_column(
+    manager_overall_rating: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Manager's rating (1-5)",
     )
-    manager_summary: Mapped[Optional[str]] = mapped_column(
+    manager_summary: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    manager_recommendations: Mapped[Optional[str]] = mapped_column(
+    manager_recommendations: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Calibration
-    calibration_date: Mapped[Optional[date]] = mapped_column(
+    calibration_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    calibrated_rating: Mapped[Optional[int]] = mapped_column(
+    calibrated_rating: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="HR-calibrated final rating",
     )
-    calibration_notes: Mapped[Optional[str]] = mapped_column(
+    calibration_notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Final Scores
-    final_score: Mapped[Optional[Decimal]] = mapped_column(
+    final_score: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
         comment="Weighted average score",
     )
-    final_rating: Mapped[Optional[int]] = mapped_column(
+    final_rating: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Final rating (1-5)",
     )
-    rating_label: Mapped[Optional[str]] = mapped_column(
+    rating_label: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Exceptional, Exceeds, Meets, Below, etc.",
     )
 
     # Completion
-    completed_on: Mapped[Optional[date]] = mapped_column(
+    completed_on: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -199,7 +199,7 @@ class Appraisal(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )
@@ -275,30 +275,30 @@ class AppraisalKRAScore(Base):
     )
 
     # Scores
-    self_rating: Mapped[Optional[int]] = mapped_column(
+    self_rating: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
     )
-    self_comments: Mapped[Optional[str]] = mapped_column(
+    self_comments: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
-    manager_rating: Mapped[Optional[int]] = mapped_column(
+    manager_rating: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
     )
-    manager_comments: Mapped[Optional[str]] = mapped_column(
+    manager_comments: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Final
-    final_rating: Mapped[Optional[int]] = mapped_column(
+    final_rating: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
     )
-    weighted_score: Mapped[Optional[Decimal]] = mapped_column(
+    weighted_score: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
         comment="(final_rating / max_rating) * weightage",
@@ -309,7 +309,7 @@ class AppraisalKRAScore(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )
@@ -370,21 +370,21 @@ class AppraisalFeedback(Base, AuditMixin):
     )
 
     # Ratings
-    overall_rating: Mapped[Optional[int]] = mapped_column(
+    overall_rating: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
     )
 
     # Feedback content
-    strengths: Mapped[Optional[str]] = mapped_column(
+    strengths: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    areas_for_improvement: Mapped[Optional[str]] = mapped_column(
+    areas_for_improvement: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    general_comments: Mapped[Optional[str]] = mapped_column(
+    general_comments: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -393,7 +393,7 @@ class AppraisalFeedback(Base, AuditMixin):
     is_anonymous: Mapped[bool] = mapped_column(
         default=False,
     )
-    submitted_on: Mapped[Optional[date]] = mapped_column(
+    submitted_on: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -403,7 +403,7 @@ class AppraisalFeedback(Base, AuditMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

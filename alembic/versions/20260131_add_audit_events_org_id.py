@@ -5,9 +5,10 @@ Revises: 20260131_batch_ops
 Create Date: 2026-01-31
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision = "20260131_add_audit_events_org_id"
 down_revision = "20260131_batch_ops"

@@ -7,11 +7,9 @@ Field names match template forms for seamless UI integration.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 # =============================================================================
 # Supplier
@@ -31,22 +29,22 @@ class SupplierBase(BaseModel):
     supplier_name: str = Field(
         max_length=255
     )  # Template name (service maps to legal_name)
-    trading_name: Optional[str] = Field(default=None, max_length=255)
-    tax_id: Optional[str] = Field(
+    trading_name: str | None = Field(default=None, max_length=255)
+    tax_id: str | None = Field(
         default=None, max_length=50
     )  # Template name (service maps to tax_identification_number)
     payment_terms_days: int = 30
     currency_code: str = Field(default="NGN", max_length=3)
-    default_expense_account_id: Optional[UUID] = None
-    default_payable_account_id: Optional[UUID] = (
+    default_expense_account_id: UUID | None = None
+    default_payable_account_id: UUID | None = (
         None  # Template name (service maps to ap_control_account_id)
     )
     is_active: bool = True
     # Additional template fields
-    email: Optional[str] = Field(default=None, max_length=255)
-    phone: Optional[str] = Field(default=None, max_length=50)
-    address: Optional[str] = Field(default=None, max_length=500)
-    payment_method: Optional[str] = Field(
+    email: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=50)
+    address: str | None = Field(default=None, max_length=500)
+    payment_method: str | None = Field(
         default=None, max_length=30
     )  # BANK_TRANSFER, CHECK, WIRE, CASH
 
@@ -60,15 +58,15 @@ class SupplierCreate(SupplierBase):
 class SupplierUpdate(BaseModel):
     """Update supplier request."""
 
-    supplier_name: Optional[str] = Field(default=None, max_length=255)
-    trading_name: Optional[str] = Field(default=None, max_length=255)
-    tax_id: Optional[str] = Field(default=None, max_length=50)
-    payment_terms_days: Optional[int] = None
-    is_active: Optional[bool] = None
-    email: Optional[str] = Field(default=None, max_length=255)
-    phone: Optional[str] = Field(default=None, max_length=50)
-    address: Optional[str] = Field(default=None, max_length=500)
-    payment_method: Optional[str] = Field(default=None, max_length=30)
+    supplier_name: str | None = Field(default=None, max_length=255)
+    trading_name: str | None = Field(default=None, max_length=255)
+    tax_id: str | None = Field(default=None, max_length=50)
+    payment_terms_days: int | None = None
+    is_active: bool | None = None
+    email: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=50)
+    address: str | None = Field(default=None, max_length=500)
+    payment_method: str | None = Field(default=None, max_length=30)
 
 
 class SupplierRead(BaseModel):
@@ -81,19 +79,19 @@ class SupplierRead(BaseModel):
     supplier_code: str
     supplier_type: str
     supplier_name: str = Field(validation_alias="legal_name")
-    trading_name: Optional[str] = None
-    tax_id: Optional[str] = Field(
+    trading_name: str | None = None
+    tax_id: str | None = Field(
         default=None, validation_alias="tax_identification_number"
     )
     payment_terms_days: int
     currency_code: str
-    default_expense_account_id: Optional[UUID] = None
-    default_payable_account_id: Optional[UUID] = Field(
+    default_expense_account_id: UUID | None = None
+    default_payable_account_id: UUID | None = Field(
         default=None, validation_alias="ap_control_account_id"
     )
     is_active: bool
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 # =============================================================================
@@ -108,9 +106,9 @@ class APInvoiceLineCreate(BaseModel):
     description: str = Field(max_length=500)
     quantity: Decimal = Field(default=Decimal("1"))
     unit_price: Decimal
-    tax_code_id: Optional[UUID] = None
-    cost_center_id: Optional[UUID] = None
-    project_id: Optional[UUID] = None
+    tax_code_id: UUID | None = None
+    cost_center_id: UUID | None = None
+    project_id: UUID | None = None
 
 
 class APInvoiceCreate(BaseModel):
@@ -120,10 +118,10 @@ class APInvoiceCreate(BaseModel):
     invoice_type: str = Field(default="standard", max_length=20)
     invoice_number: str = Field(max_length=50)
     invoice_date: date
-    received_date: Optional[date] = None
+    received_date: date | None = None
     due_date: date
     currency_code: str = Field(max_length=3)
-    description: Optional[str] = None
+    description: str | None = None
     lines: list[APInvoiceLineCreate] = Field(min_length=1)
 
 
@@ -152,7 +150,7 @@ class APInvoiceRead(BaseModel):
     organization_id: UUID
     supplier_id: UUID
     invoice_number: str
-    supplier_invoice_number: Optional[str] = None
+    supplier_invoice_number: str | None = None
     invoice_type: str
     invoice_date: date
     received_date: date
@@ -187,7 +185,7 @@ class APPaymentCreate(BaseModel):
     payment_method: str = Field(max_length=30)
     bank_account_id: UUID
     currency_code: str = Field(max_length=3)
-    reference_number: Optional[str] = None
+    reference_number: str | None = None
     allocations: list[PaymentAllocationCreate] = Field(min_length=1)
 
 
@@ -244,11 +242,11 @@ class APAgingReportRead(BaseModel):
 class POLineCreate(BaseModel):
     """PO line input."""
 
-    item_id: Optional[UUID] = None
+    item_id: UUID | None = None
     description: str
     quantity: Decimal
     unit_price: Decimal
-    expense_account_id: Optional[UUID] = None
+    expense_account_id: UUID | None = None
 
 
 class POCreate(BaseModel):
@@ -256,9 +254,9 @@ class POCreate(BaseModel):
 
     supplier_id: UUID
     po_date: date
-    expected_delivery_date: Optional[date] = None
+    expected_delivery_date: date | None = None
     currency_code: str = Field(max_length=3)
-    description: Optional[str] = None
+    description: str | None = None
     lines: list[POLineCreate] = Field(min_length=1)
 
 
@@ -284,11 +282,11 @@ class PORead(BaseModel):
 class GRLineCreate(BaseModel):
     """Goods receipt line input."""
 
-    po_line_id: Optional[UUID] = None
+    po_line_id: UUID | None = None
     item_id: UUID
     quantity_received: Decimal
     unit_cost: Decimal
-    warehouse_id: Optional[UUID] = None
+    warehouse_id: UUID | None = None
 
 
 class GRCreate(BaseModel):
@@ -296,7 +294,7 @@ class GRCreate(BaseModel):
 
     po_id: UUID
     receipt_date: date
-    notes: Optional[str] = None
+    notes: str | None = None
     lines: list[GRLineCreate] = Field(min_length=1)
 
 
@@ -325,7 +323,7 @@ class PaymentBatchCreate(BaseModel):
     payment_date: date
     bank_account_id: UUID
     payment_method: str = "EFT"
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class PaymentBatchRead(BaseModel):
@@ -347,7 +345,7 @@ class BankFileResultRead(BaseModel):
 
     success: bool
     file_format: str
-    file_content: Optional[str] = None
+    file_content: str | None = None
     payment_count: int
     total_amount: str
 

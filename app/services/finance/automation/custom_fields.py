@@ -6,7 +6,7 @@ Manages custom field definitions and validates field values.
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -30,19 +30,19 @@ class CustomFieldInput:
     field_code: str
     field_name: str
     field_type: CustomFieldType
-    description: Optional[str] = None
-    field_options: Optional[Dict[str, Any]] = None
+    description: str | None = None
+    field_options: dict[str, Any] | None = None
     is_required: bool = False
-    default_value: Optional[str] = None
-    validation_regex: Optional[str] = None
-    validation_message: Optional[str] = None
-    min_value: Optional[str] = None
-    max_value: Optional[str] = None
-    max_length: Optional[int] = None
+    default_value: str | None = None
+    validation_regex: str | None = None
+    validation_message: str | None = None
+    min_value: str | None = None
+    max_value: str | None = None
+    max_length: int | None = None
     display_order: int = 0
-    section_name: Optional[str] = None
-    placeholder: Optional[str] = None
-    help_text: Optional[str] = None
+    section_name: str | None = None
+    placeholder: str | None = None
+    help_text: str | None = None
     show_in_list: bool = False
     show_in_form: bool = True
     show_in_detail: bool = True
@@ -114,9 +114,19 @@ class CustomFieldsService:
         db.flush()
         return field
 
-    def get(self, db: Session, field_id: UUID) -> Optional[CustomFieldDefinition]:
+    def get(
+        self,
+        db: Session,
+        field_id: UUID,
+        organization_id: UUID | None = None,
+    ) -> CustomFieldDefinition | None:
         """Get a field definition by ID."""
-        return db.get(CustomFieldDefinition, field_id)
+        field = db.get(CustomFieldDefinition, field_id)
+        if not field:
+            return None
+        if organization_id is not None and field.organization_id != organization_id:
+            return None
+        return field
 
     def get_by_code(
         self,
@@ -124,7 +134,7 @@ class CustomFieldsService:
         organization_id: UUID,
         entity_type: CustomFieldEntityType,
         field_code: str,
-    ) -> Optional[CustomFieldDefinition]:
+    ) -> CustomFieldDefinition | None:
         """Get a field definition by code."""
         return db.execute(
             select(CustomFieldDefinition).where(
@@ -142,7 +152,7 @@ class CustomFieldsService:
         organization_id: UUID,
         entity_type: CustomFieldEntityType,
         is_active: bool = True,
-    ) -> List[CustomFieldDefinition]:
+    ) -> list[CustomFieldDefinition]:
         """List all custom fields for an entity type."""
         query = select(CustomFieldDefinition).where(
             and_(
@@ -166,10 +176,10 @@ class CustomFieldsService:
         self,
         db: Session,
         organization_id: UUID,
-        is_active: Optional[bool] = None,
+        is_active: bool | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[CustomFieldDefinition]:
+    ) -> list[CustomFieldDefinition]:
         """List all custom fields."""
         query = select(CustomFieldDefinition).where(
             CustomFieldDefinition.organization_id == organization_id
@@ -191,8 +201,8 @@ class CustomFieldsService:
         db: Session,
         organization_id: UUID,
         entity_type: CustomFieldEntityType,
-        field_values: Dict[str, Any],
-    ) -> Tuple[bool, List[str]]:
+        field_values: dict[str, Any],
+    ) -> tuple[bool, list[str]]:
         """
         Validate custom field values against their definitions.
 
@@ -229,8 +239,8 @@ class CustomFieldsService:
         db: Session,
         organization_id: UUID,
         entity_type: CustomFieldEntityType,
-        field_values: Optional[Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
+        field_values: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         """
         Merge provided values with defaults from field definitions.
 
@@ -254,7 +264,7 @@ class CustomFieldsService:
         db: Session,
         organization_id: UUID,
         entity_type: CustomFieldEntityType,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get field definitions formatted for form rendering.
 
@@ -264,7 +274,7 @@ class CustomFieldsService:
         definitions = self.list_for_entity(db, organization_id, entity_type)
 
         # Group by section
-        sections: Dict[str, List[Dict[str, Any]]] = {}
+        sections: dict[str, list[dict[str, Any]]] = {}
 
         for defn in definitions:
             if not defn.show_in_form:
@@ -303,9 +313,9 @@ class CustomFieldsService:
             sections[section].append(field_schema)
 
         # Convert to list format
-        result: List[Dict[str, Any]] = []
+        result: list[dict[str, Any]] = []
         for section_name, fields in sections.items():
-            field_list: List[Dict[str, Any]] = fields
+            field_list: list[dict[str, Any]] = fields
             result.append(
                 {
                     "section_name": section_name,
@@ -319,7 +329,7 @@ class CustomFieldsService:
         self,
         db: Session,
         field_id: UUID,
-        updates: Dict[str, Any],
+        updates: dict[str, Any],
         updated_by: UUID,
     ) -> CustomFieldDefinition:
         """Update a custom field definition."""

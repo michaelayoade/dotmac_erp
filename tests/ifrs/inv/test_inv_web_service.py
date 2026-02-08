@@ -48,16 +48,16 @@ class TestInvWebServiceHelpers:
 
     def test_parse_transaction_type_valid(self):
         """Test transaction type parsing with valid value."""
-        from app.services.inventory.web import _parse_transaction_type
         from app.models.inventory.inventory_transaction import TransactionType
+        from app.services.inventory.web import _parse_transaction_type
 
         result = _parse_transaction_type("RECEIPT")
         assert result == TransactionType.RECEIPT
 
     def test_parse_transaction_type_lowercase(self):
         """Test transaction type parsing with lowercase value."""
-        from app.services.inventory.web import _parse_transaction_type
         from app.models.inventory.inventory_transaction import TransactionType
+        from app.services.inventory.web import _parse_transaction_type
 
         result = _parse_transaction_type("receipt")
         assert result == TransactionType.RECEIPT
@@ -103,7 +103,7 @@ class MockItem:
     """Mock Item for testing."""
 
     def __init__(self, **kwargs):
-        from app.models.inventory.item import ItemType, CostingMethod
+        from app.models.inventory.item import CostingMethod, ItemType
 
         self.item_id = kwargs.get("item_id", uuid.uuid4())
         self.organization_id = kwargs.get("organization_id", uuid.uuid4())
@@ -118,7 +118,7 @@ class MockItem:
         self.is_active = kwargs.get("is_active", True)
         self.barcode = kwargs.get("barcode")
         self.track_inventory = kwargs.get("track_inventory", True)
-        self.reorder_point = kwargs.get("reorder_point", None)
+        self.reorder_point = kwargs.get("reorder_point")
 
 
 class MockItemCategory:

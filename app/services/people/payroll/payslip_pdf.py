@@ -7,7 +7,6 @@ Generates PDF payslips using WeasyPrint and Jinja2 templates.
 import logging
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from jinja2 import Environment, FileSystemLoader
@@ -19,7 +18,7 @@ from app.services.formatters import format_currency_compact
 logger = logging.getLogger(__name__)
 
 # Template environment for PDF generation
-_template_env: Optional[Environment] = None
+_template_env: Environment | None = None
 
 
 def _get_template_env() -> Environment:
@@ -59,9 +58,9 @@ class PayslipPDFService:
     def generate_pdf(
         self,
         slip: SalarySlip,
-        organization_name: Optional[str] = None,
-        organization_address: Optional[str] = None,
-        logo_url: Optional[str] = None,
+        organization_name: str | None = None,
+        organization_address: str | None = None,
+        logo_url: str | None = None,
     ) -> bytes:
         """
         Generate a PDF payslip document.
@@ -76,18 +75,28 @@ class PayslipPDFService:
             PDF file contents as bytes
         """
         try:
-            from weasyprint import CSS, HTML
+            from weasyprint import HTML
         except ImportError:
             logger.error("WeasyPrint not installed. Run: pip install weasyprint")
             raise ImportError("WeasyPrint is required for PDF generation")
 
-        # Get organization info if not provided
+        # Get organization info and branding
+        primary_color = "#0d9488"
+        accent_color = "#14b8a6"
         if (
             not organization_name
             and hasattr(slip, "organization")
             and slip.organization
         ):
-            organization_name = slip.organization.organization_name
+            org = slip.organization
+            organization_name = org.organization_name
+            if org.branding:
+                primary_color = org.branding.primary_color or primary_color
+                accent_color = org.branding.accent_color or accent_color
+                if not logo_url and org.branding.logo_url:
+                    logo_url = org.branding.logo_url
+            if not logo_url and org.logo_url:
+                logo_url = org.logo_url
 
         # Get employee info
         employee = slip.employee
@@ -112,6 +121,8 @@ class PayslipPDFService:
             "organization_name": organization_name or "Company",
             "organization_address": organization_address,
             "logo_url": logo_url,
+            "primary_color": primary_color,
+            "accent_color": accent_color,
             "employee_name": employee_name,
             "employee_code": employee_code,
             "department_name": department_name,
@@ -146,10 +157,10 @@ class PayslipPDFService:
     def generate_pdf_by_id(
         self,
         slip_id: UUID,
-        organization_name: Optional[str] = None,
-        organization_address: Optional[str] = None,
-        logo_url: Optional[str] = None,
-    ) -> Optional[bytes]:
+        organization_name: str | None = None,
+        organization_address: str | None = None,
+        logo_url: str | None = None,
+    ) -> bytes | None:
         """
         Generate a PDF payslip by slip ID.
 

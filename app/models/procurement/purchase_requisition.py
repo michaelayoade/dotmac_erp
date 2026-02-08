@@ -7,7 +7,7 @@ Internal purchase request (converts from Material Request or standalone).
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
@@ -71,7 +71,7 @@ class PurchaseRequisition(Base, ProcurementBaseMixin):
         nullable=False,
         comment="hr.employee who raised the requisition",
     )
-    department_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    department_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -81,7 +81,7 @@ class PurchaseRequisition(Base, ProcurementBaseMixin):
     urgency: Mapped[UrgencyLevel] = mapped_column(
         default=UrgencyLevel.NORMAL,
     )
-    justification: Mapped[Optional[str]] = mapped_column(
+    justification: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -100,34 +100,34 @@ class PurchaseRequisition(Base, ProcurementBaseMixin):
         nullable=False,
         default=False,
     )
-    budget_verified_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    budget_verified_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    budget_verified_at: Mapped[Optional[datetime]] = mapped_column(
+    budget_verified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    material_request_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    material_request_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="Link to inv.material_request",
     )
-    plan_item_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    plan_item_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="Link to proc.procurement_plan_item",
     )
-    approval_request_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approval_request_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="Link to approval workflow",
     )
-    approved_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -137,7 +137,7 @@ class PurchaseRequisition(Base, ProcurementBaseMixin):
     )
 
     # Relationships
-    lines: Mapped[List["PurchaseRequisitionLine"]] = relationship(
+    lines: Mapped[list["PurchaseRequisitionLine"]] = relationship(
         "PurchaseRequisitionLine",
         back_populates="requisition",
         cascade="all, delete-orphan",

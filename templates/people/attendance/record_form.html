@@ -28,9 +28,10 @@
     {% endif %}
 
     <form method="post" action="/people/attendance/records/new" class="card p-6 space-y-6">
+        {{ request.state.csrf_form | safe }}
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-                <label class="form-label">Employee</label>
+                <label class="form-label">Employee <span class="text-rose-500">*</span></label>
                 <select name="employee_id" class="form-select" required>
                     <option value="">Select employee</option>
                     {% for emp in employees %}
@@ -44,13 +45,13 @@
                 </p>
             </div>
             <div>
-                <label class="form-label">Attendance Date</label>
+                <label class="form-label">Attendance Date <span class="text-rose-500">*</span></label>
                 <input type="date" name="attendance_date" required
                        value="{{ form_data.attendance_date | default('', true) }}"
                        class="form-input">
             </div>
             <div>
-                <label class="form-label">Status</label>
+                <label class="form-label">Status <span class="text-rose-500">*</span></label>
                 <select name="status" class="form-select" required>
                     <option value="">Select status</option>
                     {% for s in statuses %}

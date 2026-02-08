@@ -6,9 +6,8 @@ Provides view-focused data and operations for job offer web routes.
 
 from __future__ import annotations
 
-import logging
-from typing import Any, Optional
 from datetime import date
+from typing import Any
 from uuid import UUID
 
 from fastapi import Request, UploadFile
@@ -37,8 +36,6 @@ from .base import (
     parse_uuid,
 )
 
-logger = logging.getLogger(__name__)
-
 
 def _get_form_str(form: Any, key: str, default: str = "") -> str:
     value = form.get(key, default) if form is not None else default
@@ -58,9 +55,9 @@ class OfferWebService:
     def list_offers_context(
         db: Session,
         organization_id: UUID,
-        status: Optional[str] = None,
-        job_opening_id: Optional[str] = None,
-        applicant_id: Optional[str] = None,
+        status: str | None = None,
+        job_opening_id: str | None = None,
+        applicant_id: str | None = None,
         page: int = 1,
     ) -> dict:
         """Build context for job offers list page."""
@@ -105,8 +102,8 @@ class OfferWebService:
     def offer_form_context(
         db: Session,
         organization_id: UUID,
-        offer_id: Optional[str] = None,
-        applicant_id: Optional[str] = None,
+        offer_id: str | None = None,
+        applicant_id: str | None = None,
     ) -> dict:
         """Build context for job offer create/edit form."""
         svc = RecruitmentService(db)
@@ -213,9 +210,9 @@ class OfferWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        status: Optional[str] = None,
-        job_opening_id: Optional[str] = None,
-        applicant_id: Optional[str] = None,
+        status: str | None = None,
+        job_opening_id: str | None = None,
+        applicant_id: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Render job offers list page."""
@@ -240,7 +237,7 @@ class OfferWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        applicant_id: Optional[str] = None,
+        applicant_id: str | None = None,
     ) -> HTMLResponse:
         """Render new job offer form."""
         context = base_context(request, auth, "Create Job Offer", "recruit", db=db)

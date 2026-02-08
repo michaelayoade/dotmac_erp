@@ -381,63 +381,30 @@
             }
         }
 
+        window.__authEnabled = {% if user and user.is_authenticated %}true{% else %}false{% endif %};
+
         // ═══════════════════════════════════════════════════════════════════
         // Automatic Token Refresh Manager
-        // Keeps users logged in by refreshing access tokens before expiry
+        // Keeps users logged in by refreshing access tokens periodically
         // ═══════════════════════════════════════════════════════════════════
         (function() {
-            const TOKEN_REFRESH_MARGIN_SECONDS = 120; // Refresh 2 minutes before expiry
-            const MIN_REFRESH_INTERVAL_MS = 30000;    // Don't refresh more than once per 30s
-            const MAX_REFRESH_INTERVAL_MS = 600000;   // Check at least every 10 minutes
+            const REFRESH_INTERVAL_MS = 10 * 60 * 1000; // Every 10 minutes
+            const MIN_REFRESH_INTERVAL_MS = 30000; // Don't refresh more than once per 30s
 
             let refreshTimeoutId = null;
             let lastRefreshTime = 0;
             let refreshDisabled = false;
 
-            // Parse JWT to get expiration time
-            function parseJwt(token) {
-                try {
-                    const base64Url = token.split('.')[1];
-                    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-                    const jsonPayload = decodeURIComponent(
-                        atob(base64).split('').map(function(c) {
-                            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-                        }).join('')
-                    );
-                    return JSON.parse(jsonPayload);
-                } catch (e) {
-                    return null;
-                }
-            }
-
-            // Get access token from cookie
-            function getAccessToken() {
-                const match = document.cookie.match(/(?:^|;\s*)access_token=([^;]*)/);
-                return match ? match[1] : null;
-            }
-
-            // Set access token cookie (preserve existing max-age behavior)
-            function setAccessToken(token) {
-                // Check if "remember me" was used (longer expiry)
-                const existingCookie = document.cookie;
-                const isRemembered = existingCookie.includes('access_token=');
-                const maxAge = isRemembered ? 86400 * 30 : 86400; // 30 days or 1 day
-                const secure = window.location.protocol === 'https:' ? '; Secure' : '';
-                document.cookie = `access_token=${token}; path=/; max-age=${maxAge}; SameSite=Lax${secure}`;
-            }
-
-            function clearAccessToken() {
-                const secure = window.location.protocol === 'https:' ? '; Secure' : '';
-                document.cookie = `access_token=; path=/; max-age=0; SameSite=Lax${secure}`;
-            }
-
             // Refresh the access token
             async function refreshToken() {
+                if (!window.__authEnabled) {
+                    return;
+                }
                 if (refreshDisabled) {
                     return;
                 }
                 const currentPath = window.location.pathname;
-                if (currentPath === '/login') {
+                if (currentPath === '/login' || currentPath === '/admin/login') {
                     return;
                 }
                 const now = Date.now();
@@ -457,31 +424,18 @@
                     });
 
                     if (response.ok) {
-                        const data = await response.json();
-                        if (data.access_token) {
-                            setAccessToken(data.access_token);
-                            lastRefreshTime = now;
-                            console.debug('[Auth] Token refreshed successfully');
-                        }
+                        await response.json();
+                        lastRefreshTime = now;
+                        console.debug('[Auth] Token refreshed successfully');
                     } else if (response.status === 401) {
-                        const token = getAccessToken();
-                        const payload = token ? parseJwt(token) : null;
-                        const isExpired = !payload || !payload.exp || payload.exp * 1000 <= Date.now();
-                        if (isExpired) {
-                            // Session expired - redirect to login
-                            console.debug('[Auth] Session expired, redirecting to login');
-                            const path = window.location.pathname;
-                            const redirectTarget = window.location.pathname + window.location.search;
-                            if (path !== '/login' && path !== '/') {
-                                window.location.href = '/login?next=' + encodeURIComponent(redirectTarget);
-                            }
-                            return; // Don't schedule another refresh
+                        // Session expired - redirect to login
+                        console.debug('[Auth] Session expired, redirecting to login');
+                        const path = window.location.pathname;
+                        const redirectTarget = window.location.pathname + window.location.search;
+                        if (path !== '/login' && path !== '/') {
+                            window.location.href = '/login?next=' + encodeURIComponent(redirectTarget);
                         }
-                        // Refresh token missing/invalid but access token still valid.
-                        console.debug('[Auth] Refresh disabled until reload (missing refresh token)');
-                        clearAccessToken();
-                        refreshDisabled = true;
-                        return;
+                        return; // Don't schedule another refresh
                     }
                 } catch (e) {
                     console.debug('[Auth] Token refresh failed:', e.message);
@@ -492,6 +446,9 @@
 
             // Calculate when to refresh and schedule it
             function scheduleNextRefresh() {
+                if (!window.__authEnabled) {
+                    return;
+                }
                 if (refreshDisabled) {
                     return;
                 }
@@ -499,36 +456,8 @@
                     clearTimeout(refreshTimeoutId);
                 }
 
-                const token = getAccessToken();
-                if (!token) {
-                    return; // No token, user not logged in
-                }
-
-                const payload = parseJwt(token);
-                if (!payload || !payload.exp) {
-                    return; // Invalid token
-                }
-
-                const expiresAt = payload.exp * 1000; // Convert to milliseconds
-                const now = Date.now();
-                const timeUntilExpiry = expiresAt - now;
-                const refreshMargin = TOKEN_REFRESH_MARGIN_SECONDS * 1000;
-
-                // Calculate when to refresh (before expiry, but not too soon)
-                let refreshIn = Math.max(
-                    timeUntilExpiry - refreshMargin,
-                    MIN_REFRESH_INTERVAL_MS
-                );
-                refreshIn = Math.min(refreshIn, MAX_REFRESH_INTERVAL_MS);
-
-                // If token is already expired or about to expire, refresh now
-                if (timeUntilExpiry < refreshMargin) {
-                    refreshToken();
-                    return;
-                }
-
-                console.debug('[Auth] Next token refresh in', Math.round(refreshIn / 1000), 'seconds');
-                refreshTimeoutId = setTimeout(refreshToken, refreshIn);
+                console.debug('[Auth] Next token refresh in', Math.round(REFRESH_INTERVAL_MS / 1000), 'seconds');
+                refreshTimeoutId = setTimeout(refreshToken, REFRESH_INTERVAL_MS);
             }
 
             // Also refresh on user activity (extends session feel)
@@ -538,16 +467,8 @@
                 activityRefreshScheduled = true;
                 setTimeout(() => {
                     activityRefreshScheduled = false;
-                    const token = getAccessToken();
-                    if (token) {
-                        const payload = parseJwt(token);
-                        if (payload && payload.exp) {
-                            const timeUntilExpiry = payload.exp * 1000 - Date.now();
-                            // If less than 5 minutes left, refresh proactively
-                            if (timeUntilExpiry < 300000 && timeUntilExpiry > 0) {
-                                refreshToken();
-                            }
-                        }
+                    if (window.__authEnabled) {
+                        refreshToken();
                     }
                 }, 1000);
             }
@@ -558,13 +479,13 @@
             });
 
             // Start the refresh cycle when page loads
-            if (getAccessToken()) {
+            if (window.__authEnabled) {
                 scheduleNextRefresh();
             }
 
             // Handle visibility changes (refresh when tab becomes visible)
             document.addEventListener('visibilitychange', function() {
-                if (document.visibilityState === 'visible' && getAccessToken()) {
+                if (document.visibilityState === 'visible' && window.__authEnabled) {
                     scheduleNextRefresh();
                 }
             });

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date as date_type
-from typing import Any, Optional, cast
+from typing import Any, cast
 from urllib.parse import quote
 from uuid import UUID
 
@@ -33,7 +33,7 @@ class LifecycleWebService:
     """Web service for employee lifecycle routes."""
 
     @staticmethod
-    def _parse_bool(value: Optional[str], default: bool = False) -> bool:
+    def _parse_bool(value: str | None, default: bool = False) -> bool:
         if value is None:
             return default
         return str(value).lower() in {"1", "true", "on", "yes"}
@@ -425,7 +425,7 @@ class LifecycleWebService:
     @staticmethod
     def list_promotions_response(
         request: Request,
-        employee_id: Optional[str],
+        employee_id: str | None,
         page: int,
         auth: WebAuthContext,
         db: Session,
@@ -594,8 +594,8 @@ class LifecycleWebService:
     def promotion_detail_response(
         request: Request,
         promotion_id: UUID,
-        success: Optional[str],
-        error: Optional[str],
+        success: str | None,
+        error: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> HTMLResponse | RedirectResponse:
@@ -625,7 +625,7 @@ class LifecycleWebService:
     @staticmethod
     def list_transfers_response(
         request: Request,
-        employee_id: Optional[str],
+        employee_id: str | None,
         page: int,
         auth: WebAuthContext,
         db: Session,
@@ -819,8 +819,8 @@ class LifecycleWebService:
     def transfer_detail_response(
         request: Request,
         transfer_id: UUID,
-        success: Optional[str],
-        error: Optional[str],
+        success: str | None,
+        error: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> HTMLResponse | RedirectResponse:

@@ -5,7 +5,6 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -59,9 +58,9 @@ class WorkflowTask(Base):
     source_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     module: Mapped[str] = mapped_column(String(50), nullable=False)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    action_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    assignee_employee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    action_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    assignee_employee_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id", ondelete="SET NULL"),
         nullable=True,
@@ -74,7 +73,7 @@ class WorkflowTask(Base):
         Enum(WorkflowTaskPriority, name="workflow_task_priority"),
         default=WorkflowTaskPriority.MEDIUM,
     )
-    due_at: Mapped[Optional[datetime]] = mapped_column(
+    due_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
@@ -82,7 +81,7 @@ class WorkflowTask(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

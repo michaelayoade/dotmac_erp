@@ -31,6 +31,7 @@
           class="space-y-6"
           x-data="workflowForm(window.__workflowFormInitial || {})"
           x-effect="syncAll()">
+        {{ request.state.csrf_form | safe }}
         <!-- Basic Info -->
         <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
             <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
@@ -38,7 +39,7 @@
             </div>
             <div class="p-6 space-y-4">
                 <div>
-                    <label for="rule_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Rule Name *</label>
+                    <label for="rule_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Rule Name <span class="text-rose-500">*</span></label>
                     <input type="text" id="rule_name" name="rule_name" required
                            value="{{ rule.rule_name if rule else form_data.rule_name | default('', true) }}"
                            class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
@@ -60,7 +61,7 @@
             <div class="p-6 space-y-4">
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label for="entity_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Entity Type *</label>
+                        <label for="entity_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Entity Type <span class="text-rose-500">*</span></label>
                         <select id="entity_type" name="entity_type" required {% if is_edit %}disabled{% endif %}
                                 class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                             <option value="">Select entity...</option>
@@ -70,7 +71,7 @@
                         </select>
                     </div>
                     <div>
-                        <label for="trigger_event" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Trigger Event *</label>
+                        <label for="trigger_event" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Trigger Event <span class="text-rose-500">*</span></label>
                         <select id="trigger_event" name="trigger_event" x-model="triggerEvent" required {% if is_edit %}disabled{% endif %}
                                 class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                             <option value="">Select trigger...</option>
@@ -89,13 +90,13 @@
                 <h3 class="font-semibold text-slate-900 dark:text-white">Trigger Conditions</h3>
                 <p class="text-sm text-slate-500 dark:text-slate-400">Define when this rule should match.</p>
             </div>
-            <div class="p-6 space-y-5">
+            <div class="p-6 space-y-6">
                 <div class="flex items-center gap-3">
                     <input type="checkbox" id="use_field_conditions" x-model="useFieldConditions"
                            class="h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500">
                     <label for="use_field_conditions" class="text-sm font-medium text-slate-700 dark:text-slate-300">Match field values</label>
                 </div>
-                <div x-show="useFieldConditions" x-cloak class="space-y-3">
+                <div x-show="useFieldConditions" x-cloak class="space-y-4">
                     <template x-for="(cond, index) in fieldConditions" :key="index">
                         <div class="grid gap-3 sm:grid-cols-12">
                             <div class="sm:col-span-4">
@@ -219,7 +220,7 @@
                     <input type="text" placeholder="e.g., OVERDUE" x-model="scheduleStatus"
                            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 </div>
-                <div class="space-y-3">
+                <div class="space-y-4">
                     <div class="flex items-center justify-between">
                         <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Additional filters</span>
                         <button type="button" class="text-sm font-medium text-violet-600 hover:text-violet-700" @click="addScheduleFilter()">
@@ -266,7 +267,7 @@
             </div>
             <div class="p-6 space-y-4">
                 <div>
-                    <label for="action_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Action Type *</label>
+                    <label for="action_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Action Type <span class="text-rose-500">*</span></label>
                     <select id="action_type" name="action_type" x-model="actionType" required {% if is_edit %}disabled{% endif %}
                             class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-violet-500 focus:outline-none focus:ring-1 focus:ring-violet-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                         <option value="">Select action...</option>
@@ -291,7 +292,7 @@
                 <h3 class="font-semibold text-slate-900 dark:text-white">Action Configuration</h3>
                 <p class="text-sm text-slate-500 dark:text-slate-400">Provide the details needed to execute the action.</p>
             </div>
-            <div class="p-6 space-y-5">
+            <div class="p-6 space-y-6">
                 <p x-show="!actionType" x-cloak class="text-sm text-slate-500 dark:text-slate-400">Select an action type to configure details.</p>
 
                 <div x-show="actionType === 'SEND_EMAIL'" x-cloak class="space-y-4">
@@ -480,7 +481,7 @@
                             </select>
                         </div>
                     </div>
-                    <div class="space-y-3">
+                    <div class="space-y-4">
                         <div class="flex items-center justify-between">
                             <span class="text-sm font-medium text-slate-700 dark:text-slate-300">Headers</span>
                             <button type="button" class="text-sm font-medium text-violet-600 hover:text-violet-700" @click="addWebhookHeader()">

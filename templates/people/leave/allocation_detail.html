@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}Leave Allocation{% endblock %}
 
 {% block breadcrumbs %}
@@ -75,7 +76,7 @@
     </div>
 
     <!-- Balance Summary -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
         <div class="card p-4 text-center">
             <div class="text-sm text-slate-500 dark:text-slate-400">Total Allocated</div>
             <div class="text-2xl font-bold text-slate-900 dark:text-white mt-1">{{ allocation.total_leaves_allocated }}</div>
@@ -167,7 +168,7 @@
         <div class="card-header border-b border-slate-200 dark:border-slate-700 p-4">
             <h3 class="font-semibold text-slate-900 dark:text-white">Related Leave Applications</h3>
         </div>
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
@@ -193,7 +194,7 @@
                             {% elif app.status.value == 'REJECTED' %}
                             <span class="inline-flex rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-300">Rejected</span>
                             {% else %}
-                            <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">{{ app.status.value }}</span>
+                            {{ status_badge(app.status.value, size="sm") }}
                             {% endif %}
                         </td>
                     </tr>
@@ -236,7 +237,7 @@
             </div>
         </div>
         <div class="p-4">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                 <div>
                     <span class="text-slate-500 dark:text-slate-400">Available Balance</span>
                     <p class="font-medium text-slate-900 dark:text-white">{{ available_balance }} days</p>
@@ -272,7 +273,7 @@
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                         <div class="space-y-4">
                             <div>
-                                <label for="days_to_encash" class="form-label">Days to Encash</label>
+                                <label for="days_to_encash" class="form-label">Days to Encash <span class="text-rose-500">*</span></label>
                                 <input type="number" name="days_to_encash" id="days_to_encash"
                                     class="form-input w-full"
                                     step="0.5" min="0.5" max="{{ available_balance - threshold }}"

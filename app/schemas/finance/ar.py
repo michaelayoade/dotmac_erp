@@ -7,11 +7,9 @@ Field names match template forms for seamless UI integration.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 # =============================================================================
 # Customer
@@ -26,31 +24,31 @@ class CustomerBase(BaseModel):
     This allows API clients to send template-friendly names (customer_name, tax_id, etc.)
     """
 
-    customer_code: Optional[str] = Field(default=None, max_length=30)
+    customer_code: str | None = Field(default=None, max_length=30)
     customer_type: str = Field(default="COMPANY", max_length=20)
     customer_name: str = Field(
         max_length=255
     )  # Template name (service maps to legal_name)
-    trading_name: Optional[str] = Field(default=None, max_length=255)
-    tax_id: Optional[str] = Field(
+    trading_name: str | None = Field(default=None, max_length=255)
+    tax_id: str | None = Field(
         default=None, max_length=50
     )  # Template name (service maps to tax_identification_number)
-    vat_category: Optional[str] = Field(default=None, max_length=50)
+    vat_category: str | None = Field(default=None, max_length=50)
     payment_terms_days: int = Field(
         default=30
     )  # Template name (service maps to credit_terms_days)
-    credit_limit: Optional[Decimal] = None
+    credit_limit: Decimal | None = None
     currency_code: str = Field(default="NGN", max_length=3)
-    default_revenue_account_id: Optional[UUID] = None
-    default_tax_code_id: Optional[UUID] = None
-    default_receivable_account_id: Optional[UUID] = (
+    default_revenue_account_id: UUID | None = None
+    default_tax_code_id: UUID | None = None
+    default_receivable_account_id: UUID | None = (
         None  # Template name (service maps to ar_control_account_id)
     )
     is_active: bool = True
     # Additional template fields
-    email: Optional[str] = Field(default=None, max_length=255)
-    phone: Optional[str] = Field(default=None, max_length=50)
-    address: Optional[str] = Field(default=None, max_length=500)
+    email: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=50)
+    address: str | None = Field(default=None, max_length=500)
 
 
 class CustomerCreate(CustomerBase):
@@ -62,17 +60,17 @@ class CustomerCreate(CustomerBase):
 class CustomerUpdate(BaseModel):
     """Update customer request."""
 
-    customer_name: Optional[str] = Field(default=None, max_length=255)
-    trading_name: Optional[str] = Field(default=None, max_length=255)
-    tax_id: Optional[str] = Field(default=None, max_length=50)
-    vat_category: Optional[str] = Field(default=None, max_length=50)
-    default_tax_code_id: Optional[UUID] = None
-    payment_terms_days: Optional[int] = None
-    credit_limit: Optional[Decimal] = None
-    is_active: Optional[bool] = None
-    email: Optional[str] = Field(default=None, max_length=255)
-    phone: Optional[str] = Field(default=None, max_length=50)
-    address: Optional[str] = Field(default=None, max_length=500)
+    customer_name: str | None = Field(default=None, max_length=255)
+    trading_name: str | None = Field(default=None, max_length=255)
+    tax_id: str | None = Field(default=None, max_length=50)
+    vat_category: str | None = Field(default=None, max_length=50)
+    default_tax_code_id: UUID | None = None
+    payment_terms_days: int | None = None
+    credit_limit: Decimal | None = None
+    is_active: bool | None = None
+    email: str | None = Field(default=None, max_length=255)
+    phone: str | None = Field(default=None, max_length=50)
+    address: str | None = Field(default=None, max_length=500)
 
 
 class CustomerRead(BaseModel):
@@ -85,22 +83,22 @@ class CustomerRead(BaseModel):
     customer_code: str
     customer_type: str
     customer_name: str = Field(validation_alias="legal_name")
-    trading_name: Optional[str] = None
-    tax_id: Optional[str] = Field(
+    trading_name: str | None = None
+    tax_id: str | None = Field(
         default=None, validation_alias="tax_identification_number"
     )
-    vat_category: Optional[str] = None
+    vat_category: str | None = None
     payment_terms_days: int = Field(validation_alias="credit_terms_days")
-    credit_limit: Optional[Decimal] = None
+    credit_limit: Decimal | None = None
     currency_code: str
-    default_revenue_account_id: Optional[UUID] = None
-    default_receivable_account_id: Optional[UUID] = Field(
+    default_revenue_account_id: UUID | None = None
+    default_receivable_account_id: UUID | None = Field(
         default=None, validation_alias="ar_control_account_id"
     )
-    default_tax_code_id: Optional[UUID] = None
+    default_tax_code_id: UUID | None = None
     is_active: bool
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 # =============================================================================
@@ -112,13 +110,13 @@ class ARInvoiceLineCreate(BaseModel):
     """AR invoice line for creation."""
 
     revenue_account_id: UUID
-    item_id: Optional[UUID] = None
+    item_id: UUID | None = None
     description: str = Field(max_length=500)
     quantity: Decimal = Field(default=Decimal("1"))
     unit_price: Decimal
-    tax_code_id: Optional[UUID] = None
-    cost_center_id: Optional[UUID] = None
-    project_id: Optional[UUID] = None
+    tax_code_id: UUID | None = None
+    cost_center_id: UUID | None = None
+    project_id: UUID | None = None
 
 
 class ARInvoiceCreate(BaseModel):
@@ -128,7 +126,7 @@ class ARInvoiceCreate(BaseModel):
     invoice_date: date
     due_date: date
     currency_code: str = Field(max_length=3)
-    description: Optional[str] = None
+    description: str | None = None
     lines: list[ARInvoiceLineCreate]
 
 
@@ -156,7 +154,7 @@ class ARInvoiceRead(BaseModel):
     invoice_id: UUID
     organization_id: UUID
     customer_id: UUID
-    customer_name: Optional[str] = None
+    customer_name: str | None = None
     invoice_number: str
     invoice_date: date
     due_date: date
@@ -190,7 +188,7 @@ class ARReceiptCreate(BaseModel):
     payment_method: str = Field(max_length=30)
     bank_account_id: UUID
     currency_code: str = Field(max_length=3)
-    reference_number: Optional[str] = None
+    reference_number: str | None = None
     allocations: list[ReceiptAllocationCreate]
 
 
@@ -249,7 +247,7 @@ class CreditNoteCreate(BaseModel):
     """Create credit note request."""
 
     customer_id: UUID
-    original_invoice_id: Optional[UUID] = None
+    original_invoice_id: UUID | None = None
     credit_date: date
     reason: str = Field(max_length=500)
     lines: list[ARInvoiceLineCreate]

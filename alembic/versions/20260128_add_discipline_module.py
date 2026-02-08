@@ -12,8 +12,9 @@ Creates tables for the discipline module:
 - hr.case_response
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260128_discipline"

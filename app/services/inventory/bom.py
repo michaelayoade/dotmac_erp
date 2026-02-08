@@ -6,11 +6,12 @@ Manages BOMs and processes assembly/disassembly transactions.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
-from typing import List, Optional, cast
+from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -36,7 +37,7 @@ class BOMInput:
     output_quantity: Decimal
     output_uom: str
     bom_type: BOMType = BOMType.ASSEMBLY
-    description: Optional[str] = None
+    description: str | None = None
     is_default: bool = True
 
 
@@ -49,7 +50,7 @@ class BOMComponentInput:
     uom: str
     scrap_percent: Decimal = Decimal("0")
     line_number: int = 1
-    warehouse_id: Optional[UUID] = None
+    warehouse_id: UUID | None = None
 
 
 @dataclass
@@ -61,7 +62,7 @@ class AssemblyInput:
     quantity: Decimal  # Number of finished goods to produce
     fiscal_period_id: UUID
     transaction_date: datetime
-    reference: Optional[str] = None
+    reference: str | None = None
 
 
 @dataclass
@@ -562,7 +563,7 @@ class BOMService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         item_id: UUID,
-    ) -> Optional[BillOfMaterials]:
+    ) -> BillOfMaterials | None:
         """Get the default BOM for an item."""
         org_id = coerce_uuid(organization_id)
         itm_id = coerce_uuid(item_id)
@@ -583,13 +584,13 @@ class BOMService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        item_id: Optional[str] = None,
-        bom_type: Optional[BOMType] = None,
-        is_active: Optional[bool] = None,
+        organization_id: str | None = None,
+        item_id: str | None = None,
+        bom_type: BOMType | None = None,
+        is_active: bool | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[BillOfMaterials]:
+    ) -> builtins.list[BillOfMaterials]:
         """List BOMs with optional filters."""
         query = db.query(BillOfMaterials)
 
@@ -614,7 +615,7 @@ class BOMService(ListResponseMixin):
     def list_components(
         db: Session,
         bom_id: str,
-    ) -> List[BOMComponent]:
+    ) -> builtins.list[BOMComponent]:
         """List components for a BOM."""
         b_id = coerce_uuid(bom_id)
 

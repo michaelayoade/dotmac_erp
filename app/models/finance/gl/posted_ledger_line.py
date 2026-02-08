@@ -6,7 +6,6 @@ Document 07: Append-only, immutable ledger.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import Date, DateTime, Index, Numeric, String, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -92,8 +91,8 @@ class PostedLedgerLine(Base):
     posting_date: Mapped[date] = mapped_column(Date, nullable=False)
 
     # Description
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    journal_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    journal_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Amounts (functional currency)
     debit_amount: Mapped[Decimal] = mapped_column(
@@ -104,43 +103,39 @@ class PostedLedgerLine(Base):
     )
 
     # Original currency
-    original_currency_code: Mapped[Optional[str]] = mapped_column(
-        String(3), nullable=True
-    )
-    original_debit_amount: Mapped[Optional[Decimal]] = mapped_column(
+    original_currency_code: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    original_debit_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
-    original_credit_amount: Mapped[Optional[Decimal]] = mapped_column(
+    original_credit_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
-    exchange_rate: Mapped[Optional[Decimal]] = mapped_column(
+    exchange_rate: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 10), nullable=True
     )
 
     # Dimensions
-    business_unit_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    business_unit_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    segment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    segment_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
 
     # Source tracking
-    source_module: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    source_document_type: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True
-    )
-    source_document_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    source_module: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    source_document_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    source_document_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -155,4 +150,4 @@ class PostedLedgerLine(Base):
         UUID(as_uuid=True),
         nullable=False,
     )
-    correlation_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(100), nullable=True)

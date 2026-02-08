@@ -27,7 +27,7 @@ import logging
 from datetime import date, datetime, time
 from decimal import Decimal, InvalidOperation
 from enum import Enum
-from typing import Optional, Type, TypeVar, Union
+from typing import TypeVar, Union
 
 from app.config import settings
 
@@ -50,11 +50,11 @@ _DEFAULT_DATETIME_FMT: str = "%Y-%m-%d %H:%M"
 
 
 def parse_date(
-    value: Optional[str],
+    value: str | None,
     fmt: str = _DEFAULT_DATE_FMT,
     *,
-    format: Optional[str] = None,
-) -> Optional[date]:
+    format: str | None = None,
+) -> date | None:
     """Parse a date string into a :class:`date`.
 
     Tries ``date.fromisoformat`` first (handles ``YYYY-MM-DD`` and full ISO
@@ -85,9 +85,9 @@ def parse_date(
 
 
 def parse_datetime(
-    value: Optional[str],
+    value: str | None,
     fmt: str = "%Y-%m-%d %H:%M:%S",
-) -> Optional[datetime]:
+) -> datetime | None:
     """Parse a string into a :class:`datetime`.
 
     Tries ``datetime.fromisoformat`` first, then *fmt*.
@@ -105,7 +105,7 @@ def parse_datetime(
         return None
 
 
-def parse_date_end_of_day(value: Optional[str]) -> Optional[datetime]:
+def parse_date_end_of_day(value: str | None) -> datetime | None:
     """Parse a date string and return a datetime at 23:59:59.999999.
 
     Useful for date-range filters where the upper bound should include the
@@ -118,9 +118,9 @@ def parse_date_end_of_day(value: Optional[str]) -> Optional[datetime]:
 
 
 def parse_decimal(
-    value: Optional[str],
-    default: Optional[Decimal] = None,
-) -> Optional[Decimal]:
+    value: str | None,
+    default: Decimal | None = None,
+) -> Decimal | None:
     """Parse a string into a :class:`Decimal`.
 
     When an org formatting context is active, removes the org's thousand
@@ -150,7 +150,7 @@ def parse_decimal(
         return default
 
 
-def parse_int(value: Optional[str]) -> Optional[int]:
+def parse_int(value: str | None) -> int | None:
     """Parse a string to ``int``, returning ``None`` on failure."""
     if not value:
         return None
@@ -161,7 +161,7 @@ def parse_int(value: Optional[str]) -> Optional[int]:
 
 
 def parse_bool(
-    value: Optional[str],
+    value: str | None,
     default: bool = False,
 ) -> bool:
     """Parse a boolean from a string (form checkbox, query param, etc.)."""
@@ -170,7 +170,7 @@ def parse_bool(
     return str(value).lower() in {"1", "true", "on", "yes"}
 
 
-def parse_time(value: Optional[str], fmt: str = "%H:%M") -> Optional[time]:
+def parse_time(value: str | None, fmt: str = "%H:%M") -> time | None:
     """Parse a time string (``HH:MM``) into a :class:`time`."""
     if not value:
         return None
@@ -218,10 +218,10 @@ def _format_number_with_seps(
 
 
 def format_date(
-    value: Optional[date],
+    value: date | None,
     fmt: str = _DEFAULT_DATE_FMT,
     *,
-    format: Optional[str] = None,
+    format: str | None = None,
 ) -> str:
     """Format a date as a string.  Returns ``""`` for ``None``.
 
@@ -247,13 +247,13 @@ def format_date(
         return ""
 
 
-def format_date_display(value: Optional[date], fmt: str = "%d %b %Y") -> str:
+def format_date_display(value: date | None, fmt: str = "%d %b %Y") -> str:
     """Human-friendly date (e.g. ``15 Jan 2024``)."""
     return format_date(value, fmt)
 
 
 def format_datetime(
-    value: Optional[datetime],
+    value: datetime | None,
     fmt: str = _DEFAULT_DATETIME_FMT,
 ) -> str:
     """Format a datetime as a string.  Returns ``""`` for ``None``.
@@ -289,8 +289,8 @@ def format_datetime(
 
 
 def format_currency(
-    amount: Optional[Union[Decimal, float, int]],
-    currency: Optional[str] = None,
+    amount: Union[Decimal, float, int] | None,
+    currency: str | None = None,
     *,
     none_value: str = "",
     show_symbol: bool = True,
@@ -348,7 +348,7 @@ def format_currency(
 
 
 def format_currency_compact(
-    amount: Optional[Union[Decimal, float, int]],
+    amount: Union[Decimal, float, int] | None,
     *,
     none_value: str = "",
     decimal_places: int = 2,
@@ -363,7 +363,7 @@ def format_currency_compact(
 
 
 def format_number(
-    value: Optional[Union[Decimal, float, int]],
+    value: Union[Decimal, float, int] | None,
     *,
     none_value: str = "0",
     decimal_places: int = 2,
@@ -397,7 +397,7 @@ def format_number(
         return none_value
 
 
-def format_file_size(size: Optional[int], precision: int = 1) -> str:
+def format_file_size(size: int | None, precision: int = 1) -> str:
     """Format file size for display (e.g. ``1.5 MB``)."""
     if size is None or size < 0:
         return "0 B"
@@ -412,7 +412,7 @@ def format_file_size(size: Optional[int], precision: int = 1) -> str:
 
 
 def format_percentage(
-    value: Optional[Decimal],
+    value: Decimal | None,
     *,
     none_value: str = "",
     decimal_places: int = 2,
@@ -431,7 +431,7 @@ def format_percentage(
 
 
 def format_boolean(
-    value: Optional[bool],
+    value: bool | None,
     true_text: str = "Yes",
     false_text: str = "No",
     none_text: str = "",
@@ -443,7 +443,7 @@ def format_boolean(
 
 
 def truncate_text(
-    text: Optional[str],
+    text: str | None,
     max_length: int = 50,
     suffix: str = "...",
 ) -> str:
@@ -461,10 +461,10 @@ def truncate_text(
 
 
 def parse_enum_safe(
-    enum_class: Type[E],
-    value: Optional[str],
-    default: Optional[E] = None,
-) -> Optional[E]:
+    enum_class: type[E],
+    value: str | None,
+    default: E | None = None,
+) -> E | None:
     """Safely parse a string into an enum value.
 
     Tries exact match, then uppercase, then lowercase, then by name.
@@ -484,14 +484,14 @@ def parse_enum_safe(
     return default
 
 
-def format_enum(value: Optional[Enum], none_value: str = "") -> str:
+def format_enum(value: Enum | None, none_value: str = "") -> str:
     """Return the enum's ``.value`` as a string."""
     if value is None:
         return none_value
     return str(value.value) if hasattr(value, "value") else str(value.name)
 
 
-def format_enum_display(value: Optional[Enum], none_value: str = "") -> str:
+def format_enum_display(value: Enum | None, none_value: str = "") -> str:
     """Format ``UPPER_SNAKE_CASE`` enum value as ``Title Case``."""
     if value is None:
         return none_value

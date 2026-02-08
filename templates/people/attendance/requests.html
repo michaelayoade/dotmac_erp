@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}Attendance Requests{% endblock %}
 
 {% block breadcrumbs %}
@@ -137,7 +138,7 @@
                 </div>
             </div>
 
-            <div class="overflow-x-auto">
+            <div class="table-container">
                 <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                     <thead>
                         <tr class="bg-slate-50 dark:bg-slate-800/50">
@@ -195,7 +196,7 @@
                                 {% elif req.status == "DRAFT" %}
                                 <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">Draft</span>
                                 {% else %}
-                                <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">{{ req.status }}</span>
+                                {{ status_badge(req.status, size="sm") }}
                                 {% endif %}
                             </td>
                             <td class="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">

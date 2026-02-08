@@ -63,6 +63,17 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="grid gap-4 sm:grid-cols-2">
             <div>
+                <label for="requested_approver_id" class="form-label">Expense Approver <span class="text-rose-500">*</span></label>
+                <select name="requested_approver_id" id="requested_approver_id" class="form-select w-full" required {% if not can_edit %}disabled{% endif %}>
+                    <option value="">Select approver...</option>
+                    {% for approver in expense_approver_options %}
+                    <option value="{{ approver.id }}" {% if claim.requested_approver_id and (claim.requested_approver_id | string) == (approver.id | string) %}selected{% endif %}>
+                        {{ approver.label }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
                 <label for="recipient_name" class="form-label">Beneficiary Name</label>
                 <input type="text"
                        name="recipient_name"
@@ -83,7 +94,7 @@
                        {% if not can_edit %}disabled{% endif %}>
             </div>
             <div>
-                <label for="recipient_bank_code" class="form-label">Bank Code</label>
+                <label for="recipient_bank_code" class="form-label">Bank Code <span class="text-rose-500">*</span></label>
                 <input type="text"
                        name="recipient_bank_code"
                        id="recipient_bank_code"
@@ -94,7 +105,7 @@
                        {% if not can_edit %}disabled{% endif %}>
             </div>
             <div>
-                <label for="recipient_account_number" class="form-label">Account Number</label>
+                <label for="recipient_account_number" class="form-label">Account Number <span class="text-rose-500">*</span></label>
                 <input type="text"
                        name="recipient_account_number"
                        id="recipient_account_number"
@@ -146,7 +157,7 @@
             </div>
         </div>
 
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">

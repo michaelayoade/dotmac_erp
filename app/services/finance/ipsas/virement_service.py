@@ -7,7 +7,6 @@ Workflow: DRAFT -> SUBMITTED -> APPROVED -> APPLIED.
 
 import logging
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -27,12 +26,16 @@ class VirementService:
     def __init__(self, db: Session):
         self.db = db
 
+    def _commit_and_refresh(self, virement: Virement) -> None:
+        self.db.commit()
+        self.db.refresh(virement)
+
     def list_for_org(
         self,
         organization_id: UUID,
         *,
-        fiscal_year_id: Optional[UUID] = None,
-        status: Optional[str] = None,
+        fiscal_year_id: UUID | None = None,
+        status: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[Virement]:
@@ -48,7 +51,7 @@ class VirementService:
         return list(self.db.scalars(stmt).all())
 
     def get_or_404(
-        self, virement_id: UUID, organization_id: Optional[UUID] = None
+        self, virement_id: UUID, organization_id: UUID | None = None
     ) -> Virement:
         """Get a virement by ID or raise NotFoundError.
 
@@ -97,6 +100,7 @@ class VirementService:
         self.db.flush()
 
         logger.info("Created virement %s: %s", virement_number, virement.virement_id)
+        self._commit_and_refresh(virement)
         return virement
 
     def approve(self, virement_id: UUID, approver_id: UUID) -> Virement:
@@ -117,6 +121,7 @@ class VirementService:
         self.db.flush()
 
         logger.info("Approved virement %s by %s", virement_id, approver_id)
+        self._commit_and_refresh(virement)
         return virement
 
     def apply(self, virement_id: UUID) -> Virement:
@@ -181,6 +186,7 @@ class VirementService:
             from_approp.appropriation_code,
             to_approp.appropriation_code,
         )
+        self._commit_and_refresh(virement)
         return virement
 
     def count_for_org(self, organization_id: UUID) -> int:

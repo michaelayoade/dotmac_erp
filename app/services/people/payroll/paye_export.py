@@ -13,7 +13,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Literal, Optional
+from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import select
@@ -66,7 +66,7 @@ class PAYEExportService:
         year: int,
         month: int,
         paye_format: PAYEFormat = "lirs",
-        entry_id: Optional[UUID] = None,
+        entry_id: UUID | None = None,
     ) -> PAYEExportResult:
         """
         Generate PAYE export for a period.
@@ -93,7 +93,7 @@ class PAYEExportService:
         organization_id: UUID,
         year: int,
         month: int,
-        entry_id: Optional[UUID] = None,
+        entry_id: UUID | None = None,
     ) -> list[SalarySlip]:
         """Get salary slips for the period."""
         start_date = date(year, month, 1)

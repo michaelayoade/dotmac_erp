@@ -7,7 +7,7 @@ Vendor bid/quotation in response to an RFQ.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Date,
@@ -87,20 +87,20 @@ class QuotationResponse(Base, ProcurementBaseMixin):
         nullable=False,
         default="NGN",
     )
-    delivery_period_days: Mapped[Optional[int]] = mapped_column(
+    delivery_period_days: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
     )
-    validity_days: Mapped[Optional[int]] = mapped_column(
+    validity_days: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Quote validity period in days",
     )
-    technical_proposal: Mapped[Optional[str]] = mapped_column(
+    technical_proposal: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -119,7 +119,7 @@ class QuotationResponse(Base, ProcurementBaseMixin):
         "RequestForQuotation",
         back_populates="responses",
     )
-    lines: Mapped[List["QuotationResponseLine"]] = relationship(
+    lines: Mapped[list["QuotationResponseLine"]] = relationship(
         "QuotationResponseLine",
         back_populates="response",
         cascade="all, delete-orphan",

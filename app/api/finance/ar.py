@@ -5,47 +5,45 @@ Accounts Receivable API endpoints for customers, invoices, and receipts.
 """
 
 from datetime import date
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
-from app.services.auth_dependencies import require_tenant_permission
+from app.config import settings
 from app.db import SessionLocal
+from app.models.finance.ar.contract import ContractStatus, ContractType
+from app.models.finance.ar.customer import CustomerType
+from app.models.finance.ar.customer_payment import PaymentMethod, PaymentStatus
+from app.models.finance.ar.invoice import InvoiceStatus, InvoiceType
+from app.models.finance.ar.performance_obligation import SatisfactionPattern
 from app.schemas.finance.ar import (
-    CustomerCreate,
-    CustomerUpdate,
-    CustomerRead,
+    ARAgingReportRead,
     ARInvoiceCreate,
     ARInvoiceRead,
     ARReceiptCreate,
     ARReceiptRead,
-    ARAgingReportRead,
     CreditNoteCreate,
     CreditNoteRead,
+    CustomerCreate,
+    CustomerRead,
+    CustomerUpdate,
 )
 from app.schemas.finance.common import ListResponse, PostingResultSchema
-from app.models.finance.ar.customer import CustomerType
-from app.config import settings
-from app.models.finance.ar.invoice import InvoiceType, InvoiceStatus
-from app.models.finance.ar.customer_payment import PaymentMethod, PaymentStatus
-from app.models.finance.ar.contract import ContractType, ContractStatus
-from app.models.finance.ar.performance_obligation import SatisfactionPattern
+from app.services.auth_dependencies import require_tenant_permission
 from app.services.finance.ar import (
-    customer_service,
-    ar_invoice_service,
-    customer_payment_service,
-    ar_posting_adapter,
-    ar_aging_service,
-    CustomerInput,
     ARInvoiceInput,
     ARInvoiceLineInput,
+    CustomerInput,
     CustomerPaymentInput,
     PaymentAllocationInput,
+    ar_aging_service,
+    ar_invoice_service,
+    ar_posting_adapter,
+    customer_payment_service,
+    customer_service,
 )
-
 
 router = APIRouter(
     prefix="/ar",
@@ -110,7 +108,7 @@ def get_customer(
 @router.get("/customers", response_model=ListResponse[CustomerRead])
 def list_customers(
     organization_id: UUID = Depends(require_organization_id),
-    is_active: Optional[bool] = None,
+    is_active: bool | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ar:customers:read")),
@@ -213,10 +211,10 @@ def get_ar_invoice(
 @router.get("/invoices", response_model=ListResponse[ARInvoiceRead])
 def list_ar_invoices(
     organization_id: UUID = Depends(require_organization_id),
-    customer_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    customer_id: UUID | None = None,
+    status: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ar:invoices:read")),
@@ -333,10 +331,10 @@ def get_ar_receipt(
 @router.get("/receipts", response_model=ListResponse[ARReceiptRead])
 def list_ar_receipts(
     organization_id: UUID = Depends(require_organization_id),
-    customer_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    customer_id: UUID | None = None,
+    status: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ar:receipts:read")),
@@ -401,7 +399,7 @@ def post_ar_receipt(
 def get_ar_aging(
     organization_id: UUID = Depends(require_organization_id),
     as_of_date: date = Query(...),
-    customer_id: Optional[UUID] = None,
+    customer_id: UUID | None = None,
     auth: dict = Depends(require_tenant_permission("ar:aging:read")),
     db: Session = Depends(get_db),
 ):
@@ -513,13 +511,15 @@ def create_credit_note(
 # IFRS 15 Contracts
 # =============================================================================
 
-from pydantic import BaseModel, ConfigDict, Field
-from decimal import Decimal
-from app.services.finance.ar import (
-    contract_service,
+from decimal import Decimal  # noqa: E402
+
+from pydantic import BaseModel, ConfigDict, Field  # noqa: E402
+
+from app.services.finance.ar import (  # noqa: E402
     ContractInput,
     PerformanceObligationInput,
     ProgressUpdateInput,
+    contract_service,
 )
 
 
@@ -529,16 +529,16 @@ class PerformanceObligationCreate(BaseModel):
     description: str
     standalone_price: Decimal
     recognition_method: str = "OVER_TIME"  # OVER_TIME or POINT_IN_TIME
-    measure_type: Optional[str] = "OUTPUT"  # INPUT or OUTPUT
-    total_units: Optional[Decimal] = None
+    measure_type: str | None = "OUTPUT"  # INPUT or OUTPUT
+    total_units: Decimal | None = None
     revenue_account_id: UUID
     ssp_determination_method: str = "STANDALONE"
     is_distinct: bool = True
-    over_time_method: Optional[str] = None
-    progress_measure: Optional[str] = None
-    expected_completion_date: Optional[date] = None
-    contract_asset_account_id: Optional[UUID] = None
-    contract_liability_account_id: Optional[UUID] = None
+    over_time_method: str | None = None
+    progress_measure: str | None = None
+    expected_completion_date: date | None = None
+    contract_asset_account_id: UUID | None = None
+    contract_liability_account_id: UUID | None = None
 
 
 class ContractCreate(BaseModel):
@@ -551,7 +551,7 @@ class ContractCreate(BaseModel):
     end_date: date
     total_transaction_price: Decimal
     currency_code: str = Field(max_length=3)
-    description: Optional[str] = None
+    description: str | None = None
     performance_obligations: list[PerformanceObligationCreate] = []
     contract_type: str = "STANDARD"
 
@@ -578,8 +578,8 @@ class ProgressUpdateCreate(BaseModel):
     update_date: date
     fiscal_period_id: UUID
     measure_type: str = "OUTPUT"
-    units_delivered: Optional[Decimal] = None
-    percentage_complete: Optional[Decimal] = None
+    units_delivered: Decimal | None = None
+    percentage_complete: Decimal | None = None
 
 
 class RevenueEventRead(BaseModel):
@@ -643,18 +643,19 @@ def create_contract(
 @router.get("/contracts/{contract_id}", response_model=ContractRead)
 def get_contract(
     contract_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ar:contracts:read")),
     db: Session = Depends(get_db),
 ):
     """Get a contract by ID."""
-    return contract_service.get(db, str(contract_id))
+    return contract_service.get(db, str(contract_id), organization_id)
 
 
 @router.get("/contracts", response_model=ListResponse[ContractRead])
 def list_contracts(
     organization_id: UUID = Depends(require_organization_id),
-    customer_id: Optional[UUID] = None,
-    status: Optional[str] = None,
+    customer_id: UUID | None = None,
+    status: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ar:contracts:read")),
@@ -723,7 +724,7 @@ def add_performance_obligation(
     contract_service.add_performance_obligation(
         db, organization_id, contract_id, input_data
     )
-    return contract_service.get(db, str(contract_id))
+    return contract_service.get(db, str(contract_id), organization_id)
 
 
 @router.post("/contracts/update-progress", response_model=RevenueEventRead)

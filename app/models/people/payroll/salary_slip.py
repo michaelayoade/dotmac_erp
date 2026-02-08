@@ -11,12 +11,12 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
+    JSON,
     Boolean,
     Date,
     Enum,
     ForeignKey,
     Index,
-    JSON,
     Numeric,
     String,
     Text,
@@ -31,12 +31,12 @@ from app.db import Base
 from app.models.people.base import AuditMixin, ERPNextSyncMixin, StatusTrackingMixin
 
 if TYPE_CHECKING:
-    from app.models.people.hr.employee import Employee
-    from app.models.people.payroll.salary_structure import SalaryStructure
-    from app.models.people.payroll.salary_component import SalaryComponent
-    from app.models.people.payroll.payroll_entry import PayrollEntry
-    from app.models.finance.gl.journal_entry import JournalEntry
     from app.models.finance.core_org.cost_center import CostCenter
+    from app.models.finance.gl.journal_entry import JournalEntry
+    from app.models.people.hr.employee import Employee
+    from app.models.people.payroll.payroll_entry import PayrollEntry
+    from app.models.people.payroll.salary_component import SalaryComponent
+    from app.models.people.payroll.salary_structure import SalaryStructure
 
 
 class SalarySlipStatus(str, enum.Enum):
@@ -107,14 +107,14 @@ class SalarySlip(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
         ForeignKey("hr.employee.employee_id"),
         nullable=False,
     )
-    employee_name: Mapped[Optional[str]] = mapped_column(
+    employee_name: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
         comment="Denormalized for reporting",
     )
 
     # Structure reference
-    structure_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    structure_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("payroll.salary_structure.structure_id"),
         nullable=True,
@@ -196,7 +196,7 @@ class SalarySlip(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
     )
 
     # GL Dimension (for cost allocation)
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.cost_center.cost_center_id"),
         nullable=True,
@@ -210,62 +210,62 @@ class SalarySlip(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
     )
 
     # GL Integration
-    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.journal_entry.journal_entry_id"),
         nullable=True,
         comment="Posted GL entry",
     )
-    posted_at: Mapped[Optional[datetime]] = mapped_column(
+    posted_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
     )
-    posted_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    posted_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,
     )
 
     # Payment tracking
-    paid_at: Mapped[Optional[datetime]] = mapped_column(
+    paid_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
     )
-    paid_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    paid_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,
     )
-    payment_reference: Mapped[Optional[str]] = mapped_column(
+    payment_reference: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
 
     # Bank details (denormalized from employee)
-    bank_name: Mapped[Optional[str]] = mapped_column(
+    bank_name: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
-    bank_account_number: Mapped[Optional[str]] = mapped_column(
+    bank_account_number: Mapped[str | None] = mapped_column(
         String(30),
         nullable=True,
     )
-    bank_account_name: Mapped[Optional[str]] = mapped_column(
+    bank_account_name: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
-    bank_branch_code: Mapped[Optional[str]] = mapped_column(
+    bank_branch_code: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
     )
 
     # Payroll entry link (for bulk processing)
-    payroll_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    payroll_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("payroll.payroll_entry.entry_id"),
         nullable=True,
     )
 
     # Notes
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -281,16 +281,16 @@ class SalarySlip(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
         default=False,
         comment="Flag for slips requiring manual review before approval",
     )
-    review_reasons: Mapped[Optional[list]] = mapped_column(
+    review_reasons: Mapped[list | None] = mapped_column(
         JSON,
         nullable=True,
         comment="List of reasons why review is needed (e.g., attendance gaps, proration)",
     )
-    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+    reviewed_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         comment="When the slip was reviewed/acknowledged",
     )
-    reviewed_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    reviewed_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,
@@ -302,7 +302,7 @@ class SalarySlip(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )
@@ -410,7 +410,7 @@ class SalarySlipEarning(Base):
         String(100),
         nullable=False,
     )
-    abbr: Mapped[Optional[str]] = mapped_column(
+    abbr: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
     )
@@ -492,7 +492,7 @@ class SalarySlipDeduction(Base):
         String(100),
         nullable=False,
     )
-    abbr: Mapped[Optional[str]] = mapped_column(
+    abbr: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
     )

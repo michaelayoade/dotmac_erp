@@ -18,8 +18,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.db import SessionLocal
 from app.models.finance.gl.account import Account, AccountType, NormalBalance
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
-from app.models.finance.gl.fiscal_year import FiscalYear
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
+from app.models.finance.gl.fiscal_year import FiscalYear
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
 
@@ -317,7 +317,7 @@ def read_trial_balance(year: int) -> dict:
 
     in_accum_depreciation = False
 
-    for idx, row in df.iterrows():
+    for _idx, row in df.iterrows():
         item = str(row["ITEMS"]).strip() if pd.notna(row["ITEMS"]) else ""
         if not item:
             continue

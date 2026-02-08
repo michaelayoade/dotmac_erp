@@ -6,7 +6,7 @@ Defines reusable task templates that can be applied to new projects.
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Enum, ForeignKey, String, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -53,13 +53,13 @@ class ProjectTemplate(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
     )
 
-    tasks: Mapped[List["ProjectTemplateTask"]] = relationship(
+    tasks: Mapped[list["ProjectTemplateTask"]] = relationship(
         "ProjectTemplateTask",
         back_populates="template",
         cascade="all, delete-orphan",

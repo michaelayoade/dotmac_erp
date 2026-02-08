@@ -43,6 +43,12 @@
                         <td class="table-cell-amount text-slate-900 dark:text-white">{{ txn.total_cost }}</td>
                         <td class="text-sm text-slate-600 dark:text-slate-400">{{ txn.reference | default("-") }}</td>
                     </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No transactions found", "There are no transactions to display.") }}
+                        </td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>

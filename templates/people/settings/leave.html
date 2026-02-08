@@ -54,6 +54,7 @@
 
     {% if organization %}
     <form method="POST" action="/people/settings/leave" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
         <!-- Leave Year Configuration -->
         <div class="card p-6">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Leave Year Configuration</h2>

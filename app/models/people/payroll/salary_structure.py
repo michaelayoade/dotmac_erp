@@ -8,7 +8,7 @@ import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
@@ -80,7 +80,7 @@ class SalaryStructure(Base, AuditMixin, ERPNextSyncMixin):
         String(100),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -106,7 +106,7 @@ class SalaryStructure(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )
@@ -174,12 +174,12 @@ class SalaryStructureEarning(Base):
         Boolean,
         default=False,
     )
-    formula: Mapped[Optional[str]] = mapped_column(
+    formula: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Formula expression, e.g. base * 0.25",
     )
-    condition: Mapped[Optional[str]] = mapped_column(
+    condition: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Condition for applying this earning",
@@ -240,12 +240,12 @@ class SalaryStructureDeduction(Base):
         Boolean,
         default=False,
     )
-    formula: Mapped[Optional[str]] = mapped_column(
+    formula: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Formula expression, e.g. gross * 0.08",
     )
-    condition: Mapped[Optional[str]] = mapped_column(
+    condition: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Condition for applying this deduction",

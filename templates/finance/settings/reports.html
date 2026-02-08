@@ -51,6 +51,7 @@
     {% endif %}
 
     <form method="POST" action="/settings/reports" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
         <!-- Export Defaults -->
         <div class="card p-6">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Export defaults</h2>
@@ -146,7 +147,7 @@
         </div>
 
         <!-- Actions -->
-        <div class="flex items-center justify-end gap-4 py-4">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/settings" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

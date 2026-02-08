@@ -60,7 +60,7 @@ class AccountCategory(Base):
 
     category_code: Mapped[str] = mapped_column(String(20), nullable=False)
     category_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # IFRS classification
     ifrs_category: Mapped[IFRSCategory] = mapped_column(
@@ -69,7 +69,7 @@ class AccountCategory(Base):
     )
 
     # Hierarchy
-    parent_category_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    parent_category_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.account_category.category_id"),
         nullable=True,
@@ -78,7 +78,7 @@ class AccountCategory(Base):
     display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # Statement mapping
-    financial_statement_line_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    financial_statement_line_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )

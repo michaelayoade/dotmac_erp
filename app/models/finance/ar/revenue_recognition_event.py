@@ -6,7 +6,7 @@ IFRS 15 Revenue Recognition Events.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -46,7 +46,7 @@ class RevenueRecognitionEvent(Base):
         comment="SATISFACTION, PROGRESS_UPDATE, MODIFICATION, IMPAIRMENT",
     )
 
-    progress_percentage: Mapped[Optional[Decimal]] = mapped_column(
+    progress_percentage: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
     )
@@ -55,15 +55,15 @@ class RevenueRecognitionEvent(Base):
         Numeric(20, 6), nullable=False
     )
 
-    measurement_details: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    measurement_details: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, nullable=True
     )
 
-    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    posting_batch_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    posting_batch_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )

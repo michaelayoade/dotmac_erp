@@ -156,7 +156,7 @@
         </div>
 
         <!-- Invoices Tab -->
-        <div x-show="activeTab === 'invoices'" class="overflow-x-auto">
+        <div x-show="activeTab === 'invoices'" class="table-container">
             <table class="table">
                 <thead>
                     <tr>
@@ -194,7 +194,7 @@
         </div>
 
         <!-- Payments Tab -->
-        <div x-show="activeTab === 'payments'" x-cloak class="overflow-x-auto">
+        <div x-show="activeTab === 'payments'" x-cloak class="table-container">
             <table class="table">
                 <thead>
                     <tr>
@@ -216,7 +216,7 @@
                         </td>
                         <td class="text-sm text-slate-600 dark:text-slate-400">{{ p.payment_date }}</td>
                         <td class="table-cell-amount">{{ p.amount }}</td>
-                        <td class="text-sm">{{ p.payment_method }}</td>
+                        <td class="text-sm">{{ p.payment_method | replace('_', ' ') | title }}</td>
                         <td class="text-sm font-mono text-slate-600 dark:text-slate-400">{{ p.reference }}</td>
                         <td>{{ status_badge(p.status, 'sm') }}</td>
                     </tr>
@@ -232,7 +232,7 @@
         </div>
 
         <!-- Purchase Orders Tab -->
-        <div x-show="activeTab === 'purchase_orders'" x-cloak class="overflow-x-auto">
+        <div x-show="activeTab === 'purchase_orders'" x-cloak class="table-container">
             <table class="table">
                 <thead>
                     <tr>
@@ -266,7 +266,7 @@
         </div>
 
         <!-- Goods Receipts Tab -->
-        <div x-show="activeTab === 'goods_receipts'" x-cloak class="overflow-x-auto">
+        <div x-show="activeTab === 'goods_receipts'" x-cloak class="table-container">
             <table class="table">
                 <thead>
                     <tr>

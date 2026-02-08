@@ -7,13 +7,13 @@ from uuid import uuid4
 
 import pytest
 
+from app.models.inventory.item import CostingMethod, ItemType
 from app.services.inventory.item import (
-    ItemService,
+    ItemCategoryInput,
     ItemCategoryService,
     ItemInput,
-    ItemCategoryInput,
+    ItemService,
 )
-from app.models.inventory.item import ItemType, CostingMethod
 from tests.ifrs.inv.conftest import (
     MockItem,
     MockItemCategory,
@@ -87,9 +87,7 @@ class TestCreateCategory:
         # No existing category
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        result = category_service.create_category(
-            mock_db, org_id, sample_category_input
-        )
+        category_service.create_category(mock_db, org_id, sample_category_input)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -182,7 +180,7 @@ class TestCreateItem:
         )
         mock_db.get.return_value = category
 
-        result = item_service.create_item(mock_db, org_id, sample_item_input)
+        item_service.create_item(mock_db, org_id, sample_item_input)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()

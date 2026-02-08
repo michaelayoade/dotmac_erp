@@ -5,11 +5,11 @@ Revises: 20260203_add_notification_entity_types
 Create Date: 2026-02-03
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.dialects.postgresql import UUID
 
+from alembic import op
 
 revision = "20260203_add_workflow_rule_versioning"
 down_revision = "20260203_add_notification_entity_types"

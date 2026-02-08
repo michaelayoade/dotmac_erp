@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -43,10 +43,10 @@ class ARPostingSagaResult:
     """Result from AR invoice posting saga."""
 
     success: bool
-    journal_entry_id: Optional[UUID] = None
-    posting_batch_id: Optional[UUID] = None
+    journal_entry_id: UUID | None = None
+    posting_batch_id: UUID | None = None
     message: str = ""
-    saga_id: Optional[UUID] = None
+    saga_id: UUID | None = None
 
 
 class ARInvoicePostingSaga(SagaOrchestrator):
@@ -245,7 +245,7 @@ class ARInvoicePostingSaga(SagaOrchestrator):
 
         # Credit revenue accounts (from invoice lines)
         for inv_line in lines:
-            revenue_account_id: Optional[UUID] = inv_line.revenue_account_id
+            revenue_account_id: UUID | None = inv_line.revenue_account_id
             if not revenue_account_id:
                 # Fall back to customer default
                 revenue_account_id = customer.default_revenue_account_id
@@ -618,7 +618,7 @@ class ARInvoicePostingSaga(SagaOrchestrator):
         invoice.journal_entry_id = journal_entry_id
         invoice.posting_batch_id = posting_batch_id
         invoice.posted_by_user_id = user_id
-        invoice.posted_at = datetime.now(timezone.utc)
+        invoice.posted_at = datetime.now(UTC)
 
         db.commit()
 
@@ -674,8 +674,8 @@ def post_invoice_with_saga(
     invoice_id: UUID,
     posting_date: date,
     posted_by_user_id: UUID,
-    idempotency_key: Optional[str] = None,
-    correlation_id: Optional[str] = None,
+    idempotency_key: str | None = None,
+    correlation_id: str | None = None,
 ) -> ARPostingSagaResult:
     """
     Post a customer invoice using the saga pattern.

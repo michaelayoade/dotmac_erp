@@ -59,7 +59,7 @@ class TestAdminDashboard:
     def test_dashboard_has_navigation(self, admin_dashboard_page: Page):
         """Test that admin dashboard has navigation links."""
         # Check for sidebar navigation items
-        nav_items = admin_dashboard_page.locator(
+        admin_dashboard_page.locator(
             "a[href*='/admin/users'], a[href*='/admin/roles'], "
             "a[href*='/admin/organizations'], a[href*='/admin/settings']"
         )

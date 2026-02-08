@@ -6,8 +6,8 @@ then published asynchronously by a background processor.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any, List, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import and_
@@ -42,7 +42,7 @@ class OutboxPublisher(ListResponseMixin):
         producer_module: str,
         correlation_id: str,
         idempotency_key: str,
-        causation_id: Optional[UUID] = None,
+        causation_id: UUID | None = None,
         event_version: int = 1,
     ) -> EventOutbox:
         """
@@ -91,8 +91,8 @@ class OutboxPublisher(ListResponseMixin):
     def get_pending_events(
         db: Session,
         batch_size: int = 100,
-        max_retry_count: Optional[int] = None,
-    ) -> List[EventOutbox]:
+        max_retry_count: int | None = None,
+    ) -> list[EventOutbox]:
         """
         Get pending events ready for publishing.
 
@@ -106,7 +106,7 @@ class OutboxPublisher(ListResponseMixin):
         Returns:
             List of EventOutbox records
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         max_retries = max_retry_count or OutboxPublisher.MAX_RETRY_COUNT
 
         query = db.query(EventOutbox).filter(
@@ -144,7 +144,7 @@ class OutboxPublisher(ListResponseMixin):
             raise ValueError(f"Event not found: {event_id}")
 
         event.status = EventStatus.PUBLISHED
-        event.published_at = datetime.now(timezone.utc)
+        event.published_at = datetime.now(UTC)
         event.last_error = None
 
         db.commit()
@@ -186,9 +186,7 @@ class OutboxPublisher(ListResponseMixin):
             delay_seconds = OutboxPublisher.RETRY_DELAYS[
                 min(event.retry_count - 1, len(OutboxPublisher.RETRY_DELAYS) - 1)
             ]
-            event.next_retry_at = datetime.now(timezone.utc) + timedelta(
-                seconds=delay_seconds
-            )
+            event.next_retry_at = datetime.now(UTC) + timedelta(seconds=delay_seconds)
             event.status = EventStatus.FAILED
 
         db.commit()
@@ -228,7 +226,7 @@ class OutboxPublisher(ListResponseMixin):
         db: Session,
         status: EventStatus = EventStatus.FAILED,
         limit: int = 100,
-    ) -> List[EventOutbox]:
+    ) -> list[EventOutbox]:
         """
         Get failed or dead events for manual review.
 
@@ -302,7 +300,7 @@ class OutboxPublisher(ListResponseMixin):
         aggregate_type: str,
         aggregate_id: str,
         limit: int = 50,
-    ) -> List[EventOutbox]:
+    ) -> list[EventOutbox]:
         """
         Get events for a specific aggregate.
 
@@ -333,7 +331,7 @@ class OutboxPublisher(ListResponseMixin):
         db: Session,
         correlation_id: str,
         limit: int = 50,
-    ) -> List[EventOutbox]:
+    ) -> list[EventOutbox]:
         """
         Get events by correlation ID.
 
@@ -356,11 +354,11 @@ class OutboxPublisher(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        status: Optional[EventStatus] = None,
-        producer_module: Optional[str] = None,
+        status: EventStatus | None = None,
+        producer_module: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[EventOutbox]:
+    ) -> list[EventOutbox]:
         """
         List events (for ListResponseMixin compatibility).
 

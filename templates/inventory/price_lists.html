@@ -103,7 +103,7 @@
     <div id="results-container">
     <div class="card overflow-hidden">
         {% if price_lists | default([]) | length > 0 %}
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="table-ledger">
                 <thead>
                     <tr>
@@ -111,10 +111,10 @@
                         <th scope="col">Code</th>
                         <th scope="col">Type</th>
                         <th scope="col">Currency</th>
-                        <th scope="col" class="text-right">Items</th>
+                        <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider">Items</th>
                         <th scope="col">Effective Date</th>
                         <th scope="col">Status</th>
-                        <th scope="col" class="w-12"></th>
+                        <th scope="col" class="w-12 text-xs font-semibold uppercase tracking-wider"></th>
                     </tr>
                 </thead>
                 <tbody>

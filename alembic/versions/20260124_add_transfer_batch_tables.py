@@ -5,9 +5,10 @@ Revises: 20260124_payment_intent_fees
 Create Date: 2026-01-24
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision = "20260124_transfer_batch"
 down_revision = "20260124_payment_intent_fees"

@@ -7,7 +7,7 @@ Line items within a purchase requisition.
 import uuid
 from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Date,
@@ -58,7 +58,7 @@ class PurchaseRequisitionLine(Base, ProcurementBaseMixin):
         Integer,
         nullable=False,
     )
-    item_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    item_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="inv.item catalog item",
@@ -71,7 +71,7 @@ class PurchaseRequisitionLine(Base, ProcurementBaseMixin):
         Numeric(20, 6),
         nullable=False,
     )
-    uom: Mapped[Optional[str]] = mapped_column(
+    uom: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="Unit of measure",
@@ -84,19 +84,19 @@ class PurchaseRequisitionLine(Base, ProcurementBaseMixin):
         Numeric(20, 6),
         nullable=False,
     )
-    expense_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    expense_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    delivery_date: Mapped[Optional[date]] = mapped_column(
+    delivery_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )

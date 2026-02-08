@@ -30,8 +30,8 @@ from app.models.people.base import AuditMixin, ERPNextSyncMixin, SoftDeleteMixin
 
 if TYPE_CHECKING:
     from app.models.finance.core_org.organization import Organization
-    from app.models.people.hr.designation import Designation
     from app.models.people.hr.department import Department
+    from app.models.people.hr.designation import Designation
 
 
 class CompetencyCategory(str, enum.Enum):
@@ -86,7 +86,7 @@ class Competency(Base, AuditMixin, SoftDeleteMixin):
         String(100),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -105,23 +105,23 @@ class Competency(Base, AuditMixin, SoftDeleteMixin):
 
     # Proficiency level definitions (JSON or separate table could be used for more detail)
     # Using simple 1-5 scale with descriptions
-    level_1_description: Mapped[Optional[str]] = mapped_column(
+    level_1_description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )  # Awareness
-    level_2_description: Mapped[Optional[str]] = mapped_column(
+    level_2_description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )  # Basic
-    level_3_description: Mapped[Optional[str]] = mapped_column(
+    level_3_description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )  # Intermediate
-    level_4_description: Mapped[Optional[str]] = mapped_column(
+    level_4_description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )  # Advanced
-    level_5_description: Mapped[Optional[str]] = mapped_column(
+    level_5_description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )  # Expert
@@ -138,7 +138,7 @@ class Competency(Base, AuditMixin, SoftDeleteMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )
@@ -190,7 +190,7 @@ class JobDescription(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
     )
 
     # Optional department scope (same designation may have different JDs per department)
-    department_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    department_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.department.department_id"),
         nullable=True,
@@ -214,11 +214,11 @@ class JobDescription(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
         nullable=False,
         default=1,
     )
-    effective_from: Mapped[Optional[date]] = mapped_column(
+    effective_from: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    effective_to: Mapped[Optional[date]] = mapped_column(
+    effective_to: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -236,93 +236,93 @@ class JobDescription(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
     )
 
     # Job summary
-    summary: Mapped[Optional[str]] = mapped_column(
+    summary: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    purpose: Mapped[Optional[str]] = mapped_column(
+    purpose: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )  # Why this role exists
 
     # Key responsibilities (stored as text, could be JSON for structured list)
-    key_responsibilities: Mapped[Optional[str]] = mapped_column(
+    key_responsibilities: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Qualifications & requirements
-    education_requirements: Mapped[Optional[str]] = mapped_column(
+    education_requirements: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    experience_requirements: Mapped[Optional[str]] = mapped_column(
+    experience_requirements: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    min_years_experience: Mapped[Optional[int]] = mapped_column(
+    min_years_experience: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
     )
-    max_years_experience: Mapped[Optional[int]] = mapped_column(
+    max_years_experience: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
     )
 
     # Technical requirements
-    technical_skills: Mapped[Optional[str]] = mapped_column(
+    technical_skills: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    certifications_required: Mapped[Optional[str]] = mapped_column(
+    certifications_required: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    certifications_preferred: Mapped[Optional[str]] = mapped_column(
+    certifications_preferred: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Working conditions
-    work_location: Mapped[Optional[str]] = mapped_column(
+    work_location: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
-    travel_requirements: Mapped[Optional[str]] = mapped_column(
+    travel_requirements: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    physical_requirements: Mapped[Optional[str]] = mapped_column(
+    physical_requirements: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Compensation range (optional, for internal reference)
-    salary_min: Mapped[Optional[Decimal]] = mapped_column(
+    salary_min: Mapped[Decimal | None] = mapped_column(
         Numeric(15, 2),
         nullable=True,
     )
-    salary_max: Mapped[Optional[Decimal]] = mapped_column(
+    salary_max: Mapped[Decimal | None] = mapped_column(
         Numeric(15, 2),
         nullable=True,
     )
-    salary_currency: Mapped[Optional[str]] = mapped_column(
+    salary_currency: Mapped[str | None] = mapped_column(
         String(3),
         nullable=True,
     )
 
     # Reporting structure
-    reports_to: Mapped[Optional[str]] = mapped_column(
+    reports_to: Mapped[str | None] = mapped_column(
         String(150),
         nullable=True,
     )  # Job title this role reports to
-    direct_reports: Mapped[Optional[str]] = mapped_column(
+    direct_reports: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )  # Description of who reports to this role
 
     # Additional information
-    additional_notes: Mapped[Optional[str]] = mapped_column(
+    additional_notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -332,7 +332,7 @@ class JobDescription(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )
@@ -396,7 +396,7 @@ class JobDescriptionCompetency(Base, AuditMixin):
     )
 
     # Weight/importance for this role (for weighted scoring)
-    weight: Mapped[Optional[Decimal]] = mapped_column(
+    weight: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
         default=Decimal("1.00"),
@@ -410,7 +410,7 @@ class JobDescriptionCompetency(Base, AuditMixin):
     )
 
     # Notes specific to this competency for this job
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )

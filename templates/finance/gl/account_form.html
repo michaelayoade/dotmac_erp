@@ -32,7 +32,7 @@
             <input type="hidden" name="csrf_token" value="{{ request.state.csrf_token }}">
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
-                    <label class="form-label">Account Code</label>
+                    <label class="form-label">Account Code <span class="text-rose-500">*</span></label>
                     <div class="relative">
                         <input type="text" name="account_code" id="account_code" class="form-input {% if not account %}pr-20{% endif %}"
                                value="{{ form_data.account_code if form_data else (account.account_code if account else '') }}"
@@ -49,12 +49,12 @@
                     <p id="code_hint" class="mt-1 text-xs text-slate-500 dark:text-slate-400 hidden"></p>
                 </div>
                 <div>
-                    <label class="form-label">Account Name</label>
+                    <label class="form-label">Account Name <span class="text-rose-500">*</span></label>
                     <input type="text" name="account_name" id="account_name" class="form-input"
                            value="{{ form_data.account_name if form_data else (account.account_name if account else '') }}" required>
                 </div>
                 <div>
-                    <label class="form-label">Category</label>
+                    <label class="form-label">Category <span class="text-rose-500">*</span></label>
                     <select name="category_id" id="category_id" class="form-select form-input" required>
                         <option value="">Select category</option>
                         {% set selected_category = form_data.category_id if form_data else (account.category_id|string if account else '') %}
@@ -68,7 +68,7 @@
                     </select>
                 </div>
                 <div>
-                    <label class="form-label">Account Type</label>
+                    <label class="form-label">Account Type <span class="text-rose-500">*</span></label>
                     <select name="account_type" id="account_type" class="form-select form-input" required>
                         <option value="">Select type</option>
                         {% set selected_type = form_data.account_type if form_data else (account.account_type.value if account else '') %}
@@ -78,7 +78,7 @@
                     </select>
                 </div>
                 <div>
-                    <label class="form-label">Normal Balance</label>
+                    <label class="form-label">Normal Balance <span class="text-rose-500">*</span></label>
                     <select name="normal_balance" id="normal_balance" class="form-select form-input" required>
                         <option value="">Select balance</option>
                         {% set selected_balance = form_data.normal_balance if form_data else (account.normal_balance.value if account else '') %}

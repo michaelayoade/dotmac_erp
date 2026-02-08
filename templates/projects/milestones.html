@@ -1,5 +1,6 @@
 {% extends "modules/base_modules.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block title %}Milestones - {{ project.project_name }}{% endblock %}
 
 {% block content %}
@@ -117,9 +118,7 @@
                                 'MISSED': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
                                 'CANCELLED': 'bg-slate-100 text-slate-800 dark:bg-slate-700 dark:text-slate-300'
                             } %}
-                            <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium {{ status_badge_colors.get(milestone.status.value, 'bg-slate-100') }}">
-                                {{ milestone.status.value }}
-                            </span>
+                            {{ status_badge(milestone.status.value, size="sm") }}
 
                             {% if milestone.linked_task %}
                             <a href="/projects/{{ project.project_code }}/tasks/{{ milestone.linked_task.task_code or milestone.linked_task.task_id }}"

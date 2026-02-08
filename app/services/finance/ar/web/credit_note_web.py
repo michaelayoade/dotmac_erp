@@ -6,32 +6,22 @@ Provides view-focused data and operations for AR credit note web routes.
 
 from __future__ import annotations
 
-import json
 import logging
-from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
-from fastapi import Request, UploadFile
+from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
-from app.models.finance.ar.invoice_line import InvoiceLine
-from app.models.finance.ar.payment_allocation import PaymentAllocation
 from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
 from app.services.common import coerce_uuid
 from app.services.finance.ar.customer import customer_service
-from app.services.finance.ar.invoice import (
-    ARInvoiceInput,
-    ARInvoiceLineInput,
-    ar_invoice_service,
-)
+from app.services.finance.ar.invoice import ARInvoiceInput, ar_invoice_service
 from app.services.finance.ar.web.base import (
     customer_display_name,
     customer_form_view,
@@ -60,69 +50,26 @@ class CreditNoteWebService:
     """Web service methods for AR credit notes."""
 
     @staticmethod
-    def build_credit_note_input(data: dict) -> ARInvoiceInput:
+    def build_credit_note_input(
+        db: Session, data: dict, organization_id: UUID
+    ) -> ARInvoiceInput:
         """Build ARInvoiceInput from form data for credit note."""
-        lines_data = data.get("lines", [])
-        if isinstance(lines_data, str):
-            lines_data = json.loads(lines_data)
-
-        lines = []
-        for line in lines_data:
-            if line.get("revenue_account_id") and line.get("description"):
-                # Handle both new tax_code_ids array and legacy tax_code_id field
-                tax_code_ids = []
-                if line.get("tax_code_ids"):
-                    tax_code_ids = [
-                        UUID(tc_id) for tc_id in line["tax_code_ids"] if tc_id
-                    ]
-                legacy_tax_code_id = (
-                    UUID(line["tax_code_id"]) if line.get("tax_code_id") else None
-                )
-
-                lines.append(
-                    ARInvoiceLineInput(
-                        description=line.get("description", ""),
-                        quantity=Decimal(str(line.get("quantity", 1))),
-                        unit_price=Decimal(str(line.get("unit_price", 0))),
-                        revenue_account_id=UUID(line["revenue_account_id"])
-                        if line.get("revenue_account_id")
-                        else None,
-                        tax_code_ids=tax_code_ids,
-                        tax_code_id=legacy_tax_code_id,
-                        cost_center_id=UUID(line["cost_center_id"])
-                        if line.get("cost_center_id")
-                        else None,
-                        project_id=UUID(line["project_id"])
-                        if line.get("project_id")
-                        else None,
-                    )
-                )
-
-        credit_note_date = parse_date(data.get("credit_note_date")) or date.today()
-
-        return ARInvoiceInput(
-            customer_id=UUID(data["customer_id"]),
-            invoice_type=InvoiceType.CREDIT_NOTE,
-            invoice_date=credit_note_date,
-            due_date=credit_note_date,  # Credit notes don't have due dates
-            currency_code=data.get(
-                "currency_code",
-                settings.default_functional_currency_code,
-            ),
-            notes=data.get("reason"),
-            internal_notes=data.get("notes"),
-            lines=lines,
+        payload = dict(data)
+        return ar_invoice_service.build_credit_note_input_from_payload(
+            db=db,
+            organization_id=organization_id,
+            payload=payload,
         )
 
     @staticmethod
     def list_credit_notes_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        customer_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        customer_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -266,7 +213,7 @@ class CreditNoteWebService:
     def credit_note_form_context(
         db: Session,
         organization_id: str,
-        invoice_id: Optional[str] = None,
+        invoice_id: str | None = None,
     ) -> dict:
         """Get context for credit note create form."""
         logger.debug(
@@ -456,7 +403,7 @@ class CreditNoteWebService:
         db: Session,
         organization_id: str,
         credit_note_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete a credit note. Returns error message or None on success."""
         logger.debug(
             "delete_credit_note: org=%s credit_note_id=%s",
@@ -466,39 +413,15 @@ class CreditNoteWebService:
         org_id = coerce_uuid(organization_id)
         cn_id = coerce_uuid(credit_note_id)
 
-        credit_note = db.get(Invoice, cn_id)
-        if not credit_note or credit_note.organization_id != org_id:
-            return "Credit note not found"
-
-        if credit_note.invoice_type != InvoiceType.CREDIT_NOTE:
-            return "Document is not a credit note"
-
-        # Only DRAFT credit notes can be deleted
-        if credit_note.status != InvoiceStatus.DRAFT:
-            return f"Cannot delete credit note with status '{credit_note.status.value}'. Only DRAFT credit notes can be deleted."
-
-        # Check for payment allocations
-        allocation_count = (
-            db.query(func.count(PaymentAllocation.allocation_id))
-            .filter(PaymentAllocation.invoice_id == cn_id)
-            .scalar()
-            or 0
-        )
-
-        if allocation_count > 0:
-            return f"Cannot delete credit note with {allocation_count} allocation(s)."
-
         try:
-            # Delete lines first
-            db.query(InvoiceLine).filter(InvoiceLine.invoice_id == cn_id).delete()
-            db.delete(credit_note)
-            db.commit()
+            ar_invoice_service.delete_credit_note(db, org_id, cn_id)
             logger.info(
                 "delete_credit_note: deleted credit note %s for org %s", cn_id, org_id
             )
             return None
+        except HTTPException as exc:
+            return exc.detail
         except Exception as e:
-            db.rollback()
             logger.exception("delete_credit_note: failed for org %s", org_id)
             return f"Failed to delete credit note: {str(e)}"
 
@@ -511,11 +434,11 @@ class CreditNoteWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str],
-        customer_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        customer_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
     ) -> HTMLResponse:
         """Render credit note list page."""
@@ -541,7 +464,7 @@ class CreditNoteWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        invoice_id: Optional[str],
+        invoice_id: str | None,
     ) -> HTMLResponse:
         """Render new credit note form."""
         context = base_context(request, auth, "New Credit Note", "ar")
@@ -576,7 +499,7 @@ class CreditNoteWebService:
             data = dict(form_data)
 
         try:
-            input_data = self.build_credit_note_input(data)
+            input_data = self.build_credit_note_input(db, data, org_id)
 
             credit_note = ar_invoice_service.create_invoice(
                 db=db,
@@ -659,7 +582,7 @@ class CreditNoteWebService:
         self,
         credit_note_id: str,
         file: UploadFile,
-        description: Optional[str],
+        description: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:

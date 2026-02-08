@@ -22,8 +22,8 @@ class TestAssetCategoryService:
     def test_create_category_success(self, mock_db, org_id):
         """Test successful category creation."""
         from app.services.fixed_assets.asset import (
-            AssetCategoryService,
             AssetCategoryInput,
+            AssetCategoryService,
         )
 
         input_data = AssetCategoryInput(
@@ -39,7 +39,7 @@ class TestAssetCategoryService:
         # Mock no existing category with same code
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        result = AssetCategoryService.create_category(mock_db, org_id, input_data)
+        AssetCategoryService.create_category(mock_db, org_id, input_data)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -47,11 +47,12 @@ class TestAssetCategoryService:
 
     def test_create_category_duplicate_code(self, mock_db, org_id):
         """Test category creation with duplicate code fails."""
-        from app.services.fixed_assets.asset import (
-            AssetCategoryService,
-            AssetCategoryInput,
-        )
         from fastapi import HTTPException
+
+        from app.services.fixed_assets.asset import (
+            AssetCategoryInput,
+            AssetCategoryService,
+        )
 
         existing_category = MockAssetCategory(organization_id=org_id)
         mock_db.query.return_value.filter.return_value.first.return_value = (
@@ -88,8 +89,9 @@ class TestAssetCategoryService:
 
     def test_get_category_not_found(self, mock_db):
         """Test getting non-existent category raises HTTPException."""
-        from app.services.fixed_assets.asset import AssetCategoryService
         from fastapi import HTTPException
+
+        from app.services.fixed_assets.asset import AssetCategoryService
 
         mock_db.get.return_value = None
 
@@ -126,7 +128,7 @@ class TestAssetService:
 
     def test_create_asset_success(self, mock_db, org_id, mock_category, user_id):
         """Test successful asset creation."""
-        from app.services.fixed_assets.asset import AssetService, AssetInput
+        from app.services.fixed_assets.asset import AssetInput, AssetService
 
         # Mock category lookup
         mock_db.get.return_value = mock_category
@@ -143,7 +145,7 @@ class TestAssetService:
             "app.services.fixed_assets.asset.SequenceService.get_next_number"
         ) as mock_seq:
             mock_seq.return_value = "FA-0001"
-            result = AssetService.create_asset(mock_db, org_id, input_data, user_id)
+            AssetService.create_asset(mock_db, org_id, input_data, user_id)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -151,8 +153,9 @@ class TestAssetService:
 
     def test_create_asset_category_not_found(self, mock_db, org_id, user_id):
         """Test asset creation fails when category not found."""
-        from app.services.fixed_assets.asset import AssetService, AssetInput
         from fastapi import HTTPException
+
+        from app.services.fixed_assets.asset import AssetInput, AssetService
 
         mock_db.get.return_value = None
 
@@ -173,8 +176,9 @@ class TestAssetService:
         self, mock_db, org_id, mock_category, user_id
     ):
         """Test asset creation fails when category is inactive."""
-        from app.services.fixed_assets.asset import AssetService, AssetInput
         from fastapi import HTTPException
+
+        from app.services.fixed_assets.asset import AssetInput, AssetService
 
         mock_category.is_active = False
         mock_db.get.return_value = mock_category
@@ -197,8 +201,9 @@ class TestAssetService:
         self, mock_db, org_id, mock_category, user_id
     ):
         """Test asset creation fails when cost is below capitalization threshold."""
-        from app.services.fixed_assets.asset import AssetService, AssetInput
         from fastapi import HTTPException
+
+        from app.services.fixed_assets.asset import AssetInput, AssetService
 
         mock_category.capitalization_threshold = Decimal("1000")
         mock_db.get.return_value = mock_category
@@ -230,8 +235,9 @@ class TestAssetService:
 
     def test_get_asset_not_found(self, mock_db):
         """Test getting non-existent asset raises HTTPException."""
-        from app.services.fixed_assets.asset import AssetService
         from fastapi import HTTPException
+
+        from app.services.fixed_assets.asset import AssetService
 
         mock_db.get.return_value = None
 
@@ -298,7 +304,7 @@ class TestAssetService:
         mock_asset.status = MockAssetStatus.DRAFT
         mock_db.get.return_value = mock_asset
 
-        result = AssetService.update_asset(
+        AssetService.update_asset(
             mock_db,
             org_id,
             mock_asset.asset_id,
@@ -309,8 +315,9 @@ class TestAssetService:
 
     def test_update_asset_not_found(self, mock_db, org_id):
         """Test updating non-existent asset fails."""
-        from app.services.fixed_assets.asset import AssetService
         from fastapi import HTTPException
+
+        from app.services.fixed_assets.asset import AssetService
 
         mock_db.get.return_value = None
 
@@ -328,8 +335,9 @@ class TestAssetService:
         self, mock_db, org_id, mock_asset
     ):
         """Test that certain fields can't be updated after activation."""
-        from app.services.fixed_assets.asset import AssetService
         from fastapi import HTTPException
+
+        from app.services.fixed_assets.asset import AssetService
 
         mock_asset.status = MockAssetStatus.ACTIVE  # Not DRAFT
         mock_db.get.return_value = mock_asset
@@ -352,14 +360,15 @@ class TestAssetService:
         mock_asset.status = MockAssetStatus.DRAFT
         mock_db.get.return_value = mock_asset
 
-        result = AssetService.activate_asset(mock_db, org_id, mock_asset.asset_id)
+        AssetService.activate_asset(mock_db, org_id, mock_asset.asset_id)
 
         mock_db.commit.assert_called_once()
 
     def test_activate_asset_wrong_status(self, mock_db, org_id, mock_asset):
         """Test activating asset with wrong status fails."""
-        from app.services.fixed_assets.asset import AssetService
         from fastapi import HTTPException
+
+        from app.services.fixed_assets.asset import AssetService
 
         mock_asset.status = MockAssetStatus.ACTIVE  # Already active
         mock_db.get.return_value = mock_asset
@@ -399,8 +408,6 @@ class TestAssetService:
         mock_asset.status = MockAssetStatus.ACTIVE
         mock_db.get.return_value = mock_asset
 
-        result = AssetService.mark_fully_depreciated(
-            mock_db, org_id, mock_asset.asset_id
-        )
+        AssetService.mark_fully_depreciated(mock_db, org_id, mock_asset.asset_id)
 
         mock_db.commit.assert_called_once()

@@ -2,7 +2,6 @@
 RFQ API Endpoints.
 """
 
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -31,11 +30,11 @@ def get_db():
         db.close()
 
 
-@router.get("", response_model=List[RFQResponse])
+@router.get("", response_model=list[RFQResponse])
 def list_rfqs(
     organization_id: UUID = Depends(require_organization_id),
-    status_filter: Optional[str] = Query(None, alias="status"),
-    method_filter: Optional[str] = Query(None, alias="method"),
+    status_filter: str | None = Query(None, alias="status"),
+    method_filter: str | None = Query(None, alias="method"),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     db: Session = Depends(get_db),

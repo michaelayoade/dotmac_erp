@@ -120,32 +120,32 @@ class ShiftSwapRequest(Base, AuditMixin):
     )
 
     # Request details
-    reason: Mapped[Optional[str]] = mapped_column(
+    reason: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Reason for the swap request",
     )
 
     # Target acceptance
-    target_accepted_at: Mapped[Optional[datetime]] = mapped_column(
+    target_accepted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="When target employee accepted the swap",
     )
 
     # Manager review
-    reviewed_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    reviewed_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
         comment="Manager who approved/rejected",
     )
-    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+    reviewed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="When the swap was reviewed",
     )
-    review_notes: Mapped[Optional[str]] = mapped_column(
+    review_notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Manager's notes on approval/rejection",
@@ -157,7 +157,7 @@ class ShiftSwapRequest(Base, AuditMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

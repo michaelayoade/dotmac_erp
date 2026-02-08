@@ -6,7 +6,6 @@ Provides HR admin interface for managing:
 - Onboarding dashboard and metrics
 """
 
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -14,8 +13,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.people.hr.web.onboarding_admin_web import onboarding_admin_web_service
-from app.web.deps import get_db, require_hr_access, WebAuthContext
-
+from app.web.deps import WebAuthContext, get_db, require_hr_access
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding-admin"])
 
@@ -153,7 +151,7 @@ async def delete_template_item(
 @router.get("/employees", response_class=HTMLResponse)
 def employees_list(
     request: Request,
-    status: Optional[str] = Query(None),
+    status: str | None = Query(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):

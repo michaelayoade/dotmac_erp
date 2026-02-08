@@ -6,7 +6,6 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -61,7 +60,7 @@ class LeasePaymentSchedule(Base):
     # Payment sequence
     payment_number: Mapped[int] = mapped_column(Integer, nullable=False)
     payment_date: Mapped[date] = mapped_column(Date, nullable=False)
-    fiscal_period_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    fiscal_period_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -100,26 +99,26 @@ class LeasePaymentSchedule(Base):
     )
 
     # Actual payment tracking
-    actual_payment_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    actual_payment_amount: Mapped[Optional[Decimal]] = mapped_column(
+    actual_payment_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    actual_payment_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
-    payment_reference: Mapped[Optional[uuid.UUID]] = mapped_column(
+    payment_reference: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    invoice_reference: Mapped[Optional[uuid.UUID]] = mapped_column(
+    invoice_reference: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
 
     # Journal entries
-    interest_journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    interest_journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    payment_journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    payment_journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -129,7 +128,7 @@ class LeasePaymentSchedule(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

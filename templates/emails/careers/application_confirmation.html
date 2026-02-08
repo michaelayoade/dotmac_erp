@@ -1,0 +1,22 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Application Received{% endblock %}
+{% block content %}
+<p style="margin: 0 0 16px 0;">Dear {{ applicant_name }},</p>
+
+<p style="margin: 0 0 16px 0;">Thank you for applying for the <strong>{{ job_title }}</strong> position at <strong>{{ org_name }}</strong>. We have received your application and it is currently being reviewed by our hiring team.</p>
+
+<p style="margin: 0 0 16px 0;">We appreciate your interest in joining our organization. If your qualifications match our requirements, a member of our team will be in touch to discuss next steps.</p>
+
+{% if verification_url %}
+<p style="margin: 0 0 8px 0;">To complete your application, please verify your email address:</p>
+
+<p style="margin: 0 0 20px 0;">
+  <a href="{{ verification_url }}" style="display: inline-block; padding: 12px 24px; background-color: {{ primary_color | default('#0d9488') }}; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600;">Verify Email Address</a>
+</p>
+
+<p style="margin: 0 0 16px 0; font-size: 13px; color: #64748b;">If the button above does not work, copy and paste this link into your browser:<br>
+<a href="{{ verification_url }}" style="color: {{ primary_color | default('#0d9488') }}; text-decoration: none; word-break: break-all;">{{ verification_url }}</a></p>
+{% endif %}
+
+<p style="margin: 0;">We wish you the best of luck in the selection process.</p>
+{% endblock %}

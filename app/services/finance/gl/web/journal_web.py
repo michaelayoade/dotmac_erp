@@ -6,13 +6,10 @@ Provides view-focused data and operations for GL journal entry web routes.
 
 from __future__ import annotations
 
-import json
 import logging
 from datetime import date
-from decimal import Decimal
-from typing import Optional
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -20,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
-from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
+from app.models.finance.gl.journal_entry import JournalEntry, JournalType
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
 from app.services.common import coerce_uuid
 from app.services.finance.gl.journal import JournalService
@@ -29,8 +26,6 @@ from app.services.finance.gl.web.base import (
     format_date,
     journal_entry_view,
     journal_line_view,
-    parse_date,
-    parse_status,
     period_option_view,
 )
 from app.services.finance.platform.org_context import org_context_service
@@ -51,10 +46,10 @@ class JournalWebService:
     def list_journals_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -66,28 +61,17 @@ class JournalWebService:
             status,
             page,
         )
-        org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
+        from app.services.finance.gl.journal_query import build_journal_query
 
-        status_value = parse_status(status)
-        from_date = parse_date(start_date)
-        to_date = parse_date(end_date)
-
-        query = db.query(JournalEntry).filter(JournalEntry.organization_id == org_id)
-
-        if status_value:
-            query = query.filter(JournalEntry.status == status_value)
-        if from_date:
-            query = query.filter(JournalEntry.posting_date >= from_date)
-        if to_date:
-            query = query.filter(JournalEntry.posting_date <= to_date)
-        if search:
-            search_pattern = f"%{search}%"
-            query = query.filter(
-                (JournalEntry.journal_number.ilike(search_pattern))
-                | (JournalEntry.description.ilike(search_pattern))
-                | (JournalEntry.reference.ilike(search_pattern))
-            )
+        query = build_journal_query(
+            db=db,
+            organization_id=organization_id,
+            search=search,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+        )
 
         total_count = (
             query.with_entities(func.count(JournalEntry.journal_entry_id)).scalar() or 0
@@ -138,7 +122,7 @@ class JournalWebService:
     def journal_form_context(
         db: Session,
         organization_id: str,
-        journal_entry_id: Optional[str] = None,
+        journal_entry_id: str | None = None,
     ) -> dict:
         """Get context for journal create/edit form."""
         logger.debug(
@@ -274,7 +258,7 @@ class JournalWebService:
         currency_code: str = settings.default_functional_currency_code,
         exchange_rate: str = "1.0",
         lines_json: str = "[]",
-    ) -> tuple[Optional[JournalEntry], Optional[str]]:
+    ) -> tuple[JournalEntry | None, str | None]:
         """Create a new journal entry with lines. Returns (entry, error)."""
         logger.debug(
             "create_journal: org=%s type=%s date=%s",
@@ -285,148 +269,38 @@ class JournalWebService:
         org_id = coerce_uuid(organization_id)
         uid = coerce_uuid(user_id)
 
-        # Validate journal type
-        try:
-            journal_type_enum = JournalType(journal_type)
-        except ValueError:
-            return None, f"Invalid journal type: {journal_type}"
-
-        # Validate fiscal period
-        period_id = coerce_uuid(fiscal_period_id)
-        period = db.get(FiscalPeriod, period_id)
-        if not period or period.organization_id != org_id:
-            return None, "Invalid fiscal period"
-
-        # Parse dates
-        entry_dt = parse_date(entry_date)
-        posting_dt = parse_date(posting_date)
-        if not entry_dt:
-            return None, "Invalid entry date"
-        if not posting_dt:
-            return None, "Invalid posting date"
-
-        # Parse exchange rate
-        try:
-            rate = Decimal(exchange_rate)
-        except (ValueError, TypeError):
-            rate = Decimal("1.0")
-
-        # Parse lines
-        try:
-            lines_data = json.loads(lines_json) if lines_json else []
-        except json.JSONDecodeError:
-            return None, "Invalid journal lines format"
-
-        if not lines_data:
-            return None, "Journal entry must have at least one line"
-
-        # Validate lines and calculate totals
-        total_debit = Decimal("0")
-        total_credit = Decimal("0")
-        validated_lines = []
-
-        for idx, line_data in enumerate(lines_data):
-            account_id = line_data.get("account_id")
-            if not account_id:
-                return None, f"Line {idx + 1}: Account is required"
-
-            account = db.get(Account, coerce_uuid(account_id))
-            if not account or account.organization_id != org_id:
-                return None, f"Line {idx + 1}: Invalid account"
-
-            try:
-                debit = Decimal(str(line_data.get("debit", "0") or "0"))
-                credit = Decimal(str(line_data.get("credit", "0") or "0"))
-            except (ValueError, TypeError):
-                return None, f"Line {idx + 1}: Invalid amount"
-
-            if debit == 0 and credit == 0:
-                return None, f"Line {idx + 1}: Either debit or credit must be non-zero"
-
-            if debit != 0 and credit != 0:
-                return (
-                    None,
-                    f"Line {idx + 1}: Cannot have both debit and credit on same line",
-                )
-
-            total_debit += debit
-            total_credit += credit
-            validated_lines.append(
-                {
-                    "account_id": coerce_uuid(account_id),
-                    "description": line_data.get("description", ""),
-                    "debit": debit,
-                    "credit": credit,
-                }
-            )
-
-        # Check balance
-        if total_debit != total_credit:
-            return (
-                None,
-                f"Journal is out of balance. Debit: {total_debit}, Credit: {total_credit}",
-            )
-
-        # Generate journal number
-        count = (
-            db.query(JournalEntry)
-            .filter(JournalEntry.organization_id == org_id)
-            .count()
-        )
-        journal_number = f"JE-{count + 1:06d}"
+        payload = {
+            "journal_type": journal_type,
+            "fiscal_period_id": fiscal_period_id,
+            "entry_date": entry_date,
+            "posting_date": posting_date,
+            "description": description,
+            "reference": reference,
+            "currency_code": currency_code,
+            "exchange_rate": exchange_rate,
+            "lines": lines_json,
+        }
 
         try:
-            entry = JournalEntry(
+            input_data = JournalService.build_input_from_payload(db, org_id, payload)
+            entry = JournalService.create_entry(
+                db=db,
                 organization_id=org_id,
-                journal_number=journal_number,
-                journal_type=journal_type_enum,
-                entry_date=entry_dt,
-                posting_date=posting_dt,
-                fiscal_period_id=period_id,
-                description=description,
-                reference=reference or None,
-                currency_code=currency_code,
-                exchange_rate=rate,
-                total_debit=total_debit,
-                total_credit=total_credit,
-                total_debit_functional=total_debit * rate,
-                total_credit_functional=total_credit * rate,
-                status=JournalStatus.DRAFT,
+                input=input_data,
                 created_by_user_id=uid,
             )
-            db.add(entry)
-            db.flush()
-
-            # Create lines
-            for idx, line_data in enumerate(validated_lines):
-                line = JournalEntryLine(
-                    journal_entry_id=entry.journal_entry_id,
-                    line_number=idx + 1,
-                    account_id=line_data["account_id"],
-                    description=line_data["description"] or None,
-                    debit_amount=line_data["debit"],
-                    credit_amount=line_data["credit"],
-                    debit_amount_functional=line_data["debit"] * rate,
-                    credit_amount_functional=line_data["credit"] * rate,
-                )
-                db.add(line)
-
-            db.commit()
-            db.refresh(entry)
-            logger.info(
-                "create_journal: created %s for org %s", entry.journal_number, org_id
-            )
             return entry, None
-
+        except HTTPException as e:
+            return None, str(e.detail)
         except Exception as e:
-            db.rollback()
             logger.exception("create_journal: failed for org %s", org_id)
-            return None, f"Failed to create journal entry: {str(e)}"
+            return None, str(e)
 
     @staticmethod
     def update_journal(
         db: Session,
         organization_id: str,
+        user_id: str,
         entry_id: str,
         journal_type: str,
         fiscal_period_id: str,
@@ -437,176 +311,62 @@ class JournalWebService:
         currency_code: str = settings.default_functional_currency_code,
         exchange_rate: str = "1.0",
         lines_json: str = "[]",
-    ) -> tuple[Optional[JournalEntry], Optional[str]]:
+    ) -> tuple[JournalEntry | None, str | None]:
         """Update a journal entry. Only DRAFT entries can be updated. Returns (entry, error)."""
         logger.debug("update_journal: org=%s entry_id=%s", organization_id, entry_id)
         org_id = coerce_uuid(organization_id)
-        ent_id = coerce_uuid(entry_id)
+        uid = coerce_uuid(user_id)
 
-        entry = db.get(JournalEntry, ent_id)
-        if not entry or entry.organization_id != org_id:
-            return None, "Journal entry not found"
-
-        if entry.status != JournalStatus.DRAFT:
-            return None, f"Cannot edit journal entry with status: {entry.status.value}"
-
-        # Validate journal type
-        try:
-            journal_type_enum = JournalType(journal_type)
-        except ValueError:
-            return None, f"Invalid journal type: {journal_type}"
-
-        # Validate fiscal period
-        period_id = coerce_uuid(fiscal_period_id)
-        period = db.get(FiscalPeriod, period_id)
-        if not period or period.organization_id != org_id:
-            return None, "Invalid fiscal period"
-
-        # Parse dates
-        entry_dt = parse_date(entry_date)
-        posting_dt = parse_date(posting_date)
-        if not entry_dt:
-            return None, "Invalid entry date"
-        if not posting_dt:
-            return None, "Invalid posting date"
-
-        # Parse exchange rate
-        try:
-            rate = Decimal(exchange_rate)
-        except (ValueError, TypeError):
-            rate = Decimal("1.0")
-
-        # Parse lines
-        try:
-            lines_data = json.loads(lines_json) if lines_json else []
-        except json.JSONDecodeError:
-            return None, "Invalid journal lines format"
-
-        if not lines_data:
-            return None, "Journal entry must have at least one line"
-
-        # Validate lines and calculate totals
-        total_debit = Decimal("0")
-        total_credit = Decimal("0")
-        validated_lines = []
-
-        for idx, line_data in enumerate(lines_data):
-            account_id = line_data.get("account_id")
-            if not account_id:
-                return None, f"Line {idx + 1}: Account is required"
-
-            account = db.get(Account, coerce_uuid(account_id))
-            if not account or account.organization_id != org_id:
-                return None, f"Line {idx + 1}: Invalid account"
-
-            try:
-                debit = Decimal(str(line_data.get("debit", "0") or "0"))
-                credit = Decimal(str(line_data.get("credit", "0") or "0"))
-            except (ValueError, TypeError):
-                return None, f"Line {idx + 1}: Invalid amount"
-
-            if debit == 0 and credit == 0:
-                return None, f"Line {idx + 1}: Either debit or credit must be non-zero"
-
-            if debit != 0 and credit != 0:
-                return (
-                    None,
-                    f"Line {idx + 1}: Cannot have both debit and credit on same line",
-                )
-
-            total_debit += debit
-            total_credit += credit
-            validated_lines.append(
-                {
-                    "account_id": coerce_uuid(account_id),
-                    "description": line_data.get("description", ""),
-                    "debit": debit,
-                    "credit": credit,
-                }
-            )
-
-        # Check balance
-        if total_debit != total_credit:
-            return (
-                None,
-                f"Journal is out of balance. Debit: {total_debit}, Credit: {total_credit}",
-            )
+        payload = {
+            "journal_type": journal_type,
+            "fiscal_period_id": fiscal_period_id,
+            "entry_date": entry_date,
+            "posting_date": posting_date,
+            "description": description,
+            "reference": reference,
+            "currency_code": currency_code,
+            "exchange_rate": exchange_rate,
+            "lines": lines_json,
+        }
 
         try:
-            # Update header
-            entry.journal_type = journal_type_enum
-            entry.fiscal_period_id = period_id
-            entry.entry_date = entry_dt
-            entry.posting_date = posting_dt
-            entry.description = description
-            entry.reference = reference or None
-            entry.currency_code = currency_code
-            entry.exchange_rate = rate
-            entry.total_debit = total_debit
-            entry.total_credit = total_credit
-            entry.total_debit_functional = total_debit * rate
-            entry.total_credit_functional = total_credit * rate
-
-            # Delete existing lines
-            db.query(JournalEntryLine).filter(
-                JournalEntryLine.journal_entry_id == ent_id
-            ).delete()
-
-            # Create new lines
-            for idx, line_data in enumerate(validated_lines):
-                line = JournalEntryLine(
-                    journal_entry_id=ent_id,
-                    line_number=idx + 1,
-                    account_id=line_data["account_id"],
-                    description=line_data["description"] or None,
-                    debit_amount=line_data["debit"],
-                    credit_amount=line_data["credit"],
-                    debit_amount_functional=line_data["debit"] * rate,
-                    credit_amount_functional=line_data["credit"] * rate,
-                )
-                db.add(line)
-
-            db.commit()
-            db.refresh(entry)
-            logger.info(
-                "update_journal: updated %s for org %s", entry.journal_number, org_id
+            input_data = JournalService.build_input_from_payload(db, org_id, payload)
+            entry = JournalService.update_journal(
+                db=db,
+                organization_id=org_id,
+                journal_entry_id=coerce_uuid(entry_id),
+                input=input_data,
+                updated_by_user_id=uid,
             )
             return entry, None
-
+        except HTTPException as e:
+            return None, str(e.detail)
         except Exception as e:
-            db.rollback()
             logger.exception("update_journal: failed for org %s", org_id)
-            return None, f"Failed to update journal entry: {str(e)}"
+            return None, str(e)
 
     @staticmethod
     def delete_journal(
         db: Session,
         organization_id: str,
         entry_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete a journal entry. Only DRAFT entries can be deleted. Returns error message or None."""
         logger.debug("delete_journal: org=%s entry_id=%s", organization_id, entry_id)
         org_id = coerce_uuid(organization_id)
-        ent_id = coerce_uuid(entry_id)
-
-        entry = db.get(JournalEntry, ent_id)
-        if not entry or entry.organization_id != org_id:
-            return "Journal entry not found"
-
-        if entry.status != JournalStatus.DRAFT:
-            return f"Cannot delete journal entry with status: {entry.status.value}. Only DRAFT entries can be deleted."
-
         try:
-            # Lines will be cascade deleted due to relationship
-            db.delete(entry)
-            db.commit()
-            logger.info("delete_journal: deleted %s for org %s", ent_id, org_id)
+            JournalService.delete_journal(
+                db=db,
+                organization_id=org_id,
+                journal_entry_id=coerce_uuid(entry_id),
+            )
+            logger.info("delete_journal: deleted %s for org %s", entry_id, org_id)
             return None
-
+        except HTTPException as e:
+            return str(e.detail)
         except Exception as e:
-            db.rollback()
             logger.exception("delete_journal: failed for org %s", org_id)
-            return f"Failed to delete journal entry: {str(e)}"
+            return str(e)
 
     # =========================================================================
     # Response Methods
@@ -617,10 +377,10 @@ class JournalWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
     ) -> HTMLResponse:
         """Render journal entries list page."""
@@ -702,7 +462,7 @@ class JournalWebService:
         posting_date: str,
         description: str,
         reference: str,
-        currency_code: Optional[str],
+        currency_code: str | None,
         exchange_rate: str,
         lines_json: str,
     ) -> HTMLResponse | RedirectResponse:
@@ -764,7 +524,7 @@ class JournalWebService:
         posting_date: str,
         description: str,
         reference: str,
-        currency_code: Optional[str],
+        currency_code: str | None,
         exchange_rate: str,
         lines_json: str,
     ) -> HTMLResponse | RedirectResponse:
@@ -779,6 +539,7 @@ class JournalWebService:
         _, error = self.update_journal(
             db,
             str(org_id),
+            str(auth.user_id),
             entry_id=entry_id,
             journal_type=journal_type,
             fiscal_period_id=fiscal_period_id,

@@ -5,7 +5,6 @@ Financial Statement Line Model - Reporting Schema.
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -64,10 +63,10 @@ class FinancialStatementLine(Base):
     )
     line_code: Mapped[str] = mapped_column(String(50), nullable=False)
     line_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Hierarchy
-    parent_line_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    parent_line_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("rpt.financial_statement_line.line_id"),
         nullable=True,
@@ -85,12 +84,12 @@ class FinancialStatementLine(Base):
     calculation_type: Mapped[str] = mapped_column(
         String(30), nullable=False, default="SUM_ACCOUNTS"
     )
-    calculation_formula: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    calculation_formula: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Account mapping
-    account_codes: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
-    account_categories: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
-    exclude_account_codes: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    account_codes: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    account_categories: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    exclude_account_codes: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
     # Sign convention
     normal_balance: Mapped[str] = mapped_column(
@@ -101,10 +100,10 @@ class FinancialStatementLine(Base):
     )
 
     # XBRL mapping
-    xbrl_element: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    xbrl_element: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     # Formatting
-    formatting: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    formatting: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
@@ -113,7 +112,7 @@ class FinancialStatementLine(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

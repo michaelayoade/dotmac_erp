@@ -8,7 +8,7 @@ Provides secure file storage with MIME type validation.
 import logging
 import uuid
 from pathlib import Path
-from typing import BinaryIO, Optional
+from typing import BinaryIO
 
 from sqlalchemy.orm import Session
 
@@ -17,6 +17,7 @@ from app.models.people.discipline import CaseDocument, DisciplinaryCase, Documen
 from app.services.common import coerce_uuid
 from app.services.file_upload import (
     FileUploadError,
+    FileUploadService,
     get_discipline_attachment_upload,
     resolve_safe_path,
 )
@@ -24,7 +25,7 @@ from app.services.file_upload import (
 logger = logging.getLogger(__name__)
 
 
-def _upload_service():
+def _upload_service() -> FileUploadService:
     return get_discipline_attachment_upload()
 
 
@@ -58,8 +59,8 @@ class DisciplineAttachmentService:
         content_type: str,
         document_type: DocumentType,
         uploaded_by_id: uuid.UUID,
-        title: Optional[str] = None,
-        description: Optional[str] = None,
+        title: str | None = None,
+        description: str | None = None,
     ) -> CaseDocument:
         """
         Save an uploaded file and create document record.
@@ -134,7 +135,7 @@ class DisciplineAttachmentService:
         self,
         organization_id: uuid.UUID,
         document_id: uuid.UUID,
-    ) -> Optional[CaseDocument]:
+    ) -> CaseDocument | None:
         """
         Get document by ID with organization validation.
 

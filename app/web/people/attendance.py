@@ -4,7 +4,6 @@ Attendance management web routes.
 Attendance list and shift type configuration pages.
 """
 
-from typing import Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -14,7 +13,6 @@ from sqlalchemy.orm import Session
 from app.services.people.attendance.web import attendance_web_service
 from app.web.deps import WebAuthContext, get_db, require_hr_access
 
-
 router = APIRouter(prefix="/attendance", tags=["people-attendance-web"])
 
 
@@ -23,13 +21,13 @@ router = APIRouter(prefix="/attendance", tags=["people-attendance-web"])
 @router.get("/records", response_class=HTMLResponse)
 def attendance_overview(
     request: Request,
-    status: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    employee_id: Optional[str] = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    employee_id: str | None = None,
     page: int = Query(default=1, ge=1),
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -83,8 +81,8 @@ async def bulk_mark_attendance(
 @router.get("/shifts", response_class=HTMLResponse)
 def attendance_shifts(
     request: Request,
-    search: Optional[str] = None,
-    is_active: Optional[str] = None,
+    search: str | None = None,
+    is_active: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -196,9 +194,9 @@ async def update_shift(
 @router.get("/reports/summary", response_class=HTMLResponse)
 def attendance_summary_report(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    department_id: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    department_id: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -216,9 +214,9 @@ def attendance_summary_report(
 @router.get("/reports/by-employee", response_class=HTMLResponse)
 def attendance_by_employee_report(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    department_id: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    department_id: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -236,9 +234,9 @@ def attendance_by_employee_report(
 @router.get("/reports/late-early", response_class=HTMLResponse)
 def attendance_late_early_report(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    department_id: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    department_id: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -277,12 +275,12 @@ def attendance_trends_report(
 @router.get("/requests", response_class=HTMLResponse)
 def attendance_requests_list(
     request: Request,
-    status: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     page: int = Query(default=1, ge=1),
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):

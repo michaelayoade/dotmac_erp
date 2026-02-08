@@ -10,17 +10,15 @@ Pydantic schemas for Expense APIs including:
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.expense import (
-    ExpenseClaimStatus,
-    CashAdvanceStatus,
     CardTransactionStatus,
+    CashAdvanceStatus,
+    ExpenseClaimStatus,
 )
-
 
 # =============================================================================
 # Expense Category Schemas
@@ -32,9 +30,9 @@ class ExpenseCategoryBase(BaseModel):
 
     category_code: str = Field(max_length=30)
     category_name: str = Field(max_length=200)
-    description: Optional[str] = None
-    expense_account_id: Optional[UUID] = None
-    max_amount_per_claim: Optional[Decimal] = None
+    description: str | None = None
+    expense_account_id: UUID | None = None
+    max_amount_per_claim: Decimal | None = None
     requires_receipt: bool = True
     is_active: bool = True
 
@@ -48,13 +46,13 @@ class ExpenseCategoryCreate(ExpenseCategoryBase):
 class ExpenseCategoryUpdate(BaseModel):
     """Update expense category request."""
 
-    category_code: Optional[str] = Field(default=None, max_length=30)
-    category_name: Optional[str] = Field(default=None, max_length=200)
-    description: Optional[str] = None
-    expense_account_id: Optional[UUID] = None
-    max_amount_per_claim: Optional[Decimal] = None
-    requires_receipt: Optional[bool] = None
-    is_active: Optional[bool] = None
+    category_code: str | None = Field(default=None, max_length=30)
+    category_name: str | None = Field(default=None, max_length=200)
+    description: str | None = None
+    expense_account_id: UUID | None = None
+    max_amount_per_claim: Decimal | None = None
+    requires_receipt: bool | None = None
+    is_active: bool | None = None
 
 
 class ExpenseCategoryRead(ExpenseCategoryBase):
@@ -65,13 +63,13 @@ class ExpenseCategoryRead(ExpenseCategoryBase):
     category_id: UUID
     organization_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class ExpenseCategoryListResponse(BaseModel):
     """Paginated expense category list response."""
 
-    items: List[ExpenseCategoryRead]
+    items: list[ExpenseCategoryRead]
     total: int
     offset: int
     limit: int
@@ -99,16 +97,16 @@ class ExpenseClaimItemBase(BaseModel):
     category_id: UUID
     description: str = Field(max_length=500)
     claimed_amount: Decimal
-    expense_account_id: Optional[UUID] = None
-    cost_center_id: Optional[UUID] = None
-    receipt_url: Optional[str] = Field(default=None, max_length=500)
-    receipt_number: Optional[str] = Field(default=None, max_length=50)
-    vendor_name: Optional[str] = Field(default=None, max_length=200)
+    expense_account_id: UUID | None = None
+    cost_center_id: UUID | None = None
+    receipt_url: str | None = Field(default=None, max_length=500)
+    receipt_number: str | None = Field(default=None, max_length=50)
+    vendor_name: str | None = Field(default=None, max_length=200)
     is_travel_expense: bool = False
-    travel_from: Optional[str] = Field(default=None, max_length=200)
-    travel_to: Optional[str] = Field(default=None, max_length=200)
-    distance_km: Optional[Decimal] = None
-    notes: Optional[str] = None
+    travel_from: str | None = Field(default=None, max_length=200)
+    travel_to: str | None = Field(default=None, max_length=200)
+    distance_km: Decimal | None = None
+    notes: str | None = None
 
 
 class ExpenseClaimItemCreate(ExpenseClaimItemBase):
@@ -125,10 +123,10 @@ class ExpenseClaimItemRead(ExpenseClaimItemBase):
     item_id: UUID
     organization_id: UUID
     claim_id: UUID
-    approved_amount: Optional[Decimal] = None
+    approved_amount: Decimal | None = None
     sequence: int
 
-    category: Optional[ExpenseCategoryBrief] = None
+    category: ExpenseCategoryBrief | None = None
 
 
 # =============================================================================
@@ -139,37 +137,49 @@ class ExpenseClaimItemRead(ExpenseClaimItemBase):
 class ExpenseClaimBase(BaseModel):
     """Base expense claim schema."""
 
-    employee_id: Optional[UUID] = None
+    employee_id: UUID | None = None
     claim_date: date
-    expense_period_start: Optional[date] = None
-    expense_period_end: Optional[date] = None
+    expense_period_start: date | None = None
+    expense_period_end: date | None = None
     purpose: str = Field(max_length=500)
-    project_id: Optional[UUID] = None
-    ticket_id: Optional[UUID] = None
-    task_id: Optional[UUID] = None
+    project_id: UUID | None = None
+    ticket_id: UUID | None = None
+    task_id: UUID | None = None
     currency_code: str = "NGN"
-    cost_center_id: Optional[UUID] = None
-    notes: Optional[str] = None
+    cost_center_id: UUID | None = None
+    recipient_bank_code: str | None = None
+    recipient_bank_name: str | None = None
+    recipient_account_number: str | None = None
+    recipient_account_name: str | None = None
+    recipient_name: str | None = None
+    requested_approver_id: UUID | None = None
+    notes: str | None = None
 
 
 class ExpenseClaimCreate(ExpenseClaimBase):
     """Create expense claim request."""
 
-    items: List[ExpenseClaimItemCreate] = []
+    items: list[ExpenseClaimItemCreate] = []
 
 
 class ExpenseClaimUpdate(BaseModel):
     """Update expense claim request."""
 
-    claim_date: Optional[date] = None
-    expense_period_start: Optional[date] = None
-    expense_period_end: Optional[date] = None
-    purpose: Optional[str] = Field(default=None, max_length=500)
-    project_id: Optional[UUID] = None
-    ticket_id: Optional[UUID] = None
-    task_id: Optional[UUID] = None
-    cost_center_id: Optional[UUID] = None
-    notes: Optional[str] = None
+    claim_date: date | None = None
+    expense_period_start: date | None = None
+    expense_period_end: date | None = None
+    purpose: str | None = Field(default=None, max_length=500)
+    project_id: UUID | None = None
+    ticket_id: UUID | None = None
+    task_id: UUID | None = None
+    cost_center_id: UUID | None = None
+    recipient_bank_code: str | None = None
+    recipient_bank_name: str | None = None
+    recipient_account_number: str | None = None
+    recipient_account_name: str | None = None
+    recipient_name: str | None = None
+    requested_approver_id: UUID | None = None
+    notes: str | None = None
 
 
 class EmployeeBrief(BaseModel):
@@ -190,29 +200,29 @@ class ExpenseClaimRead(ExpenseClaimBase):
     organization_id: UUID
     claim_number: str
     total_claimed_amount: Decimal
-    total_approved_amount: Optional[Decimal] = None
+    total_approved_amount: Decimal | None = None
     advance_adjusted: Decimal
-    cash_advance_id: Optional[UUID] = None
-    net_payable_amount: Optional[Decimal] = None
+    cash_advance_id: UUID | None = None
+    net_payable_amount: Decimal | None = None
     status: ExpenseClaimStatus
-    approver_id: Optional[UUID] = None
-    approved_on: Optional[date] = None
-    rejection_reason: Optional[str] = None
-    supplier_invoice_id: Optional[UUID] = None
-    payment_reference: Optional[str] = None
-    paid_on: Optional[date] = None
+    approver_id: UUID | None = None
+    approved_on: date | None = None
+    rejection_reason: str | None = None
+    supplier_invoice_id: UUID | None = None
+    payment_reference: str | None = None
+    paid_on: date | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
-    employee: Optional[EmployeeBrief] = None
-    approver: Optional[EmployeeBrief] = None
-    items: List[ExpenseClaimItemRead] = []
+    employee: EmployeeBrief | None = None
+    approver: EmployeeBrief | None = None
+    items: list[ExpenseClaimItemRead] = []
 
 
 class ExpenseClaimListResponse(BaseModel):
     """Paginated expense claim list response."""
 
-    items: List[ExpenseClaimRead]
+    items: list[ExpenseClaimRead]
     total: int
     offset: int
     limit: int
@@ -227,9 +237,9 @@ class ExpenseClaimSubmitRequest(BaseModel):
 class ExpenseClaimApprovalRequest(BaseModel):
     """Approve expense claim."""
 
-    approver_id: Optional[UUID] = None
-    notes: Optional[str] = None
-    approved_amounts: Optional[List["ItemApprovalAmount"]] = None
+    approver_id: UUID | None = None
+    notes: str | None = None
+    approved_amounts: list["ItemApprovalAmount"] | None = None
 
 
 class ItemApprovalAmount(BaseModel):
@@ -242,14 +252,14 @@ class ItemApprovalAmount(BaseModel):
 class ExpenseClaimRejectRequest(BaseModel):
     """Reject expense claim request."""
 
-    approver_id: Optional[UUID] = None
+    approver_id: UUID | None = None
     reason: str
 
 
 class ExpenseClaimCancelRequest(BaseModel):
     """Cancel expense claim request."""
 
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class LinkAdvanceRequest(BaseModel):
@@ -262,8 +272,8 @@ class LinkAdvanceRequest(BaseModel):
 class MarkPaidRequest(BaseModel):
     """Mark expense claim as paid."""
 
-    payment_reference: Optional[str] = None
-    payment_date: Optional[date] = None
+    payment_reference: str | None = None
+    payment_date: date | None = None
 
 
 # =============================================================================
@@ -274,15 +284,15 @@ class MarkPaidRequest(BaseModel):
 class CashAdvanceBase(BaseModel):
     """Base cash advance schema."""
 
-    employee_id: Optional[UUID] = None
+    employee_id: UUID | None = None
     request_date: date
     purpose: str = Field(max_length=500)
     requested_amount: Decimal
     currency_code: str = "NGN"
-    expected_settlement_date: Optional[date] = None
-    cost_center_id: Optional[UUID] = None
-    advance_account_id: Optional[UUID] = None
-    notes: Optional[str] = None
+    expected_settlement_date: date | None = None
+    cost_center_id: UUID | None = None
+    advance_account_id: UUID | None = None
+    notes: str | None = None
 
 
 class CashAdvanceCreate(CashAdvanceBase):
@@ -294,12 +304,12 @@ class CashAdvanceCreate(CashAdvanceBase):
 class CashAdvanceUpdate(BaseModel):
     """Update cash advance request."""
 
-    purpose: Optional[str] = Field(default=None, max_length=500)
-    requested_amount: Optional[Decimal] = None
-    expected_settlement_date: Optional[date] = None
-    cost_center_id: Optional[UUID] = None
-    advance_account_id: Optional[UUID] = None
-    notes: Optional[str] = None
+    purpose: str | None = Field(default=None, max_length=500)
+    requested_amount: Decimal | None = None
+    expected_settlement_date: date | None = None
+    cost_center_id: UUID | None = None
+    advance_account_id: UUID | None = None
+    notes: str | None = None
 
 
 class CashAdvanceRead(CashAdvanceBase):
@@ -310,29 +320,29 @@ class CashAdvanceRead(CashAdvanceBase):
     advance_id: UUID
     organization_id: UUID
     advance_number: str
-    approved_amount: Optional[Decimal] = None
+    approved_amount: Decimal | None = None
     amount_settled: Decimal
     amount_refunded: Decimal
-    disbursed_on: Optional[date] = None
-    settled_on: Optional[date] = None
+    disbursed_on: date | None = None
+    settled_on: date | None = None
     status: CashAdvanceStatus
-    approver_id: Optional[UUID] = None
-    approved_on: Optional[date] = None
-    rejection_reason: Optional[str] = None
-    payment_mode: Optional[str] = None
-    payment_reference: Optional[str] = None
-    journal_entry_id: Optional[UUID] = None
+    approver_id: UUID | None = None
+    approved_on: date | None = None
+    rejection_reason: str | None = None
+    payment_mode: str | None = None
+    payment_reference: str | None = None
+    journal_entry_id: UUID | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
-    employee: Optional[EmployeeBrief] = None
-    approver: Optional[EmployeeBrief] = None
+    employee: EmployeeBrief | None = None
+    approver: EmployeeBrief | None = None
 
 
 class CashAdvanceListResponse(BaseModel):
     """Paginated cash advance list response."""
 
-    items: List[CashAdvanceRead]
+    items: list[CashAdvanceRead]
     total: int
     offset: int
     limit: int
@@ -342,31 +352,31 @@ class CashAdvanceApprovalRequest(BaseModel):
     """Approve/reject cash advance."""
 
     action: str = Field(description="APPROVE or REJECT")
-    approved_amount: Optional[Decimal] = None
-    rejection_reason: Optional[str] = None
+    approved_amount: Decimal | None = None
+    rejection_reason: str | None = None
 
 
 class CashAdvanceDisburseRequest(BaseModel):
     """Disburse cash advance."""
 
-    disbursed_amount: Optional[Decimal] = None
-    disbursement_date: Optional[date] = None
-    payment_reference: Optional[str] = Field(default=None, max_length=100)
+    disbursed_amount: Decimal | None = None
+    disbursement_date: date | None = None
+    payment_reference: str | None = Field(default=None, max_length=100)
 
 
 class CashAdvanceSettleRequest(BaseModel):
     """Settle cash advance."""
 
     settled_amount: Decimal
-    settlement_date: Optional[date] = None
-    notes: Optional[str] = None
+    settlement_date: date | None = None
+    notes: str | None = None
 
 
 class CashAdvanceRefundRequest(BaseModel):
     """Record refund from employee."""
 
     refund_amount: Decimal
-    payment_reference: Optional[str] = Field(default=None, max_length=100)
+    payment_reference: str | None = Field(default=None, max_length=100)
 
 
 # =============================================================================
@@ -380,15 +390,15 @@ class CorporateCardBase(BaseModel):
     card_number_last4: str = Field(max_length=4)
     card_name: str = Field(max_length=100)
     card_type: str
-    issuer: Optional[str] = Field(default=None, max_length=100)
-    employee_id: Optional[UUID] = None
-    assigned_date: Optional[date] = None
-    expiry_date: Optional[date] = None
-    credit_limit: Optional[Decimal] = None
-    single_transaction_limit: Optional[Decimal] = None
-    monthly_limit: Optional[Decimal] = None
+    issuer: str | None = Field(default=None, max_length=100)
+    employee_id: UUID | None = None
+    assigned_date: date | None = None
+    expiry_date: date | None = None
+    credit_limit: Decimal | None = None
+    single_transaction_limit: Decimal | None = None
+    monthly_limit: Decimal | None = None
     currency_code: str = "NGN"
-    liability_account_id: Optional[UUID] = None
+    liability_account_id: UUID | None = None
 
 
 class CorporateCardCreate(CorporateCardBase):
@@ -400,12 +410,12 @@ class CorporateCardCreate(CorporateCardBase):
 class CorporateCardUpdate(BaseModel):
     """Update corporate card request."""
 
-    card_name: Optional[str] = Field(default=None, max_length=100)
-    expiry_date: Optional[date] = None
-    credit_limit: Optional[Decimal] = None
-    single_transaction_limit: Optional[Decimal] = None
-    monthly_limit: Optional[Decimal] = None
-    liability_account_id: Optional[UUID] = None
+    card_name: str | None = Field(default=None, max_length=100)
+    expiry_date: date | None = None
+    credit_limit: Decimal | None = None
+    single_transaction_limit: Decimal | None = None
+    monthly_limit: Decimal | None = None
+    liability_account_id: UUID | None = None
 
 
 class CorporateCardRead(CorporateCardBase):
@@ -416,18 +426,18 @@ class CorporateCardRead(CorporateCardBase):
     card_id: UUID
     organization_id: UUID
     is_active: bool
-    deactivated_on: Optional[date] = None
-    deactivation_reason: Optional[str] = None
+    deactivated_on: date | None = None
+    deactivation_reason: str | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
-    employee: Optional[EmployeeBrief] = None
+    employee: EmployeeBrief | None = None
 
 
 class CorporateCardListResponse(BaseModel):
     """Paginated corporate card list response."""
 
-    items: List[CorporateCardRead]
+    items: list[CorporateCardRead]
     total: int
     offset: int
     limit: int
@@ -436,7 +446,7 @@ class CorporateCardListResponse(BaseModel):
 class DeactivateCardRequest(BaseModel):
     """Deactivate corporate card request."""
 
-    reason: Optional[str] = Field(default=None, max_length=200)
+    reason: str | None = Field(default=None, max_length=200)
 
 
 # =============================================================================
@@ -449,16 +459,16 @@ class CardTransactionBase(BaseModel):
 
     card_id: UUID
     transaction_date: date
-    posting_date: Optional[date] = None
+    posting_date: date | None = None
     merchant_name: str = Field(max_length=200)
-    merchant_category: Optional[str] = Field(default=None, max_length=100)
+    merchant_category: str | None = Field(default=None, max_length=100)
     amount: Decimal
     currency_code: str = "NGN"
-    original_currency: Optional[str] = None
-    original_amount: Optional[Decimal] = None
-    external_reference: Optional[str] = Field(default=None, max_length=100)
-    description: Optional[str] = None
-    notes: Optional[str] = None
+    original_currency: str | None = None
+    original_amount: Decimal | None = None
+    external_reference: str | None = Field(default=None, max_length=100)
+    description: str | None = None
+    notes: str | None = None
 
 
 class CardTransactionCreate(CardTransactionBase):
@@ -470,11 +480,11 @@ class CardTransactionCreate(CardTransactionBase):
 class CardTransactionUpdate(BaseModel):
     """Update card transaction request."""
 
-    merchant_name: Optional[str] = Field(default=None, max_length=200)
-    merchant_category: Optional[str] = Field(default=None, max_length=100)
-    description: Optional[str] = None
-    notes: Optional[str] = None
-    status: Optional[CardTransactionStatus] = None
+    merchant_name: str | None = Field(default=None, max_length=200)
+    merchant_category: str | None = Field(default=None, max_length=100)
+    description: str | None = None
+    notes: str | None = None
+    status: CardTransactionStatus | None = None
 
 
 class CorporateCardBrief(BaseModel):
@@ -495,20 +505,20 @@ class CardTransactionRead(CardTransactionBase):
     transaction_id: UUID
     organization_id: UUID
     status: CardTransactionStatus
-    expense_claim_id: Optional[UUID] = None
-    matched_on: Optional[date] = None
+    expense_claim_id: UUID | None = None
+    matched_on: date | None = None
     is_personal_expense: bool
     personal_deduction_from_salary: bool
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
-    card: Optional[CorporateCardBrief] = None
+    card: CorporateCardBrief | None = None
 
 
 class CardTransactionListResponse(BaseModel):
     """Paginated card transaction list response."""
 
-    items: List[CardTransactionRead]
+    items: list[CardTransactionRead]
     total: int
     offset: int
     limit: int
@@ -530,7 +540,7 @@ class BulkImportTransactionsRequest(BaseModel):
     """Bulk import card transactions."""
 
     card_id: UUID
-    transactions: List[CardTransactionCreate]
+    transactions: list[CardTransactionCreate]
 
 
 class ExpenseStats(BaseModel):
@@ -562,19 +572,19 @@ class EmployeeExpenseSummary(BaseModel):
 class DimensionFilters(BaseModel):
     """Dimension filters for expense limits."""
 
-    category_ids: List[UUID] = []
-    cost_center_ids: List[UUID] = []
-    project_ids: List[UUID] = []
+    category_ids: list[UUID] = []
+    cost_center_ids: list[UUID] = []
+    project_ids: list[UUID] = []
     is_cumulative: bool = True
 
 
 class ActionConfig(BaseModel):
     """Action configuration for expense limits."""
 
-    approver_id: Optional[UUID] = None
-    escalation_levels: List[int] = []
+    approver_id: UUID | None = None
+    escalation_levels: list[int] = []
     min_approvers: int = 1
-    warning_message: Optional[str] = None
+    warning_message: str | None = None
 
 
 class ExpenseLimitRuleBase(BaseModel):
@@ -582,25 +592,25 @@ class ExpenseLimitRuleBase(BaseModel):
 
     rule_code: str = Field(max_length=50)
     rule_name: str = Field(max_length=200)
-    description: Optional[str] = None
+    description: str | None = None
     scope_type: str = Field(
         description="EMPLOYEE, GRADE, DESIGNATION, DEPARTMENT, EMPLOYMENT_TYPE, ORGANIZATION"
     )
-    scope_id: Optional[UUID] = None
+    scope_id: UUID | None = None
     period_type: str = Field(
         description="TRANSACTION, DAY, WEEK, MONTH, QUARTER, YEAR, CUSTOM"
     )
-    custom_period_days: Optional[int] = None
+    custom_period_days: int | None = None
     limit_amount: Decimal
     currency_code: str = "NGN"
     action_type: str = Field(
         description="BLOCK, WARN, REQUIRE_APPROVAL, REQUIRE_MULTI_APPROVAL, AUTO_ESCALATE"
     )
-    dimension_filters: Optional[DimensionFilters] = None
-    action_config: Optional[ActionConfig] = None
+    dimension_filters: DimensionFilters | None = None
+    action_config: ActionConfig | None = None
     priority: int = 100
     effective_from: date
-    effective_to: Optional[date] = None
+    effective_to: date | None = None
     is_active: bool = True
 
 
@@ -613,15 +623,15 @@ class ExpenseLimitRuleCreate(ExpenseLimitRuleBase):
 class ExpenseLimitRuleUpdate(BaseModel):
     """Update expense limit rule request."""
 
-    rule_name: Optional[str] = Field(default=None, max_length=200)
-    description: Optional[str] = None
-    limit_amount: Optional[Decimal] = None
-    action_type: Optional[str] = None
-    dimension_filters: Optional[DimensionFilters] = None
-    action_config: Optional[ActionConfig] = None
-    priority: Optional[int] = None
-    effective_to: Optional[date] = None
-    is_active: Optional[bool] = None
+    rule_name: str | None = Field(default=None, max_length=200)
+    description: str | None = None
+    limit_amount: Decimal | None = None
+    action_type: str | None = None
+    dimension_filters: DimensionFilters | None = None
+    action_config: ActionConfig | None = None
+    priority: int | None = None
+    effective_to: date | None = None
+    is_active: bool | None = None
 
 
 class ExpenseLimitRuleRead(ExpenseLimitRuleBase):
@@ -635,13 +645,13 @@ class ExpenseLimitRuleRead(ExpenseLimitRuleBase):
     trigger_count: int = 0
     block_count: int = 0
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class ExpenseLimitRuleListResponse(BaseModel):
     """Paginated expense limit rule list response."""
 
-    items: List[ExpenseLimitRuleRead]
+    items: list[ExpenseLimitRuleRead]
     total: int
     offset: int
     limit: int
@@ -668,12 +678,12 @@ class ExpenseApproverLimitBase(BaseModel):
     """Base expense approver limit schema."""
 
     scope_type: str = Field(description="EMPLOYEE, GRADE, DESIGNATION, ROLE")
-    scope_id: Optional[UUID] = None
+    scope_id: UUID | None = None
     max_approval_amount: Decimal
     currency_code: str = "NGN"
-    dimension_filters: Optional[DimensionFilters] = None
-    escalate_to_employee_id: Optional[UUID] = None
-    escalate_to_grade_min_rank: Optional[int] = None
+    dimension_filters: DimensionFilters | None = None
+    escalate_to_employee_id: UUID | None = None
+    escalate_to_grade_min_rank: int | None = None
     can_approve_own_expenses: bool = False
     is_active: bool = True
 
@@ -687,12 +697,12 @@ class ExpenseApproverLimitCreate(ExpenseApproverLimitBase):
 class ExpenseApproverLimitUpdate(BaseModel):
     """Update expense approver limit request."""
 
-    max_approval_amount: Optional[Decimal] = None
-    dimension_filters: Optional[DimensionFilters] = None
-    escalate_to_employee_id: Optional[UUID] = None
-    escalate_to_grade_min_rank: Optional[int] = None
-    can_approve_own_expenses: Optional[bool] = None
-    is_active: Optional[bool] = None
+    max_approval_amount: Decimal | None = None
+    dimension_filters: DimensionFilters | None = None
+    escalate_to_employee_id: UUID | None = None
+    escalate_to_grade_min_rank: int | None = None
+    can_approve_own_expenses: bool | None = None
+    is_active: bool | None = None
 
 
 class ExpenseApproverLimitRead(ExpenseApproverLimitBase):
@@ -703,13 +713,13 @@ class ExpenseApproverLimitRead(ExpenseApproverLimitBase):
     approver_limit_id: UUID
     organization_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class ExpenseApproverLimitListResponse(BaseModel):
     """Paginated expense approver limit list response."""
 
-    items: List[ExpenseApproverLimitRead]
+    items: list[ExpenseApproverLimitRead]
     total: int
     offset: int
     limit: int
@@ -725,16 +735,16 @@ class ExpenseLimitEvaluationBase(BaseModel):
 
     claim_id: UUID
     claim_amount: Decimal
-    period_spent_amount: Optional[Decimal] = None
-    period_start: Optional[date] = None
-    period_end: Optional[date] = None
-    rule_id: Optional[UUID] = None
-    rule_code: Optional[str] = None
+    period_spent_amount: Decimal | None = None
+    period_start: date | None = None
+    period_end: date | None = None
+    rule_id: UUID | None = None
+    rule_code: str | None = None
     result: str = Field(
         description="PASSED, BLOCKED, WARNING, APPROVAL_REQUIRED, MULTI_APPROVAL_REQUIRED, ESCALATED"
     )
-    result_message: Optional[str] = None
-    context_data: Optional[dict] = None
+    result_message: str | None = None
+    context_data: dict | None = None
 
 
 class ExpenseLimitEvaluationRead(ExpenseLimitEvaluationBase):
@@ -745,15 +755,15 @@ class ExpenseLimitEvaluationRead(ExpenseLimitEvaluationBase):
     evaluation_id: UUID
     organization_id: UUID
     evaluated_at: datetime
-    evaluated_by_id: Optional[UUID] = None
+    evaluated_by_id: UUID | None = None
 
-    rule: Optional[ExpenseLimitRuleBrief] = None
+    rule: ExpenseLimitRuleBrief | None = None
 
 
 class ExpenseLimitEvaluationListResponse(BaseModel):
     """Paginated expense limit evaluation list response."""
 
-    items: List[ExpenseLimitEvaluationRead]
+    items: list[ExpenseLimitEvaluationRead]
     total: int
     offset: int
     limit: int
@@ -771,8 +781,8 @@ class ExpensePeriodUsageBase(BaseModel):
     period_type: str
     period_start: date
     period_end: date
-    dimension_type: Optional[str] = None
-    dimension_id: Optional[UUID] = None
+    dimension_type: str | None = None
+    dimension_id: UUID | None = None
     total_claimed: Decimal = Decimal("0")
     total_approved: Decimal = Decimal("0")
     claim_count: int = 0
@@ -793,7 +803,7 @@ class ExpensePeriodUsageRead(ExpensePeriodUsageBase):
 class ExpensePeriodUsageListResponse(BaseModel):
     """Paginated expense period usage list response."""
 
-    items: List[ExpensePeriodUsageRead]
+    items: list[ExpensePeriodUsageRead]
     total: int
     offset: int
     limit: int
@@ -817,10 +827,10 @@ class EvaluateLimitResponse(BaseModel):
     claim_id: UUID
     claim_amount: Decimal
     result: str  # PASSED, BLOCKED, WARNING, APPROVAL_REQUIRED, etc.
-    result_message: Optional[str] = None
-    triggered_rules: List[ExpenseLimitRuleBrief] = []
-    period_usage: Optional[ExpensePeriodUsageRead] = None
-    eligible_approvers: List["EligibleApprover"] = []
+    result_message: str | None = None
+    triggered_rules: list[ExpenseLimitRuleBrief] = []
+    period_usage: ExpensePeriodUsageRead | None = None
+    eligible_approvers: list["EligibleApprover"] = []
 
 
 class EligibleApprover(BaseModel):
@@ -832,18 +842,18 @@ class EligibleApprover(BaseModel):
     employee_name: str
     max_approval_amount: Decimal
     is_direct_manager: bool = False
-    grade_rank: Optional[int] = None
+    grade_rank: int | None = None
 
 
 class EmployeeUsageSummary(BaseModel):
     """Summary of an employee's expense usage across periods."""
 
     employee_id: UUID
-    employee_name: Optional[str] = None
+    employee_name: str | None = None
     current_month_claimed: Decimal = Decimal("0")
     current_month_approved: Decimal = Decimal("0")
     current_quarter_claimed: Decimal = Decimal("0")
     current_year_claimed: Decimal = Decimal("0")
     pending_claims_count: int = 0
     pending_claims_amount: Decimal = Decimal("0")
-    applicable_limits: List[ExpenseLimitRuleBrief] = []
+    applicable_limits: list[ExpenseLimitRuleBrief] = []

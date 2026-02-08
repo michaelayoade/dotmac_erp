@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 from datetime import date
-from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select
@@ -78,10 +77,10 @@ class SchedulingService:
         self,
         org_id: UUID,
         *,
-        is_active: Optional[bool] = None,
-        rotation_type: Optional[RotationType] = None,
-        search: Optional[str] = None,
-        pagination: Optional[PaginationParams] = None,
+        is_active: bool | None = None,
+        rotation_type: RotationType | None = None,
+        search: str | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[ShiftPattern]:
         """List shift patterns for an organization."""
         query = (
@@ -152,10 +151,10 @@ class SchedulingService:
         pattern_name: str,
         rotation_type: RotationType,
         day_shift_type_id: UUID,
-        night_shift_type_id: Optional[UUID] = None,
+        night_shift_type_id: UUID | None = None,
         cycle_weeks: int = 1,
-        work_days: Optional[List[str]] = None,
-        description: Optional[str] = None,
+        work_days: list[str] | None = None,
+        description: str | None = None,
         is_active: bool = True,
     ) -> ShiftPattern:
         """Create a new shift pattern."""
@@ -249,12 +248,12 @@ class SchedulingService:
         self,
         org_id: UUID,
         *,
-        department_id: Optional[UUID] = None,
-        employee_id: Optional[UUID] = None,
-        shift_pattern_id: Optional[UUID] = None,
-        is_active: Optional[bool] = None,
-        effective_date: Optional[date] = None,
-        pagination: Optional[PaginationParams] = None,
+        department_id: UUID | None = None,
+        employee_id: UUID | None = None,
+        shift_pattern_id: UUID | None = None,
+        is_active: bool | None = None,
+        effective_date: date | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[ShiftPatternAssignment]:
         """List pattern assignments."""
         query = (
@@ -338,7 +337,7 @@ class SchedulingService:
         department_id: UUID,
         shift_pattern_id: UUID,
         effective_from: date,
-        effective_to: Optional[date] = None,
+        effective_to: date | None = None,
         rotation_week_offset: int = 0,
         is_active: bool = True,
     ) -> ShiftPatternAssignment:
@@ -375,17 +374,17 @@ class SchedulingService:
         self,
         org_id: UUID,
         *,
-        employee_ids: List[UUID],
+        employee_ids: list[UUID],
         department_id: UUID,
         shift_pattern_id: UUID,
         effective_from: date,
-        effective_to: Optional[date] = None,
+        effective_to: date | None = None,
         rotation_week_offset: int = 0,
     ) -> dict:
         """Bulk create pattern assignments for multiple employees."""
         success_count = 0
         failed_count = 0
-        errors: List[dict] = []
+        errors: list[dict] = []
 
         for employee_id in employee_ids:
             try:
@@ -456,13 +455,13 @@ class SchedulingService:
         self,
         org_id: UUID,
         *,
-        department_id: Optional[UUID] = None,
-        employee_id: Optional[UUID] = None,
-        schedule_month: Optional[str] = None,
-        status: Optional[ScheduleStatus] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
-        pagination: Optional[PaginationParams] = None,
+        department_id: UUID | None = None,
+        employee_id: UUID | None = None,
+        schedule_month: str | None = None,
+        status: ScheduleStatus | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[ShiftSchedule]:
         """List shift schedules."""
         query = (
@@ -579,7 +578,7 @@ class SchedulingService:
         org_id: UUID,
         department_id: UUID,
         schedule_month: str,
-    ) -> Optional[ScheduleStatus]:
+    ) -> ScheduleStatus | None:
         """Get the overall status for a month's schedule."""
         result = self.db.scalar(
             select(ShiftSchedule.status)
@@ -597,7 +596,7 @@ class SchedulingService:
         org_id: UUID,
         employee_id: UUID,
         as_of_date: date,
-    ) -> Optional[ShiftPatternAssignment]:
+    ) -> ShiftPatternAssignment | None:
         """Get the active pattern assignment for an employee on a given date."""
         return self.db.scalar(
             select(ShiftPatternAssignment)
@@ -620,7 +619,7 @@ class SchedulingService:
         employee_id: UUID,
         department_id: UUID,
         effective_from: date,
-        effective_to: Optional[date],
+        effective_to: date | None,
     ) -> None:
         """
         Check for overlapping active assignments for the same employee in the same department.

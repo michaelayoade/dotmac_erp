@@ -5,7 +5,6 @@ Business logic for Request for Quotation management.
 """
 
 import logging
-from typing import List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -30,7 +29,7 @@ class RFQService:
         self,
         organization_id: UUID,
         rfq_id: UUID,
-    ) -> Optional[RequestForQuotation]:
+    ) -> RequestForQuotation | None:
         """Get an RFQ by ID."""
         stmt = select(RequestForQuotation).where(
             RequestForQuotation.organization_id == organization_id,
@@ -42,11 +41,12 @@ class RFQService:
         self,
         organization_id: UUID,
         *,
-        status: Optional[str] = None,
-        procurement_method: Optional[str] = None,
+        status: str | None = None,
+        procurement_method: str | None = None,
+        search: str | None = None,
         offset: int = 0,
         limit: int = 25,
-    ) -> Tuple[List[RequestForQuotation], int]:
+    ) -> tuple[list[RequestForQuotation], int]:
         """List RFQs with filters."""
         base = select(RequestForQuotation).where(
             RequestForQuotation.organization_id == organization_id,
@@ -67,6 +67,16 @@ class RFQService:
                 base = base.where(
                     RequestForQuotation.procurement_method == method_enum,
                 )
+        if search:
+            from sqlalchemy import or_
+
+            term = f"%{search}%"
+            base = base.where(
+                or_(
+                    RequestForQuotation.rfq_number.ilike(term),
+                    RequestForQuotation.title.ilike(term),
+                )
+            )
 
         total = self.db.scalar(select(func.count()).select_from(base.subquery()))
         items = list(

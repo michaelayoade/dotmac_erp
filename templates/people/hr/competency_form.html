@@ -35,7 +35,7 @@
                 <h3 class="font-medium text-slate-900 dark:text-white">Competency Details</h3>
             </div>
             <div class="card-body space-y-4">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="competency_code" class="form-label required">Competency Code</label>
                         <input type="text" name="competency_code" id="competency_code" required
@@ -122,7 +122,7 @@
             </div>
         </div>
 
-        <div class="flex justify-end gap-3">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/people/hr/competencies" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">{% if competency %}Save Changes{% else %}Create Competency{% endif %}</button>
         </div>

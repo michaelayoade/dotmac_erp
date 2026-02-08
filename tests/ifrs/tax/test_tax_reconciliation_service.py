@@ -4,15 +4,16 @@ Tests for TaxReconciliationService.
 Tests IAS 12 tax rate reconciliation creation, review, and validation.
 """
 
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock
 from uuid import uuid4
 
+import pytest
+
 from app.services.finance.tax.tax_reconciliation import (
-    TaxReconciliationService,
     TaxReconciliationInput,
+    TaxReconciliationService,
 )
 
 
@@ -93,7 +94,7 @@ class MockTaxReconciliation:
         self.prepared_by_user_id = prepared_by_user_id or uuid4()
         self.reviewed_by_user_id = reviewed_by_user_id
         self.reviewed_at = reviewed_at
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
 
 
 @pytest.fixture
@@ -172,7 +173,7 @@ class TestCreateReconciliation:
             deferred_tax_expense=Decimal("30000.00"),
         )
 
-        result = TaxReconciliationService.create_reconciliation(
+        TaxReconciliationService.create_reconciliation(
             mock_db, org_id, input_data, user_id
         )
 
@@ -201,7 +202,7 @@ class TestCreateReconciliation:
             tax_credits_utilized=Decimal("5000.00"),
         )
 
-        result = TaxReconciliationService.create_reconciliation(
+        TaxReconciliationService.create_reconciliation(
             mock_db, org_id, input_data, user_id
         )
 
@@ -295,7 +296,7 @@ class TestReviewReconciliation:
         )
         mock_db.get.return_value = reconciliation
 
-        result = TaxReconciliationService.review_reconciliation(
+        TaxReconciliationService.review_reconciliation(
             mock_db, org_id, reconciliation.reconciliation_id, reviewer_id
         )
 
@@ -683,7 +684,7 @@ class TestListReconciliations:
         mock_query.all.return_value = []
         mock_db.query.return_value = mock_query
 
-        result = TaxReconciliationService.list(
+        TaxReconciliationService.list(
             mock_db,
             organization_id=str(org_id),
             limit=10,

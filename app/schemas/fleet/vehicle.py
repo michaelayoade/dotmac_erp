@@ -6,7 +6,6 @@ Schemas for Vehicle API endpoints.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -20,7 +19,6 @@ from app.models.fleet.enums import (
     VehicleType,
 )
 
-
 # =============================================================================
 # Vehicle Schemas
 # =============================================================================
@@ -31,42 +29,42 @@ class VehicleBase(BaseModel):
 
     vehicle_code: str = Field(max_length=30)
     registration_number: str = Field(max_length=20)
-    vin: Optional[str] = Field(default=None, max_length=50)
-    engine_number: Optional[str] = Field(default=None, max_length=50)
+    vin: str | None = Field(default=None, max_length=50)
+    engine_number: str | None = Field(default=None, max_length=50)
 
     # Specifications
     make: str = Field(max_length=50)
     model: str = Field(max_length=50)
     year: int = Field(ge=1900, le=2100)
-    color: Optional[str] = Field(default=None, max_length=30)
+    color: str | None = Field(default=None, max_length=30)
     vehicle_type: VehicleType = VehicleType.SEDAN
     fuel_type: FuelType = FuelType.PETROL
-    transmission: Optional[str] = Field(default=None, max_length=20)
-    engine_capacity_cc: Optional[int] = Field(default=None, ge=0)
+    transmission: str | None = Field(default=None, max_length=20)
+    engine_capacity_cc: int | None = Field(default=None, ge=0)
     seating_capacity: int = Field(default=5, ge=1)
-    fuel_tank_capacity_liters: Optional[Decimal] = Field(default=None, ge=0)
-    expected_fuel_efficiency: Optional[Decimal] = Field(default=None, ge=0)
+    fuel_tank_capacity_liters: Decimal | None = Field(default=None, ge=0)
+    expected_fuel_efficiency: Decimal | None = Field(default=None, ge=0)
 
     # Ownership
     ownership_type: OwnershipType = OwnershipType.OWNED
-    purchase_date: Optional[date] = None
-    purchase_price: Optional[Decimal] = Field(default=None, ge=0)
-    lease_start_date: Optional[date] = None
-    lease_end_date: Optional[date] = None
-    lease_monthly_cost: Optional[Decimal] = Field(default=None, ge=0)
-    vendor_id: Optional[UUID] = None
+    purchase_date: date | None = None
+    purchase_price: Decimal | None = Field(default=None, ge=0)
+    lease_start_date: date | None = None
+    lease_end_date: date | None = None
+    lease_monthly_cost: Decimal | None = Field(default=None, ge=0)
+    vendor_id: UUID | None = None
 
     # Assignment
     assignment_type: AssignmentType = AssignmentType.POOL
-    assigned_employee_id: Optional[UUID] = None
-    assigned_department_id: Optional[UUID] = None
-    assigned_cost_center_id: Optional[UUID] = None
+    assigned_employee_id: UUID | None = None
+    assigned_department_id: UUID | None = None
+    assigned_cost_center_id: UUID | None = None
 
     # GPS
     has_gps_tracker: bool = False
-    gps_device_id: Optional[str] = Field(default=None, max_length=50)
+    gps_device_id: str | None = Field(default=None, max_length=50)
 
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class VehicleCreate(VehicleBase):
@@ -78,32 +76,32 @@ class VehicleCreate(VehicleBase):
 class VehicleUpdate(BaseModel):
     """Update vehicle request."""
 
-    vehicle_code: Optional[str] = Field(default=None, max_length=30)
-    registration_number: Optional[str] = Field(default=None, max_length=20)
-    vin: Optional[str] = Field(default=None, max_length=50)
-    engine_number: Optional[str] = Field(default=None, max_length=50)
-    color: Optional[str] = Field(default=None, max_length=30)
-    vehicle_type: Optional[VehicleType] = None
-    fuel_type: Optional[FuelType] = None
-    transmission: Optional[str] = Field(default=None, max_length=20)
-    engine_capacity_cc: Optional[int] = Field(default=None, ge=0)
-    seating_capacity: Optional[int] = Field(default=None, ge=1)
-    fuel_tank_capacity_liters: Optional[Decimal] = Field(default=None, ge=0)
-    expected_fuel_efficiency: Optional[Decimal] = Field(default=None, ge=0)
-    ownership_type: Optional[OwnershipType] = None
-    purchase_date: Optional[date] = None
-    purchase_price: Optional[Decimal] = Field(default=None, ge=0)
-    lease_start_date: Optional[date] = None
-    lease_end_date: Optional[date] = None
-    lease_monthly_cost: Optional[Decimal] = Field(default=None, ge=0)
-    vendor_id: Optional[UUID] = None
-    assignment_type: Optional[AssignmentType] = None
-    assigned_employee_id: Optional[UUID] = None
-    assigned_department_id: Optional[UUID] = None
-    assigned_cost_center_id: Optional[UUID] = None
-    has_gps_tracker: Optional[bool] = None
-    gps_device_id: Optional[str] = Field(default=None, max_length=50)
-    notes: Optional[str] = None
+    vehicle_code: str | None = Field(default=None, max_length=30)
+    registration_number: str | None = Field(default=None, max_length=20)
+    vin: str | None = Field(default=None, max_length=50)
+    engine_number: str | None = Field(default=None, max_length=50)
+    color: str | None = Field(default=None, max_length=30)
+    vehicle_type: VehicleType | None = None
+    fuel_type: FuelType | None = None
+    transmission: str | None = Field(default=None, max_length=20)
+    engine_capacity_cc: int | None = Field(default=None, ge=0)
+    seating_capacity: int | None = Field(default=None, ge=1)
+    fuel_tank_capacity_liters: Decimal | None = Field(default=None, ge=0)
+    expected_fuel_efficiency: Decimal | None = Field(default=None, ge=0)
+    ownership_type: OwnershipType | None = None
+    purchase_date: date | None = None
+    purchase_price: Decimal | None = Field(default=None, ge=0)
+    lease_start_date: date | None = None
+    lease_end_date: date | None = None
+    lease_monthly_cost: Decimal | None = Field(default=None, ge=0)
+    vendor_id: UUID | None = None
+    assignment_type: AssignmentType | None = None
+    assigned_employee_id: UUID | None = None
+    assigned_department_id: UUID | None = None
+    assigned_cost_center_id: UUID | None = None
+    has_gps_tracker: bool | None = None
+    gps_device_id: str | None = Field(default=None, max_length=50)
+    notes: str | None = None
 
 
 class VehicleRead(VehicleBase):
@@ -115,15 +113,15 @@ class VehicleRead(VehicleBase):
     organization_id: UUID
     status: VehicleStatus
     current_odometer: int
-    last_odometer_date: Optional[date] = None
-    last_known_location: Optional[str] = None
-    last_location_update: Optional[datetime] = None
-    disposal_date: Optional[date] = None
-    disposal_method: Optional[DisposalMethod] = None
-    disposal_amount: Optional[Decimal] = None
+    last_odometer_date: date | None = None
+    last_known_location: str | None = None
+    last_location_update: datetime | None = None
+    disposal_date: date | None = None
+    disposal_method: DisposalMethod | None = None
+    disposal_amount: Decimal | None = None
     is_deleted: bool = False
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class VehicleBrief(BaseModel):
@@ -149,22 +147,22 @@ class VehicleWithDetails(VehicleRead):
     model_config = ConfigDict(from_attributes=True)
 
     # Computed from relationships
-    assigned_employee_name: Optional[str] = None
-    assigned_department_name: Optional[str] = None
+    assigned_employee_name: str | None = None
+    assigned_department_name: str | None = None
     active_documents_count: int = 0
     expiring_documents_count: int = 0
     pending_maintenance_count: int = 0
     open_incidents_count: int = 0
 
     # Computed properties
-    display_name: Optional[str] = None
-    age_years: Optional[int] = None
+    display_name: str | None = None
+    age_years: int | None = None
 
 
 class VehicleListResponse(BaseModel):
     """Paginated vehicle list response."""
 
-    items: List[VehicleBrief]
+    items: list[VehicleBrief]
     total: int
     offset: int
     limit: int
@@ -199,19 +197,19 @@ class VehicleStatusChange(BaseModel):
     """Request to change vehicle status."""
 
     status: VehicleStatus
-    reason: Optional[str] = Field(default=None, max_length=200)
+    reason: str | None = Field(default=None, max_length=200)
 
 
 class OdometerUpdate(BaseModel):
     """Request to update odometer reading."""
 
     reading: int = Field(ge=0)
-    reading_date: Optional[date] = None
+    reading_date: date | None = None
 
 
 class VehicleDispose(BaseModel):
     """Request to dispose of vehicle."""
 
     method: DisposalMethod
-    amount: Optional[Decimal] = Field(default=None, ge=0)
-    notes: Optional[str] = None
+    amount: Decimal | None = Field(default=None, ge=0)
+    notes: str | None = None

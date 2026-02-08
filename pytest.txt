@@ -17,22 +17,22 @@ sample_supplier_input = SupplierInput(supplier_code='SUP-001', supplier_type=<Su
             supplier_code="OLD-CODE",
         )
         mock_db.get.return_value = supplier
-    
+
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
         mock_query.first.return_value = None  # No duplicate
         mock_db.query.return_value = mock_query
-    
+
         with patch("app.services.finance.ap.supplier.Supplier"):
 >           result = SupplierService.update_supplier(
                 mock_db, org_id, supplier.supplier_id, sample_supplier_input
             )
 
-tests/ifrs/ap/test_supplier_service.py:124: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/ifrs/ap/test_supplier_service.py:124:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 app/services/finance/ap/supplier.py:177: in update_supplier
     validate_unique_code(
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 db = <MagicMock id='138817713645392'>
 model_class = <MagicMock name='Supplier' id='138817712453920'>
@@ -54,7 +54,7 @@ parent_field_name = None
     ) -> None:
         """
         Validate that a code is unique within an organization (and optionally within a parent entity).
-    
+
         Args:
             db: Database session
             model_class: SQLAlchemy model class
@@ -65,32 +65,32 @@ parent_field_name = None
             exclude_id: Entity ID to exclude from the check (for updates)
             parent_id: Optional parent entity ID for hierarchical uniqueness
             parent_field_name: Field name for parent relationship (e.g., "warehouse_id")
-    
+
         Raises:
             HTTPException(400): If the code already exists
         """
         org_id = coerce_uuid(org_id)
-    
+
         # Build base filter
         code_column = getattr(model_class, code_field_name, None)
         if code_column is None:
             raise ValueError(f"Model {model_class.__name__} has no field '{code_field_name}'")
-    
+
         org_column = getattr(model_class, "organization_id", None)
         if org_column is None:
             raise ValueError(f"Model {model_class.__name__} has no 'organization_id' field")
-    
+
         filters = [
             org_column == org_id,
             code_column == code_value,
         ]
-    
+
         # Add parent scope if provided
         if parent_id is not None and parent_field_name:
             parent_column = getattr(model_class, parent_field_name, None)
             if parent_column is not None:
                 filters.append(parent_column == coerce_uuid(parent_id))
-    
+
         # Exclude current entity for updates
         if exclude_id is not None:
             pk_column_name = get_model_pk_column(model_class)

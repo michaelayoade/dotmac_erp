@@ -1,5 +1,5 @@
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator
 
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -69,6 +69,15 @@ def get_async_engine():
 
 
 SessionLocal = sessionmaker(bind=get_engine(), autoflush=False, autocommit=False)
+
+
+def get_db() -> Generator[Session, None, None]:
+    """Dependency that provides a transactional DB session."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 # ---------------------------------------------------------------------------
@@ -241,6 +250,16 @@ def transaction(db: Session) -> Generator[Session, None, None]:
                 service.create_child(db, child)
                 # Can rollback just this without affecting parent
     """
+    if db.in_transaction():
+        nested = db.begin_nested()
+        try:
+            yield db
+            nested.commit()
+        except Exception:
+            nested.rollback()
+            raise
+        return
+
     try:
         yield db
         db.commit()

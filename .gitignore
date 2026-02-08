@@ -63,6 +63,9 @@ logs/
 # Static uploads
 static/avatars/*
 !static/avatars/.gitkeep
+uploads/
+Employee.csv
+Test sheet - Sheet1 (3).csv
 
 # OS
 .DS_Store

@@ -10,10 +10,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.services.people.payroll.working_days_calculator import (
-    WorkingDaysCalculator,
     ProrationMethod,
     ProrationReason,
     ProrationResult,
+    WorkingDaysCalculator,
     calculate_proration,
 )
 

@@ -7,7 +7,7 @@ Employee performance scorecards and balanced scorecards.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Date,
@@ -73,61 +73,61 @@ class Scorecard(Base, AuditMixin, ERPNextSyncMixin):
         Date,
         nullable=False,
     )
-    period_label: Mapped[Optional[str]] = mapped_column(
+    period_label: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Q1 2024, FY 2024, etc.",
     )
 
     # Scores by perspective (Balanced Scorecard)
-    financial_score: Mapped[Optional[Decimal]] = mapped_column(
+    financial_score: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
         comment="Financial/Revenue metrics",
     )
-    customer_score: Mapped[Optional[Decimal]] = mapped_column(
+    customer_score: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
         comment="Customer satisfaction metrics",
     )
-    process_score: Mapped[Optional[Decimal]] = mapped_column(
+    process_score: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
         comment="Internal process metrics",
     )
-    learning_score: Mapped[Optional[Decimal]] = mapped_column(
+    learning_score: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
         comment="Learning & growth metrics",
     )
 
     # Overall
-    overall_score: Mapped[Optional[Decimal]] = mapped_column(
+    overall_score: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
     )
-    overall_rating: Mapped[Optional[int]] = mapped_column(
+    overall_rating: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
     )
-    rating_label: Mapped[Optional[str]] = mapped_column(
+    rating_label: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
     )
 
     # Trend
-    previous_score: Mapped[Optional[Decimal]] = mapped_column(
+    previous_score: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
     )
-    score_change: Mapped[Optional[Decimal]] = mapped_column(
+    score_change: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
         comment="overall_score - previous_score",
     )
 
     # Notes
-    summary: Mapped[Optional[str]] = mapped_column(
+    summary: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -136,7 +136,7 @@ class Scorecard(Base, AuditMixin, ERPNextSyncMixin):
     is_finalized: Mapped[bool] = mapped_column(
         default=False,
     )
-    finalized_on: Mapped[Optional[date]] = mapped_column(
+    finalized_on: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -146,7 +146,7 @@ class Scorecard(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )
@@ -203,21 +203,21 @@ class ScorecardItem(Base):
         String(200),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Target & Actual
-    target_value: Mapped[Optional[Decimal]] = mapped_column(
+    target_value: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
     )
-    actual_value: Mapped[Optional[Decimal]] = mapped_column(
+    actual_value: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
     )
-    unit_of_measure: Mapped[Optional[str]] = mapped_column(
+    unit_of_measure: Mapped[str | None] = mapped_column(
         String(30),
         nullable=True,
     )
@@ -227,17 +227,17 @@ class ScorecardItem(Base):
         Numeric(5, 2),
         default=Decimal("0.00"),
     )
-    score: Mapped[Optional[Decimal]] = mapped_column(
+    score: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
     )
-    weighted_score: Mapped[Optional[Decimal]] = mapped_column(
+    weighted_score: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
     )
 
     # Status
-    status: Mapped[Optional[str]] = mapped_column(
+    status: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="ON_TRACK, AT_RISK, OFF_TRACK, ACHIEVED",

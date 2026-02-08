@@ -9,7 +9,9 @@
             </svg>
         </a>
         <div>
-            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">New Approver Limit</h1>
+            <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">
+                {{ "Edit Approver Limit" if approver_limit else "New Approver Limit" }}
+            </h1>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">Define approval authority for a role, grade, or individual</p>
         </div>
     </div>
@@ -20,7 +22,9 @@
     </div>
     {% endif %}
 
-    <form method="post" class="space-y-6">
+    <form method="post"
+          action="{% if approver_limit %}/expense/limits/approvers/{{ approver_limit.approver_limit_id }}/edit{% else %}/expense/limits/approvers/new{% endif %}"
+          class="space-y-6">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
         <!-- Scope Configuration -->
@@ -45,19 +49,30 @@
                 </div>
                 <div>
                     <label class="form-label">Scope Target</label>
-                    <select name="scope_id" class="form-input form-select">
-                        <option value="">All (applies to scope type)</option>
+                    <div class="relative"
+                         x-show="scopeType === 'EMPLOYEE'"
+                         data-typeahead-url="/expense/limits/approvers/employees/search"
+                         data-typeahead-min="2"
+                         data-typeahead-limit="8">
+                        <input type="text"
+                               class="form-input w-full"
+                               placeholder="Search employees..."
+                               autocomplete="off"
+                               value="{{ scope_label if scope_label else '' }}"
+                               data-typeahead-input>
+                        <input type="hidden"
+                               name="scope_id"
+                               x-bind:disabled="scopeType !== 'EMPLOYEE'"
+                               value="{{ approver_limit.scope_id if approver_limit and approver_limit.scope_type == 'EMPLOYEE' else '' }}"
+                               data-typeahead-hidden>
+                        <div data-typeahead-results></div>
+                    </div>
 
-                        <!-- Employee options -->
-                        <template x-if="scopeType === 'EMPLOYEE'">
-                            <optgroup label="Employees">
-                                {% for emp in scope_options.employees %}
-                                <option value="{{ emp.employee_id }}" {% if approver_limit and approver_limit.scope_id and (approver_limit.scope_id | string) == (emp.employee_id | string) %}selected{% endif %}>
-                                    {{ emp.first_name }} {{ emp.last_name }}
-                                </option>
-                                {% endfor %}
-                            </optgroup>
-                        </template>
+                    <select name="scope_id"
+                            class="form-input form-select"
+                            x-show="scopeType !== 'EMPLOYEE'"
+                            x-bind:disabled="scopeType === 'EMPLOYEE'">
+                        <option value="">All (applies to scope type)</option>
 
                         <!-- Grade options -->
                         <template x-if="scopeType === 'GRADE'">
@@ -75,7 +90,18 @@
                             <optgroup label="Designations">
                                 {% for des in scope_options.designations %}
                                 <option value="{{ des.designation_id }}" {% if approver_limit and approver_limit.scope_id and (approver_limit.scope_id | string) == (des.designation_id | string) %}selected{% endif %}>
-                                    {{ des.name }}
+                                    {{ des.designation_name }}
+                                </option>
+                                {% endfor %}
+                            </optgroup>
+                        </template>
+
+                        <!-- Role options -->
+                        <template x-if="scopeType === 'ROLE'">
+                            <optgroup label="Roles">
+                                {% for role in scope_options.roles %}
+                                <option value="{{ role.id }}" {% if approver_limit and approver_limit.scope_id and (approver_limit.scope_id | string) == (role.id | string) %}selected{% endif %}>
+                                    {{ role.name }}
                                 </option>
                                 {% endfor %}
                             </optgroup>
@@ -129,7 +155,7 @@
         </div>
 
         <!-- Form Actions -->
-        <div class="flex justify-end gap-3">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/expense/limits/approvers" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">Create Approver Limit</button>
         </div>

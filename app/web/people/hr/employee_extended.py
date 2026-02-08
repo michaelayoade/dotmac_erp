@@ -1,36 +1,34 @@
 """Employee Extended Data routes - Documents, Qualifications, Certifications, Dependents, Skills."""
 
 import uuid
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.orm import Session
 
 from app.models.people.hr import (
-    Employee,
     DocumentType,
+    Employee,
     QualificationType,
     RelationshipType,
     SkillCategory,
 )
+from app.services.common import coerce_uuid
 from app.services.people.hr import (
-    EmployeeService,
-    EmployeeDocumentService,
-    EmployeeQualificationService,
     EmployeeCertificationService,
     EmployeeDependentService,
-    SkillService,
+    EmployeeDocumentService,
+    EmployeeQualificationService,
+    EmployeeService,
     EmployeeSkillService,
+    SkillService,
 )
-from app.services.common import coerce_uuid
 from app.templates import templates
-from app.web.deps import base_context, get_db, require_hr_access, WebAuthContext
+from app.web.deps import WebAuthContext, base_context, get_db, require_hr_access
 
 from ._common import _parse_bool
-
 
 router = APIRouter()
 
@@ -49,9 +47,7 @@ def _is_missing_table_error(exc: ProgrammingError) -> bool:
         return True
     if orig and orig.__class__.__name__ == "UndefinedTable":
         return True
-    if orig and "UndefinedTable" in str(orig):
-        return True
-    return False
+    return bool(orig and "UndefinedTable" in str(orig))
 
 
 # =============================================================================
@@ -63,9 +59,9 @@ def _is_missing_table_error(exc: ProgrammingError) -> bool:
 def list_employee_documents(
     request: Request,
     employee_id: str,
-    document_type: Optional[str] = None,
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    document_type: str | None = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -155,9 +151,9 @@ def create_document(
     document_name: str = Form(...),
     file_path: str = Form(...),
     file_name: str = Form(...),
-    description: Optional[str] = Form(None),
-    issue_date: Optional[str] = Form(None),
-    expiry_date: Optional[str] = Form(None),
+    description: str | None = Form(None),
+    issue_date: str | None = Form(None),
+    expiry_date: str | None = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -224,7 +220,7 @@ def verify_document(
     request: Request,
     employee_id: str,
     document_id: str,
-    notes: Optional[str] = Form(None),
+    notes: str | None = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -298,8 +294,8 @@ def delete_document(
 def list_employee_qualifications(
     request: Request,
     employee_id: str,
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -384,12 +380,12 @@ def create_qualification(
     qualification_type: str = Form(...),
     qualification_name: str = Form(...),
     institution_name: str = Form(...),
-    field_of_study: Optional[str] = Form(None),
-    start_date: Optional[str] = Form(None),
-    end_date: Optional[str] = Form(None),
-    is_ongoing: Optional[str] = Form(None),
-    grade: Optional[str] = Form(None),
-    notes: Optional[str] = Form(None),
+    field_of_study: str | None = Form(None),
+    start_date: str | None = Form(None),
+    end_date: str | None = Form(None),
+    is_ongoing: str | None = Form(None),
+    grade: str | None = Form(None),
+    notes: str | None = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -464,8 +460,8 @@ def delete_qualification(
 def list_employee_certifications(
     request: Request,
     employee_id: str,
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -548,11 +544,11 @@ def create_certification(
     certification_name: str = Form(...),
     issuing_authority: str = Form(...),
     issue_date: str = Form(...),
-    expiry_date: Optional[str] = Form(None),
-    does_not_expire: Optional[str] = Form(None),
-    credential_id: Optional[str] = Form(None),
-    credential_url: Optional[str] = Form(None),
-    notes: Optional[str] = Form(None),
+    expiry_date: str | None = Form(None),
+    does_not_expire: str | None = Form(None),
+    credential_id: str | None = Form(None),
+    credential_url: str | None = Form(None),
+    notes: str | None = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -626,8 +622,8 @@ def delete_certification(
 def list_employee_dependents(
     request: Request,
     employee_id: str,
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -713,15 +709,15 @@ def create_dependent(
     employee_id: str,
     full_name: str = Form(...),
     relationship: str = Form(...),
-    date_of_birth: Optional[str] = Form(None),
-    gender: Optional[str] = Form(None),
-    phone: Optional[str] = Form(None),
-    email: Optional[str] = Form(None),
-    is_emergency_contact: Optional[str] = Form(None),
-    emergency_contact_priority: Optional[str] = Form(None),
-    is_beneficiary: Optional[str] = Form(None),
-    beneficiary_percentage: Optional[str] = Form(None),
-    notes: Optional[str] = Form(None),
+    date_of_birth: str | None = Form(None),
+    gender: str | None = Form(None),
+    phone: str | None = Form(None),
+    email: str | None = Form(None),
+    is_emergency_contact: str | None = Form(None),
+    emergency_contact_priority: str | None = Form(None),
+    is_beneficiary: str | None = Form(None),
+    beneficiary_percentage: str | None = Form(None),
+    notes: str | None = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -802,8 +798,8 @@ def delete_dependent(
 def list_employee_skills(
     request: Request,
     employee_id: str,
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -903,10 +899,10 @@ def add_employee_skill(
     employee_id: str,
     skill_id: str = Form(...),
     proficiency_level: int = Form(...),
-    years_experience: Optional[str] = Form(None),
-    is_primary: Optional[str] = Form(None),
-    is_certified: Optional[str] = Form(None),
-    notes: Optional[str] = Form(None),
+    years_experience: str | None = Form(None),
+    is_primary: str | None = Form(None),
+    is_certified: str | None = Form(None),
+    notes: str | None = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):

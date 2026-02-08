@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 from uuid import UUID
 
+from fastapi import Response
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.supplier import Supplier
@@ -32,6 +33,7 @@ class SupplierBulkService(BulkActionService[Supplier]):
 
     model = Supplier
     id_field = "supplier_id"
+    search_fields = ["supplier_name", "supplier_code", "tax_id"]
     org_field = "organization_id"
 
     # Fields to export in CSV
@@ -87,6 +89,30 @@ class SupplierBulkService(BulkActionService[Supplier]):
         """Get supplier export filename."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return f"suppliers_export_{timestamp}.csv"
+
+    async def export_all(
+        self,
+        search: str = "",
+        status: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        extra_filters: dict[str, object] | None = None,
+        format: str = "csv",
+    ) -> Response:
+        """
+        Export all suppliers matching filters to CSV.
+        """
+        from app.services.finance.ap.supplier_query import build_supplier_query
+
+        query = build_supplier_query(
+            db=self.db,
+            organization_id=str(self.organization_id),
+            search=search,
+            status=status,
+        )
+
+        entities = query.all()
+        return self._build_csv(entities)
 
 
 def get_supplier_bulk_service(

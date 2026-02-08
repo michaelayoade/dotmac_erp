@@ -17,6 +17,14 @@ from app.main import (
 from app.models.domain_settings import DomainSetting, SettingDomain
 
 
+def _mock_session_ctx(mock_session):
+    mock_db = MagicMock()
+    mock_session.return_value = mock_db
+    mock_db.__enter__.return_value = mock_db
+    mock_db.__exit__.return_value = False
+    return mock_db
+
+
 class TestAuditPathSkipping:
     """Tests for audit path skipping logic."""
 
@@ -245,10 +253,9 @@ class TestAuditMiddlewareReadTriggers:
 
         with patch("app.main._load_audit_settings", return_value=audit_settings):
             with patch("app.main.SessionLocal") as mock_session:
-                mock_db = MagicMock()
-                mock_session.return_value = mock_db
+                _mock_session_ctx(mock_session)
                 with patch("app.main.audit_service") as mock_audit:
-                    result = await audit_middleware(request, call_next)
+                    await audit_middleware(request, call_next)
                     # GET without trigger should not log
                     mock_audit.audit_events.log_request.assert_not_called()
 
@@ -277,10 +284,9 @@ class TestAuditMiddlewareReadTriggers:
 
         with patch("app.main._load_audit_settings", return_value=audit_settings):
             with patch("app.main.SessionLocal") as mock_session:
-                mock_db = MagicMock()
-                mock_session.return_value = mock_db
+                _mock_session_ctx(mock_session)
                 with patch("app.main.audit_service") as mock_audit:
-                    result = await audit_middleware(request, call_next)
+                    await audit_middleware(request, call_next)
                     # GET with header trigger should log
                     mock_audit.audit_events.log_request.assert_called_once()
 
@@ -307,10 +313,9 @@ class TestAuditMiddlewareReadTriggers:
 
         with patch("app.main._load_audit_settings", return_value=audit_settings):
             with patch("app.main.SessionLocal") as mock_session:
-                mock_db = MagicMock()
-                mock_session.return_value = mock_db
+                _mock_session_ctx(mock_session)
                 with patch("app.main.audit_service") as mock_audit:
-                    result = await audit_middleware(request, call_next)
+                    await audit_middleware(request, call_next)
                     mock_audit.audit_events.log_request.assert_called_once()
 
 
@@ -339,8 +344,7 @@ class TestAuditMiddlewareExceptionLogging:
 
         with patch("app.main._load_audit_settings", return_value=audit_settings):
             with patch("app.main.SessionLocal") as mock_session:
-                mock_db = MagicMock()
-                mock_session.return_value = mock_db
+                _mock_session_ctx(mock_session)
                 with patch("app.main.audit_service") as mock_audit:
                     with pytest.raises(Exception):
                         await audit_middleware(request, call_next)
@@ -371,8 +375,7 @@ class TestAuditMiddlewareExceptionLogging:
 
         with patch("app.main._load_audit_settings", return_value=audit_settings):
             with patch("app.main.SessionLocal") as mock_session:
-                mock_db = MagicMock()
-                mock_session.return_value = mock_db
+                _mock_session_ctx(mock_session)
                 with patch("app.main.audit_service") as mock_audit:
                     with pytest.raises(Exception):
                         await audit_middleware(request, call_next)
@@ -403,8 +406,7 @@ class TestAuditMiddlewareDisabled:
 
         with patch("app.main._load_audit_settings", return_value=audit_settings):
             with patch("app.main.SessionLocal") as mock_session:
-                mock_db = MagicMock()
-                mock_session.return_value = mock_db
+                _mock_session_ctx(mock_session)
                 with patch("app.main.audit_service") as mock_audit:
-                    result = await audit_middleware(request, call_next)
+                    await audit_middleware(request, call_next)
                     mock_audit.audit_events.log_request.assert_not_called()

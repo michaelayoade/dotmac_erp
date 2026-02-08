@@ -5,9 +5,9 @@ Business logic for procurement plan management.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -32,9 +32,7 @@ class ProcurementPlanService:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_by_id(
-        self, organization_id: UUID, plan_id: UUID
-    ) -> Optional[ProcurementPlan]:
+    def get_by_id(self, organization_id: UUID, plan_id: UUID) -> ProcurementPlan | None:
         """Get a plan by ID."""
         stmt = select(ProcurementPlan).where(
             ProcurementPlan.organization_id == organization_id,
@@ -46,11 +44,12 @@ class ProcurementPlanService:
         self,
         organization_id: UUID,
         *,
-        status: Optional[str] = None,
-        fiscal_year: Optional[str] = None,
+        status: str | None = None,
+        fiscal_year: str | None = None,
+        search: str | None = None,
         offset: int = 0,
         limit: int = 25,
-    ) -> Tuple[List[ProcurementPlan], int]:
+    ) -> tuple[list[ProcurementPlan], int]:
         """List plans with filters."""
         base = select(ProcurementPlan).where(
             ProcurementPlan.organization_id == organization_id,
@@ -59,6 +58,16 @@ class ProcurementPlanService:
             base = base.where(ProcurementPlan.status == ProcurementPlanStatus(status))
         if fiscal_year:
             base = base.where(ProcurementPlan.fiscal_year == fiscal_year)
+        if search:
+            from sqlalchemy import or_
+
+            term = f"%{search}%"
+            base = base.where(
+                or_(
+                    ProcurementPlan.plan_number.ilike(term),
+                    ProcurementPlan.title.ilike(term),
+                )
+            )
 
         total = self.db.scalar(select(func.count()).select_from(base.subquery()))
         plans = list(
@@ -70,7 +79,7 @@ class ProcurementPlanService:
         )
         return plans, total or 0
 
-    def get_summary(self, organization_id: UUID) -> Dict[str, Any]:
+    def get_summary(self, organization_id: UUID) -> dict[str, Any]:
         """Get summary statistics for procurement plans."""
         plans = self.db.scalars(
             select(ProcurementPlan).where(
@@ -78,7 +87,7 @@ class ProcurementPlanService:
             )
         ).all()
 
-        status_counts: Dict[str, int] = {}
+        status_counts: dict[str, int] = {}
         total_value = Decimal("0")
         for plan in plans:
             key = plan.status.value
@@ -182,7 +191,7 @@ class ProcurementPlanService:
 
         plan.status = ProcurementPlanStatus.APPROVED
         plan.approved_by_user_id = approved_by_user_id
-        plan.approved_at = datetime.now(timezone.utc)
+        plan.approved_at = datetime.now(UTC)
         self.db.flush()
         logger.info("Approved procurement plan %s", plan.plan_number)
         return plan

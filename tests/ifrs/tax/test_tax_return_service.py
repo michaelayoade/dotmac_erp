@@ -2,7 +2,7 @@
 Tests for TaxReturnService - Tax return preparation and filing.
 """
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -11,9 +11,9 @@ import pytest
 from fastapi import HTTPException
 
 from app.services.finance.tax.tax_return import (
-    TaxReturnService,
-    TaxReturnInput,
     TaxReturnBoxValue,
+    TaxReturnInput,
+    TaxReturnService,
 )
 
 
@@ -68,7 +68,7 @@ class MockTaxReturn:
         self.payment_reference = kwargs.get("payment_reference")
         self.payment_journal_entry_id = kwargs.get("payment_journal_entry_id")
         self.return_reference = kwargs.get("return_reference")
-        self.created_at = kwargs.get("created_at", datetime.now(timezone.utc))
+        self.created_at = kwargs.get("created_at", datetime.now(UTC))
 
 
 class MockTaxPeriod:
@@ -89,8 +89,8 @@ class TestTaxReturnServicePrepareReturn:
 
     def test_prepare_return_success(self, mock_db):
         """Test successful return preparation."""
-        from app.models.finance.tax.tax_return import TaxReturnType
         from app.models.finance.tax.tax_period import TaxPeriodStatus
+        from app.models.finance.tax.tax_return import TaxReturnType
 
         org_id = uuid4()
         period_id = uuid4()
@@ -124,7 +124,7 @@ class TestTaxReturnServicePrepareReturn:
             return_type=TaxReturnType.VAT,
         )
 
-        result = TaxReturnService.prepare_return(mock_db, org_id, input_data, user_id)
+        TaxReturnService.prepare_return(mock_db, org_id, input_data, user_id)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -152,8 +152,8 @@ class TestTaxReturnServicePrepareReturn:
 
     def test_prepare_return_period_not_open(self, mock_db):
         """Test preparation with non-open period."""
-        from app.models.finance.tax.tax_return import TaxReturnType
         from app.models.finance.tax.tax_period import TaxPeriodStatus
+        from app.models.finance.tax.tax_return import TaxReturnType
 
         org_id = uuid4()
         mock_period = MockTaxPeriod(
@@ -178,8 +178,8 @@ class TestTaxReturnServicePrepareReturn:
 
     def test_prepare_return_existing_non_draft(self, mock_db):
         """Test preparation when non-draft return exists."""
-        from app.models.finance.tax.tax_return import TaxReturnType, TaxReturnStatus
         from app.models.finance.tax.tax_period import TaxPeriodStatus
+        from app.models.finance.tax.tax_return import TaxReturnStatus, TaxReturnType
 
         org_id = uuid4()
         mock_period = MockTaxPeriod(organization_id=org_id, status=TaxPeriodStatus.OPEN)
@@ -227,7 +227,7 @@ class TestTaxReturnServiceReviewReturn:
         mock_query.first.return_value = mock_return
         mock_db.query.return_value = mock_query
 
-        result = TaxReturnService.review_return(mock_db, org_id, return_id, reviewer_id)
+        TaxReturnService.review_return(mock_db, org_id, return_id, reviewer_id)
 
         assert mock_return.status == TaxReturnStatus.REVIEWED
         assert mock_return.reviewed_by_user_id == reviewer_id
@@ -313,7 +313,7 @@ class TestTaxReturnServiceFileReturn:
         mock_query.update.return_value = 0
         mock_db.query.return_value = mock_query
 
-        result = TaxReturnService.file_return(
+        TaxReturnService.file_return(
             mock_db, org_id, return_id, uuid4(), filing_reference="REF-001"
         )
 
@@ -362,7 +362,7 @@ class TestTaxReturnServiceRecordPayment:
         mock_query.first.side_effect = [mock_return, mock_period]
         mock_db.query.return_value = mock_query
 
-        result = TaxReturnService.record_payment(
+        TaxReturnService.record_payment(
             mock_db,
             org_id,
             return_id,
@@ -419,7 +419,7 @@ class TestTaxReturnServiceCreateAmendment:
         mock_query.first.return_value = mock_original
         mock_db.query.return_value = mock_query
 
-        result = TaxReturnService.create_amendment(
+        TaxReturnService.create_amendment(
             mock_db,
             org_id,
             original_id,
@@ -521,7 +521,7 @@ class TestTaxReturnServiceQueries:
 
     def test_list_returns_with_filters(self, mock_db):
         """Test listing returns with filters."""
-        from app.models.finance.tax.tax_return import TaxReturnType, TaxReturnStatus
+        from app.models.finance.tax.tax_return import TaxReturnStatus, TaxReturnType
 
         returns = [MockTaxReturn(), MockTaxReturn()]
 

@@ -5,7 +5,6 @@ Thin API wrapper for Performance Management endpoints. All business logic is in 
 """
 
 from datetime import date
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -15,40 +14,40 @@ from app.api.deps import require_organization_id, require_tenant_auth
 from app.db import SessionLocal
 from app.models.people.perf import AppraisalCycleStatus, AppraisalStatus, KPIStatus
 from app.schemas.people.perf import (
-    # Appraisal Cycle
-    AppraisalCycleCreate,
-    AppraisalCycleUpdate,
-    AppraisalCycleRead,
-    AppraisalCycleListResponse,
-    # Appraisal Template
-    AppraisalTemplateCreate,
-    AppraisalTemplateUpdate,
-    AppraisalTemplateRead,
-    AppraisalTemplateListResponse,
-    # KRA
-    KRACreate,
-    KRAUpdate,
-    KRARead,
-    KRAListResponse,
-    # KPI
-    KPICreate,
-    KPIUpdate,
-    KPIRead,
-    KPIListResponse,
     # Appraisal
     AppraisalCreate,
-    AppraisalUpdate,
-    AppraisalRead,
+    # Appraisal Cycle
+    AppraisalCycleCreate,
+    AppraisalCycleListResponse,
+    AppraisalCycleRead,
+    AppraisalCycleUpdate,
     AppraisalListResponse,
-    SelfAssessmentRequest,
-    ManagerReviewRequest,
+    AppraisalRead,
+    # Appraisal Template
+    AppraisalTemplateCreate,
+    AppraisalTemplateListResponse,
+    AppraisalTemplateRead,
+    AppraisalTemplateUpdate,
+    AppraisalUpdate,
     CalibrationRequest,
+    # KPI
+    KPICreate,
+    KPIListResponse,
+    KPIRead,
+    KPIUpdate,
+    # KRA
+    KRACreate,
+    KRAListResponse,
+    KRARead,
+    KRAUpdate,
+    ManagerReviewRequest,
+    ScorecardListResponse,
     # Scorecard
     ScorecardRead,
-    ScorecardListResponse,
+    SelfAssessmentRequest,
 )
-from app.services.people.perf import PerformanceService
 from app.services.common import PaginationParams
+from app.services.people.perf import PerformanceService
 
 router = APIRouter(
     prefix="/perf",
@@ -65,7 +64,7 @@ def get_db():
         db.close()
 
 
-def parse_enum(value: Optional[str], enum_type, field_name: str):
+def parse_enum(value: str | None, enum_type, field_name: str):
     if value is None:
         return None
     try:
@@ -84,9 +83,9 @@ def parse_enum(value: Optional[str], enum_type, field_name: str):
 @router.get("/cycles", response_model=AppraisalCycleListResponse)
 def list_appraisal_cycles(
     organization_id: UUID = Depends(require_organization_id),
-    search: Optional[str] = None,
-    status: Optional[str] = None,
-    year: Optional[int] = None,
+    search: str | None = None,
+    status: str | None = None,
+    year: int | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -211,10 +210,10 @@ def close_cycle(
 @router.get("/templates", response_model=AppraisalTemplateListResponse)
 def list_appraisal_templates(
     organization_id: UUID = Depends(require_organization_id),
-    search: Optional[str] = None,
-    department_id: Optional[UUID] = None,
-    designation_id: Optional[UUID] = None,
-    is_active: Optional[bool] = None,
+    search: str | None = None,
+    department_id: UUID | None = None,
+    designation_id: UUID | None = None,
+    is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -314,11 +313,11 @@ def delete_appraisal_template(
 @router.get("/kras", response_model=KRAListResponse)
 def list_kras(
     organization_id: UUID = Depends(require_organization_id),
-    search: Optional[str] = None,
-    department_id: Optional[UUID] = None,
-    designation_id: Optional[UUID] = None,
-    category: Optional[str] = None,
-    is_active: Optional[bool] = None,
+    search: str | None = None,
+    department_id: UUID | None = None,
+    designation_id: UUID | None = None,
+    category: str | None = None,
+    is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -412,13 +411,13 @@ def delete_kra(
 @router.get("/kpis", response_model=KPIListResponse)
 def list_kpis(
     organization_id: UUID = Depends(require_organization_id),
-    employee_id: Optional[UUID] = None,
-    kra_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    search: Optional[str] = None,
-    is_active: Optional[bool] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    employee_id: UUID | None = None,
+    kra_id: UUID | None = None,
+    status: str | None = None,
+    search: str | None = None,
+    is_active: bool | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -518,10 +517,10 @@ def delete_kpi(
 @router.get("/appraisals", response_model=AppraisalListResponse)
 def list_appraisals(
     organization_id: UUID = Depends(require_organization_id),
-    cycle_id: Optional[UUID] = None,
-    employee_id: Optional[UUID] = None,
-    manager_id: Optional[UUID] = None,
-    status: Optional[str] = None,
+    cycle_id: UUID | None = None,
+    employee_id: UUID | None = None,
+    manager_id: UUID | None = None,
+    status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -684,9 +683,9 @@ def submit_calibration(
 @router.get("/scorecards", response_model=ScorecardListResponse)
 def list_scorecards(
     organization_id: UUID = Depends(require_organization_id),
-    cycle_id: Optional[UUID] = None,
-    employee_id: Optional[UUID] = None,
-    department_id: Optional[UUID] = None,
+    cycle_id: UUID | None = None,
+    employee_id: UUID | None = None,
+    department_id: UUID | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),

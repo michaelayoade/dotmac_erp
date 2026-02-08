@@ -21,11 +21,12 @@ class TestLeaseVariablePaymentService:
 
     def test_record_variable_payment_not_found(self, mock_db, org_id):
         """Test recording variable payment on non-existent schedule fails."""
+        from fastapi import HTTPException
+
         from app.services.finance.lease.lease_variable_payment import (
             LeaseVariablePaymentService,
             VariablePaymentInput,
         )
-        from fastapi import HTTPException
 
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
@@ -45,11 +46,12 @@ class TestLeaseVariablePaymentService:
         self, mock_db, org_id, mock_payment_schedule
     ):
         """Test recording variable payment on paid schedule fails."""
+        from fastapi import HTTPException
+
         from app.services.finance.lease.lease_variable_payment import (
             LeaseVariablePaymentService,
             VariablePaymentInput,
         )
-        from fastapi import HTTPException
 
         mock_payment_schedule.status = PaymentStatus.PAID
         mock_db.query.return_value.filter.return_value.first.return_value = (
@@ -101,8 +103,8 @@ class TestLeaseVariablePaymentService:
     def test_apply_index_adjustment_contract_not_found(self, mock_db, org_id, user_id):
         """Test index adjustment fails when contract not found."""
         from app.services.finance.lease.lease_variable_payment import (
-            LeaseVariablePaymentService,
             IndexAdjustmentInput,
+            LeaseVariablePaymentService,
         )
 
         mock_db.query.return_value.filter.return_value.first.return_value = None
@@ -127,8 +129,8 @@ class TestLeaseVariablePaymentService:
     ):
         """Test index adjustment fails for non-active contract."""
         from app.services.finance.lease.lease_variable_payment import (
-            LeaseVariablePaymentService,
             IndexAdjustmentInput,
+            LeaseVariablePaymentService,
         )
 
         mock_contract.status = LeaseStatus.DRAFT
@@ -156,8 +158,8 @@ class TestLeaseVariablePaymentService:
     ):
         """Test index adjustment fails when liability not found."""
         from app.services.finance.lease.lease_variable_payment import (
-            LeaseVariablePaymentService,
             IndexAdjustmentInput,
+            LeaseVariablePaymentService,
         )
 
         # Service queries contract, then liability, then asset
@@ -226,10 +228,11 @@ class TestLeaseVariablePaymentService:
 
     def test_mark_payment_paid_not_found(self, mock_db):
         """Test marking non-existent payment fails."""
+        from fastapi import HTTPException
+
         from app.services.finance.lease.lease_variable_payment import (
             LeaseVariablePaymentService,
         )
-        from fastapi import HTTPException
 
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
@@ -245,10 +248,11 @@ class TestLeaseVariablePaymentService:
 
     def test_mark_payment_paid_already_paid(self, mock_db, mock_payment_schedule):
         """Test marking already paid payment fails."""
+        from fastapi import HTTPException
+
         from app.services.finance.lease.lease_variable_payment import (
             LeaseVariablePaymentService,
         )
-        from fastapi import HTTPException
 
         mock_payment_schedule.status = PaymentStatus.PAID
         mock_db.query.return_value.filter.return_value.first.return_value = (

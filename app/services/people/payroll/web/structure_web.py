@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -23,6 +23,17 @@ from app.models.people.payroll.salary_slip import SalarySlip
 from app.models.people.payroll.salary_structure import PayrollFrequency, SalaryStructure
 from app.services.common import coerce_uuid
 from app.services.people.payroll.payroll_service import PayrollService
+from app.templates import templates
+from app.web.deps import WebAuthContext, base_context
+
+from .base import (
+    DEFAULT_PAGE_SIZE,
+    PAYROLL_FREQUENCIES,
+    parse_bool,
+    parse_date,
+    parse_decimal,
+    parse_uuid,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,24 +49,10 @@ def _safe_form_text(value: object) -> str:
     return str(value)
 
 
-from app.templates import templates
-from app.web.deps import WebAuthContext, base_context
-
-
 def _normalize_form(form: Any) -> dict[str, str]:
     if form is None:
         return {}
     return {key: value if isinstance(value, str) else "" for key, value in form.items()}
-
-
-from .base import (
-    DEFAULT_PAGE_SIZE,
-    PAYROLL_FREQUENCIES,
-    parse_bool,
-    parse_date,
-    parse_decimal,
-    parse_uuid,
-)
 
 
 class StructureWebService:
@@ -66,7 +63,7 @@ class StructureWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
+        search: str | None = None,
         page: int = 1,
     ) -> Response:
         """Render salary structures list page."""
@@ -591,10 +588,10 @@ class StructureWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
+        search: str | None = None,
         page: int = 1,
-        bulk_created: Optional[int] = None,
-        bulk_skipped: Optional[int] = None,
+        bulk_created: int | None = None,
+        bulk_skipped: int | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Render salary assignments list page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -656,7 +653,7 @@ class StructureWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        employee_id: Optional[str] = None,
+        employee_id: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Render new assignment form."""
         org_id = coerce_uuid(auth.organization_id)
@@ -1128,7 +1125,7 @@ class StructureWebService:
         auth: WebAuthContext,
         db: Session,
         assignment_id: str,
-        end_date: Optional[str] = None,
+        end_date: str | None = None,
     ) -> RedirectResponse:
         """End salary structure assignment."""
         org_id = coerce_uuid(auth.organization_id)
@@ -1174,7 +1171,7 @@ class StructureWebService:
         db: Session,
         error: str,
         form_data: dict,
-        assignment: Optional[SalaryStructureAssignment] = None,
+        assignment: SalaryStructureAssignment | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Render assignment form with error."""
         org_id = coerce_uuid(auth.organization_id)

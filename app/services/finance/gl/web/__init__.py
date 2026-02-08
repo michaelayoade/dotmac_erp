@@ -105,6 +105,27 @@ class GLWebService(
         )
         return await service.bulk_export(req.ids, req.format)
 
+    async def export_all_accounts_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        search: str = "",
+        status: str = "",
+        category: str = "",
+    ):
+        """Export all accounts matching filters to CSV."""
+        from app.services.finance.gl.bulk import get_account_bulk_service
+
+        service = get_account_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
+        extra: dict[str, object] | None = {"category": category} if category else None
+        return await service.export_all(
+            search=search, status=status, extra_filters=extra
+        )
+
     async def bulk_activate_accounts_response(
         self,
         request: Request,
@@ -180,6 +201,30 @@ class GLWebService(
             coerce_uuid(auth.user_id),
         )
         return await service.bulk_export(req.ids, req.format)
+
+    async def export_all_journals_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        search: str = "",
+        status: str = "",
+        start_date: str = "",
+        end_date: str = "",
+    ):
+        """Export all journals matching filters to CSV."""
+        from app.services.finance.gl.bulk import get_journal_bulk_service
+
+        service = get_journal_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
+        return await service.export_all(
+            search=search,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+        )
 
     async def bulk_approve_journals_response(
         self,

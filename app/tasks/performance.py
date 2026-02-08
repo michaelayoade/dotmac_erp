@@ -9,7 +9,7 @@ Handles:
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from celery import shared_task
@@ -92,7 +92,7 @@ def process_cycle_phase_transitions() -> dict:
 
 
 @shared_task
-def generate_cycle_appraisals(cycle_id: str, template_id: Optional[str] = None) -> dict:
+def generate_cycle_appraisals(cycle_id: str, template_id: str | None = None) -> dict:
     """
     Generate appraisals for all eligible employees in a cycle.
 
@@ -331,7 +331,7 @@ def sync_all_cycle_progress() -> dict:
 
 
 @shared_task
-def activate_cycle(cycle_id: str, template_id: Optional[str] = None) -> dict:
+def activate_cycle(cycle_id: str, template_id: str | None = None) -> dict:
     """
     Activate a cycle and generate appraisals for eligible employees.
 

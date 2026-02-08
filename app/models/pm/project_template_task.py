@@ -6,7 +6,7 @@ Stores ordered tasks and dependencies for project templates.
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     CheckConstraint,
@@ -55,7 +55,7 @@ class ProjectTemplateTask(Base):
     )
 
     task_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     order_index: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     created_at: Mapped[datetime] = mapped_column(
@@ -69,14 +69,14 @@ class ProjectTemplateTask(Base):
         back_populates="tasks",
     )
 
-    dependencies: Mapped[List["ProjectTemplateTaskDependency"]] = relationship(
+    dependencies: Mapped[list["ProjectTemplateTaskDependency"]] = relationship(
         "ProjectTemplateTaskDependency",
         foreign_keys="ProjectTemplateTaskDependency.template_task_id",
         back_populates="task",
         cascade="all, delete-orphan",
     )
 
-    dependents: Mapped[List["ProjectTemplateTaskDependency"]] = relationship(
+    dependents: Mapped[list["ProjectTemplateTaskDependency"]] = relationship(
         "ProjectTemplateTaskDependency",
         foreign_keys="ProjectTemplateTaskDependency.depends_on_template_task_id",
         back_populates="depends_on_task",

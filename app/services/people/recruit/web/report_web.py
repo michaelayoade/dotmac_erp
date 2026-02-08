@@ -6,8 +6,6 @@ Provides view-focused data and operations for recruitment report web routes.
 
 from __future__ import annotations
 
-import logging
-from typing import Optional
 from uuid import UUID
 
 from fastapi import Request
@@ -19,9 +17,7 @@ from app.services.people.recruit import RecruitmentService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
-from .base import logger, parse_date_only, parse_uuid
-
-logger = logging.getLogger(__name__)
+from .base import parse_date_only, parse_uuid
 
 
 class ReportWebService:
@@ -35,7 +31,7 @@ class ReportWebService:
     def pipeline_report_context(
         db: Session,
         organization_id: UUID,
-        job_opening_id: Optional[str] = None,
+        job_opening_id: str | None = None,
     ) -> dict:
         """Build context for pipeline report page."""
         svc = RecruitmentService(db)
@@ -54,8 +50,8 @@ class ReportWebService:
     def time_to_hire_report_context(
         db: Session,
         organization_id: UUID,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict:
         """Build context for time to hire report page."""
         svc = RecruitmentService(db)
@@ -76,8 +72,8 @@ class ReportWebService:
     def source_analysis_report_context(
         db: Session,
         organization_id: UUID,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict:
         """Build context for source analysis report page."""
         svc = RecruitmentService(db)
@@ -98,8 +94,8 @@ class ReportWebService:
     def overview_report_context(
         db: Session,
         organization_id: UUID,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict:
         """Build context for recruitment overview report page."""
         svc = RecruitmentService(db)
@@ -125,7 +121,7 @@ class ReportWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        job_opening_id: Optional[str] = None,
+        job_opening_id: str | None = None,
     ) -> HTMLResponse:
         """Render pipeline report page."""
         context = base_context(request, auth, "Pipeline Report", "recruit", db=db)
@@ -146,8 +142,8 @@ class ReportWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> HTMLResponse:
         """Render time to hire report page."""
         context = base_context(request, auth, "Time to Hire", "recruit", db=db)
@@ -169,8 +165,8 @@ class ReportWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> HTMLResponse:
         """Render source analysis report page."""
         context = base_context(request, auth, "Source Analysis", "recruit", db=db)
@@ -192,8 +188,8 @@ class ReportWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> HTMLResponse:
         """Render recruitment overview report page."""
         context = base_context(request, auth, "Recruitment Overview", "recruit", db=db)

@@ -5,10 +5,10 @@ Revises: 4f4e6f737d70
 Create Date: 2026-01-23
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
+from alembic import op
 
 revision = "20260123_add_employee_location_shift_fields"
 down_revision = "4f4e6f737d70"

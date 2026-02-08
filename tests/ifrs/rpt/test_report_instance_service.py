@@ -3,7 +3,7 @@ Tests for ReportInstanceService.
 """
 
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
@@ -23,8 +23,8 @@ class TestReportInstanceServiceQueue:
     ):
         """Test successful report queue."""
         from app.services.finance.rpt.report_instance import (
-            ReportInstanceService,
             ReportGenerationRequest,
+            ReportInstanceService,
         )
 
         mock_db.get.return_value = mock_report_definition
@@ -35,7 +35,7 @@ class TestReportInstanceServiceQueue:
             parameters={"date": "2024-01-01"},
         )
 
-        result = ReportInstanceService.queue_report(mock_db, org_id, request, user_id)
+        ReportInstanceService.queue_report(mock_db, org_id, request, user_id)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -43,8 +43,8 @@ class TestReportInstanceServiceQueue:
     def test_queue_report_definition_not_found(self, mock_db, org_id, user_id):
         """Test queue with missing report definition."""
         from app.services.finance.rpt.report_instance import (
-            ReportInstanceService,
             ReportGenerationRequest,
+            ReportInstanceService,
         )
 
         mock_db.get.return_value = None
@@ -63,8 +63,8 @@ class TestReportInstanceServiceQueue:
     def test_queue_report_inactive_definition(self, mock_db, org_id, user_id):
         """Test queue with inactive report definition."""
         from app.services.finance.rpt.report_instance import (
-            ReportInstanceService,
             ReportGenerationRequest,
+            ReportInstanceService,
         )
 
         inactive_def = MockReportDefinition(
@@ -87,8 +87,8 @@ class TestReportInstanceServiceQueue:
     def test_queue_report_unsupported_format(self, mock_db, org_id, user_id):
         """Test queue with unsupported output format."""
         from app.services.finance.rpt.report_instance import (
-            ReportInstanceService,
             ReportGenerationRequest,
+            ReportInstanceService,
         )
 
         definition = MockReportDefinition(
@@ -114,13 +114,13 @@ class TestReportInstanceServiceGeneration:
 
     def test_start_generation_success(self, mock_db, mock_report_instance):
         """Test successful generation start."""
-        from app.services.finance.rpt.report_instance import ReportInstanceService
         from app.models.finance.rpt.report_instance import ReportStatus
+        from app.services.finance.rpt.report_instance import ReportInstanceService
 
         mock_report_instance.status = ReportStatus.QUEUED
         mock_db.get.return_value = mock_report_instance
 
-        result = ReportInstanceService.start_generation(
+        ReportInstanceService.start_generation(
             mock_db, mock_report_instance.instance_id
         )
 
@@ -141,8 +141,8 @@ class TestReportInstanceServiceGeneration:
 
     def test_start_generation_wrong_status(self, mock_db, mock_report_instance):
         """Test start generation with wrong status."""
-        from app.services.finance.rpt.report_instance import ReportInstanceService
         from app.models.finance.rpt.report_instance import ReportStatus
+        from app.services.finance.rpt.report_instance import ReportInstanceService
 
         mock_report_instance.status = ReportStatus.COMPLETED
         mock_db.get.return_value = mock_report_instance
@@ -156,16 +156,14 @@ class TestReportInstanceServiceGeneration:
 
     def test_complete_generation_success(self, mock_db, mock_report_instance):
         """Test successful generation completion."""
-        from app.services.finance.rpt.report_instance import ReportInstanceService
         from app.models.finance.rpt.report_instance import ReportStatus
+        from app.services.finance.rpt.report_instance import ReportInstanceService
 
         mock_report_instance.status = ReportStatus.GENERATING
-        mock_report_instance.started_at = datetime.now(timezone.utc) - timedelta(
-            seconds=5
-        )
+        mock_report_instance.started_at = datetime.now(UTC) - timedelta(seconds=5)
         mock_db.get.return_value = mock_report_instance
 
-        result = ReportInstanceService.complete_generation(
+        ReportInstanceService.complete_generation(
             mock_db,
             mock_report_instance.instance_id,
             output_file_path="/reports/output.pdf",
@@ -196,8 +194,8 @@ class TestReportInstanceServiceGeneration:
 
     def test_complete_generation_wrong_status(self, mock_db, mock_report_instance):
         """Test complete with wrong status."""
-        from app.services.finance.rpt.report_instance import ReportInstanceService
         from app.models.finance.rpt.report_instance import ReportStatus
+        from app.services.finance.rpt.report_instance import ReportInstanceService
 
         mock_report_instance.status = ReportStatus.QUEUED
         mock_db.get.return_value = mock_report_instance
@@ -214,14 +212,14 @@ class TestReportInstanceServiceGeneration:
 
     def test_fail_generation_success(self, mock_db, mock_report_instance):
         """Test successful generation failure recording."""
-        from app.services.finance.rpt.report_instance import ReportInstanceService
         from app.models.finance.rpt.report_instance import ReportStatus
+        from app.services.finance.rpt.report_instance import ReportInstanceService
 
         mock_report_instance.status = ReportStatus.GENERATING
-        mock_report_instance.started_at = datetime.now(timezone.utc)
+        mock_report_instance.started_at = datetime.now(UTC)
         mock_db.get.return_value = mock_report_instance
 
-        result = ReportInstanceService.fail_generation(
+        ReportInstanceService.fail_generation(
             mock_db,
             mock_report_instance.instance_id,
             error_message="Database connection failed",
@@ -250,14 +248,14 @@ class TestReportInstanceServiceCancel:
 
     def test_cancel_report_success(self, mock_db, org_id, mock_report_instance):
         """Test successful report cancellation."""
-        from app.services.finance.rpt.report_instance import ReportInstanceService
         from app.models.finance.rpt.report_instance import ReportStatus
+        from app.services.finance.rpt.report_instance import ReportInstanceService
 
         mock_report_instance.status = ReportStatus.QUEUED
         mock_report_instance.organization_id = org_id
         mock_db.get.return_value = mock_report_instance
 
-        result = ReportInstanceService.cancel_report(
+        ReportInstanceService.cancel_report(
             mock_db, org_id, mock_report_instance.instance_id
         )
 
@@ -277,8 +275,8 @@ class TestReportInstanceServiceCancel:
 
     def test_cancel_report_wrong_status(self, mock_db, org_id, mock_report_instance):
         """Test cancel with wrong status (not QUEUED)."""
-        from app.services.finance.rpt.report_instance import ReportInstanceService
         from app.models.finance.rpt.report_instance import ReportStatus
+        from app.services.finance.rpt.report_instance import ReportInstanceService
 
         mock_report_instance.status = ReportStatus.GENERATING
         mock_report_instance.organization_id = org_id
@@ -331,8 +329,8 @@ class TestReportInstanceServiceQueries:
 
     def test_get_generation_statistics(self, mock_db, org_id, mock_report_instance):
         """Test getting generation statistics."""
-        from app.services.finance.rpt.report_instance import ReportInstanceService
         from app.models.finance.rpt.report_instance import ReportStatus
+        from app.services.finance.rpt.report_instance import ReportInstanceService
 
         completed_instance = MockReportInstance(
             organization_id=org_id,
@@ -424,7 +422,7 @@ class TestReportInstanceServiceRegenerate:
 
         mock_db.get.side_effect = [mock_report_instance, mock_report_definition]
 
-        result = ReportInstanceService.regenerate_report(
+        ReportInstanceService.regenerate_report(
             mock_db, org_id, mock_report_instance.instance_id, user_id
         )
 

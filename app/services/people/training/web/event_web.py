@@ -4,8 +4,6 @@ Training Web Service - Event methods.
 
 from __future__ import annotations
 
-import logging
-from typing import Optional
 from uuid import UUID
 
 from fastapi import Request
@@ -29,8 +27,6 @@ from .base import (
     parse_uuid,
 )
 
-logger = logging.getLogger(__name__)
-
 
 class EventWebService:
     """Web service methods for training events."""
@@ -39,11 +35,11 @@ class EventWebService:
     def list_events_context(
         db: Session,
         organization_id: UUID,
-        search: Optional[str] = None,
-        status: Optional[str] = None,
-        program_id: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        search: str | None = None,
+        status: str | None = None,
+        program_id: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
         page: int = 1,
     ) -> dict:
         """Build context for events list page."""
@@ -85,8 +81,8 @@ class EventWebService:
     def event_form_context(
         db: Session,
         organization_id: UUID,
-        event_id: Optional[str] = None,
-        preselected_program_id: Optional[str] = None,
+        event_id: str | None = None,
+        preselected_program_id: str | None = None,
     ) -> dict:
         """Build context for event create/edit form."""
         svc = TrainingService(db)
@@ -172,11 +168,11 @@ class EventWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
-        status: Optional[str] = None,
-        program_id: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        search: str | None = None,
+        status: str | None = None,
+        program_id: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Render events list page."""
@@ -203,7 +199,7 @@ class EventWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        program_id: Optional[str] = None,
+        program_id: str | None = None,
     ) -> HTMLResponse:
         """Render new event form."""
         context = base_context(request, auth, "New Training Event", "training", db=db)
@@ -223,7 +219,7 @@ class EventWebService:
         auth: WebAuthContext,
         db: Session,
         event_id: str,
-        success: Optional[str] = None,
+        success: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Render event detail page."""
         ctx = self.event_detail_context(db, coerce_uuid(auth.organization_id), event_id)

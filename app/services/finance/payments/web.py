@@ -7,7 +7,6 @@ Provides view-focused data for payment-related web routes.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -24,7 +23,7 @@ class PaymentWebService:
     def payment_callback_context(
         db: Session,
         reference: str,
-        trxref: Optional[str] = None,
+        trxref: str | None = None,
     ) -> dict:
         from app.models.finance.payments import PaymentIntent, PaymentIntentStatus
 
@@ -199,10 +198,13 @@ class PaymentWebService:
     def transfer_list_context(
         db: Session,
         organization_id,
-        status: Optional[str],
+        search: str | None,
+        status: str | None,
         page: int,
-        per_page: int = 20,
+        per_page: int = 25,
     ) -> dict:
+        from sqlalchemy import func, or_
+
         from app.models.finance.payments import (
             PaymentDirection,
             PaymentIntent,
@@ -211,14 +213,50 @@ class PaymentWebService:
 
         offset = (page - 1) * per_page
 
+        # Base filter: org + outbound direction
+        base_filter = [
+            PaymentIntent.organization_id == organization_id,
+            PaymentIntent.direction == PaymentDirection.OUTBOUND,
+        ]
+
+        # Stat card counts (unfiltered by search/status)
+        stat_query = db.query(PaymentIntent).filter(*base_filter)
+        total_count = stat_query.count()
+        total_amount = (
+            db.query(func.coalesce(func.sum(PaymentIntent.amount), 0))
+            .filter(*base_filter)
+            .scalar()
+        )
+        pending_count = stat_query.filter(
+            PaymentIntent.status == PaymentIntentStatus.PENDING
+        ).count()
+        processing_count = stat_query.filter(
+            PaymentIntent.status == PaymentIntentStatus.PROCESSING
+        ).count()
+        completed_count = stat_query.filter(
+            PaymentIntent.status == PaymentIntentStatus.COMPLETED
+        ).count()
+        failed_count = stat_query.filter(
+            PaymentIntent.status == PaymentIntentStatus.FAILED
+        ).count()
+
+        # Filtered query for listing
         query = (
             db.query(PaymentIntent)
-            .filter(
-                PaymentIntent.organization_id == organization_id,
-                PaymentIntent.direction == PaymentDirection.OUTBOUND,
-            )
+            .filter(*base_filter)
             .order_by(PaymentIntent.created_at.desc())
         )
+
+        if search:
+            search_pattern = f"%{search}%"
+            query = query.filter(
+                or_(
+                    PaymentIntent.paystack_reference.ilike(search_pattern),
+                    PaymentIntent.recipient_account_name.ilike(search_pattern),
+                    PaymentIntent.recipient_account_number.ilike(search_pattern),
+                    PaymentIntent.transfer_code.ilike(search_pattern),
+                )
+            )
 
         if status:
             try:
@@ -227,23 +265,34 @@ class PaymentWebService:
             except ValueError:
                 pass
 
-        total = query.count()
+        filtered_total = query.count()
         intents = query.limit(per_page).offset(offset).all()
+        total_pages = max(1, (filtered_total + per_page - 1) // per_page)
+
+        from app.services.formatters import format_currency
 
         return {
             "intents": intents,
-            "current_page": page,
-            "total_pages": (total + per_page - 1) // per_page,
-            "total": total,
+            "search": search or "",
+            "page": page,
+            "total_pages": total_pages,
+            "total_count": filtered_total,
             "status_filter": status,
             "statuses": [s.value for s in PaymentIntentStatus],
+            # Stat card data
+            "stat_total_count": total_count,
+            "stat_total_amount": format_currency(total_amount, "NGN"),
+            "stat_pending": pending_count,
+            "stat_processing": processing_count,
+            "stat_completed": completed_count,
+            "stat_failed": failed_count,
         }
 
     @staticmethod
     def payment_history_context(
         db: Session,
         organization_id,
-        status: Optional[str],
+        status: str | None,
         page: int,
         per_page: int = 20,
     ) -> dict:

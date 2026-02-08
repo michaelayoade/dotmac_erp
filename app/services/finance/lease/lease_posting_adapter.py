@@ -11,7 +11,6 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -50,7 +49,7 @@ class LeasePostingAdapter:
         lease_id: UUID,
         posting_date: date,
         posted_by_user_id: UUID,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> LeasePostingResult:
         """
         Post the initial recognition of a lease to the general ledger.
@@ -228,7 +227,7 @@ class LeasePostingAdapter:
         accrual_date: date,
         interest_amount: Decimal,
         posted_by_user_id: UUID,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> LeasePostingResult:
         """
         Post interest accrual on lease liability to the general ledger.
@@ -374,7 +373,7 @@ class LeasePostingAdapter:
         payment_amount: Decimal,
         cash_account_id: UUID,
         posted_by_user_id: UUID,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> LeasePostingResult:
         """
         Post a lease payment to the general ledger.
@@ -523,7 +522,7 @@ class LeasePostingAdapter:
         depreciation_date: date,
         depreciation_amount: Decimal,
         posted_by_user_id: UUID,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> LeasePostingResult:
         """
         Post ROU asset depreciation to the general ledger.
@@ -670,7 +669,7 @@ class LeasePostingAdapter:
         lease_id: UUID,
         termination_date: date,
         posted_by_user_id: UUID,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> LeasePostingResult:
         """
         Post early lease termination to the general ledger.

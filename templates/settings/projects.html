@@ -23,6 +23,7 @@
     {{ settings_ui.settings_messages(request, error, "Projects settings updated successfully.") }}
 
     <form method="POST" action="/settings/projects" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
         <!-- Project Defaults -->
         <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Project Defaults</h2>

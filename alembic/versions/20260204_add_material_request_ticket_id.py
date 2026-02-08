@@ -5,10 +5,10 @@ Revises: 20260204_add_material_request_project_id
 Create Date: 2026-02-04
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
+from alembic import op
 
 revision = "20260204_add_material_request_ticket_id"
 down_revision = "20260204_add_material_request_project_id"

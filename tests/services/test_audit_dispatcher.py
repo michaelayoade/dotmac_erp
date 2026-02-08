@@ -11,7 +11,6 @@ from unittest.mock import MagicMock, patch
 from app.models.finance.audit.audit_log import AuditAction
 from app.services.audit_dispatcher import fire_audit_event
 
-
 # Patch targets — imports are inside fire_audit_event() so we patch
 # them at the module where they're looked up.
 _SVC_PATCH = "app.services.finance.platform.audit_log.AuditLogService"

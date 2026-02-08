@@ -6,12 +6,12 @@ Handles maintenance scheduling, tracking, and completion.
 
 import logging
 from datetime import date
-from typing import Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.models.finance.audit.audit_log import AuditAction
 from app.models.fleet.enums import MaintenanceStatus, MaintenanceType, VehicleStatus
 from app.models.fleet.maintenance import MaintenanceRecord
 from app.models.fleet.vehicle import Vehicle
@@ -20,6 +20,7 @@ from app.schemas.fleet.maintenance import (
     MaintenanceCreate,
     MaintenanceUpdate,
 )
+from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import (
     NotFoundError,
     PaginatedResult,
@@ -27,15 +28,13 @@ from app.services.common import (
     ValidationError,
     paginate,
 )
-from app.models.finance.audit.audit_log import AuditAction
-from app.services.audit_dispatcher import fire_audit_event
 from app.services.state_machine import StateMachine
 
 logger = logging.getLogger(__name__)
 
 
 # Valid maintenance status transitions
-MAINTENANCE_STATUS_TRANSITIONS: Dict[MaintenanceStatus, set] = {
+MAINTENANCE_STATUS_TRANSITIONS: dict[MaintenanceStatus, set] = {
     MaintenanceStatus.SCHEDULED: {
         MaintenanceStatus.IN_PROGRESS,
         MaintenanceStatus.COMPLETED,
@@ -58,7 +57,7 @@ class MaintenanceService:
         self.db = db
         self.organization_id = organization_id
 
-    def get_by_id(self, maintenance_id: UUID) -> Optional[MaintenanceRecord]:
+    def get_by_id(self, maintenance_id: UUID) -> MaintenanceRecord | None:
         """Get maintenance record by ID."""
         return self.db.get(MaintenanceRecord, maintenance_id)
 
@@ -72,12 +71,12 @@ class MaintenanceService:
     def list_records(
         self,
         *,
-        vehicle_id: Optional[UUID] = None,
-        status: Optional[MaintenanceStatus] = None,
-        maintenance_type: Optional[MaintenanceType] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
-        params: Optional[PaginationParams] = None,
+        vehicle_id: UUID | None = None,
+        status: MaintenanceStatus | None = None,
+        maintenance_type: MaintenanceType | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        params: PaginationParams | None = None,
     ) -> PaginatedResult[MaintenanceRecord]:
         """List maintenance records with filtering."""
         stmt = (
@@ -105,8 +104,8 @@ class MaintenanceService:
         return paginate(self.db, stmt, params)
 
     def get_due_maintenance(
-        self, days_ahead: int = 7, *, limit: Optional[int] = None
-    ) -> List[MaintenanceRecord]:
+        self, days_ahead: int = 7, *, limit: int | None = None
+    ) -> list[MaintenanceRecord]:
         """Get maintenance records due within the specified days."""
         from datetime import timedelta
 
@@ -126,8 +125,8 @@ class MaintenanceService:
         return list(self.db.scalars(stmt).all())
 
     def get_overdue_maintenance(
-        self, *, limit: Optional[int] = None
-    ) -> List[MaintenanceRecord]:
+        self, *, limit: int | None = None
+    ) -> list[MaintenanceRecord]:
         """Get overdue maintenance records."""
         stmt = (
             select(MaintenanceRecord)
@@ -293,7 +292,7 @@ class MaintenanceService:
         return record
 
     def cancel(
-        self, maintenance_id: UUID, reason: Optional[str] = None
+        self, maintenance_id: UUID, reason: str | None = None
     ) -> MaintenanceRecord:
         """Cancel a maintenance record."""
         record = self.get_or_raise(maintenance_id)

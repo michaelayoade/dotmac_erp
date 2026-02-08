@@ -1,5 +1,6 @@
 {% extends "modules/base_modules.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}{{ ticket.ticket_number if ticket else 'Ticket Not Found' }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -34,7 +35,7 @@
         </button>
         {# Confirmation Modal #}
         <div x-show="showConfirm" x-cloak class="fixed inset-0 z-50 flex items-center justify-center">
-            <div class="fixed inset-0 bg-black/50" @click="showConfirm = false"></div>
+            <div class="fixed inset-0 bg-slate-900/50" @click="showConfirm = false"></div>
             <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
                 <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">Archive Ticket?</h3>
                 <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">
@@ -43,6 +44,7 @@
                 <div class="flex justify-end gap-3">
                     <button @click="showConfirm = false" type="button" class="btn btn-secondary">Cancel</button>
                     <form method="post" action="/support/tickets/{{ ticket.ticket_number }}/archive" class="inline">
+                        {{ request.state.csrf_form | safe }}
                         <button type="submit" class="btn btn-danger">
                             <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
@@ -63,7 +65,7 @@
             Delete
         </button>
         <div x-show="showDelete" x-cloak class="fixed inset-0 z-50 flex items-center justify-center">
-            <div class="fixed inset-0 bg-black/50" @click="showDelete = false"></div>
+            <div class="fixed inset-0 bg-slate-900/50" @click="showDelete = false"></div>
             <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full mx-4 p-6">
                 <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-2">Delete Ticket?</h3>
                 <p class="text-sm text-slate-500 dark:text-slate-400 mb-6">
@@ -131,6 +133,7 @@
                          class="absolute right-0 mt-2 w-48 rounded-lg border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-800 z-10">
                         {% for s in ticket.can_transition_to %}
                         <form method="post" action="/support/tickets/{{ ticket.ticket_number }}/status" class="block">
+                            {{ request.state.csrf_form | safe }}
                             <input type="hidden" name="status" value="{{ s.value }}">
                             <button type="submit" class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-700/50 transition-colors">
                                 {{ s.label }}
@@ -165,14 +168,13 @@
                     <h3 class="card-title">
                         Attachments
                         {% if attachments %}
-                        <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-                            {{ attachments|length }}
-                        </span>
+                        {{ status_badge(attachments|length, size="sm") }}
                         {% endif %}
                     </h3>
                 </div>
                 <div class="p-6 space-y-4">
-                    <form method="post" enctype="multipart/form-data" action="/support/tickets/{{ ticket.ticket_number }}/attachments" class="space-y-3">
+                    <form method="post" enctype="multipart/form-data" action="/support/tickets/{{ ticket.ticket_number }}/attachments" class="space-y-4">
+                        {{ request.state.csrf_form | safe }}
                         <div>
                             <input type="file" name="file"
                                    accept=".jpg,.jpeg,.png,.gif,.webp,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.zip"
@@ -225,6 +227,7 @@
                                 <a href="/support/tickets/{{ ticket.ticket_number }}/attachments/{{ att.attachment_id }}" class="btn btn-secondary btn-sm">Download</a>
                                 <form method="post" action="/support/tickets/{{ ticket.ticket_number }}/attachments/{{ att.attachment_id }}/delete"
                                       onsubmit="return confirm('Delete this attachment?');">
+                                    {{ request.state.csrf_form | safe }}
                                     <button type="submit" class="btn btn-ghost btn-sm text-rose-600">Delete</button>
                                 </form>
                             </div>
@@ -267,6 +270,7 @@
                     </svg>
                 </button>
                 <form x-show="showResolve" x-collapse method="post" action="/support/tickets/{{ ticket.ticket_number }}/resolve" class="mt-4 space-y-4">
+                    {{ request.state.csrf_form | safe }}
                     <div>
                         <label class="form-label required">Resolution Notes</label>
                         <textarea name="resolution" required rows="4" class="form-input w-full" placeholder="Describe how this issue was resolved..."></textarea>
@@ -287,9 +291,7 @@
                     <h3 class="card-title">
                         Linked Expenses
                         {% if ticket.linked_expense_count > 0 %}
-                        <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-                            {{ ticket.linked_expense_count }}
-                        </span>
+                        {{ status_badge(ticket.linked_expense_count, size="sm") }}
                         {% endif %}
                     </h3>
                     <a href="/people/self/expenses?ticket_id={{ ticket.ticket_id }}" class="btn btn-sm btn-primary">
@@ -306,7 +308,7 @@
                         </div>
                         <div class="text-right">
                             <p class="font-mono text-sm font-medium text-slate-900 dark:text-white">{{ expense.total_amount }}</p>
-                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ expense.status }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ expense.status | replace('_', ' ') | title }}</p>
                         </div>
                     </a>
                     {% endfor %}
@@ -327,9 +329,7 @@
                     <h3 class="card-title">
                         Linked Tasks
                         {% if linked_tasks %}
-                        <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-                            {{ linked_tasks|length }}
-                        </span>
+                        {{ status_badge(linked_tasks|length, size="sm") }}
                         {% endif %}
                     </h3>
                 </div>
@@ -350,9 +350,7 @@
                                 'COMPLETED': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
                                 'CANCELLED': 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
                             } %}
-                            <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium {{ status_colors.get(task.status.value, 'bg-slate-100') }}">
-                                {{ task.status.value }}
-                            </span>
+                            {{ status_badge(task.status.value, size="sm") }}
                             <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ task.progress_percent }}% complete</p>
                         </div>
                     </a>
@@ -575,10 +573,10 @@
                 </div>
                 {% endif %}
 
-                <form method="post" action="/support/tickets/{{ ticket.ticket_number }}/assign" class="space-y-3">
+                <form method="post" action="/support/tickets/{{ ticket.ticket_number }}/assign" class="space-y-4">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <div>
-                        <label class="form-label">{{ 'Reassign to' if ticket.assigned_to_name else 'Assign to' }}</label>
+                        <label class="form-label">{{ 'Reassign to' if ticket.assigned_to_name else 'Assign to' }} <span class="text-rose-500">*</span></label>
                         <select name="assigned_to_id" class="form-input w-full" required>
                             <option value="">Select employee...</option>
                             {% for emp in employees %}
@@ -688,9 +686,7 @@
                 </svg>
                 Activity Log
                 {% if activity_timeline %}
-                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-                    {{ activity_timeline | length }}
-                </span>
+                {{ status_badge(activity_timeline | length, size="sm") }}
                 {% endif %}
             </h3>
             <svg class="h-5 w-5 text-slate-400 transition-transform" :class="expanded ? 'rotate-180' : ''" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -746,7 +742,8 @@
 
             {# Add Comment Form #}
             <div class="px-6 py-4 bg-slate-50/50 dark:bg-slate-800/30 border-b border-slate-200 dark:border-slate-700">
-                <form method="post" enctype="multipart/form-data" action="/support/tickets/{{ ticket.ticket_number }}/comments" class="space-y-3">
+                <form method="post" enctype="multipart/form-data" action="/support/tickets/{{ ticket.ticket_number }}/comments" class="space-y-4">
+                    {{ request.state.csrf_form | safe }}
                     <div>
                         <textarea name="content" required rows="2" class="form-input w-full" placeholder="Add a comment..."></textarea>
                     </div>
@@ -786,7 +783,7 @@
                      x-transition:enter="transition ease-out duration-200"
                      x-transition:enter-start="opacity-0"
                      x-transition:enter-end="opacity-100"
-                     data-activity-type="{{ item.type }}">
+                     data-activity-type="{{ item.type | replace('_', ' ') | title }}">
                     <div class="flex gap-4">
                         <div class="flex-shrink-0">
                             <div class="flex h-9 w-9 items-center justify-center rounded-full {{ item.icon_bg }}">
@@ -869,7 +866,7 @@
 </div>
 
 <div x-show="previewOpen" x-cloak class="fixed inset-0 z-50 flex items-center justify-center">
-    <div class="absolute inset-0 bg-black/70" @click="closePreview()"></div>
+    <div class="absolute inset-0 bg-slate-900/70" @click="closePreview()"></div>
     <div class="relative bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-4xl w-full mx-6 p-4">
         <div class="flex items-center justify-between mb-3">
             <div class="text-sm font-medium text-slate-800 dark:text-slate-200 truncate" x-text="previewName"></div>

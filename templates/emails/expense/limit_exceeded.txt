@@ -1,0 +1,15 @@
+{% extends "emails/base_email.txt" %}
+{% block content %}Hi {{ first_name }},
+
+{% if is_blocked %}** EXPENSE CLAIM BLOCKED **{% else %}** EXPENSE LIMIT WARNING **{% endif %}
+
+{{ status_text }}
+
+Claim Number: {{ claim_number }}
+Claim Amount: {{ currency }} {{ amount }}
+Limit: {{ currency }} {{ limit_amount }}
+Rule: {{ rule_name }}
+
+{{ action_text }}
+
+View claim at: {{ claim_url }}{% endblock %}

@@ -10,8 +10,8 @@ Excludes users whose display name is "Admin".
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import argparse
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 
@@ -19,7 +19,6 @@ from app.db import SessionLocal
 from app.models.auth import AuthProvider, UserCredential
 from app.models.person import Person
 from app.services.auth_flow import hash_password
-
 
 DEFAULT_PASSWORD = "Dotmac@123"
 
@@ -82,7 +81,7 @@ def main() -> int:
             credential.username = email
             credential.password_hash = hash_password(DEFAULT_PASSWORD)
             credential.must_change_password = True
-            credential.password_updated_at = datetime.now(timezone.utc)
+            credential.password_updated_at = datetime.now(UTC)
             credential.is_active = True
             updated += 1
 

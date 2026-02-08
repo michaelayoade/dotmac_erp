@@ -6,42 +6,40 @@ fiscal periods, and account balances.
 """
 
 from datetime import date, datetime
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
-from app.services.auth_dependencies import require_tenant_permission
 from app.api.finance.utils import parse_enum
 from app.db import SessionLocal
+from app.models.finance.gl.account import AccountType, NormalBalance
+from app.models.finance.gl.fiscal_period import PeriodStatus
+from app.models.finance.gl.journal_entry import JournalStatus, JournalType
+from app.schemas.finance.common import ListResponse, PostingResultSchema
 from app.schemas.finance.gl import (
+    AccountBalanceRead,
     AccountCreate,
-    AccountUpdate,
     AccountRead,
+    AccountUpdate,
     FiscalPeriodCreate,
     FiscalPeriodRead,
     JournalEntryCreate,
     JournalEntryRead,
-    AccountBalanceRead,
     TrialBalanceRead,
 )
-from app.schemas.finance.common import ListResponse, PostingResultSchema
-from app.models.finance.gl.account import AccountType, NormalBalance
-from app.models.finance.gl.fiscal_period import PeriodStatus
-from app.models.finance.gl.journal_entry import JournalType, JournalStatus
+from app.services.auth_dependencies import require_tenant_permission
 from app.services.finance.gl import (
-    chart_of_accounts_service,
-    fiscal_period_service,
-    journal_service,
-    ledger_posting_service,
     AccountInput,
     FiscalPeriodInput,
     JournalInput,
     JournalLineInput,
+    chart_of_accounts_service,
+    fiscal_period_service,
+    journal_service,
+    ledger_posting_service,
 )
-
 
 router = APIRouter(
     prefix="/gl",
@@ -98,20 +96,21 @@ def create_account(
 @router.get("/accounts/{account_id}", response_model=AccountRead)
 def get_account(
     account_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("gl:accounts:read")),
     db: Session = Depends(get_db),
 ):
     """Get a GL account by ID."""
-    return chart_of_accounts_service.get(db, str(account_id))
+    return chart_of_accounts_service.get(db, str(account_id), organization_id)
 
 
 @router.get("/accounts", response_model=ListResponse[AccountRead])
 def list_accounts(
     organization_id: UUID = Depends(require_organization_id),
-    account_type: Optional[str] = None,
-    is_active: Optional[bool] = None,
-    category_id: Optional[UUID] = None,
-    search: Optional[str] = None,
+    account_type: str | None = None,
+    is_active: bool | None = None,
+    category_id: UUID | None = None,
+    search: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("gl:accounts:read")),
@@ -220,18 +219,19 @@ def create_fiscal_period(
 @router.get("/fiscal-periods/{period_id}", response_model=FiscalPeriodRead)
 def get_fiscal_period(
     period_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("gl:periods:read")),
     db: Session = Depends(get_db),
 ):
     """Get a fiscal period by ID."""
-    return fiscal_period_service.get(db, str(period_id))
+    return fiscal_period_service.get(db, str(period_id), organization_id)
 
 
 @router.get("/fiscal-periods", response_model=ListResponse[FiscalPeriodRead])
 def list_fiscal_periods(
     organization_id: UUID = Depends(require_organization_id),
-    fiscal_year_id: Optional[UUID] = None,
-    status: Optional[str] = None,
+    fiscal_year_id: UUID | None = None,
+    status: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("gl:periods:read")),
@@ -342,21 +342,22 @@ def create_journal_entry(
 @router.get("/journal-entries/{entry_id}", response_model=JournalEntryRead)
 def get_journal_entry(
     entry_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("gl:journals:read")),
     db: Session = Depends(get_db),
 ):
     """Get a journal entry by ID."""
-    return journal_service.get(db, str(entry_id))
+    return journal_service.get(db, str(entry_id), organization_id)
 
 
 @router.get("/journal-entries", response_model=ListResponse[JournalEntryRead])
 def list_journal_entries(
     organization_id: UUID = Depends(require_organization_id),
-    fiscal_period_id: Optional[UUID] = None,
-    journal_type: Optional[str] = None,
-    status: Optional[str] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    fiscal_period_id: UUID | None = None,
+    journal_type: str | None = None,
+    status: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("gl:journals:read")),
@@ -449,7 +450,7 @@ def get_account_balance(
     if not balance:
         raise HTTPException(status_code=404, detail="Balance not found")
 
-    account = chart_of_accounts_service.get(db, str(account_id))
+    account = chart_of_accounts_service.get(db, str(account_id), organization_id)
     return AccountBalanceRead(
         account_id=balance.account_id,
         account_code=account.account_code,
@@ -467,7 +468,7 @@ def get_account_balance(
 def get_trial_balance(
     organization_id: UUID = Depends(require_organization_id),
     fiscal_period_id: UUID = Query(...),
-    as_of_date: Optional[date] = None,
+    as_of_date: date | None = None,
     auth: dict = Depends(require_tenant_permission("reports:trial_balance:read")),
     db: Session = Depends(get_db),
 ):

@@ -24,6 +24,7 @@
           hx-swap="none"
           hx-on::after-request="if(event.detail.successful) { const data = JSON.parse(event.detail.xhr.response); window.location.href='/finance/banking/reconciliations/' + data.reconciliation_id; }"
           class="space-y-6">
+        {{ request.state.csrf_form | safe }}
 
         {% if selected_account_id is defined and selected_account_id %}
         <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 flex items-center gap-2">
@@ -41,7 +42,7 @@
             <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Select Bank Account</h3>
 
             <div>
-                <label for="bank_account_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Bank Account *</label>
+                <label for="bank_account_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Bank Account <span class="text-rose-500">*</span></label>
                 <select id="bank_account_id" name="bank_account_id" required
                         hx-get="/api/v1/banking/accounts/{value}/balance"
                         hx-trigger="change"
@@ -65,17 +66,17 @@
 
             <div class="grid gap-4 sm:grid-cols-3">
                 <div>
-                    <label for="reconciliation_date" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Reconciliation Date *</label>
+                    <label for="reconciliation_date" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Reconciliation Date <span class="text-rose-500">*</span></label>
                     <input type="date" id="reconciliation_date" name="reconciliation_date" required
                            class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 </div>
                 <div>
-                    <label for="period_start" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Period Start *</label>
+                    <label for="period_start" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Period Start <span class="text-rose-500">*</span></label>
                     <input type="date" id="period_start" name="period_start" required
                            class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 </div>
                 <div>
-                    <label for="period_end" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Period End *</label>
+                    <label for="period_end" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Period End <span class="text-rose-500">*</span></label>
                     <input type="date" id="period_end" name="period_end" required
                            class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 </div>
@@ -88,12 +89,12 @@
 
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
-                    <label for="statement_opening_balance" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Statement Opening Balance *</label>
+                    <label for="statement_opening_balance" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Statement Opening Balance <span class="text-rose-500">*</span></label>
                     <input type="number" id="statement_opening_balance" name="statement_opening_balance" step="0.01" required
                            class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 </div>
                 <div>
-                    <label for="statement_closing_balance" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Statement Closing Balance *</label>
+                    <label for="statement_closing_balance" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Statement Closing Balance <span class="text-rose-500">*</span></label>
                     <input type="number" id="statement_closing_balance" name="statement_closing_balance" step="0.01" required
                            class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 </div>
@@ -112,7 +113,7 @@
         </div>
 
         <!-- Actions -->
-        <div class="flex items-center justify-end gap-4">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/finance/banking/reconciliations"
                class="btn btn-secondary">
                 Cancel

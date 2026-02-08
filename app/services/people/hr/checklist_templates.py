@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -31,10 +30,10 @@ class ChecklistTemplateService:
         self,
         org_id: UUID,
         *,
-        template_type: Optional[ChecklistTemplateType] = None,
-        is_active: Optional[bool] = None,
-        search: Optional[str] = None,
-        pagination: Optional[PaginationParams] = None,
+        template_type: ChecklistTemplateType | None = None,
+        is_active: bool | None = None,
+        search: str | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[ChecklistTemplate]:
         query = select(ChecklistTemplate).where(
             ChecklistTemplate.organization_id == org_id
@@ -93,10 +92,10 @@ class ChecklistTemplateService:
         *,
         template_code: str,
         template_name: str,
-        description: Optional[str],
+        description: str | None,
         template_type: ChecklistTemplateType,
         is_active: bool,
-        items: Optional[list[dict]],
+        items: list[dict] | None,
     ) -> ChecklistTemplate:
         template = ChecklistTemplate(
             organization_id=org_id,

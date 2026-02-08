@@ -6,7 +6,6 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -66,7 +65,7 @@ class LeaseModification(Base):
         Enum(ModificationType, name="lease_modification_type"),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Is this a separate lease? (IFRS 16.44)
     is_separate_lease: Mapped[bool] = mapped_column(
@@ -84,13 +83,13 @@ class LeaseModification(Base):
     )
 
     # Modification parameters
-    new_lease_payments: Mapped[Optional[Decimal]] = mapped_column(
+    new_lease_payments: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6), nullable=True
     )
-    revised_discount_rate: Mapped[Optional[Decimal]] = mapped_column(
+    revised_discount_rate: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 6), nullable=True
     )
-    revised_lease_term_months: Mapped[Optional[int]] = mapped_column(
+    revised_lease_term_months: Mapped[int | None] = mapped_column(
         Numeric(10, 0), nullable=True
     )
 
@@ -112,7 +111,7 @@ class LeaseModification(Base):
     )
 
     # Journal entry
-    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -122,11 +121,11 @@ class LeaseModification(Base):
         UUID(as_uuid=True),
         nullable=False,
     )
-    approved_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )

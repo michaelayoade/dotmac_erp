@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, or_
@@ -32,12 +32,12 @@ class SearchSuggestion:
 
     id: str
     label: str
-    subtitle: Optional[str] = None
-    category: Optional[str] = None
-    meta: Optional[Dict[str, Any]] = None
+    subtitle: str | None = None
+    category: str | None = None
+    meta: dict[str, Any] | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
-        result: Dict[str, Any] = {"id": self.id, "label": self.label}
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {"id": self.id, "label": self.label}
         if self.subtitle:
             result["subtitle"] = self.subtitle
         if self.category:
@@ -51,12 +51,12 @@ class SearchSuggestion:
 class SearchResult:
     """Search result with suggestions and metadata."""
 
-    suggestions: List[SearchSuggestion]
+    suggestions: list[SearchSuggestion]
     query: str
     entity_type: str
     has_more: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "suggestions": [s.to_dict() for s in self.suggestions],
             "query": self.query,
@@ -83,7 +83,7 @@ class SearchSuggestionsService:
         entity_type: str,
         query: str,
         limit: int = 10,
-        filters: Optional[Dict[str, Any]] = None,
+        filters: dict[str, Any] | None = None,
     ) -> SearchResult:
         """
         Search for suggestions across an entity type.
@@ -131,8 +131,8 @@ class SearchSuggestionsService:
 
     @classmethod
     def _search_customers(
-        cls, db: Session, org_id: UUID, query: str, limit: int, filters: Dict
-    ) -> tuple[List[SearchSuggestion], bool]:
+        cls, db: Session, org_id: UUID, query: str, limit: int, filters: dict
+    ) -> tuple[list[SearchSuggestion], bool]:
         """Search customers by name or code."""
         q = query.lower()
         base_query = (
@@ -167,8 +167,8 @@ class SearchSuggestionsService:
 
     @classmethod
     def _search_suppliers(
-        cls, db: Session, org_id: UUID, query: str, limit: int, filters: Dict
-    ) -> tuple[List[SearchSuggestion], bool]:
+        cls, db: Session, org_id: UUID, query: str, limit: int, filters: dict
+    ) -> tuple[list[SearchSuggestion], bool]:
         """Search suppliers by name or code."""
         q = query.lower()
         base_query = (
@@ -202,8 +202,8 @@ class SearchSuggestionsService:
 
     @classmethod
     def _search_accounts(
-        cls, db: Session, org_id: UUID, query: str, limit: int, filters: Dict
-    ) -> tuple[List[SearchSuggestion], bool]:
+        cls, db: Session, org_id: UUID, query: str, limit: int, filters: dict
+    ) -> tuple[list[SearchSuggestion], bool]:
         """Search GL accounts by code or name."""
         q = query.lower()
         base_query = (
@@ -241,8 +241,8 @@ class SearchSuggestionsService:
 
     @classmethod
     def _search_items(
-        cls, db: Session, org_id: UUID, query: str, limit: int, filters: Dict
-    ) -> tuple[List[SearchSuggestion], bool]:
+        cls, db: Session, org_id: UUID, query: str, limit: int, filters: dict
+    ) -> tuple[list[SearchSuggestion], bool]:
         """Search inventory items by code or name."""
         q = query.lower()
         base_query = (
@@ -279,8 +279,8 @@ class SearchSuggestionsService:
 
     @classmethod
     def _search_tax_codes(
-        cls, db: Session, org_id: UUID, query: str, limit: int, filters: Dict
-    ) -> tuple[List[SearchSuggestion], bool]:
+        cls, db: Session, org_id: UUID, query: str, limit: int, filters: dict
+    ) -> tuple[list[SearchSuggestion], bool]:
         """Search tax codes by code or name."""
         q = query.lower()
         base_query = (
@@ -317,8 +317,8 @@ class SearchSuggestionsService:
 
     @classmethod
     def _search_bank_accounts(
-        cls, db: Session, org_id: UUID, query: str, limit: int, filters: Dict
-    ) -> tuple[List[SearchSuggestion], bool]:
+        cls, db: Session, org_id: UUID, query: str, limit: int, filters: dict
+    ) -> tuple[list[SearchSuggestion], bool]:
         """Search bank accounts by name or number."""
         q = query.lower()
         base_query = (

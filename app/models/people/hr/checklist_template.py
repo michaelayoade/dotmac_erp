@@ -13,7 +13,6 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -84,7 +83,7 @@ class ChecklistTemplate(Base, AuditMixin, ERPNextSyncMixin):
     )
     template_code: Mapped[str] = mapped_column(String(30), nullable=False)
     template_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     template_type: Mapped[ChecklistTemplateType] = mapped_column(
         Enum(ChecklistTemplateType, name="checklist_template_type"),
         nullable=False,
@@ -93,11 +92,11 @@ class ChecklistTemplate(Base, AuditMixin, ERPNextSyncMixin):
     created_at: Mapped[datetime] = mapped_column(
         nullable=False, server_default=func.now()
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True, onupdate=func.now()
     )
 
-    items: Mapped[list["ChecklistTemplateItem"]] = relationship(
+    items: Mapped[list[ChecklistTemplateItem]] = relationship(
         "ChecklistTemplateItem",
         back_populates="template",
         cascade="all, delete-orphan",
@@ -137,14 +136,14 @@ class ChecklistTemplateItem(Base):
     # --- New fields for enhanced onboarding ---
 
     # Phase/category for grouping tasks
-    category: Mapped[Optional[str]] = mapped_column(
+    category: Mapped[str | None] = mapped_column(
         String(30),
         nullable=True,
         comment="Task category/phase: PRE_BOARDING, DAY_ONE, FIRST_WEEK, FIRST_MONTH, ONGOING",
     )
 
     # Default assignee role (who should complete this task)
-    default_assignee_role: Mapped[Optional[str]] = mapped_column(
+    default_assignee_role: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Default assignee role: HR, MANAGER, IT, FINANCE, EMPLOYEE, BUDDY",
@@ -163,17 +162,17 @@ class ChecklistTemplateItem(Base):
         default=False,
         comment="Whether document upload is required to complete this task",
     )
-    document_type: Mapped[Optional[str]] = mapped_column(
+    document_type: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Expected document type: ID_COPY, PASSPORT, SIGNED_CONTRACT, BANK_DETAILS, etc.",
     )
 
     # Instructions for task completion
-    instructions: Mapped[Optional[str]] = mapped_column(
+    instructions: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Detailed instructions for the assignee",
     )
 
-    template: Mapped["ChecklistTemplate"] = relationship(back_populates="items")
+    template: Mapped[ChecklistTemplate] = relationship(back_populates="items")

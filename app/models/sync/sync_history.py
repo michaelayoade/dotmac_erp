@@ -7,7 +7,7 @@ Records each migration/sync execution for audit and monitoring.
 import enum
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -72,7 +72,7 @@ class SyncHistory(Base):
         nullable=False,
         default=SyncType.FULL,
     )
-    entity_types: Mapped[Optional[list[str]]] = mapped_column(
+    entity_types: Mapped[list[str] | None] = mapped_column(
         JSONB, nullable=True
     )  # ['items', 'assets', 'accounts']
 
@@ -84,10 +84,10 @@ class SyncHistory(Base):
     )
 
     # Timing
-    started_at: Mapped[Optional[datetime]] = mapped_column(
+    started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
@@ -98,7 +98,7 @@ class SyncHistory(Base):
     error_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     # Error details (first N errors)
-    errors: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+    errors: Mapped[list[dict[str, Any]] | None] = mapped_column(
         JSONB, nullable=True
     )  # [{doctype, name, error}]
 
@@ -159,7 +159,7 @@ class SyncHistory(Base):
         self.skipped_count += 1
 
     @property
-    def duration_seconds(self) -> Optional[float]:
+    def duration_seconds(self) -> float | None:
         """Calculate duration in seconds."""
         if self.started_at and self.completed_at:
             return (self.completed_at - self.started_at).total_seconds()

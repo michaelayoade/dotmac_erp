@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}KPI Details{% endblock %}
 
 {% block breadcrumbs %}
@@ -70,9 +71,7 @@
                     'DEFERRED': 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
                     'CANCELLED': 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'
                 } %}
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium {{ status_colors.get(kpi.status.value, 'bg-slate-100 text-slate-700') }}">
-                    {{ kpi.status.value | replace('_', ' ') | title }}
-                </span>
+                {{ status_badge(kpi.status.value) }}
             </div>
         </div>
     </div>
@@ -95,7 +94,7 @@
             </div>
 
             {# Target vs Actual #}
-            <div class="grid grid-cols-3 gap-4 pt-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-4">
                 <div class="text-center">
                     <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ kpi.target_value }}</p>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Target</p>

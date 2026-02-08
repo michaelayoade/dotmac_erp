@@ -10,8 +10,9 @@ This migration creates tables for Nigeria PAYE tax calculation under NTA 2025:
 """
 
 import sqlalchemy as sa
-from alembic import op
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260123_add_paye_tax_tables"

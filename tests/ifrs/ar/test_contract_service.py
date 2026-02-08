@@ -10,17 +10,17 @@ Tests cover:
 - Contract completion
 """
 
-import pytest
 from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+import pytest
 from fastapi import HTTPException
 
 from app.services.finance.ar.contract import (
-    ContractService,
     ContractInput,
+    ContractService,
     PerformanceObligationInput,
     ProgressUpdateInput,
 )

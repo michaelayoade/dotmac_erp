@@ -8,8 +8,7 @@ from __future__ import annotations
 
 import logging
 from calendar import monthrange
-from datetime import date, datetime, timedelta, timezone
-from typing import Dict, List, Optional, Set
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import or_, select
@@ -71,7 +70,7 @@ class ScheduleGenerator:
         org_id: UUID,
         department_id: UUID,
         year_month: str,
-        created_by_id: Optional[UUID] = None,
+        created_by_id: UUID | None = None,
     ) -> dict:
         """
         Generate shift schedules for a department for a given month.
@@ -133,7 +132,7 @@ class ScheduleGenerator:
         # Generate schedules
         schedules_created = 0
         skipped_on_leave = 0
-        employee_ids_scheduled: Set[UUID] = set()
+        employee_ids_scheduled: set[UUID] = set()
 
         # Get month date range
         _, days_in_month = monthrange(year, month)
@@ -208,7 +207,7 @@ class ScheduleGenerator:
         org_id: UUID,
         department_id: UUID,
         year_month: str,
-        published_by_id: Optional[UUID] = None,
+        published_by_id: UUID | None = None,
     ) -> int:
         """
         Publish all DRAFT schedules for a month.
@@ -239,7 +238,7 @@ class ScheduleGenerator:
                 f"No draft schedules found for {year_month} in this department"
             )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for schedule in schedules:
             schedule.status = ScheduleStatus.PUBLISHED
             schedule.published_at = now
@@ -262,7 +261,7 @@ class ScheduleGenerator:
     def _notify_schedule_published(
         self,
         org_id: UUID,
-        schedules: List[ShiftSchedule],
+        schedules: list[ShiftSchedule],
         year_month: str,
     ) -> None:
         """Notify employees that their schedule has been published."""
@@ -342,7 +341,7 @@ class ScheduleGenerator:
         department_id: UUID,
         year: int,
         month: int,
-    ) -> List[ShiftPatternAssignment]:
+    ) -> list[ShiftPatternAssignment]:
         """Get all active pattern assignments for a department that overlap the month."""
         _, days_in_month = monthrange(year, month)
         month_start = date(year, month, 1)
@@ -370,10 +369,10 @@ class ScheduleGenerator:
     def _get_leave_dates_for_month(
         self,
         org_id: UUID,
-        employee_ids: List[UUID],
+        employee_ids: list[UUID],
         year: int,
         month: int,
-    ) -> Dict[UUID, Set[date]]:
+    ) -> dict[UUID, set[date]]:
         """
         Get approved leave dates for employees in a month.
 
@@ -400,7 +399,7 @@ class ScheduleGenerator:
         )
 
         # Build mapping of employee to leave dates
-        leave_dates: Dict[UUID, Set[date]] = {}
+        leave_dates: dict[UUID, set[date]] = {}
 
         for app in leave_apps:
             if app.employee_id not in leave_dates:

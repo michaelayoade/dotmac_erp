@@ -43,10 +43,10 @@
                     <span class="text-sm text-slate-500 dark:text-slate-400">{{ v.created_at }}</span>
                 </div>
                 <div class="mt-3 flex gap-4 text-xs text-slate-500 dark:text-slate-400">
-                    <span>Entity: {{ v.entity_type }}</span>
+                    <span>Entity: {{ v.entity_type | replace('_', ' ') | title }}</span>
                     <span>Trigger: {{ v.trigger_event }}</span>
-                    <span>Action: {{ v.action_type }}</span>
-                    <span>Priority: {{ v.priority }}</span>
+                    <span>Action: {{ v.action_type | replace('_', ' ') | title }}</span>
+                    <span>Priority: {{ v.priority | replace('_', ' ') | title }}</span>
                     {% if v.cooldown_seconds %}
                     <span>Cooldown: {{ v.cooldown_seconds }}s</span>
                     {% endif %}

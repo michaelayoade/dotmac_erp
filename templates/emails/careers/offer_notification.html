@@ -1,0 +1,20 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Offer of Employment{% endblock %}
+{% block content %}
+<p style="margin: 0 0 16px 0;">Dear {{ applicant_name }},</p>
+
+<p style="margin: 0 0 16px 0;">Congratulations! We are delighted to inform you that you have been selected for the <strong>{{ job_title }}</strong> position at <strong>{{ org_name }}</strong>.</p>
+
+<p style="margin: 0 0 16px 0;">After a thorough evaluation, we were impressed by your qualifications and believe you will be a valuable addition to our team.</p>
+
+{% if offer_details %}
+<div style="background: #ecfdf5; padding: 14px 16px; border-radius: 6px; border-left: 3px solid #059669; margin: 20px 0;">
+  <strong style="color: #065f46;">Offer Details</strong>
+  <p style="margin: 6px 0 0 0; color: #065f46;">{{ offer_details }}</p>
+</div>
+{% endif %}
+
+<p style="margin: 0 0 16px 0;">A member of our HR team will be in touch shortly with the full details of your offer, including compensation, benefits, and start date information.</p>
+
+<p style="margin: 0;">We are excited to welcome you aboard and look forward to working with you.</p>
+{% endblock %}

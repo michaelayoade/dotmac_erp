@@ -10,11 +10,10 @@ from fastapi import APIRouter, Depends, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.services.profile_web import profile_web_service
-from app.services.person import people
 from app.schemas.person import PersonUpdate
-from app.web.deps import get_db, require_web_auth, WebAuthContext
-
+from app.services.person import people
+from app.services.profile_web import profile_web_service
+from app.web.deps import WebAuthContext, get_db, require_web_auth
 
 router = APIRouter(tags=["web-profile"])
 

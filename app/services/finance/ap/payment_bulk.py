@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 from uuid import UUID
 
+from fastapi import Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -31,6 +32,8 @@ class APPaymentBulkService(BulkActionService[SupplierPayment]):
     model = SupplierPayment
     id_field = "payment_id"
     org_field = "organization_id"
+    search_fields = ["payment_number", "reference"]
+    date_field = "payment_date"
 
     # Fields to export in CSV
     export_fields = [
@@ -94,6 +97,25 @@ class APPaymentBulkService(BulkActionService[SupplierPayment]):
 
         return (True, "")
 
+    _supplier_names: dict[str, str] | None = None
+
+    def _resolve_supplier_name(self, supplier_id: object) -> str:
+        """Batch-resolve supplier names on first call, then use cache."""
+        if self._supplier_names is None:
+            from app.models.finance.ap.supplier import Supplier
+
+            rows = (
+                self.db.query(
+                    Supplier.supplier_id,
+                    Supplier.trading_name,
+                    Supplier.legal_name,
+                )
+                .filter(Supplier.organization_id == self.organization_id)
+                .all()
+            )
+            self._supplier_names = {str(r[0]): r[1] or r[2] or "" for r in rows}
+        return self._supplier_names.get(str(supplier_id), "")
+
     def _get_export_value(self, entity: SupplierPayment, field_name: str) -> str:
         """Handle special field formatting for payment export."""
         if field_name == "status":
@@ -103,8 +125,7 @@ class APPaymentBulkService(BulkActionService[SupplierPayment]):
         if field_name == "payment_date":
             return entity.payment_date.isoformat() if entity.payment_date else ""
         if field_name == "supplier_name":
-            # This would need a join - for now return supplier_id
-            return str(entity.supplier_id) if entity.supplier_id else ""
+            return self._resolve_supplier_name(entity.supplier_id)
         if field_name == "remittance_advice_sent":
             return "Yes" if entity.remittance_advice_sent else "No"
 
@@ -114,6 +135,37 @@ class APPaymentBulkService(BulkActionService[SupplierPayment]):
         """Get payment export filename."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return f"ap_payments_export_{timestamp}.csv"
+
+    async def export_all(
+        self,
+        search: str = "",
+        status: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        extra_filters: dict[str, object] | None = None,
+        format: str = "csv",
+    ) -> Response:
+        """
+        Export all payments matching filters to CSV.
+        """
+        from app.services.finance.ap.payment_query import build_payment_query
+
+        supplier_id = ""
+        if extra_filters:
+            supplier_id = str(extra_filters.get("supplier_id") or "")
+
+        query = build_payment_query(
+            db=self.db,
+            organization_id=str(self.organization_id),
+            search=search,
+            supplier_id=supplier_id or None,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        entities = query.all()
+        return self._build_csv(entities)
 
 
 def get_ap_payment_bulk_service(

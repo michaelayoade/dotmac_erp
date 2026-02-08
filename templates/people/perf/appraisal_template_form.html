@@ -36,7 +36,7 @@
                 <h3 class="font-medium text-slate-900 dark:text-white">Basic Information</h3>
             </div>
             <div class="card-body space-y-4">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="template_code" class="form-label required">Template Code</label>
                         <input type="text" name="template_code" id="template_code" required
@@ -80,7 +80,7 @@
                 <p class="text-sm text-slate-500 dark:text-slate-400">Define which employees this template applies to</p>
             </div>
             <div class="card-body space-y-4">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="department_id" class="form-label">Department</label>
                         <select name="department_id" id="department_id" class="form-select w-full">
@@ -168,7 +168,7 @@
             </div>
         </div>
 
-        <div class="flex justify-end gap-3">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/people/perf/templates{% if template %}/{{ template.template_id }}{% endif %}" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 {% if template %}Save Changes{% else %}Create Template{% endif %}

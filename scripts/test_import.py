@@ -15,10 +15,10 @@ from uuid import uuid4
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from app.services.finance.import_export.base import ImportConfig
 from app.services.finance.import_export.accounts import (
     ZOHO_ACCOUNT_TYPE_MAPPING,
 )
+from app.services.finance.import_export.base import ImportConfig
 
 
 def test_csv_parsing(file_path: str) -> None:
@@ -27,7 +27,7 @@ def test_csv_parsing(file_path: str) -> None:
     print(f"Testing CSV: {file_path}")
     print("=" * 60)
 
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
 
@@ -147,7 +147,7 @@ def simulate_import(file_path: str) -> None:
     print("=" * 60)
 
     # Create mock config
-    config = ImportConfig(
+    ImportConfig(
         organization_id=uuid4(),
         user_id=uuid4(),
         skip_duplicates=True,
@@ -156,7 +156,7 @@ def simulate_import(file_path: str) -> None:
     )
 
     # Read and validate rows
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, encoding="utf-8") as f:
         reader = csv.DictReader(f)
         rows = list(reader)
 

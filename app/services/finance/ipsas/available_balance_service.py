@@ -7,7 +7,6 @@ commitments, obligations, and expenditures.
 
 import logging
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -31,9 +30,9 @@ class AvailableBalanceService:
         self,
         organization_id: UUID,
         *,
-        appropriation_id: Optional[UUID] = None,
-        fund_id: Optional[UUID] = None,
-        account_id: Optional[UUID] = None,
+        appropriation_id: UUID | None = None,
+        fund_id: UUID | None = None,
+        account_id: UUID | None = None,
     ) -> AvailableBalanceResponse:
         """
         Calculate available balance for given filters.

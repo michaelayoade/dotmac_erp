@@ -6,7 +6,6 @@ Handles document tracking, expiry monitoring, and reminders.
 
 import logging
 from datetime import date, timedelta
-from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -33,7 +32,7 @@ class DocumentService:
         self.db = db
         self.organization_id = organization_id
 
-    def get_by_id(self, document_id: UUID) -> Optional[VehicleDocument]:
+    def get_by_id(self, document_id: UUID) -> VehicleDocument | None:
         """Get document by ID."""
         return self.db.get(VehicleDocument, document_id)
 
@@ -47,11 +46,11 @@ class DocumentService:
     def list_documents(
         self,
         *,
-        vehicle_id: Optional[UUID] = None,
-        document_type: Optional[DocumentType] = None,
+        vehicle_id: UUID | None = None,
+        document_type: DocumentType | None = None,
         expired_only: bool = False,
         expiring_soon: bool = False,
-        params: Optional[PaginationParams] = None,
+        params: PaginationParams | None = None,
     ) -> PaginatedResult[VehicleDocument]:
         """List documents with filtering."""
         stmt = (
@@ -80,8 +79,8 @@ class DocumentService:
         return paginate(self.db, stmt, params)
 
     def get_expiring_documents(
-        self, days_before: int = 30, *, limit: Optional[int] = None
-    ) -> List[VehicleDocument]:
+        self, days_before: int = 30, *, limit: int | None = None
+    ) -> list[VehicleDocument]:
         """Get documents expiring within specified days."""
         cutoff = date.today() + timedelta(days=days_before)
         stmt = (
@@ -101,8 +100,8 @@ class DocumentService:
         return list(self.db.scalars(stmt).all())
 
     def get_expired_documents(
-        self, *, limit: Optional[int] = None
-    ) -> List[VehicleDocument]:
+        self, *, limit: int | None = None
+    ) -> list[VehicleDocument]:
         """Get all expired documents."""
         stmt = (
             select(VehicleDocument)
@@ -167,7 +166,7 @@ class DocumentService:
         doc.reminder_sent = True
         return doc
 
-    def get_fleet_managers(self) -> List[UUID]:
+    def get_fleet_managers(self) -> list[UUID]:
         """Get list of fleet manager user IDs scoped to the current organization."""
         # Import here to avoid circular imports
         from app.models.person import Person

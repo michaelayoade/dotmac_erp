@@ -6,7 +6,7 @@ Vendors invited to respond to an RFQ.
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
@@ -65,7 +65,7 @@ class RFQInvitation(Base):
         nullable=False,
         default=False,
     )
-    response_date: Mapped[Optional[datetime]] = mapped_column(
+    response_date: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )

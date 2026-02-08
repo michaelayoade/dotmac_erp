@@ -9,11 +9,13 @@ This migration adds:
 - ticket_id column and FK on expense_claim (links to Ticket sync'd from ERPNext)
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "add_expense_project_ticket_fk"

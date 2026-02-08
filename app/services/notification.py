@@ -7,7 +7,6 @@ Handles in-app and email notifications for all app modules.
 import logging
 import uuid
 from datetime import datetime, timedelta
-from typing import List, Optional
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
@@ -37,8 +36,8 @@ class NotificationService:
         message: str,
         *,
         channel: NotificationChannel = NotificationChannel.IN_APP,
-        action_url: Optional[str] = None,
-        actor_id: Optional[uuid.UUID] = None,
+        action_url: str | None = None,
+        actor_id: uuid.UUID | None = None,
     ) -> Notification:
         """
         Create a notification.
@@ -95,7 +94,7 @@ class NotificationService:
         ticket_number: str,
         ticket_subject: str,
         assignee_id: uuid.UUID,
-        actor_id: Optional[uuid.UUID] = None,
+        actor_id: uuid.UUID | None = None,
     ) -> Notification:
         """Notify an employee they've been assigned a ticket."""
         return self.create(
@@ -121,7 +120,7 @@ class NotificationService:
         recipient_id: uuid.UUID,
         old_status: str,
         new_status: str,
-        actor_id: Optional[uuid.UUID] = None,
+        actor_id: uuid.UUID | None = None,
     ) -> Notification:
         """Notify about a ticket status change."""
         return self.create(
@@ -146,7 +145,7 @@ class NotificationService:
         ticket_subject: str,
         recipient_id: uuid.UUID,
         resolver_name: str,
-        actor_id: Optional[uuid.UUID] = None,
+        actor_id: uuid.UUID | None = None,
     ) -> Notification:
         """Notify that a ticket has been resolved."""
         return self.create(
@@ -172,7 +171,7 @@ class NotificationService:
         recipient_id: uuid.UUID,
         commenter_name: str,
         is_internal: bool = False,
-        actor_id: Optional[uuid.UUID] = None,
+        actor_id: uuid.UUID | None = None,
     ) -> Notification:
         """Notify about a new comment on a ticket."""
         action = "added an internal note" if is_internal else "commented"
@@ -202,7 +201,7 @@ class NotificationService:
         recipient_id: uuid.UUID,
         submitter_name: str,
         amount: str,
-        actor_id: Optional[uuid.UUID] = None,
+        actor_id: uuid.UUID | None = None,
     ) -> Notification:
         """Notify approver of a submitted expense claim."""
         return self.create(
@@ -227,7 +226,7 @@ class NotificationService:
         claim_number: str,
         recipient_id: uuid.UUID,
         approver_name: str,
-        actor_id: Optional[uuid.UUID] = None,
+        actor_id: uuid.UUID | None = None,
     ) -> Notification:
         """Notify employee their expense was approved."""
         return self.create(
@@ -252,8 +251,8 @@ class NotificationService:
         claim_number: str,
         recipient_id: uuid.UUID,
         rejector_name: str,
-        reason: Optional[str] = None,
-        actor_id: Optional[uuid.UUID] = None,
+        reason: str | None = None,
+        actor_id: uuid.UUID | None = None,
     ) -> Notification:
         """Notify employee their expense was rejected."""
         message = f"Your expense claim was rejected by {rejector_name}"
@@ -286,7 +285,7 @@ class NotificationService:
         case_number: str,
         employee_id: uuid.UUID,
         response_due_date: str,
-        actor_id: Optional[uuid.UUID] = None,
+        actor_id: uuid.UUID | None = None,
     ) -> Notification:
         """Notify employee that a disciplinary query has been issued."""
         return self.create(
@@ -311,8 +310,8 @@ class NotificationService:
         case_number: str,
         employee_id: uuid.UUID,
         hearing_date: str,
-        hearing_location: Optional[str] = None,
-        actor_id: Optional[uuid.UUID] = None,
+        hearing_location: str | None = None,
+        actor_id: uuid.UUID | None = None,
     ) -> Notification:
         """Notify employee of scheduled disciplinary hearing."""
         location_text = f" at {hearing_location}" if hearing_location else ""
@@ -337,8 +336,8 @@ class NotificationService:
         case_id: uuid.UUID,
         case_number: str,
         employee_id: uuid.UUID,
-        appeal_deadline: Optional[str] = None,
-        actor_id: Optional[uuid.UUID] = None,
+        appeal_deadline: str | None = None,
+        actor_id: uuid.UUID | None = None,
     ) -> Notification:
         """Notify employee that a decision has been made on their case."""
         message = f"A decision has been reached for disciplinary case {case_number}."
@@ -365,7 +364,7 @@ class NotificationService:
         case_id: uuid.UUID,
         case_number: str,
         employee_id: uuid.UUID,
-        actor_id: Optional[uuid.UUID] = None,
+        actor_id: uuid.UUID | None = None,
     ) -> Notification:
         """Notify employee that their disciplinary case has been closed."""
         return self.create(
@@ -390,7 +389,7 @@ class NotificationService:
         case_number: str,
         hr_recipient_id: uuid.UUID,
         employee_name: str,
-        actor_id: Optional[uuid.UUID] = None,
+        actor_id: uuid.UUID | None = None,
     ) -> Notification:
         """Notify HR that employee has submitted a response."""
         return self.create(
@@ -415,7 +414,7 @@ class NotificationService:
         case_number: str,
         hr_recipient_id: uuid.UUID,
         employee_name: str,
-        actor_id: Optional[uuid.UUID] = None,
+        actor_id: uuid.UUID | None = None,
     ) -> Notification:
         """Notify HR that employee has filed an appeal."""
         return self.create(
@@ -463,7 +462,7 @@ class NotificationService:
         self,
         db: Session,
         recipient_id: uuid.UUID,
-        organization_id: Optional[uuid.UUID] = None,
+        organization_id: uuid.UUID | None = None,
     ) -> int:
         """Get count of unread notifications for a user."""
         query = select(Notification).where(
@@ -481,12 +480,12 @@ class NotificationService:
         db: Session,
         recipient_id: uuid.UUID,
         *,
-        organization_id: Optional[uuid.UUID] = None,
+        organization_id: uuid.UUID | None = None,
         unread_only: bool = False,
-        entity_type: Optional[EntityType] = None,
+        entity_type: EntityType | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[Notification]:
+    ) -> list[Notification]:
         """
         List notifications for a user.
 
@@ -537,7 +536,7 @@ class NotificationService:
         self,
         db: Session,
         recipient_id: uuid.UUID,
-        organization_id: Optional[uuid.UUID] = None,
+        organization_id: uuid.UUID | None = None,
     ) -> int:
         """
         Mark all notifications as read for a user.

@@ -5,7 +5,6 @@ Report Instance Model - Reporting Schema.
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     DateTime,
@@ -55,7 +54,7 @@ class ReportInstance(Base):
         ForeignKey("rpt.report_definition.report_def_id"),
         nullable=False,
     )
-    schedule_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    schedule_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("rpt.report_schedule.schedule_id"),
         nullable=True,
@@ -66,16 +65,16 @@ class ReportInstance(Base):
     )
 
     # Report parameters used
-    fiscal_period_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    fiscal_period_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    parameters_used: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    parameters_used: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     # Output
     output_format: Mapped[str] = mapped_column(String(20), nullable=False)
-    output_file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    output_size_bytes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    output_file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    output_size_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Generation status
     status: Mapped[ReportStatus] = mapped_column(
@@ -83,7 +82,7 @@ class ReportInstance(Base):
         nullable=False,
         default=ReportStatus.QUEUED,
     )
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Timing
     queued_at: Mapped[datetime] = mapped_column(
@@ -91,15 +90,15 @@ class ReportInstance(Base):
         nullable=False,
         server_default=func.now(),
     )
-    started_at: Mapped[Optional[datetime]] = mapped_column(
+    started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    generation_time_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    generation_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Audit
     generated_by_user_id: Mapped[uuid.UUID] = mapped_column(

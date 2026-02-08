@@ -8,8 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests.ifrs.bulk.conftest import MockAccount, MockAccountType, MockAccountCategory
-
+from tests.ifrs.bulk.conftest import MockAccount, MockAccountCategory, MockAccountType
 
 # ============ TestCanDelete ============
 

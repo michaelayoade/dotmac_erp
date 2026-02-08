@@ -9,11 +9,9 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
-
 
 # =============================================================================
 # Fund Schemas
@@ -27,25 +25,25 @@ class FundCreate(BaseModel):
     fund_name: str
     fund_type: str
     effective_from: date
-    description: Optional[str] = None
+    description: str | None = None
     is_restricted: bool = False
-    restriction_description: Optional[str] = None
-    donor_name: Optional[str] = None
-    donor_reference: Optional[str] = None
-    parent_fund_id: Optional[UUID] = None
+    restriction_description: str | None = None
+    donor_name: str | None = None
+    donor_reference: str | None = None
+    parent_fund_id: UUID | None = None
 
 
 class FundUpdate(BaseModel):
     """Update an existing fund."""
 
-    fund_name: Optional[str] = None
-    description: Optional[str] = None
-    status: Optional[str] = None
-    is_restricted: Optional[bool] = None
-    restriction_description: Optional[str] = None
-    donor_name: Optional[str] = None
-    donor_reference: Optional[str] = None
-    effective_to: Optional[date] = None
+    fund_name: str | None = None
+    description: str | None = None
+    status: str | None = None
+    is_restricted: bool | None = None
+    restriction_description: str | None = None
+    donor_name: str | None = None
+    donor_reference: str | None = None
+    effective_to: date | None = None
 
 
 class FundResponse(BaseModel):
@@ -57,19 +55,19 @@ class FundResponse(BaseModel):
     organization_id: UUID
     fund_code: str
     fund_name: str
-    description: Optional[str] = None
+    description: str | None = None
     fund_type: str
     status: str
     is_restricted: bool
-    restriction_description: Optional[str] = None
-    donor_name: Optional[str] = None
-    donor_reference: Optional[str] = None
+    restriction_description: str | None = None
+    donor_name: str | None = None
+    donor_reference: str | None = None
     effective_from: date
-    effective_to: Optional[date] = None
-    parent_fund_id: Optional[UUID] = None
+    effective_to: date | None = None
+    parent_fund_id: UUID | None = None
     created_by_user_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 # =============================================================================
@@ -88,12 +86,12 @@ class AppropriationCreate(BaseModel):
     approved_amount: Decimal
     currency_code: str
     effective_from: date
-    budget_id: Optional[UUID] = None
-    account_id: Optional[UUID] = None
-    cost_center_id: Optional[UUID] = None
-    business_unit_id: Optional[UUID] = None
-    appropriation_act_reference: Optional[str] = None
-    effective_to: Optional[date] = None
+    budget_id: UUID | None = None
+    account_id: UUID | None = None
+    cost_center_id: UUID | None = None
+    business_unit_id: UUID | None = None
+    appropriation_act_reference: str | None = None
+    effective_to: date | None = None
 
 
 class AppropriationResponse(BaseModel):
@@ -105,7 +103,7 @@ class AppropriationResponse(BaseModel):
     organization_id: UUID
     fiscal_year_id: UUID
     fund_id: UUID
-    budget_id: Optional[UUID] = None
+    budget_id: UUID | None = None
     appropriation_code: str
     appropriation_name: str
     appropriation_type: str
@@ -113,17 +111,17 @@ class AppropriationResponse(BaseModel):
     approved_amount: Decimal
     revised_amount: Decimal
     currency_code: str
-    account_id: Optional[UUID] = None
-    cost_center_id: Optional[UUID] = None
-    business_unit_id: Optional[UUID] = None
-    appropriation_act_reference: Optional[str] = None
+    account_id: UUID | None = None
+    cost_center_id: UUID | None = None
+    business_unit_id: UUID | None = None
+    appropriation_act_reference: str | None = None
     effective_from: date
-    effective_to: Optional[date] = None
+    effective_to: date | None = None
     created_by_user_id: UUID
-    approved_by_user_id: Optional[UUID] = None
-    approved_at: Optional[datetime] = None
+    approved_by_user_id: UUID | None = None
+    approved_at: datetime | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 # =============================================================================
@@ -140,8 +138,8 @@ class AllotmentCreate(BaseModel):
     allotted_amount: Decimal
     period_from: date
     period_to: date
-    cost_center_id: Optional[UUID] = None
-    business_unit_id: Optional[UUID] = None
+    cost_center_id: UUID | None = None
+    business_unit_id: UUID | None = None
 
 
 class AllotmentResponse(BaseModel):
@@ -157,11 +155,11 @@ class AllotmentResponse(BaseModel):
     allotted_amount: Decimal
     period_from: date
     period_to: date
-    cost_center_id: Optional[UUID] = None
-    business_unit_id: Optional[UUID] = None
+    cost_center_id: UUID | None = None
+    business_unit_id: UUID | None = None
     status: str
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 # =============================================================================
@@ -179,15 +177,15 @@ class CommitmentResponse(BaseModel):
     commitment_number: str
     commitment_type: str
     status: str
-    appropriation_id: Optional[UUID] = None
-    allotment_id: Optional[UUID] = None
+    appropriation_id: UUID | None = None
+    allotment_id: UUID | None = None
     fund_id: UUID
     source_type: str
     source_id: UUID
     account_id: UUID
-    cost_center_id: Optional[UUID] = None
-    business_unit_id: Optional[UUID] = None
-    project_id: Optional[UUID] = None
+    cost_center_id: UUID | None = None
+    business_unit_id: UUID | None = None
+    project_id: UUID | None = None
     fiscal_year_id: UUID
     fiscal_period_id: UUID
     currency_code: str
@@ -196,11 +194,11 @@ class CommitmentResponse(BaseModel):
     expended_amount: Decimal
     cancelled_amount: Decimal
     commitment_date: date
-    obligation_date: Optional[date] = None
-    expenditure_date: Optional[date] = None
+    obligation_date: date | None = None
+    expenditure_date: date | None = None
     created_by_user_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 # =============================================================================
@@ -218,13 +216,13 @@ class VirementCreate(BaseModel):
     amount: Decimal
     currency_code: str
     justification: str
-    from_account_id: Optional[UUID] = None
-    from_cost_center_id: Optional[UUID] = None
-    from_fund_id: Optional[UUID] = None
-    to_account_id: Optional[UUID] = None
-    to_cost_center_id: Optional[UUID] = None
-    to_fund_id: Optional[UUID] = None
-    approval_authority: Optional[str] = None
+    from_account_id: UUID | None = None
+    from_cost_center_id: UUID | None = None
+    from_fund_id: UUID | None = None
+    to_account_id: UUID | None = None
+    to_cost_center_id: UUID | None = None
+    to_fund_id: UUID | None = None
+    approval_authority: str | None = None
 
 
 class VirementResponse(BaseModel):
@@ -239,23 +237,23 @@ class VirementResponse(BaseModel):
     description: str
     status: str
     from_appropriation_id: UUID
-    from_account_id: Optional[UUID] = None
-    from_cost_center_id: Optional[UUID] = None
-    from_fund_id: Optional[UUID] = None
+    from_account_id: UUID | None = None
+    from_cost_center_id: UUID | None = None
+    from_fund_id: UUID | None = None
     to_appropriation_id: UUID
-    to_account_id: Optional[UUID] = None
-    to_cost_center_id: Optional[UUID] = None
-    to_fund_id: Optional[UUID] = None
+    to_account_id: UUID | None = None
+    to_cost_center_id: UUID | None = None
+    to_fund_id: UUID | None = None
     amount: Decimal
     currency_code: str
     justification: str
-    approval_authority: Optional[str] = None
+    approval_authority: str | None = None
     created_by_user_id: UUID
-    approved_by_user_id: Optional[UUID] = None
-    approved_at: Optional[datetime] = None
-    applied_at: Optional[datetime] = None
+    approved_by_user_id: UUID | None = None
+    approved_at: datetime | None = None
+    applied_at: datetime | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 # =============================================================================
@@ -297,7 +295,7 @@ class CoASegmentValueCreate(BaseModel):
 
     segment_code: str
     segment_name: str
-    parent_segment_value_id: Optional[UUID] = None
+    parent_segment_value_id: UUID | None = None
     is_active: bool = True
 
 
@@ -311,7 +309,7 @@ class CoASegmentValueResponse(BaseModel):
     organization_id: UUID
     segment_code: str
     segment_name: str
-    parent_segment_value_id: Optional[UUID] = None
+    parent_segment_value_id: UUID | None = None
     is_active: bool
     created_at: datetime
 
@@ -327,7 +325,7 @@ class BudgetLineItem(BaseModel):
     appropriation_id: UUID
     appropriation_code: str
     appropriation_name: str
-    fund_code: Optional[str] = None
+    fund_code: str | None = None
     original_budget: Decimal
     revised_budget: Decimal
     committed: Decimal
@@ -342,7 +340,7 @@ class BudgetComparisonResponse(BaseModel):
 
     organization_id: UUID
     fiscal_year_id: UUID
-    fund_id: Optional[UUID] = None
+    fund_id: UUID | None = None
     total_budget: Decimal
     total_committed: Decimal
     total_obligated: Decimal
@@ -355,9 +353,9 @@ class AvailableBalanceResponse(BaseModel):
     """Available balance calculation result."""
 
     organization_id: UUID
-    appropriation_id: Optional[UUID] = None
-    fund_id: Optional[UUID] = None
-    account_id: Optional[UUID] = None
+    appropriation_id: UUID | None = None
+    fund_id: UUID | None = None
+    account_id: UUID | None = None
     total_appropriated: Decimal
     total_allotted: Decimal
     total_committed: Decimal

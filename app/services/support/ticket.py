@@ -7,7 +7,7 @@ status transitions, and assignment handling.
 
 import logging
 from datetime import date
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
@@ -57,18 +57,18 @@ class TicketService:
         db: Session,
         organization_id: UUID,
         *,
-        status: Optional[str] = None,
-        priority: Optional[str] = None,
-        assigned_to_id: Optional[UUID] = None,
-        category_id: Optional[UUID] = None,
-        team_id: Optional[UUID] = None,
-        search: Optional[str] = None,
-        date_from: Optional[date] = None,
-        date_to: Optional[date] = None,
+        status: str | None = None,
+        priority: str | None = None,
+        assigned_to_id: UUID | None = None,
+        category_id: UUID | None = None,
+        team_id: UUID | None = None,
+        search: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
         include_deleted: bool = False,
         page: int = 1,
         per_page: int = 50,
-    ) -> Tuple[List[Ticket], int]:
+    ) -> tuple[list[Ticket], int]:
         """
         List tickets with filtering and pagination.
 
@@ -151,10 +151,10 @@ class TicketService:
         db: Session,
         organization_id: UUID,
         *,
-        search: Optional[str] = None,
+        search: str | None = None,
         page: int = 1,
         per_page: int = 50,
-    ) -> Tuple[List[Ticket], int]:
+    ) -> tuple[list[Ticket], int]:
         """
         List archived (soft-deleted) tickets with pagination.
 
@@ -204,7 +204,7 @@ class TicketService:
         db: Session,
         organization_id: UUID,
         ticket_id: UUID,
-    ) -> Optional[Ticket]:
+    ) -> Ticket | None:
         """Get a single ticket by ID with all relationships loaded."""
         org_id = coerce_uuid(organization_id)
         tid = coerce_uuid(ticket_id)
@@ -230,7 +230,7 @@ class TicketService:
         db: Session,
         organization_id: UUID,
         ticket_number: str,
-    ) -> Optional[Ticket]:
+    ) -> Ticket | None:
         """Get a ticket by its ticket number."""
         org_id = coerce_uuid(organization_id)
 
@@ -248,19 +248,19 @@ class TicketService:
         user_id: UUID,
         *,
         subject: str,
-        description: Optional[str] = None,
+        description: str | None = None,
         priority: str = "MEDIUM",
-        raised_by_email: Optional[str] = None,
-        raised_by_id: Optional[UUID] = None,
-        assigned_to_id: Optional[UUID] = None,
-        project_id: Optional[UUID] = None,
-        customer_id: Optional[UUID] = None,
-        category_id: Optional[UUID] = None,
-        team_id: Optional[UUID] = None,
-        opening_date: Optional[date] = None,
-        contact_email: Optional[str] = None,
-        contact_phone: Optional[str] = None,
-        contact_address: Optional[str] = None,
+        raised_by_email: str | None = None,
+        raised_by_id: UUID | None = None,
+        assigned_to_id: UUID | None = None,
+        project_id: UUID | None = None,
+        customer_id: UUID | None = None,
+        category_id: UUID | None = None,
+        team_id: UUID | None = None,
+        opening_date: date | None = None,
+        contact_email: str | None = None,
+        contact_phone: str | None = None,
+        contact_address: str | None = None,
     ) -> Ticket:
         """
         Create a new support ticket.
@@ -313,20 +313,20 @@ class TicketService:
         ticket_id: UUID,
         user_id: UUID,
         *,
-        subject: Optional[str] = None,
-        description: Optional[str] = None,
-        priority: Optional[str] = None,
-        raised_by_email: Optional[str] = None,
-        raised_by_id: Optional[UUID] = None,
-        assigned_to_id: Optional[UUID] = None,
-        project_id: Optional[UUID] = None,
-        customer_id: Optional[UUID] = None,
-        category_id: Optional[UUID] = None,
-        team_id: Optional[UUID] = None,
-        contact_email: Optional[str] = None,
-        contact_phone: Optional[str] = None,
-        contact_address: Optional[str] = None,
-    ) -> Optional[Ticket]:
+        subject: str | None = None,
+        description: str | None = None,
+        priority: str | None = None,
+        raised_by_email: str | None = None,
+        raised_by_id: UUID | None = None,
+        assigned_to_id: UUID | None = None,
+        project_id: UUID | None = None,
+        customer_id: UUID | None = None,
+        category_id: UUID | None = None,
+        team_id: UUID | None = None,
+        contact_email: str | None = None,
+        contact_phone: str | None = None,
+        contact_address: str | None = None,
+    ) -> Ticket | None:
         """Update ticket details (not status - use update_status for that)."""
         ticket = self.get_ticket(db, organization_id, ticket_id)
         if not ticket:
@@ -473,8 +473,8 @@ class TicketService:
         ticket_id: UUID,
         user_id: UUID,
         new_status: str,
-        notes: Optional[str] = None,
-    ) -> Tuple[Optional[Ticket], Optional[str]]:
+        notes: str | None = None,
+    ) -> tuple[Ticket | None, str | None]:
         """
         Update ticket status with validation.
 
@@ -578,7 +578,7 @@ class TicketService:
         ticket_id: UUID,
         user_id: UUID,
         assigned_to_id: UUID,
-    ) -> Optional[Ticket]:
+    ) -> Ticket | None:
         """Assign ticket to an employee."""
         ticket = self.get_ticket(db, organization_id, ticket_id)
         if not ticket:
@@ -631,7 +631,7 @@ class TicketService:
         ticket_id: UUID,
         user_id: UUID,
         resolution: str,
-    ) -> Tuple[Optional[Ticket], Optional[str]]:
+    ) -> tuple[Ticket | None, str | None]:
         """
         Mark ticket as resolved with resolution notes.
 
@@ -651,7 +651,7 @@ class TicketService:
         db: Session,
         organization_id: UUID,
         ticket_id: UUID,
-    ) -> List[ExpenseClaim]:
+    ) -> list[ExpenseClaim]:
         """Get all expense claims linked to this ticket."""
         org_id = coerce_uuid(organization_id)
         tid = coerce_uuid(ticket_id)
@@ -675,9 +675,9 @@ class TicketService:
         organization_id: UUID,
         query: str,
         *,
-        status_filter: Optional[List[str]] = None,
+        status_filter: list[str] | None = None,
         limit: int = 20,
-    ) -> List[Ticket]:
+    ) -> list[Ticket]:
         """
         Search tickets for typeahead/autocomplete.
 
@@ -712,7 +712,7 @@ class TicketService:
         self,
         db: Session,
         organization_id: UUID,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get ticket statistics for dashboard."""
         org_id = coerce_uuid(organization_id)
 
@@ -819,7 +819,7 @@ class TicketService:
         ticket_id: UUID,
         user_id: UUID,
         hard_delete: bool = False,
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Delete a ticket (soft delete by default).
 
@@ -883,7 +883,7 @@ class TicketService:
         organization_id: UUID,
         ticket_id: UUID,
         user_id: UUID,
-    ) -> Optional[Ticket]:
+    ) -> Ticket | None:
         """Restore a soft-deleted ticket."""
         org_id = coerce_uuid(organization_id)
         tid = coerce_uuid(ticket_id)
@@ -925,12 +925,12 @@ class TicketService:
         self,
         db: Session,
         organization_id: UUID,
-        ticket_ids: List[UUID],
+        ticket_ids: list[UUID],
         user_id: UUID,
         *,
         new_status: str,
-        notes: Optional[str] = None,
-    ) -> Dict[str, int]:
+        notes: str | None = None,
+    ) -> dict[str, int]:
         """Update status for multiple tickets at once."""
         org_id = coerce_uuid(organization_id)
         uid = coerce_uuid(user_id)
@@ -963,11 +963,11 @@ class TicketService:
         self,
         db: Session,
         organization_id: UUID,
-        ticket_ids: List[UUID],
+        ticket_ids: list[UUID],
         user_id: UUID,
         *,
         assigned_to_id: UUID,
-    ) -> Dict[str, int]:
+    ) -> dict[str, int]:
         """Assign multiple tickets to an employee."""
         org_id = coerce_uuid(organization_id)
         uid = coerce_uuid(user_id)
@@ -994,9 +994,9 @@ class TicketService:
         self,
         db: Session,
         organization_id: UUID,
-        ticket_ids: List[UUID],
+        ticket_ids: list[UUID],
         user_id: UUID,
-    ) -> Dict[str, int]:
+    ) -> dict[str, int]:
         """Archive multiple tickets at once."""
         org_id = coerce_uuid(organization_id)
         uid = coerce_uuid(user_id)

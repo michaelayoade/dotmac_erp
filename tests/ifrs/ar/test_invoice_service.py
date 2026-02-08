@@ -39,12 +39,12 @@ class TestCreateInvoice:
 
     def test_create_invoice_success(self, mock_db, org_id, user_id):
         """Test successful invoice creation."""
+        from app.models.finance.ar.invoice import InvoiceType
         from app.services.finance.ar.invoice import (
-            ARInvoiceService,
             ARInvoiceInput,
             ARInvoiceLineInput,
+            ARInvoiceService,
         )
-        from app.models.finance.ar.invoice import InvoiceType
 
         customer = MockCustomer(organization_id=org_id)
         mock_account = MagicMock(organization_id=org_id)
@@ -87,7 +87,7 @@ class TestCreateInvoice:
                             "app.services.finance.ar.invoice.SequenceService.get_next_number",
                             return_value="INV-0001",
                         ):
-                            result = ARInvoiceService.create_invoice(
+                            ARInvoiceService.create_invoice(
                                 mock_db, org_id, invoice_input, user_id
                             )
 
@@ -97,12 +97,13 @@ class TestCreateInvoice:
     def test_create_invoice_invalid_customer_fails(self, mock_db, org_id, user_id):
         """Test that invalid customer fails validation."""
         from fastapi import HTTPException
+
+        from app.models.finance.ar.invoice import InvoiceType
         from app.services.finance.ar.invoice import (
-            ARInvoiceService,
             ARInvoiceInput,
             ARInvoiceLineInput,
+            ARInvoiceService,
         )
-        from app.models.finance.ar.invoice import InvoiceType
 
         mock_db.get.return_value = None  # Customer not found
 
@@ -133,11 +134,12 @@ class TestCreateInvoice:
     def test_create_invoice_empty_lines_fails(self, mock_db, org_id, user_id):
         """Test that invoice with no lines fails."""
         from fastapi import HTTPException
-        from app.services.finance.ar.invoice import (
-            ARInvoiceService,
-            ARInvoiceInput,
-        )
+
         from app.models.finance.ar.invoice import InvoiceType
+        from app.services.finance.ar.invoice import (
+            ARInvoiceInput,
+            ARInvoiceService,
+        )
 
         customer = MockCustomer(organization_id=org_id)
         mock_db.get.return_value = customer
@@ -163,8 +165,8 @@ class TestSubmitInvoice:
 
     def test_submit_draft_invoice(self, mock_db, org_id, user_id):
         """Test submitting a draft invoice."""
-        from app.services.finance.ar.invoice import ARInvoiceService
         from app.models.finance.ar.invoice import InvoiceStatus
+        from app.services.finance.ar.invoice import ARInvoiceService
 
         invoice = MockInvoice(
             organization_id=org_id,
@@ -183,8 +185,9 @@ class TestSubmitInvoice:
     def test_submit_non_draft_fails(self, mock_db, org_id, user_id):
         """Test submitting non-draft invoice fails."""
         from fastapi import HTTPException
-        from app.services.finance.ar.invoice import ARInvoiceService
+
         from app.models.finance.ar.invoice import InvoiceStatus
+        from app.services.finance.ar.invoice import ARInvoiceService
 
         invoice = MockInvoice(
             organization_id=org_id,
@@ -206,8 +209,8 @@ class TestApproveInvoice:
 
     def test_approve_submitted_invoice(self, mock_db, org_id, user_id):
         """Test approving a submitted invoice."""
-        from app.services.finance.ar.invoice import ARInvoiceService
         from app.models.finance.ar.invoice import InvoiceStatus
+        from app.services.finance.ar.invoice import ARInvoiceService
 
         submitter_id = uuid4()
         invoice = MockInvoice(
@@ -228,8 +231,9 @@ class TestApproveInvoice:
     def test_self_approval_fails_sod(self, mock_db, org_id):
         """Test that self-approval fails segregation of duties."""
         from fastapi import HTTPException
-        from app.services.finance.ar.invoice import ARInvoiceService
+
         from app.models.finance.ar.invoice import InvoiceStatus
+        from app.services.finance.ar.invoice import ARInvoiceService
 
         submitter_id = uuid4()
         invoice = MockInvoice(
@@ -258,8 +262,8 @@ class TestVoidInvoice:
 
     def test_void_draft_invoice(self, mock_db, org_id, user_id):
         """Test voiding a draft invoice."""
-        from app.services.finance.ar.invoice import ARInvoiceService
         from app.models.finance.ar.invoice import InvoiceStatus
+        from app.services.finance.ar.invoice import ARInvoiceService
 
         invoice = MockInvoice(
             organization_id=org_id,
@@ -278,8 +282,9 @@ class TestVoidInvoice:
     def test_void_paid_invoice_fails(self, mock_db, org_id, user_id):
         """Test that voiding paid invoice fails."""
         from fastapi import HTTPException
-        from app.services.finance.ar.invoice import ARInvoiceService
+
         from app.models.finance.ar.invoice import InvoiceStatus
+        from app.services.finance.ar.invoice import ARInvoiceService
 
         invoice = MockInvoice(
             organization_id=org_id,
@@ -314,6 +319,7 @@ class TestGetInvoice:
     def test_get_nonexistent_raises(self, mock_db):
         """Test getting non-existent invoice raises exception."""
         from fastapi import HTTPException
+
         from app.services.finance.ar.invoice import ARInvoiceService
 
         mock_db.get.return_value = None
@@ -330,8 +336,8 @@ class TestListInvoices:
 
     def test_list_with_filters(self, mock_db, org_id):
         """Test listing invoices with filters."""
-        from app.services.finance.ar.invoice import ARInvoiceService
         from app.models.finance.ar.invoice import InvoiceStatus
+        from app.services.finance.ar.invoice import ARInvoiceService
 
         invoices = [MockInvoice(organization_id=org_id)]
         mock_query = MagicMock()
@@ -383,6 +389,7 @@ class TestGetInvoiceLines:
     def test_get_invoice_lines_not_found(self, mock_db, org_id):
         """Test getting lines for non-existent invoice."""
         from fastapi import HTTPException
+
         from app.services.finance.ar.invoice import ARInvoiceService
 
         mock_db.get.return_value = None
@@ -399,8 +406,8 @@ class TestPostInvoice:
 
     def test_post_approved_invoice(self, mock_db, org_id, user_id):
         """Test posting an approved invoice."""
-        from app.services.finance.ar.invoice import ARInvoiceService
         from app.models.finance.ar.invoice import InvoiceStatus
+        from app.services.finance.ar.invoice import ARInvoiceService
 
         invoice = MockInvoice(
             organization_id=org_id,
@@ -431,8 +438,9 @@ class TestPostInvoice:
     def test_post_non_approved_fails(self, mock_db, org_id, user_id):
         """Test that posting non-approved invoice fails."""
         from fastapi import HTTPException
-        from app.services.finance.ar.invoice import ARInvoiceService
+
         from app.models.finance.ar.invoice import InvoiceStatus
+        from app.services.finance.ar.invoice import ARInvoiceService
 
         invoice = MockInvoice(
             organization_id=org_id,
@@ -451,8 +459,9 @@ class TestPostInvoice:
     def test_post_invoice_adapter_failure(self, mock_db, org_id, user_id):
         """Test posting fails when adapter returns error."""
         from fastapi import HTTPException
-        from app.services.finance.ar.invoice import ARInvoiceService
+
         from app.models.finance.ar.invoice import InvoiceStatus
+        from app.services.finance.ar.invoice import ARInvoiceService
 
         invoice = MockInvoice(
             organization_id=org_id,
@@ -464,21 +473,24 @@ class TestPostInvoice:
         mock_result.success = False
         mock_result.message = "Posting failed: invalid account"
 
-        with patch("app.services.finance.ar.invoice.Invoice"):
-            with patch(
+        with (
+            patch("app.services.finance.ar.invoice.Invoice"),
+            patch(
                 "app.services.finance.ar.ar_posting_adapter.ARPostingAdapter"
-            ) as MockAdapter:
-                MockAdapter.post_invoice.return_value = mock_result
-                with pytest.raises(HTTPException) as exc:
-                    ARInvoiceService.post_invoice(
-                        mock_db, org_id, invoice.invoice_id, user_id
-                    )
+            ) as MockAdapter,
+        ):
+            MockAdapter.post_invoice.return_value = mock_result
+            with pytest.raises(HTTPException) as exc:
+                ARInvoiceService.post_invoice(
+                    mock_db, org_id, invoice.invoice_id, user_id
+                )
 
         assert exc.value.status_code == 400
 
     def test_post_invoice_not_found(self, mock_db, org_id, user_id):
         """Test posting non-existent invoice."""
         from fastapi import HTTPException
+
         from app.services.finance.ar.invoice import ARInvoiceService
 
         mock_db.get.return_value = None
@@ -495,8 +507,8 @@ class TestMarkOverdue:
 
     def test_mark_overdue_invoices(self, mock_db, org_id):
         """Test marking overdue invoices."""
-        from app.services.finance.ar.invoice import ARInvoiceService
         from app.models.finance.ar.invoice import InvoiceStatus
+        from app.services.finance.ar.invoice import ARInvoiceService
 
         # Create invoices that are past due with balance
         invoice1 = MockInvoice(
@@ -541,8 +553,8 @@ class TestMarkOverdue:
 
     def test_mark_overdue_with_custom_date(self, mock_db, org_id):
         """Test marking overdue with custom as_of_date."""
-        from app.services.finance.ar.invoice import ARInvoiceService
         from app.models.finance.ar.invoice import InvoiceStatus
+        from app.services.finance.ar.invoice import ARInvoiceService
 
         invoice = MockInvoice(
             organization_id=org_id,
@@ -563,8 +575,8 @@ class TestMarkOverdue:
 
     def test_mark_overdue_skips_fully_paid(self, mock_db, org_id):
         """Test that fully paid invoices are not marked overdue."""
-        from app.services.finance.ar.invoice import ARInvoiceService
         from app.models.finance.ar.invoice import InvoiceStatus
+        from app.services.finance.ar.invoice import ARInvoiceService
 
         # Invoice with balance_due = 0
         invoice = MockInvoice(
@@ -589,8 +601,8 @@ class TestRecordPayment:
 
     def test_record_partial_payment(self, mock_db, org_id):
         """Test recording a partial payment."""
-        from app.services.finance.ar.invoice import ARInvoiceService
         from app.models.finance.ar.invoice import InvoiceStatus
+        from app.services.finance.ar.invoice import ARInvoiceService
 
         invoice = MockInvoice(
             organization_id=org_id,
@@ -611,8 +623,8 @@ class TestRecordPayment:
 
     def test_record_full_payment(self, mock_db, org_id):
         """Test recording full payment."""
-        from app.services.finance.ar.invoice import ARInvoiceService
         from app.models.finance.ar.invoice import InvoiceStatus
+        from app.services.finance.ar.invoice import ARInvoiceService
 
         invoice = MockInvoice(
             organization_id=org_id,
@@ -632,8 +644,8 @@ class TestRecordPayment:
 
     def test_record_payment_on_partially_paid(self, mock_db, org_id):
         """Test recording payment on partially paid invoice."""
-        from app.services.finance.ar.invoice import ARInvoiceService
         from app.models.finance.ar.invoice import InvoiceStatus
+        from app.services.finance.ar.invoice import ARInvoiceService
 
         invoice = MockInvoice(
             organization_id=org_id,
@@ -654,8 +666,8 @@ class TestRecordPayment:
 
     def test_record_payment_on_overdue(self, mock_db, org_id):
         """Test recording payment on overdue invoice."""
-        from app.services.finance.ar.invoice import ARInvoiceService
         from app.models.finance.ar.invoice import InvoiceStatus
+        from app.services.finance.ar.invoice import ARInvoiceService
 
         invoice = MockInvoice(
             organization_id=org_id,
@@ -675,8 +687,9 @@ class TestRecordPayment:
     def test_record_payment_on_non_posted_fails(self, mock_db, org_id):
         """Test that payment on non-posted invoice fails."""
         from fastapi import HTTPException
-        from app.services.finance.ar.invoice import ARInvoiceService
+
         from app.models.finance.ar.invoice import InvoiceStatus
+        from app.services.finance.ar.invoice import ARInvoiceService
 
         invoice = MockInvoice(
             organization_id=org_id,
@@ -695,6 +708,7 @@ class TestRecordPayment:
     def test_record_payment_not_found(self, mock_db, org_id):
         """Test recording payment on non-existent invoice."""
         from fastapi import HTTPException
+
         from app.services.finance.ar.invoice import ARInvoiceService
 
         mock_db.get.return_value = None
@@ -713,12 +727,12 @@ class TestCreditNoteHandling:
 
     def test_create_credit_note_negative_amounts(self, mock_db, org_id, user_id):
         """Test that credit notes have negative amounts."""
+        from app.models.finance.ar.invoice import InvoiceType
         from app.services.finance.ar.invoice import (
-            ARInvoiceService,
             ARInvoiceInput,
             ARInvoiceLineInput,
+            ARInvoiceService,
         )
-        from app.models.finance.ar.invoice import InvoiceType
 
         customer = MockCustomer(organization_id=org_id)
         mock_account = MagicMock(organization_id=org_id)
@@ -761,7 +775,7 @@ class TestCreditNoteHandling:
                             "app.services.finance.ar.invoice.SequenceService.get_next_number",
                             return_value="INV-0002",
                         ):
-                            result = ARInvoiceService.create_invoice(
+                            ARInvoiceService.create_invoice(
                                 mock_db, org_id, invoice_input, user_id
                             )
 
@@ -777,12 +791,13 @@ class TestInactiveCustomerHandling:
     def test_create_invoice_inactive_customer_fails(self, mock_db, org_id, user_id):
         """Test that creating invoice for inactive customer fails."""
         from fastapi import HTTPException
+
+        from app.models.finance.ar.invoice import InvoiceType
         from app.services.finance.ar.invoice import (
-            ARInvoiceService,
             ARInvoiceInput,
             ARInvoiceLineInput,
+            ARInvoiceService,
         )
-        from app.models.finance.ar.invoice import InvoiceType
 
         customer = MockCustomer(organization_id=org_id, is_active=False)
         mock_db.get.return_value = customer
@@ -819,6 +834,7 @@ class TestInvoiceNotFoundScenarios:
     def test_submit_invoice_not_found(self, mock_db, org_id, user_id):
         """Test submitting non-existent invoice."""
         from fastapi import HTTPException
+
         from app.services.finance.ar.invoice import ARInvoiceService
 
         mock_db.get.return_value = None
@@ -832,6 +848,7 @@ class TestInvoiceNotFoundScenarios:
     def test_approve_invoice_not_found(self, mock_db, org_id, user_id):
         """Test approving non-existent invoice."""
         from fastapi import HTTPException
+
         from app.services.finance.ar.invoice import ARInvoiceService
 
         mock_db.get.return_value = None
@@ -845,6 +862,7 @@ class TestInvoiceNotFoundScenarios:
     def test_void_invoice_not_found(self, mock_db, org_id, user_id):
         """Test voiding non-existent invoice."""
         from fastapi import HTTPException
+
         from app.services.finance.ar.invoice import ARInvoiceService
 
         mock_db.get.return_value = None
@@ -862,6 +880,7 @@ class TestListInvoicesEdgeCases:
     def test_list_requires_organization_id(self, mock_db):
         """Test that list requires organization_id."""
         from fastapi import HTTPException
+
         from app.services.finance.ar.invoice import ARInvoiceService
 
         with patch("app.services.finance.ar.invoice.Invoice"):

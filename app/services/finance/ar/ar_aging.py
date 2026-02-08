@@ -6,11 +6,11 @@ Generates aging snapshots and provides aging analysis for AR management.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import and_
@@ -80,7 +80,7 @@ class ARAgingService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         customer_id: UUID,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
     ) -> CustomerAgingSummary:
         """
         Calculate aging for a single customer.
@@ -145,7 +145,7 @@ class ARAgingService(ListResponseMixin):
     def calculate_organization_aging(
         db: Session,
         organization_id: UUID,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
     ) -> OrganizationARAgingSummary:
         """
         Calculate aging summary for entire organization.
@@ -205,8 +205,8 @@ class ARAgingService(ListResponseMixin):
     def get_aging_by_customer(
         db: Session,
         organization_id: UUID,
-        as_of_date: Optional[date] = None,
-        min_balance: Optional[Decimal] = None,
+        as_of_date: date | None = None,
+        min_balance: Decimal | None = None,
     ) -> list[CustomerAgingSummary]:
         """
         Get aging breakdown by customer.
@@ -262,9 +262,9 @@ class ARAgingService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         fiscal_period_id: UUID,
-        as_of_date: Optional[date] = None,
-        created_by_user_id: Optional[UUID] = None,
-    ) -> List[ARAgingSnapshot]:
+        as_of_date: date | None = None,
+        created_by_user_id: UUID | None = None,
+    ) -> builtins.list[ARAgingSnapshot]:
         """
         Create point-in-time aging snapshot for all customers.
 
@@ -317,9 +317,9 @@ class ARAgingService(ListResponseMixin):
     def get_overdue_invoices(
         db: Session,
         organization_id: UUID,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
         min_days_overdue: int = 1,
-        customer_id: Optional[UUID] = None,
+        customer_id: UUID | None = None,
     ) -> list[Invoice]:
         """
         Get overdue invoices.
@@ -370,9 +370,9 @@ class ARAgingService(ListResponseMixin):
     def get_high_risk_customers(
         db: Session,
         organization_id: UUID,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
         min_overdue_days: int = 60,
-        min_overdue_amount: Optional[Decimal] = None,
+        min_overdue_amount: Decimal | None = None,
     ) -> list[CustomerAgingSummary]:
         """
         Get customers with high-risk aging profiles.
@@ -415,10 +415,10 @@ class ARAgingService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        customer_id: Optional[str] = None,
-        snapshot_date: Optional[date] = None,
-        aging_bucket: Optional[str] = None,
+        organization_id: str | None = None,
+        customer_id: str | None = None,
+        snapshot_date: date | None = None,
+        aging_bucket: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[ARAgingSnapshot]:

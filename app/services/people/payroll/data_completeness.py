@@ -12,7 +12,6 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from enum import Enum
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
@@ -77,7 +76,7 @@ class EmployeeCompleteness:
     employee_id: UUID
     employee_number: str
     full_name: str
-    department_name: Optional[str]
+    department_name: str | None
     status: CompletenessStatus
     missing_fields: list[MissingField] = field(default_factory=list)
     has_tax_profile: bool = False
@@ -167,10 +166,10 @@ class DataCompletenessService:
         self,
         organization_id: UUID,
         *,
-        department_id: Optional[UUID] = None,
-        designation_id: Optional[UUID] = None,
+        department_id: UUID | None = None,
+        designation_id: UUID | None = None,
         include_complete: bool = True,
-        export_types: Optional[list[ExportType]] = None,
+        export_types: list[ExportType] | None = None,
     ) -> CompletenessReportResult:
         """
         Generate data completeness report for employees.
@@ -258,8 +257,8 @@ class DataCompletenessService:
     def _get_assigned_employees(
         self,
         organization_id: UUID,
-        department_id: Optional[UUID],
-        designation_id: Optional[UUID],
+        department_id: UUID | None,
+        designation_id: UUID | None,
     ) -> list[Employee]:
         """Get employees with active salary structure assignments."""
         today = date.today()
@@ -322,7 +321,7 @@ class DataCompletenessService:
     def _check_employee_completeness(
         self,
         employee: Employee,
-        tax_profile: Optional[EmployeeTaxProfile],
+        tax_profile: EmployeeTaxProfile | None,
         export_types: list[ExportType],
     ) -> EmployeeCompleteness:
         """Check data completeness for a single employee."""
@@ -554,7 +553,7 @@ class EmployeePayrollReadiness:
     employee_id: UUID
     employee_code: str
     employee_name: str
-    department_name: Optional[str]
+    department_name: str | None
     is_ready: bool
     needs_review: bool
     issues: list[PayrollReadinessIssue] = field(default_factory=list)
@@ -566,7 +565,7 @@ class EmployeePayrollReadiness:
     has_attendance: bool = True
     attendance_gap_days: int = 0
     is_prorated: bool = False
-    proration_reason: Optional[str] = None
+    proration_reason: str | None = None
 
     @property
     def review_reasons(self) -> list[str]:
@@ -629,7 +628,7 @@ class PayrollReadinessService:
         period_start: date,
         period_end: date,
         *,
-        department_id: Optional[UUID] = None,
+        department_id: UUID | None = None,
         check_attendance: bool = True,
     ) -> PayrollReadinessReport:
         """
@@ -716,7 +715,7 @@ class PayrollReadinessService:
         organization_id: UUID,
         period_start: date,
         period_end: date,
-        department_id: Optional[UUID],
+        department_id: UUID | None,
     ) -> list[Employee]:
         """Get employees eligible for payroll in this period."""
         stmt = (
@@ -856,9 +855,9 @@ class PayrollReadinessService:
     def _check_employee_readiness(
         self,
         employee: Employee,
-        assignment: Optional[SalaryStructureAssignment],
-        tax_profile: Optional[EmployeeTaxProfile],
-        attendance: Optional[dict],
+        assignment: SalaryStructureAssignment | None,
+        tax_profile: EmployeeTaxProfile | None,
+        attendance: dict | None,
         period_start: date,
         period_end: date,
     ) -> EmployeePayrollReadiness:

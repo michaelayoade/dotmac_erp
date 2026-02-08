@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 
+{% from "components/macros.html" import empty_state %}
 {% block page_title %}KPI Achievement{% endblock %}
 
 {% block breadcrumbs %}
@@ -115,15 +116,15 @@
             <div class="flex h-8 rounded-lg overflow-hidden">
                 {% for s in report.status_breakdown %}
                 {% if s.status == 'COMPLETED' %}
-                <div class="bg-green-500 transition-all" style="width: {{ s.percentage }}%" title="{{ s.status }}: {{ s.percentage }}%"></div>
+                <div class="bg-green-500 transition-all" style="width: {{ s.percentage }}%" title="{{ s.status | replace('_', ' ') | title }}: {{ s.percentage }}%"></div>
                 {% elif s.status == 'IN_PROGRESS' %}
-                <div class="bg-blue-500 transition-all" style="width: {{ s.percentage }}%" title="{{ s.status }}: {{ s.percentage }}%"></div>
+                <div class="bg-blue-500 transition-all" style="width: {{ s.percentage }}%" title="{{ s.status | replace('_', ' ') | title }}: {{ s.percentage }}%"></div>
                 {% elif s.status == 'DRAFT' %}
-                <div class="bg-slate-400 transition-all" style="width: {{ s.percentage }}%" title="{{ s.status }}: {{ s.percentage }}%"></div>
+                <div class="bg-slate-400 transition-all" style="width: {{ s.percentage }}%" title="{{ s.status | replace('_', ' ') | title }}: {{ s.percentage }}%"></div>
                 {% elif s.status == 'CANCELLED' %}
-                <div class="bg-rose-500 transition-all" style="width: {{ s.percentage }}%" title="{{ s.status }}: {{ s.percentage }}%"></div>
+                <div class="bg-rose-500 transition-all" style="width: {{ s.percentage }}%" title="{{ s.status | replace('_', ' ') | title }}: {{ s.percentage }}%"></div>
                 {% else %}
-                <div class="bg-amber-500 transition-all" style="width: {{ s.percentage }}%" title="{{ s.status }}: {{ s.percentage }}%"></div>
+                <div class="bg-amber-500 transition-all" style="width: {{ s.percentage }}%" title="{{ s.status | replace('_', ' ') | title }}: {{ s.percentage }}%"></div>
                 {% endif %}
                 {% endfor %}
             </div>
@@ -184,7 +185,7 @@
         <div class="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Top Performing KPIs</h2>
         </div>
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
@@ -207,6 +208,12 @@
                                 </svg>
                                 {{ kpi.achievement_percentage }}%
                             </span>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No report found", "There are no report to display.") }}
                         </td>
                     </tr>
                     {% endfor %}

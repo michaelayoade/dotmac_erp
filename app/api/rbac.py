@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
-from app.schemas.common import ListResponse
 
 from app.db import SessionLocal
-from app.services.auth_dependencies import require_permission
+from app.schemas.common import ListResponse
 from app.schemas.rbac import (
     PermissionCreate,
     PermissionRead,
@@ -19,6 +18,7 @@ from app.schemas.rbac import (
     RoleUpdate,
 )
 from app.services import rbac as rbac_service
+from app.services.auth_dependencies import require_permission
 
 router = APIRouter(prefix="/rbac", tags=["rbac"])
 

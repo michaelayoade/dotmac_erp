@@ -75,12 +75,12 @@
 
                         <div class="grid gap-6 sm:grid-cols-2">
                             <div>
-                                <label class="form-label">First name</label>
+                                <label class="form-label">First name <span class="text-rose-500">*</span></label>
                                 <input type="text" name="first_name" value="{{ person.first_name }}"
                                        class="form-input" required>
                             </div>
                             <div>
-                                <label class="form-label">Last name</label>
+                                <label class="form-label">Last name <span class="text-rose-500">*</span></label>
                                 <input type="text" name="last_name" value="{{ person.last_name }}"
                                        class="form-input" required>
                             </div>
@@ -94,7 +94,7 @@
                         </div>
 
                         <div>
-                            <label class="form-label">Email address</label>
+                            <label class="form-label">Email address <span class="text-rose-500">*</span></label>
                             <input type="email" name="email" value="{{ person.email }}"
                                    class="form-input" required disabled>
                             <p class="form-hint">Contact support to update your email address</p>

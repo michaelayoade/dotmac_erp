@@ -106,7 +106,7 @@
 
                 <!-- Balance Display -->
                 <div x-show="balances.length > 0" x-transition class="mt-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                         <template x-for="bal in balances" :key="bal.leave_type_id">
                             <div class="text-center p-3 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
                                 <div class="text-xs text-slate-500 dark:text-slate-400 truncate" x-text="bal.leave_type_code"></div>
@@ -202,7 +202,7 @@
         </div>
 
         <!-- Actions -->
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <div>
                 {% if application and application.status.value in ['DRAFT', 'SUBMITTED'] %}
                 <button type="button" onclick="confirmCancel()"

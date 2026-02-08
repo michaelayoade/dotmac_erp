@@ -25,8 +25,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
 if TYPE_CHECKING:
-    from app.models.person import Person
     from app.models.finance.common.attachment import Attachment
+    from app.models.person import Person
 
 
 class PMCommentType(str, enum.Enum):
@@ -83,23 +83,23 @@ class PMComment(Base):
         nullable=False,
         comment="Comment content (supports markdown)",
     )
-    action: Mapped[Optional[str]] = mapped_column(
+    action: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Action type for system comments",
     )
-    old_value: Mapped[Optional[str]] = mapped_column(
+    old_value: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
         comment="Previous value for change tracking",
     )
-    new_value: Mapped[Optional[str]] = mapped_column(
+    new_value: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
         comment="New value for change tracking",
     )
 
-    author_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    author_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,
@@ -122,7 +122,7 @@ class PMComment(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

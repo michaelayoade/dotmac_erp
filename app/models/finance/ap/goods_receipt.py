@@ -5,7 +5,6 @@ Goods Receipt Model - AP Schema.
 import enum
 import uuid
 from datetime import date, datetime
-from typing import Optional
 
 from sqlalchemy import (
     Date,
@@ -76,15 +75,15 @@ class GoodsReceipt(Base):
         default=ReceiptStatus.RECEIVED,
     )
 
-    received_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    received_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    warehouse_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    warehouse_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

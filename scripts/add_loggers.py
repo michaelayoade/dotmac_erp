@@ -16,7 +16,7 @@ def needs_logger(filepath: str) -> bool:
     if filepath.endswith("__init__.py"):
         return False
 
-    with open(filepath, "r") as f:
+    with open(filepath) as f:
         content = f.read()
 
     # Skip files that already have a logger
@@ -24,15 +24,12 @@ def needs_logger(filepath: str) -> bool:
         return False
 
     # Only process files that define classes (actual services)
-    if not re.search(r"^class\s+\w+", content, re.MULTILINE):
-        return False
-
-    return True
+    return re.search(r"^class\s+\w+", content, re.MULTILINE)
 
 
 def find_last_import_end_line(filepath: str) -> int | None:
     """Use AST to find the line number AFTER the last import statement."""
-    with open(filepath, "r") as f:
+    with open(filepath) as f:
         source = f.read()
 
     try:
@@ -68,7 +65,7 @@ def add_logger(filepath: str, dry_run: bool = False) -> bool:
     if last_import_line is None:
         return False
 
-    with open(filepath, "r") as f:
+    with open(filepath) as f:
         lines = f.readlines()
 
     content = "".join(lines)
@@ -124,7 +121,7 @@ def main():
     skipped = 0
     errors = []
 
-    for root, dirs, files in os.walk(services_dir):
+    for root, _dirs, files in os.walk(services_dir):
         for fname in sorted(files):
             if not fname.endswith(".py"):
                 continue

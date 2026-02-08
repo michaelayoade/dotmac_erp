@@ -13,13 +13,14 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import date, datetime, timezone
-from typing import TYPE_CHECKING, List, Optional
+from datetime import UTC, date, datetime
+from typing import TYPE_CHECKING
 
-from sqlalchemy import Integer, cast, func, or_, select, text, update
+from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.auth import AuthProvider, UserCredential
+from app.models.finance.audit.audit_log import AuditAction
 from app.models.finance.core_org.cost_center import CostCenter
 from app.models.finance.core_org.location import Location
 from app.models.people.attendance.shift_type import ShiftType
@@ -32,7 +33,6 @@ from app.models.people.hr import (
     EmploymentType,
 )
 from app.models.person import Person
-from app.models.finance.audit.audit_log import AuditAction
 from app.services.audit_dispatcher import fire_audit_event
 from app.services.auth_flow import hash_password
 from app.services.common import PaginatedResult, PaginationParams, paginate
@@ -79,7 +79,7 @@ class EmployeeService:
         self,
         db: Session,
         organization_id: uuid.UUID,
-        principal: Optional["Principal"] = None,
+        principal: Principal | None = None,
     ) -> None:
         self.db = db
         self.organization_id = organization_id
@@ -93,7 +93,7 @@ class EmployeeService:
         self,
         employee_id: uuid.UUID,
         manager_id: uuid.UUID,
-        visited: Optional[set] = None,
+        visited: set | None = None,
     ) -> bool:
         """Check if setting manager_id would create a circular reference.
 
@@ -140,31 +140,22 @@ class EmployeeService:
         """Generate a unique employee code.
 
         Uses sequence: EMP-YYYY-NNNN format.
+        Delegates to SyncNumberingService for race-condition-safe generation.
 
         Returns:
             Generated employee code string.
         """
-        year = datetime.now(timezone.utc).year
+        from app.models.finance.core_config.numbering_sequence import SequenceType
+        from app.services.finance.common.numbering import SyncNumberingService
 
-        # Get current max sequence for this year
-        prefix = f"EMP-{year}-"
-        seq_expr = cast(
-            func.substring(Employee.employee_code, len(prefix) + 1), Integer
+        return SyncNumberingService(self.db).generate_next_number(
+            self.organization_id, SequenceType.EMPLOYEE
         )
-        stmt = select(func.max(seq_expr)).where(
-            Employee.organization_id == self.organization_id,
-            Employee.employee_code.like(f"{prefix}%"),
-            Employee.employee_code.op("~")(f"^{prefix}\\d+$"),
-        )
-        max_seq = self.db.scalar(stmt)
-        next_seq = (max_seq or 0) + 1
-
-        return f"{prefix}{next_seq:04d}"
 
     def _validate_org_reference(
         self,
         model: type,
-        entity_id: Optional[uuid.UUID],
+        entity_id: uuid.UUID | None,
         label: str,
     ) -> None:
         """Ensure a referenced entity exists within the organization."""
@@ -185,8 +176,8 @@ class EmployeeService:
 
     def list_employees(
         self,
-        filters: Optional[EmployeeFilters] = None,
-        pagination: Optional[PaginationParams] = None,
+        filters: EmployeeFilters | None = None,
+        pagination: PaginationParams | None = None,
         *,
         eager_load: bool = False,
     ) -> PaginatedResult[Employee]:
@@ -242,6 +233,11 @@ class EmployeeService:
 
         if filters.reports_to_id:
             stmt = stmt.where(Employee.reports_to_id == filters.reports_to_id)
+
+        if filters.expense_approver_id:
+            stmt = stmt.where(
+                Employee.expense_approver_id == filters.expense_approver_id
+            )
 
         if filters.search:
             search_term = f"%{filters.search}%"
@@ -347,7 +343,7 @@ class EmployeeService:
 
         return employee
 
-    def get_employee_by_code(self, employee_code: str) -> Optional[Employee]:
+    def get_employee_by_code(self, employee_code: str) -> Employee | None:
         """Get an employee by employee code.
 
         Args:
@@ -364,7 +360,7 @@ class EmployeeService:
             )
         )
 
-    def get_employee_by_person(self, person_id: uuid.UUID) -> Optional[Employee]:
+    def get_employee_by_person(self, person_id: uuid.UUID) -> Employee | None:
         """Get an employee by their linked Person ID.
 
         Args:
@@ -381,7 +377,7 @@ class EmployeeService:
             )
         )
 
-    def search_employees(self, query: str, limit: int = 20) -> List[EmployeeSummary]:
+    def search_employees(self, query: str, limit: int = 20) -> list[EmployeeSummary]:
         """Search employees for autocomplete.
 
         Args:
@@ -424,7 +420,7 @@ class EmployeeService:
             for emp, person in results
         ]
 
-    def get_direct_reports(self, manager_id: uuid.UUID) -> List[Employee]:
+    def get_direct_reports(self, manager_id: uuid.UUID) -> list[Employee]:
         """Get all direct reports of a manager.
 
         Args:
@@ -445,8 +441,8 @@ class EmployeeService:
         return list(self.db.scalars(stmt).all())
 
     def get_org_chart(
-        self, root_employee_id: Optional[uuid.UUID] = None, depth: int = 3
-    ) -> List[OrgChartNode]:
+        self, root_employee_id: uuid.UUID | None = None, depth: int = 3
+    ) -> list[OrgChartNode]:
         """Get organization chart as a tree.
 
         Args:
@@ -486,7 +482,7 @@ class EmployeeService:
 
             return node
 
-        reports_by_manager: dict[Optional[uuid.UUID], list[Employee]] = {}
+        reports_by_manager: dict[uuid.UUID | None, list[Employee]] = {}
 
         if root_employee_id:
             root_stmt = (
@@ -632,9 +628,7 @@ class EmployeeService:
         employee_code = data.employee_number
         if not employee_code:
             # Serialize code generation per org/year to avoid duplicates.
-            lock_key = (self.organization_id.int ^ datetime.now(timezone.utc).year) % (
-                2**63
-            )
+            lock_key = (self.organization_id.int ^ datetime.now(UTC).year) % (2**63)
             self.db.execute(
                 text("SELECT pg_advisory_xact_lock(:key)"),
                 {"key": lock_key},
@@ -661,6 +655,19 @@ class EmployeeService:
             if not manager:
                 raise ValidationError(f"Manager with ID {data.reports_to_id} not found")
 
+        if data.expense_approver_id:
+            approver = self.db.scalar(
+                select(Employee).where(
+                    Employee.employee_id == data.expense_approver_id,
+                    Employee.organization_id == self.organization_id,
+                    Employee.is_deleted == False,
+                )
+            )
+            if not approver:
+                raise ValidationError(
+                    f"Expense approver with ID {data.expense_approver_id} not found"
+                )
+
         self._validate_org_reference(Department, data.department_id, "Department")
         self._validate_org_reference(Designation, data.designation_id, "Designation")
         self._validate_org_reference(
@@ -682,6 +689,7 @@ class EmployeeService:
             employment_type_id=data.employment_type_id,
             grade_id=data.grade_id,
             reports_to_id=data.reports_to_id,
+            expense_approver_id=data.expense_approver_id,
             assigned_location_id=data.assigned_location_id,
             default_shift_type_id=data.default_shift_type_id,
             date_of_joining=data.date_of_joining or date.today(),
@@ -781,6 +789,28 @@ class EmployeeService:
             employee.reports_to_id = data.reports_to_id
         elif use_provided_fields and "reports_to_id" in provided_fields:
             employee.reports_to_id = None
+
+        if (
+            data.expense_approver_id is not None
+            and data.expense_approver_id != employee.expense_approver_id
+        ):
+            if data.expense_approver_id == employee_id:
+                raise ValidationError("Expense approver cannot be the employee")
+            if data.expense_approver_id:
+                approver = self.db.scalar(
+                    select(Employee).where(
+                        Employee.employee_id == data.expense_approver_id,
+                        Employee.organization_id == self.organization_id,
+                        Employee.is_deleted == False,
+                    )
+                )
+                if not approver:
+                    raise ValidationError(
+                        f"Expense approver with ID {data.expense_approver_id} not found"
+                    )
+            employee.expense_approver_id = data.expense_approver_id
+        elif use_provided_fields and "expense_approver_id" in provided_fields:
+            employee.expense_approver_id = None
 
         # Update department
         if data.department_id is not None:
@@ -905,7 +935,7 @@ class EmployeeService:
         elif use_provided_fields and "notes" in provided_fields:
             employee.notes = None
 
-        employee.updated_at = datetime.now(timezone.utc)
+        employee.updated_at = datetime.now(UTC)
         employee.updated_by_id = self.principal.id if self.principal else None
         employee.version += 1
 
@@ -989,7 +1019,7 @@ class EmployeeService:
             username=username,
             password_hash=password_hash,
             must_change_password=must_change_password,
-            password_updated_at=datetime.now(timezone.utc) if password_hash else None,
+            password_updated_at=datetime.now(UTC) if password_hash else None,
         )
         self.db.add(credential)
         self.db.flush()
@@ -1007,9 +1037,9 @@ class EmployeeService:
         employee = self.get_employee(employee_id)
 
         employee.is_deleted = True
-        employee.deleted_at = datetime.now(timezone.utc)
+        employee.deleted_at = datetime.now(UTC)
         employee.deleted_by_id = self.principal.id if self.principal else None
-        employee.updated_at = datetime.now(timezone.utc)
+        employee.updated_at = datetime.now(UTC)
 
     # =========================================================================
     # Status Management
@@ -1029,12 +1059,12 @@ class EmployeeService:
         """
         employee = self.get_employee(employee_id)
         employee.status = EmployeeStatus.ACTIVE
-        employee.updated_at = datetime.now(timezone.utc)
+        employee.updated_at = datetime.now(UTC)
         employee.updated_by_id = self.principal.id if self.principal else None
         return employee
 
     def suspend_employee(
-        self, employee_id: uuid.UUID, reason: Optional[str] = None
+        self, employee_id: uuid.UUID, reason: str | None = None
     ) -> Employee:
         """Suspend an employee.
 
@@ -1050,7 +1080,7 @@ class EmployeeService:
         """
         employee = self.get_employee(employee_id)
         employee.status = EmployeeStatus.SUSPENDED
-        employee.updated_at = datetime.now(timezone.utc)
+        employee.updated_at = datetime.now(UTC)
         employee.updated_by_id = self.principal.id if self.principal else None
         # Note: reason could be stored in notes field or separate audit log
         return employee
@@ -1083,7 +1113,7 @@ class EmployeeService:
 
         employee.status = EmployeeStatus.TERMINATED
         employee.date_of_leaving = data.date_of_leaving
-        employee.updated_at = datetime.now(timezone.utc)
+        employee.updated_at = datetime.now(UTC)
         employee.updated_by_id = self.principal.id if self.principal else None
 
         fire_audit_event(
@@ -1118,7 +1148,7 @@ class EmployeeService:
         employee = self.get_employee(employee_id)
         employee.status = EmployeeStatus.RESIGNED
         employee.date_of_leaving = date_of_leaving
-        employee.updated_at = datetime.now(timezone.utc)
+        employee.updated_at = datetime.now(UTC)
         employee.updated_by_id = self.principal.id if self.principal else None
         return employee
 
@@ -1144,7 +1174,7 @@ class EmployeeService:
             )
 
         employee.status = EmployeeStatus.ON_LEAVE
-        employee.updated_at = datetime.now(timezone.utc)
+        employee.updated_at = datetime.now(UTC)
         employee.updated_by_id = self.principal.id if self.principal else None
 
         return employee
@@ -1166,7 +1196,7 @@ class EmployeeService:
             return BulkResult()
 
         result = BulkResult()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Build update dict from non-None fields
         updates: dict = {}
@@ -1220,7 +1250,7 @@ class EmployeeService:
 
         return result
 
-    def bulk_delete(self, ids: List[uuid.UUID]) -> BulkResult:
+    def bulk_delete(self, ids: list[uuid.UUID]) -> BulkResult:
         """Bulk soft-delete multiple employees.
 
         Args:
@@ -1233,7 +1263,7 @@ class EmployeeService:
             return BulkResult()
 
         result = BulkResult()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         user_id = self.principal.id if self.principal else None
 
         stmt = (

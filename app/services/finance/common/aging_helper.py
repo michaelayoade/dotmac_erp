@@ -4,10 +4,11 @@ Shared aging helpers for AR/AP aging services.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Callable, Iterable, Optional, TypeVar
+from typing import TypeVar
 
 T = TypeVar("T")
 
@@ -18,7 +19,7 @@ class AgingBucket:
 
     bucket_name: str
     min_days: int
-    max_days: Optional[int]
+    max_days: int | None
 
 
 AGING_BUCKETS: list[AgingBucket] = [

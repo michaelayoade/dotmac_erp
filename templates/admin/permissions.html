@@ -76,7 +76,7 @@
     <!-- Permissions Table -->
     <div id="results-container">
     <div class="admin-card overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="w-full">
                 <thead class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
                     <tr>
@@ -157,7 +157,8 @@
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
                                     </svg>
                                 </button>
-                                <form id="delete-perm-{{ perm.permission_id }}" action="/admin/permissions/{{ perm.permission_id }}/delete" method="POST" class="hidden"></form>
+                                <form id="delete-perm-{{ perm.permission_id }}" action="/admin/permissions/{{ perm.permission_id }}/delete" method="POST" class="hidden">
+                                    {{ request.state.csrf_form | safe }}</form>
                             </div>
                         </td>
                     </tr>

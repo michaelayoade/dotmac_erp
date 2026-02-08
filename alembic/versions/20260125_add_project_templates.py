@@ -5,11 +5,13 @@ Revises: 20260124_task_asset_fks, 20260124_transfer_batch, 20260125_add_hr_check
 Create Date: 2026-01-25
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "20260125_project_templates"

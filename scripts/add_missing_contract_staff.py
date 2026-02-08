@@ -13,9 +13,9 @@ Usage:
 
 import argparse
 import sys
-from pathlib import Path
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from uuid import UUID
 
 # Add project root to path
@@ -26,13 +26,12 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.hr.department import Department
+from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.hr.employment_type import EmploymentType
-from app.models.person import Person, PersonStatus
-from app.models.people.payroll.salary_structure import SalaryStructure
 from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
-
+from app.models.people.payroll.salary_structure import SalaryStructure
+from app.models.person import Person, PersonStatus
 
 # Excel file path
 EXCEL_PATH = Path("/root/.dotmac/jan paye (2) (1).xlsx")
@@ -343,7 +342,7 @@ def main():
                 print(f"  [DRY RUN] Would create: {data['name']} -> {employee_code}")
                 print(f"             Role: {data['role']}, Salary: {data['net_pay']}")
             else:
-                emp = create_employee(
+                create_employee(
                     db, org_id, user_id, data, emp_type, employee_code, structure
                 )
                 created.append((data["name"], employee_code))

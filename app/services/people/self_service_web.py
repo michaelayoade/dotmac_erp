@@ -5,9 +5,8 @@ Self-service web view service for employees and managers.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Optional
 from urllib.parse import urlencode
 from uuid import UUID
 
@@ -18,11 +17,13 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.models.finance.core_org.pfa_directory import PFADirectory
 from app.models.people.exp import ExpenseClaim, ExpenseClaimItem, ExpenseClaimStatus
-from app.models.people.hr.employee import Employee
+from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.leave import LeaveApplication, LeaveApplicationStatus
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
 from app.models.person import Gender as PersonGender
+from app.models.person import Person
+from app.models.rbac import PersonRole, Role
 from app.services.common import PaginationParams, ValidationError, coerce_uuid
 from app.services.finance.banking.bank_directory import BankDirectoryService
 from app.services.people.attendance import AttendanceService
@@ -86,7 +87,7 @@ class SelfServiceWebService:
 
     @staticmethod
     def _get_employee_id(
-        db: Session, org_id: Optional[UUID], person_id: Optional[UUID]
+        db: Session, org_id: UUID | None, person_id: UUID | None
     ) -> UUID:
         if org_id is None or person_id is None:
             raise HTTPException(
@@ -110,7 +111,7 @@ class SelfServiceWebService:
         page_title: str,
         active_module: str,
         *,
-        detail: Optional[str] = None,
+        detail: str | None = None,
     ) -> HTMLResponse:
         context = base_context(request, auth, page_title, active_module, db=db)
         context["has_team_approvals"] = False
@@ -122,12 +123,62 @@ class SelfServiceWebService:
         )
 
     @staticmethod
+    def _get_expense_approver_options(db: Session, org_id: UUID) -> list[dict]:
+        """Return active employee options with admin or expense_approver roles."""
+        roles = (
+            db.query(Role)
+            .filter(
+                Role.is_active == True, Role.name.in_(["admin", "expense_approver"])
+            )
+            .all()
+        )
+        role_ids = [role.id for role in roles]
+        if not role_ids:
+            return []
+
+        rows = (
+            db.query(Employee, PersonRole, Person)
+            .join(PersonRole, PersonRole.person_id == Employee.person_id)
+            .join(Person, Person.id == Employee.person_id)
+            .filter(
+                Employee.organization_id == org_id,
+                Employee.status == EmployeeStatus.ACTIVE,
+                PersonRole.role_id.in_(role_ids),
+            )
+            .order_by(Person.first_name, Person.last_name)
+            .all()
+        )
+
+        options = {}
+        for employee, _, person in rows:
+            label = ""
+            if person:
+                if person.name:
+                    label = person.name
+                else:
+                    label = (
+                        f"{person.first_name or ''} {person.last_name or ''}".strip()
+                    )
+            if employee.employee_code:
+                label = (
+                    f"{label} ({employee.employee_code})"
+                    if label
+                    else employee.employee_code
+                )
+            options[str(employee.employee_id)] = {
+                "id": str(employee.employee_id),
+                "label": label or "Unnamed",
+            }
+
+        return list(options.values())
+
+    @staticmethod
     def _has_team_approvals(
         db: Session,
-        org_id: Optional[UUID],
-        person_id: Optional[UUID],
+        org_id: UUID | None,
+        person_id: UUID | None,
         *,
-        employee_id: Optional[UUID] = None,
+        employee_id: UUID | None = None,
     ) -> bool:
         if org_id is None or person_id is None:
             return False
@@ -141,6 +192,31 @@ class SelfServiceWebService:
         employee_svc = EmployeeService(db, org_id)
         reports = employee_svc.list_employees(
             filters=EmployeeFilters(reports_to_id=manager_employee_id),
+            pagination=PaginationParams(offset=0, limit=1),
+        )
+        return bool(reports.items)
+
+    @staticmethod
+    def _has_team_expense_approvals(
+        db: Session,
+        org_id: UUID | None,
+        person_id: UUID | None,
+        *,
+        employee_id: UUID | None = None,
+    ) -> bool:
+        if org_id is None or person_id is None:
+            return False
+        try:
+            approver_employee_id = (
+                employee_id
+                or SelfServiceWebService._get_employee_id(db, org_id, person_id)
+            )
+        except HTTPException:
+            return False
+
+        employee_svc = EmployeeService(db, org_id)
+        reports = employee_svc.list_employees(
+            filters=EmployeeFilters(expense_approver_id=approver_employee_id),
             pagination=PaginationParams(offset=0, limit=1),
         )
         return bool(reports.items)
@@ -229,8 +305,8 @@ class SelfServiceWebService:
         auth: WebAuthContext,
         db: Session,
         *,
-        success: Optional[str] = None,
-        error: Optional[str] = None,
+        success: str | None = None,
+        error: str | None = None,
     ) -> HTMLResponse:
         """Self-service tax, bank, and personal info page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -303,7 +379,9 @@ class SelfServiceWebService:
             db, org_id, person_id, employee_id=employee_id
         )
         context["can_team_leave"] = context["has_team_approvals"]
-        context["can_team_expenses"] = context["has_team_approvals"]
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
         return templates.TemplateResponse(request, "people/self/tax_info.html", context)
 
     def tax_info_submit_response(
@@ -311,7 +389,7 @@ class SelfServiceWebService:
         auth: WebAuthContext,
         db: Session,
         *,
-        payload: dict[str, Optional[object]],
+        payload: dict[str, object | None],
     ) -> RedirectResponse:
         """Submit a change request for tax, bank, and personal info."""
         org_id = coerce_uuid(auth.organization_id)
@@ -348,7 +426,7 @@ class SelfServiceWebService:
             .limit(1)
         )
 
-        def _normalize(value: Optional[object]) -> Optional[str]:
+        def _normalize(value: object | None) -> str | None:
             if value is None:
                 return None
             value = str(value).strip()
@@ -457,7 +535,7 @@ class SelfServiceWebService:
 
     @staticmethod
     def _get_tasks_for_dropdown(
-        db: Session, org_id: UUID, project_id: Optional[str] = None
+        db: Session, org_id: UUID, project_id: str | None = None
     ) -> list:
         """Get tasks for expense linking."""
         try:
@@ -534,7 +612,9 @@ class SelfServiceWebService:
             db, org_id, person_id, employee_id=employee_id
         )
         context["can_team_leave"] = context["has_team_approvals"]
-        context["can_team_expenses"] = context["has_team_approvals"]
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
         return templates.TemplateResponse(request, "people/self/tickets.html", context)
 
     def tasks_response(
@@ -587,7 +667,9 @@ class SelfServiceWebService:
             db, org_id, person_id, employee_id=employee_id
         )
         context["can_team_leave"] = context["has_team_approvals"]
-        context["can_team_expenses"] = context["has_team_approvals"]
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
         return templates.TemplateResponse(request, "people/self/tasks.html", context)
 
     def attendance_response(
@@ -596,7 +678,7 @@ class SelfServiceWebService:
         auth: WebAuthContext,
         db: Session,
         *,
-        month: Optional[str] = None,
+        month: str | None = None,
     ) -> HTMLResponse:
         org_id = coerce_uuid(auth.organization_id)
         person_id = coerce_uuid(auth.person_id)
@@ -619,11 +701,11 @@ class SelfServiceWebService:
         today_record = svc.get_attendance_by_date(org_id, employee_id, today)
         org_tzinfo = svc.get_org_tzinfo(org_id)
 
-        def _format_time(value: Optional[datetime]) -> str:
+        def _format_time(value: datetime | None) -> str:
             if not value:
                 return "-"
             if value.tzinfo is None:
-                value = value.replace(tzinfo=timezone.utc)
+                value = value.replace(tzinfo=UTC)
             return value.astimezone(org_tzinfo).strftime("%H:%M")
 
         if month:
@@ -677,7 +759,9 @@ class SelfServiceWebService:
             db, org_id, person_id, employee_id=employee_id
         )
         context["can_team_leave"] = context["has_team_approvals"]
-        context["can_team_expenses"] = context["has_team_approvals"]
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
         return templates.TemplateResponse(
             request, "people/self/attendance.html", context
         )
@@ -687,9 +771,9 @@ class SelfServiceWebService:
         auth: WebAuthContext,
         db: Session,
         *,
-        notes: Optional[str] = None,
-        latitude: Optional[float] = None,
-        longitude: Optional[float] = None,
+        notes: str | None = None,
+        latitude: float | None = None,
+        longitude: float | None = None,
     ) -> RedirectResponse:
         org_id = coerce_uuid(auth.organization_id)
         person_id = coerce_uuid(auth.person_id)
@@ -721,9 +805,9 @@ class SelfServiceWebService:
         auth: WebAuthContext,
         db: Session,
         *,
-        notes: Optional[str] = None,
-        latitude: Optional[float] = None,
-        longitude: Optional[float] = None,
+        notes: str | None = None,
+        latitude: float | None = None,
+        longitude: float | None = None,
     ) -> RedirectResponse:
         org_id = coerce_uuid(auth.organization_id)
         person_id = coerce_uuid(auth.person_id)
@@ -795,7 +879,9 @@ class SelfServiceWebService:
             db, org_id, person_id, employee_id=employee_id
         )
         context["can_team_leave"] = context["has_team_approvals"]
-        context["can_team_expenses"] = context["has_team_approvals"]
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
         return templates.TemplateResponse(request, "people/self/leave.html", context)
 
     def leave_detail_response(
@@ -833,7 +919,9 @@ class SelfServiceWebService:
             db, org_id, person_id, employee_id=employee_id
         )
         context["can_team_leave"] = context["has_team_approvals"]
-        context["can_team_expenses"] = context["has_team_approvals"]
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
         return templates.TemplateResponse(
             request, "people/self/leave_detail.html", context
         )
@@ -866,8 +954,8 @@ class SelfServiceWebService:
         leave_type_id: str,
         from_date: date,
         to_date: date,
-        half_day: Optional[str] = None,
-        reason: Optional[str] = None,
+        half_day: str | None = None,
+        reason: str | None = None,
     ) -> RedirectResponse:
         org_id = coerce_uuid(auth.organization_id)
         person_id = coerce_uuid(auth.person_id)
@@ -947,13 +1035,18 @@ class SelfServiceWebService:
                 or "",
                 "employee_recipient_name": (employee.full_name if employee else "")
                 or "",
+                "expense_approver_options": self._get_expense_approver_options(
+                    db, org_id
+                ),
             }
         )
         context["has_team_approvals"] = self._has_team_approvals(
             db, org_id, person_id, employee_id=employee_id
         )
         context["can_team_leave"] = context["has_team_approvals"]
-        context["can_team_expenses"] = context["has_team_approvals"]
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
         return templates.TemplateResponse(request, "people/self/expenses.html", context)
 
     def expense_claim_create_response(
@@ -967,17 +1060,18 @@ class SelfServiceWebService:
         category_id: str,
         description: str,
         claimed_amount: str,
-        recipient_bank_code: Optional[str] = None,
-        recipient_bank_name: Optional[str] = None,
-        recipient_account_number: Optional[str] = None,
-        recipient_name: Optional[str] = None,
-        receipt_url: Optional[str] = None,
-        receipt_number: Optional[str] = None,
-        receipt_file: Optional[UploadFile] = None,
-        submit_now: Optional[str] = None,
-        project_id: Optional[str] = None,
-        ticket_id: Optional[str] = None,
-        task_id: Optional[str] = None,
+        recipient_bank_code: str | None = None,
+        recipient_bank_name: str | None = None,
+        recipient_account_number: str | None = None,
+        recipient_name: str | None = None,
+        requested_approver_id: str | None = None,
+        receipt_url: str | None = None,
+        receipt_number: str | None = None,
+        receipt_file: UploadFile | None = None,
+        submit_now: str | None = None,
+        project_id: str | None = None,
+        ticket_id: str | None = None,
+        task_id: str | None = None,
     ) -> RedirectResponse:
         org_id = coerce_uuid(auth.organization_id)
         person_id = coerce_uuid(auth.person_id)
@@ -1007,6 +1101,9 @@ class SelfServiceWebService:
             recipient_bank_name=recipient_bank_name,
             recipient_account_number=recipient_account_number,
             recipient_name=recipient_name,
+            requested_approver_id=coerce_uuid(requested_approver_id)
+            if requested_approver_id
+            else None,
             items=[
                 {
                     "expense_date": expense_date,
@@ -1064,13 +1161,18 @@ class SelfServiceWebService:
                 "projects": projects,
                 "tickets": tickets,
                 "tasks": tasks,
+                "expense_approver_options": self._get_expense_approver_options(
+                    db, org_id
+                ),
             }
         )
         context["has_team_approvals"] = self._has_team_approvals(
             db, org_id, person_id, employee_id=employee_id
         )
         context["can_team_leave"] = context["has_team_approvals"]
-        context["can_team_expenses"] = context["has_team_approvals"]
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
         return templates.TemplateResponse(
             request, "people/self/expense_claim_edit.html", context
         )
@@ -1106,13 +1208,14 @@ class SelfServiceWebService:
         *,
         claim_id: UUID,
         items: list[dict],
-        recipient_bank_code: Optional[str] = None,
-        recipient_bank_name: Optional[str] = None,
-        recipient_account_number: Optional[str] = None,
-        recipient_name: Optional[str] = None,
-        project_id: Optional[UUID] = None,
-        ticket_id: Optional[UUID] = None,
-        task_id: Optional[UUID] = None,
+        recipient_bank_code: str | None = None,
+        recipient_bank_name: str | None = None,
+        recipient_account_number: str | None = None,
+        recipient_name: str | None = None,
+        requested_approver_id: UUID | None = None,
+        project_id: UUID | None = None,
+        ticket_id: UUID | None = None,
+        task_id: UUID | None = None,
     ) -> RedirectResponse:
         org_id = coerce_uuid(auth.organization_id)
         person_id = coerce_uuid(auth.person_id)
@@ -1134,6 +1237,7 @@ class SelfServiceWebService:
             recipient_bank_name=recipient_bank_name,
             recipient_account_number=recipient_account_number,
             recipient_name=recipient_name,
+            requested_approver_id=requested_approver_id,
             project_id=project_id,
             ticket_id=ticket_id,
             task_id=task_id,
@@ -1169,7 +1273,7 @@ class SelfServiceWebService:
         auth: WebAuthContext,
         db: Session,
         *,
-        status: Optional[str] = None,
+        status: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         org_id = coerce_uuid(auth.organization_id)
@@ -1190,7 +1294,7 @@ class SelfServiceWebService:
 
         employee_svc = EmployeeService(db, org_id)
         reports = employee_svc.list_employees(
-            filters=EmployeeFilters(reports_to_id=manager_employee_id),
+            filters=EmployeeFilters(expense_approver_id=manager_employee_id),
             pagination=PaginationParams(offset=0, limit=1000),
         ).items
         report_ids = [emp.employee_id for emp in reports]
@@ -1236,7 +1340,9 @@ class SelfServiceWebService:
         )
         context["has_team_approvals"] = True
         context["can_team_leave"] = True
-        context["can_team_expenses"] = True
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=manager_employee_id
+        )
         return templates.TemplateResponse(
             request, "people/self/team_leave.html", context
         )
@@ -1258,7 +1364,7 @@ class SelfServiceWebService:
 
         employee_svc = EmployeeService(db, org_id)
         reports = employee_svc.list_employees(
-            filters=EmployeeFilters(reports_to_id=manager_employee_id),
+            filters=EmployeeFilters(expense_approver_id=manager_employee_id),
             pagination=PaginationParams(offset=0, limit=1000),
         ).items
         report_ids = {emp.employee_id for emp in reports}
@@ -1279,7 +1385,7 @@ class SelfServiceWebService:
         db: Session,
         *,
         application_id: UUID,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> RedirectResponse:
         org_id = coerce_uuid(auth.organization_id)
         person_id = coerce_uuid(auth.person_id)
@@ -1288,7 +1394,7 @@ class SelfServiceWebService:
         application = LeaveService(db, auth).get_application(org_id, application_id)
         employee_svc = EmployeeService(db, org_id)
         reports = employee_svc.list_employees(
-            filters=EmployeeFilters(reports_to_id=manager_employee_id),
+            filters=EmployeeFilters(expense_approver_id=manager_employee_id),
             pagination=PaginationParams(offset=0, limit=1000),
         ).items
         report_ids = {emp.employee_id for emp in reports}
@@ -1310,7 +1416,7 @@ class SelfServiceWebService:
         auth: WebAuthContext,
         db: Session,
         *,
-        status: Optional[str] = None,
+        status: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         org_id = coerce_uuid(auth.organization_id)
@@ -1405,7 +1511,9 @@ class SelfServiceWebService:
         )
         context["has_team_approvals"] = True
         context["can_team_leave"] = True
-        context["can_team_expenses"] = True
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=manager_employee_id
+        )
         return templates.TemplateResponse(
             request, "people/self/team_expenses.html", context
         )
@@ -1445,7 +1553,7 @@ class SelfServiceWebService:
         db: Session,
         *,
         claim_id: UUID,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> RedirectResponse:
         org_id = coerce_uuid(auth.organization_id)
         person_id = coerce_uuid(auth.person_id)
@@ -1478,7 +1586,7 @@ class SelfServiceWebService:
         auth: WebAuthContext,
         db: Session,
         *,
-        year: Optional[int] = None,
+        year: int | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Self-service payslips list page."""
@@ -1555,7 +1663,9 @@ class SelfServiceWebService:
             db, org_id, person_id, employee_id=employee_id
         )
         context["can_team_leave"] = context["has_team_approvals"]
-        context["can_team_expenses"] = context["has_team_approvals"]
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
         return templates.TemplateResponse(request, "people/self/payslips.html", context)
 
     def payslip_detail_response(
@@ -1632,7 +1742,9 @@ class SelfServiceWebService:
             db, org_id, person_id, employee_id=employee_id
         )
         context["can_team_leave"] = context["has_team_approvals"]
-        context["can_team_expenses"] = context["has_team_approvals"]
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
         return templates.TemplateResponse(
             request, "people/self/payslip_detail.html", context
         )
@@ -1669,11 +1781,9 @@ class SelfServiceWebService:
 
         # Mark cases that need response
         for case in cases:
-            setattr(
-                case,
-                "has_pending_response",
+            case.has_pending_response = (
                 case.status.value == "QUERY_ISSUED"
-                and case.response_due_date is not None,
+                and case.response_due_date is not None
             )
 
         context = base_context(request, auth, "Discipline", "self-discipline", db=db)
@@ -1687,7 +1797,9 @@ class SelfServiceWebService:
             db, org_id, person_id, employee_id=employee_id
         )
         context["can_team_leave"] = context["has_team_approvals"]
-        context["can_team_expenses"] = context["has_team_approvals"]
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
         return templates.TemplateResponse(
             request, "people/self/discipline.html", context
         )
@@ -1746,7 +1858,9 @@ class SelfServiceWebService:
             db, org_id, person_id, employee_id=employee_id
         )
         context["can_team_leave"] = context["has_team_approvals"]
-        context["can_team_expenses"] = context["has_team_approvals"]
+        context["can_team_expenses"] = self._has_team_expense_approvals(
+            db, org_id, person_id, employee_id=employee_id
+        )
         return templates.TemplateResponse(
             request, "people/self/discipline_detail.html", context
         )

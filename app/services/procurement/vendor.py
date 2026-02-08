@@ -5,8 +5,7 @@ Business logic for vendor prequalification management.
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import List, Optional, Tuple
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -33,7 +32,7 @@ class VendorPrequalificationService:
         self,
         organization_id: UUID,
         prequalification_id: UUID,
-    ) -> Optional[VendorPrequalification]:
+    ) -> VendorPrequalification | None:
         """Get a prequalification by ID."""
         stmt = select(VendorPrequalification).where(
             VendorPrequalification.organization_id == organization_id,
@@ -45,10 +44,10 @@ class VendorPrequalificationService:
         self,
         organization_id: UUID,
         *,
-        status: Optional[str] = None,
+        status: str | None = None,
         offset: int = 0,
         limit: int = 25,
-    ) -> Tuple[List[VendorPrequalification], int]:
+    ) -> tuple[list[VendorPrequalification], int]:
         """List prequalifications with filters."""
         base = select(VendorPrequalification).where(
             VendorPrequalification.organization_id == organization_id,
@@ -120,7 +119,7 @@ class VendorPrequalificationService:
 
         preq.status = PrequalificationStatus.QUALIFIED
         preq.reviewed_by_user_id = reviewed_by_user_id
-        preq.reviewed_at = datetime.now(timezone.utc)
+        preq.reviewed_at = datetime.now(UTC)
         self.db.flush()
         logger.info("Qualified vendor %s", preq.supplier_id)
         return preq
@@ -130,7 +129,7 @@ class VendorPrequalificationService:
         organization_id: UUID,
         prequalification_id: UUID,
         reviewed_by_user_id: UUID,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> VendorPrequalification:
         """Disqualify a vendor."""
         preq = self.get_by_id(organization_id, prequalification_id)
@@ -140,7 +139,7 @@ class VendorPrequalificationService:
         preq.status = PrequalificationStatus.DISQUALIFIED
         preq.review_notes = reason
         preq.reviewed_by_user_id = reviewed_by_user_id
-        preq.reviewed_at = datetime.now(timezone.utc)
+        preq.reviewed_at = datetime.now(UTC)
         self.db.flush()
         logger.info("Disqualified vendor %s", preq.supplier_id)
         return preq
@@ -161,7 +160,7 @@ class VendorPrequalificationService:
         preq.blacklisted = True
         preq.blacklist_reason = reason
         preq.reviewed_by_user_id = reviewed_by_user_id
-        preq.reviewed_at = datetime.now(timezone.utc)
+        preq.reviewed_at = datetime.now(UTC)
         self.db.flush()
         logger.info("Blacklisted vendor %s", preq.supplier_id)
         return preq

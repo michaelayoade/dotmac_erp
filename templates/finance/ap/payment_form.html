@@ -26,6 +26,7 @@
 
         <form id="payment-form" method="POST" action="/finance/ap/payments/new" class="mt-6 space-y-6"
               hx-post="/finance/ap/payments/new" hx-swap="innerHTML" hx-target="#form-result">
+            {{ request.state.csrf_form | safe }}
 
             <!-- Row 1: Supplier & Date -->
             <div class="grid gap-4 sm:grid-cols-2">

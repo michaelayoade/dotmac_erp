@@ -4,7 +4,6 @@ People assets API router.
 Provides assignment endpoints for HR asset tracking.
 """
 
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -15,10 +14,10 @@ from app.db import SessionLocal
 from app.models.people.assets.assignment import AssignmentStatus
 from app.schemas.people.assets import (
     AssetAssignmentCreate,
+    AssetAssignmentListResponse,
+    AssetAssignmentRead,
     AssetAssignmentReturnRequest,
     AssetAssignmentTransferRequest,
-    AssetAssignmentRead,
-    AssetAssignmentListResponse,
 )
 from app.services.common import PaginationParams
 from app.services.people.assets import AssetAssignmentService
@@ -38,7 +37,7 @@ def get_db():
         db.close()
 
 
-def parse_enum(value: Optional[str], enum_type, field_name: str):
+def parse_enum(value: str | None, enum_type, field_name: str):
     if value is None:
         return None
     try:
@@ -52,9 +51,9 @@ def parse_enum(value: Optional[str], enum_type, field_name: str):
 @router.get("/assignments", response_model=AssetAssignmentListResponse)
 def list_assignments(
     organization_id: UUID = Depends(require_organization_id),
-    asset_id: Optional[UUID] = None,
-    employee_id: Optional[UUID] = None,
-    status: Optional[str] = None,
+    asset_id: UUID | None = None,
+    employee_id: UUID | None = None,
+    status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),

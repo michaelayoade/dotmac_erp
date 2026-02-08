@@ -5,7 +5,7 @@ Imports customer and vendor data from Zoho Books CSV exports.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -45,7 +45,7 @@ class CustomerImporter(BaseImporter[Customer]):
         self.ar_control_account_id = ar_control_account_id
         self._code_counter = 0
 
-    def get_field_mappings(self) -> List[FieldMapping]:
+    def get_field_mappings(self) -> list[FieldMapping]:
         """Define field mappings from Zoho CSV to Customer model."""
         return [
             FieldMapping("Display Name", "display_name", required=True),
@@ -100,11 +100,11 @@ class CustomerImporter(BaseImporter[Customer]):
             FieldMapping("Customer Sub Type", "customer_sub_type", required=False),
         ]
 
-    def get_unique_key(self, row: Dict[str, Any]) -> str:
+    def get_unique_key(self, row: dict[str, Any]) -> str:
         """Unique key is the display name."""
         return str(row.get("Display Name", "") or "").strip()
 
-    def check_duplicate(self, row: Dict[str, Any]) -> Optional[Customer]:
+    def check_duplicate(self, row: dict[str, Any]) -> Customer | None:
         """Check if customer already exists by name."""
         name = self.get_unique_key(row)
         if not name:
@@ -120,7 +120,7 @@ class CustomerImporter(BaseImporter[Customer]):
 
         return existing
 
-    def create_entity(self, row: Dict[str, Any]) -> Customer:
+    def create_entity(self, row: dict[str, Any]) -> Customer:
         """Create a new customer from transformed row data."""
         display_name = str(row.get("display_name", "") or "").strip()
         company_name = str(row.get("company_name", "") or "").strip()
@@ -179,9 +179,7 @@ class CustomerImporter(BaseImporter[Customer]):
 
         return customer
 
-    def _build_address(
-        self, row: Dict[str, Any], prefix: str
-    ) -> Optional[Dict[str, Any]]:
+    def _build_address(self, row: dict[str, Any], prefix: str) -> dict[str, Any] | None:
         """Build address JSONB from row data."""
         address = {
             "attention": row.get(f"{prefix}_attention"),
@@ -220,7 +218,7 @@ class SupplierImporter(BaseImporter[Supplier]):
         self.ap_control_account_id = ap_control_account_id
         self._code_counter = 0
 
-    def get_field_mappings(self) -> List[FieldMapping]:
+    def get_field_mappings(self) -> list[FieldMapping]:
         """Define field mappings from Zoho CSV to Supplier model."""
         return [
             FieldMapping("Display Name", "display_name", required=False),
@@ -285,11 +283,11 @@ class SupplierImporter(BaseImporter[Supplier]):
             FieldMapping("Website", "website", required=False),
         ]
 
-    def get_unique_key(self, row: Dict[str, Any]) -> str:
+    def get_unique_key(self, row: dict[str, Any]) -> str:
         """Unique key is the display name or contact name."""
         return str(row.get("Display Name") or row.get("Contact Name") or "").strip()
 
-    def check_duplicate(self, row: Dict[str, Any]) -> Optional[Supplier]:
+    def check_duplicate(self, row: dict[str, Any]) -> Supplier | None:
         """Check if supplier already exists by name."""
         name = self.get_unique_key(row)
         if not name:
@@ -304,7 +302,7 @@ class SupplierImporter(BaseImporter[Supplier]):
 
         return existing
 
-    def create_entity(self, row: Dict[str, Any]) -> Supplier:
+    def create_entity(self, row: dict[str, Any]) -> Supplier:
         """Create a new supplier from transformed row data."""
         display_name = str(
             row.get("display_name") or row.get("contact_name") or ""
@@ -361,9 +359,7 @@ class SupplierImporter(BaseImporter[Supplier]):
 
         return supplier
 
-    def _build_address(
-        self, row: Dict[str, Any], prefix: str
-    ) -> Optional[Dict[str, Any]]:
+    def _build_address(self, row: dict[str, Any], prefix: str) -> dict[str, Any] | None:
         """Build address JSONB from row data."""
         address = {
             "attention": row.get(f"{prefix}_attention"),
@@ -379,7 +375,7 @@ class SupplierImporter(BaseImporter[Supplier]):
         return address if address else None
 
 
-def get_ar_control_account(db: Session, organization_id: UUID) -> Optional[UUID]:
+def get_ar_control_account(db: Session, organization_id: UUID) -> UUID | None:
     """Find the AR control account for the organization."""
     account = db.execute(
         select(Account).where(
@@ -390,7 +386,7 @@ def get_ar_control_account(db: Session, organization_id: UUID) -> Optional[UUID]
     return account.account_id if account else None
 
 
-def get_ap_control_account(db: Session, organization_id: UUID) -> Optional[UUID]:
+def get_ap_control_account(db: Session, organization_id: UUID) -> UUID | None:
     """Find the AP control account for the organization."""
     account = db.execute(
         select(Account).where(

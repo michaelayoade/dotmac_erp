@@ -1,5 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
+{% from "components/macros.html" import empty_state %}
 {% block page_title %}{{ "Edit Sales Order" if order else "New Sales Order" }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -18,7 +19,7 @@
 
 {% block content %}
 <div x-data="soForm()" class="max-w-5xl mx-auto space-y-8">
-    <form @submit.prevent="submitForm" class="space-y-8">
+    <form @submit.prevent="submitForm" class="space-y-6">
         <!-- Page Header -->
         <div>
             <h1 class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
@@ -201,14 +202,14 @@
                 <table class="w-full min-w-[800px]">
                     <thead>
                         <tr class="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700">
-                            <th scope="col" class="pb-3 pr-2" style="width: 10%">Item Code</th>
-                            <th scope="col" class="pb-3 px-2" style="width: 20%">Revenue Account</th>
-                            <th scope="col" class="pb-3 px-2" style="width: 20%">Description</th>
-                            <th scope="col" class="pb-3 px-2 text-right" style="width: 10%">Qty</th>
-                            <th scope="col" class="pb-3 px-2 text-right" style="width: 12%">Unit Price</th>
-                            <th scope="col" class="pb-3 px-2" style="width: 14%">Tax</th>
-                            <th scope="col" class="pb-3 px-2 text-right" style="width: 10%">Total</th>
-                            <th scope="col" class="pb-3 pl-2" style="width: 4%"></th>
+                            <th scope="col" class="pb-3 pr-2 text-xs font-semibold uppercase tracking-wider" style="width: 10%">Item Code</th>
+                            <th scope="col" class="pb-3 px-2 text-xs font-semibold uppercase tracking-wider" style="width: 20%">Revenue Account</th>
+                            <th scope="col" class="pb-3 px-2 text-xs font-semibold uppercase tracking-wider" style="width: 20%">Description</th>
+                            <th scope="col" class="pb-3 px-2 text-right text-xs font-semibold uppercase tracking-wider" style="width: 10%">Qty</th>
+                            <th scope="col" class="pb-3 px-2 text-right text-xs font-semibold uppercase tracking-wider" style="width: 12%">Unit Price</th>
+                            <th scope="col" class="pb-3 px-2 text-xs font-semibold uppercase tracking-wider" style="width: 14%">Tax</th>
+                            <th scope="col" class="pb-3 px-2 text-right text-xs font-semibold uppercase tracking-wider" style="width: 10%">Total</th>
+                            <th scope="col" class="pb-3 pl-2 text-xs font-semibold uppercase tracking-wider" style="width: 4%"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -222,6 +223,12 @@
                                         <option value="">Account</option>
                                         {% for account in revenue_accounts %}
                                         <option value="{{ account.account_id }}">{{ account.name }} ({{ account.code }})</option>
+                                        {% else %}
+                                        <tr>
+                                            <td colspan="99" class="p-0">
+                                                {{ empty_state("No revenue_accounts found", "There are no revenue_accounts to display.") }}
+                                            </td>
+                                        </tr>
                                         {% endfor %}
                                     </select>
                                 </td>
@@ -241,6 +248,12 @@
                                         <option value="">No Tax</option>
                                         {% for tax in tax_codes %}
                                         <option value="{{ tax.tax_code_id }}" data-rate="{{ tax.rate }}">{{ tax.code }} ({{ tax.rate }}%)</option>
+                                        {% else %}
+                                        <tr>
+                                            <td colspan="99" class="p-0">
+                                                {{ empty_state("No tax_codes found", "There are no tax_codes to display.") }}
+                                            </td>
+                                        </tr>
                                         {% endfor %}
                                     </select>
                                 </td>
@@ -310,7 +323,7 @@
         </div>
 
         <!-- Form Actions -->
-        <div class="flex items-center justify-between py-4">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <div class="text-sm text-slate-500">
                 <span class="text-rose-500">*</span> Required fields
             </div>

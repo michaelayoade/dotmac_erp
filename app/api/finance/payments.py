@@ -5,7 +5,6 @@ Handles payment initialization, verification, and webhooks for Paystack integrat
 """
 
 import logging
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -13,18 +12,18 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
-from app.services.auth_dependencies import require_tenant_permission
-from app.services.common import coerce_uuid
-from app.services.finance.platform.authorization import AuthorizationService
 from app.db import SessionLocal
 from app.models.domain_settings import SettingDomain
 from app.models.finance.payments.payment_intent import PaymentIntentStatus
+from app.services.auth_dependencies import require_tenant_permission
+from app.services.common import coerce_uuid
 from app.services.finance.payments import (
     PaymentService,
     PaystackConfig,
     PaystackError,
     WebhookService,
 )
+from app.services.finance.platform.authorization import AuthorizationService
 from app.services.settings_spec import resolve_value
 
 logger = logging.getLogger(__name__)
@@ -116,16 +115,16 @@ class PaymentStatusResponse(BaseModel):
     status: str
     amount: float
     currency: str
-    paid_at: Optional[str] = None
-    invoice_number: Optional[str] = None
-    customer_payment_id: Optional[UUID] = None
+    paid_at: str | None = None
+    invoice_number: str | None = None
+    customer_payment_id: UUID | None = None
 
 
 class WebhookResponse(BaseModel):
     """Response to webhook."""
 
     status: str
-    message: Optional[str] = None
+    message: str | None = None
 
 
 # -----------------------------------------------------------------------------
@@ -159,10 +158,10 @@ class InitializeExpensePaymentRequest(BaseModel):
     """Request to initialize expense reimbursement."""
 
     expense_claim_id: UUID
-    bank_code: Optional[str] = Field(
+    bank_code: str | None = Field(
         default=None, description="Recipient's bank code (ignored; claim data is used)"
     )
-    account_number: Optional[str] = Field(
+    account_number: str | None = Field(
         default=None,
         min_length=10,
         max_length=10,
@@ -178,9 +177,9 @@ class ExpensePaymentResponse(BaseModel):
     amount: float
     currency: str
     status: str
-    recipient_account_name: Optional[str] = None
-    recipient_bank_code: Optional[str] = None
-    recipient_account_number: Optional[str] = None
+    recipient_account_name: str | None = None
+    recipient_bank_code: str | None = None
+    recipient_account_number: str | None = None
 
 
 class InitiateTransferResponse(BaseModel):
@@ -192,8 +191,8 @@ class InitiateTransferResponse(BaseModel):
     amount: float
     currency: str
     completed_immediately: bool = False  # True if transfer completed without webhook
-    claim_status: Optional[str] = None  # Status of the expense claim after transfer
-    message: Optional[str] = None  # Human-readable status message
+    claim_status: str | None = None  # Status of the expense claim after transfer
+    message: str | None = None  # Human-readable status message
 
 
 # =============================================================================
@@ -280,7 +279,6 @@ def initialize_invoice_payment(
             callback_url=callback_url,
             paystack_config=config,
         )
-        db.commit()
     except PaystackError as e:
         logger.error(f"Paystack initialization failed: {e}")
         raise HTTPException(
@@ -375,16 +373,12 @@ def verify_payment(
     svc = PaymentService(db, organization_id)
     try:
         intent = svc.verify_payment_by_reference(reference, config)
-        db.commit()
     except PaystackError as e:
         logger.error(f"Paystack verification failed: {e}")
         raise HTTPException(
             status_code=502,
             detail=f"Payment verification failed: {e.message}",
         )
-
-    # Refresh intent
-    db.refresh(intent)
 
     return PaymentStatusResponse(
         intent_id=intent.intent_id,
@@ -545,8 +539,6 @@ def initialize_expense_payment(
             recipient_bank_code=recipient_bank_code,
             recipient_account_number=recipient_account_number,
         )
-        db.commit()
-
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except PaystackError as e:
@@ -621,16 +613,11 @@ def initiate_transfer(
             intent=intent,
             paystack_config=config,
         )
-        db.commit()
-
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except PaystackError as e:
         logger.error(f"Transfer initiation failed: {e}")
         raise HTTPException(status_code=502, detail=f"Transfer failed: {e.message}")
-
-    # Refresh intent and get claim status for response
-    db.refresh(updated_intent)
 
     # Get the expense claim status
     from app.models.expense.expense_claim import ExpenseClaim
@@ -766,8 +753,6 @@ async def paystack_webhook(
             raw_payload=raw_body,
             signature=x_paystack_signature,
         )
-        db.commit()
-
         return WebhookResponse(
             status=webhook.status.value,
             message=webhook.error_message,
@@ -780,5 +765,4 @@ async def paystack_webhook(
 
     except Exception as e:
         logger.exception(f"Webhook processing error: {e}")
-        db.rollback()
         raise HTTPException(status_code=500, detail="Webhook processing failed")

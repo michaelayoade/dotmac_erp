@@ -8,7 +8,6 @@ Create Date: 2026-02-02 08:08:00.000000
 
 from alembic import op
 
-
 revision = "20260202_set_org_timezone_lagos"
 down_revision = "d72ea77c35b7"
 branch_labels = None

@@ -1,8 +1,8 @@
 import logging
-from typing import Any
+from typing import Any, TypeVar
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Query, Session
 
 from app.models.scheduler import ScheduledTask, ScheduleType
 from app.schemas.scheduler import ScheduledTaskCreate, ScheduledTaskUpdate
@@ -11,10 +11,12 @@ from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
 
+T = TypeVar("T")
+
 
 def _apply_ordering(
-    query: Any, order_by: str, order_dir: str, allowed_columns: dict[str, Any]
-) -> Any:
+    query: Query[T], order_by: str, order_dir: str, allowed_columns: dict[str, Any]
+) -> Query[T]:
     if order_by not in allowed_columns:
         raise HTTPException(
             status_code=400,
@@ -26,7 +28,7 @@ def _apply_ordering(
     return query.order_by(column.asc())
 
 
-def _apply_pagination(query: Any, limit: int, offset: int) -> Any:
+def _apply_pagination(query: Query[T], limit: int, offset: int) -> Query[T]:
     return query.limit(limit).offset(offset)
 
 

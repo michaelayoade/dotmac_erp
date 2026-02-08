@@ -1,4 +1,5 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import status_badge %}
 {% from "components/macros.html" import live_search, status_badge %}
 
 {% block page_title %}Journal Entries{% endblock %}
@@ -50,7 +51,7 @@
     <div id="results-container">
     <!-- Journal Entries Table -->
     <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50 overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="w-full table-ledger">
                 <thead>
                     <tr class="border-b border-slate-200 dark:border-slate-700">
@@ -87,7 +88,7 @@
                             {% elif entry.status == 'REVERSED' %}
                             <span class="badge-rejected">Reversed</span>
                             {% else %}
-                            <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">{{ entry.status | replace('''_''', ''' ''') | title }}</span>
+                            {{ status_badge(entry.status, size="sm") }}
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right">

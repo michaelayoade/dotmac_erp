@@ -19,7 +19,7 @@ For backward compatibility, the original import path also works:
     from app.services.finance.ap.web import ap_web_service
 """
 
-from fastapi import Request, UploadFile
+from fastapi import Request
 from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -199,6 +199,23 @@ class APWebService(
         )
         return await service.bulk_export(req.ids, req.format)
 
+    async def export_all_suppliers_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        search: str = "",
+        status: str = "",
+    ):
+        """Export all suppliers matching filters to CSV."""
+        from app.services.finance.ap.bulk import get_supplier_bulk_service
+
+        service = get_supplier_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
+        return await service.export_all(search=search, status=status)
+
     async def bulk_activate_suppliers_response(
         self,
         request: Request,
@@ -275,6 +292,35 @@ class APWebService(
         )
         return await service.bulk_export(req.ids, req.format)
 
+    async def export_all_invoices_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        search: str = "",
+        status: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        supplier_id: str = "",
+    ):
+        """Export all invoices matching filters to CSV."""
+        from app.services.finance.ap.invoice_bulk import get_ap_invoice_bulk_service
+
+        service = get_ap_invoice_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
+        extra: dict[str, object] | None = (
+            {"supplier_id": supplier_id} if supplier_id else None
+        )
+        return await service.export_all(
+            search=search,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+            extra_filters=extra,
+        )
+
     async def bulk_approve_invoices_response(
         self,
         request: Request,
@@ -350,6 +396,35 @@ class APWebService(
             coerce_uuid(auth.user_id),
         )
         return await service.bulk_export(req.ids, req.format)
+
+    async def export_all_payments_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        search: str = "",
+        status: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        supplier_id: str = "",
+    ):
+        """Export all payments matching filters to CSV."""
+        from app.services.finance.ap.payment_bulk import get_ap_payment_bulk_service
+
+        service = get_ap_payment_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
+        extra: dict[str, object] | None = (
+            {"supplier_id": supplier_id} if supplier_id else None
+        )
+        return await service.export_all(
+            search=search,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+            extra_filters=extra,
+        )
 
 
 # Module-level singleton for backward compatibility

@@ -6,7 +6,6 @@ Manages IPSAS funds (general, capital, donor, trust, etc.).
 
 import logging
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -26,12 +25,16 @@ class FundService:
     def __init__(self, db: Session):
         self.db = db
 
+    def _commit_and_refresh(self, fund: Fund) -> None:
+        self.db.commit()
+        self.db.refresh(fund)
+
     def list_for_org(
         self,
         organization_id: UUID,
         *,
-        status: Optional[str] = None,
-        fund_type: Optional[str] = None,
+        status: str | None = None,
+        fund_type: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[Fund]:
@@ -46,7 +49,7 @@ class FundService:
         stmt = stmt.order_by(Fund.fund_code).offset(offset).limit(limit)
         return list(self.db.scalars(stmt).all())
 
-    def get_or_404(self, fund_id: UUID, organization_id: Optional[UUID] = None) -> Fund:
+    def get_or_404(self, fund_id: UUID, organization_id: UUID | None = None) -> Fund:
         """Get a fund by ID or raise NotFoundError.
 
         If organization_id is provided, also verifies tenant ownership.
@@ -82,6 +85,7 @@ class FundService:
         self.db.add(fund)
         self.db.flush()
         logger.info("Created fund %s: %s", fund.fund_code, fund.fund_id)
+        self._commit_and_refresh(fund)
         return fund
 
     def update(self, fund_id: UUID, data: FundUpdate) -> Fund:
@@ -97,12 +101,13 @@ class FundService:
 
         self.db.flush()
         logger.info("Updated fund %s", fund_id)
+        self._commit_and_refresh(fund)
         return fund
 
     def get_fund_balance(
         self,
         fund_id: UUID,
-        fiscal_period_id: Optional[UUID] = None,
+        fiscal_period_id: UUID | None = None,
     ) -> Decimal:
         """
         Get aggregated balance for a fund.

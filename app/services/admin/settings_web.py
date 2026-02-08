@@ -7,7 +7,7 @@ Handles org-wide settings: Organization profile, Branding, Email, Features, Paym
 
 import logging
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -16,12 +16,16 @@ from app.models.domain_settings import SettingDomain, SettingValueType
 from app.models.finance.core_org import Organization
 from app.schemas.settings import DomainSettingUpdate
 from app.services.domain_settings import DomainSettings
-from app.services.settings_cache import get_cached_setting
 from app.services.formatting_context import (
     COMMON_TIMEZONES,
+)
+from app.services.formatting_context import (
     DATE_FORMAT_CHOICES as DATE_FORMATS,
+)
+from app.services.formatting_context import (
     NUMBER_FORMAT_CHOICES as NUMBER_FORMATS,
 )
+from app.services.settings_cache import get_cached_setting
 from app.services.settings_spec import (
     DOMAIN_SETTINGS_SERVICE,
     get_spec,
@@ -30,6 +34,35 @@ from app.services.settings_spec import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# ── Font presets (available in the app's self-hosted stylesheet) ──
+FONT_PRESETS: dict[str, list[dict[str, str]]] = {
+    "display": [
+        {"value": "", "label": "Default (Fraunces)"},
+        {"value": "Fraunces, Georgia, serif", "label": "Fraunces"},
+        {"value": "DM Sans, system-ui, sans-serif", "label": "DM Sans"},
+        {"value": "Georgia, Cambria, serif", "label": "Georgia"},
+        {"value": "Palatino Linotype, Book Antiqua, serif", "label": "Palatino"},
+        {"value": "system-ui, -apple-system, sans-serif", "label": "System UI"},
+    ],
+    "body": [
+        {"value": "", "label": "Default (DM Sans)"},
+        {"value": "DM Sans, system-ui, sans-serif", "label": "DM Sans"},
+        {"value": "Inter, system-ui, sans-serif", "label": "Inter"},
+        {"value": "system-ui, -apple-system, sans-serif", "label": "System UI"},
+        {"value": "Segoe UI, Roboto, sans-serif", "label": "Segoe UI"},
+        {"value": "Helvetica Neue, Arial, sans-serif", "label": "Helvetica"},
+    ],
+    "mono": [
+        {"value": "", "label": "Default (JetBrains Mono)"},
+        {"value": "JetBrains Mono, monospace", "label": "JetBrains Mono"},
+        {"value": "Fira Code, monospace", "label": "Fira Code"},
+        {"value": "Source Code Pro, monospace", "label": "Source Code Pro"},
+        {"value": "Menlo, Monaco, monospace", "label": "Menlo / Monaco"},
+        {"value": "Consolas, monospace", "label": "Consolas"},
+    ],
+}
 
 
 # Hub sections configuration
@@ -106,7 +139,7 @@ class AdminSettingsWebService:
         db: Session,
         organization_id: uuid.UUID,
         data: dict[str, Any],
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Update organization profile."""
         org = db.get(Organization, organization_id)
         if not org:
@@ -162,20 +195,26 @@ class AdminSettingsWebService:
         if not org:
             return {"organization": None, "error": "Organization not found"}
 
-        # Try to get branding from OrganizationBranding if it exists
+        # Use get_or_create so branding is always non-None
         branding = None
         try:
-            from app.models.finance.core_org.organization_branding import (
-                OrganizationBranding,
-            )
+            from app.services.finance.branding import BrandingService
 
-            branding = db.execute(
-                select(OrganizationBranding).where(
-                    OrganizationBranding.organization_id == organization_id
-                )
-            ).scalar_one_or_none()
+            branding = BrandingService(db).get_or_create(organization_id)
         except Exception:
-            pass
+            # Fall back to raw query if BrandingService unavailable
+            try:
+                from app.models.finance.core_org.organization_branding import (
+                    OrganizationBranding,
+                )
+
+                branding = db.execute(
+                    select(OrganizationBranding).where(
+                        OrganizationBranding.organization_id == organization_id
+                    )
+                ).scalar_one_or_none()
+            except Exception:
+                pass
 
         email_logo_url = get_cached_setting(
             db, SettingDomain.email, "email_logo_url", ""
@@ -184,11 +223,66 @@ class AdminSettingsWebService:
             db, SettingDomain.reporting, "report_logo_url", ""
         )
 
+        # Import enums for UI controls
+        from app.models.finance.core_org.organization_branding import (
+            BorderRadiusStyle,
+            ButtonStyle,
+            SidebarStyle,
+        )
+
+        # Build Alpine.js-friendly config dict with safe defaults
+        branding_config = {
+            "display_name": (branding.display_name or "") if branding else "",
+            "tagline": (branding.tagline or "") if branding else "",
+            "brand_mark": (branding.brand_mark or "") if branding else "",
+            "primary_color": (branding.primary_color or "#0D9488")
+            if branding
+            else "#0D9488",
+            "accent_color": (branding.accent_color or "#D97706")
+            if branding
+            else "#D97706",
+            "font_family_display": (branding.font_family_display or "")
+            if branding
+            else "",
+            "font_family_body": (branding.font_family_body or "") if branding else "",
+            "font_family_mono": (branding.font_family_mono or "") if branding else "",
+            "border_radius": (
+                branding.border_radius.value
+                if branding and branding.border_radius
+                else "rounded"
+            ),
+            "button_style": (
+                branding.button_style.value
+                if branding and branding.button_style
+                else "gradient"
+            ),
+            "sidebar_style": (
+                branding.sidebar_style.value
+                if branding and branding.sidebar_style
+                else "dark"
+            ),
+            "custom_css": (branding.custom_css or "") if branding else "",
+        }
+
         return {
             "organization": org,
             "branding": branding,
+            "branding_config": branding_config,
             "email_logo_url": email_logo_url or "",
             "report_logo_url": report_logo_url or "",
+            "font_presets": FONT_PRESETS,
+            "border_radius_choices": [
+                {"value": e.value, "label": e.name.replace("_", " ").title()}
+                for e in BorderRadiusStyle
+            ],
+            "button_style_choices": [
+                {"value": e.value, "label": e.name.replace("_", " ").title()}
+                for e in ButtonStyle
+            ],
+            "sidebar_style_choices": [
+                {"value": e.value, "label": e.name.replace("_", " ").title()}
+                for e in SidebarStyle
+            ],
         }
 
     def update_branding(
@@ -196,7 +290,7 @@ class AdminSettingsWebService:
         db: Session,
         organization_id: uuid.UUID,
         data: dict[str, Any],
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Update branding settings."""
         org = db.get(Organization, organization_id)
         if not org:
@@ -226,7 +320,11 @@ class AdminSettingsWebService:
                 "logo_dark_url",
                 "favicon_url",
                 "primary_color",
+                "primary_light",
+                "primary_dark",
                 "accent_color",
+                "accent_light",
+                "accent_dark",
                 "success_color",
                 "warning_color",
                 "danger_color",
@@ -299,7 +397,7 @@ class AdminSettingsWebService:
         db: Session,
         organization_id: uuid.UUID,
         data: dict[str, Any],
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Update email settings."""
         # Delegate to finance settings service for email updates
         from app.services.finance.settings_web import settings_web_service
@@ -346,7 +444,7 @@ class AdminSettingsWebService:
         organization_id: uuid.UUID,
         key: str,
         enabled: bool,
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Toggle a feature flag."""
         spec = get_spec(SettingDomain.features, key)
         if not spec:
@@ -400,7 +498,7 @@ class AdminSettingsWebService:
         db: Session,
         organization_id: uuid.UUID,
         data: dict[str, Any],
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Update Paystack settings."""
         # Delegate to finance settings service
         from app.services.finance.settings_web import settings_web_service

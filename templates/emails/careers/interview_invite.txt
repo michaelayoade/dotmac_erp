@@ -1,0 +1,18 @@
+{% extends "emails/base_email.txt" %}
+{% block content %}Dear {{ applicant_name }},
+
+We are pleased to invite you to an interview for the {{ job_title }} position at {{ org_name }}.
+
+Please find the details of your interview below:
+
+  Date:     {{ interview_date }}
+  Time:     {{ interview_time }}
+  Type:     {{ interview_type }}
+  Location: {{ location_or_link }}
+{% if additional_notes %}
+Additional Notes:
+{{ additional_notes }}
+{% endif %}
+Please confirm your attendance by responding to this invitation at your earliest convenience. If you need to reschedule, let us know as soon as possible.
+
+We look forward to speaking with you.{% endblock %}

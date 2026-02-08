@@ -9,10 +9,10 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models.people.recruit import JobApplicant, JobOpening, JobOffer
+from app.models.email_profile import EmailModule
+from app.models.people.recruit import JobApplicant, JobOffer, JobOpening
 from app.models.person import Person, PersonStatus
 from app.models.rbac import PersonRole, Role
-from app.models.email_profile import EmailModule
 from app.services.email import send_email
 
 logger = logging.getLogger(__name__)

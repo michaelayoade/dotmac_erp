@@ -9,7 +9,6 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -383,8 +382,8 @@ class FXService(ListResponseMixin):
         rate_type_code: str,
         effective_date: date,
         exchange_rate: Decimal,
-        source: Optional[str] = None,
-        created_by_user_id: Optional[UUID] = None,
+        source: str | None = None,
+        created_by_user_id: UUID | None = None,
     ) -> ExchangeRate:
         """
         Create a new exchange rate.
@@ -454,12 +453,12 @@ class FXService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        from_currency: Optional[str] = None,
-        to_currency: Optional[str] = None,
-        rate_type_code: Optional[str] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
+        organization_id: str | None = None,
+        from_currency: str | None = None,
+        to_currency: str | None = None,
+        rate_type_code: str | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[ExchangeRate]:

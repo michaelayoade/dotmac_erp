@@ -5,7 +5,6 @@ System Configuration Model - Core Config.
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -48,7 +47,7 @@ class SystemConfiguration(Base):
         default=uuid.uuid4,
         server_default=text("gen_random_uuid()"),
     )
-    organization_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.organization.organization_id"),
         nullable=True,
@@ -63,7 +62,7 @@ class SystemConfiguration(Base):
         default=ConfigType.STRING,
     )
 
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_encrypted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     updated_at: Mapped[datetime] = mapped_column(
@@ -72,7 +71,7 @@ class SystemConfiguration(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
-    updated_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    updated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )

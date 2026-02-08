@@ -45,7 +45,8 @@
                 return this.services[this.biller] || [];
             },
             hasServices() {
-                return this.getServices().length > 0;
+                return this.getServices().length >
+            {{ request.state.csrf_form | safe }} 0;
             },
             onServiceSelect(event) {
                 this.serviceTypeId = event.target.value;

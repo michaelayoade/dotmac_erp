@@ -321,9 +321,9 @@
     </div>
 
     <!-- Main Content Grid -->
-    <div class="grid gap-8 lg:grid-cols-12">
+    <div class="grid gap-8 lg:grid-cols-3">
         <!-- Left Column - Quick Actions & Stats -->
-        <div class="lg:col-span-4 space-y-8">
+        <div class="space-y-8">
             <!-- Pending Approvals -->
             {% if pending_approvals.total > 0 %}
             <div class="stagger-in" style="animation-delay: 290ms;">
@@ -435,7 +435,7 @@
                     <span class="section-label-text">Today's Attendance</span>
                 </div>
                 <div class="card p-5">
-                    <div class="grid grid-cols-3 gap-4 text-center">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-center">
                         <div>
                             <div class="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">{{ stats.checked_in_today | default(0) }}</div>
                             <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">Present</div>
@@ -494,7 +494,7 @@
         </div>
 
         <!-- Right Column - Lists & Timeline -->
-        <div class="lg:col-span-8 space-y-8">
+        <div class="lg:col-span-2 space-y-8">
             <!-- Recent Hires -->
             <div class="stagger-in" style="animation-delay: 300ms;">
                 <div class="section-label">
@@ -624,7 +624,7 @@
 
             <!-- Quick Links -->
             <div class="stagger-in" style="animation-delay: 450ms;">
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-4 gap-3">
                     <a href="/people/hr/employees" class="card card-hover p-4 text-center">
                         <div class="text-slate-400 dark:text-slate-500 mb-2">
                             <svg class="h-6 w-6 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">

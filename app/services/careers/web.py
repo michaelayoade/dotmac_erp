@@ -11,7 +11,6 @@ This service handles:
 import logging
 import uuid
 from dataclasses import dataclass
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -44,7 +43,7 @@ class OrganizationContext:
     org_id: uuid.UUID
     org_slug: str
     org_name: str
-    org_logo: Optional[str]
+    org_logo: str | None
     brand: dict
 
 
@@ -66,8 +65,8 @@ class ApplicationResult:
     """Result of application submission."""
 
     success: bool
-    application_number: Optional[str] = None
-    error: Optional[str] = None
+    application_number: str | None = None
+    error: str | None = None
 
 
 class CareersWebService:
@@ -82,7 +81,7 @@ class CareersWebService:
         self._careers_service = CareersService(db)
         self._resume_service = ResumeService()
 
-    def get_organization_context(self, slug: str) -> Optional[OrganizationContext]:
+    def get_organization_context(self, slug: str) -> OrganizationContext | None:
         """
         Get organization context for template rendering.
 
@@ -93,29 +92,53 @@ class CareersWebService:
             return None
 
         org_name = org.trading_name or org.legal_name
+
+        # Build brand dict with branding if available
+        brand: dict = {
+            "name": org_name,
+            "tagline": "Careers",
+            "logo_url": org.logo_url,
+            "mark": (org_name or "C")[:2].upper(),
+            "css": "",
+            "fonts_url": None,
+            "favicon_url": None,
+            "primary_color": None,
+        }
+
+        if org.branding:
+            from app.services.finance.branding import CSSGenerator
+
+            branding = org.branding
+            brand["logo_url"] = branding.logo_url or org.logo_url
+            brand["favicon_url"] = branding.favicon_url
+            brand["primary_color"] = branding.primary_color
+            if branding.brand_mark:
+                brand["mark"] = branding.brand_mark
+
+            css_gen = CSSGenerator(branding)
+            brand["css"] = css_gen.generate()
+            brand["fonts_url"] = css_gen.get_google_fonts_url()
+
+        logo_url = brand["logo_url"]
+
         return OrganizationContext(
             org=org,
             org_id=org.organization_id,
             org_slug=slug,
             org_name=org_name,
-            org_logo=org.logo_url,
-            brand={
-                "name": org_name,
-                "tagline": "Careers",
-                "logo_url": org.logo_url,
-                "mark": (org_name or "C")[:2].upper(),
-            },
+            org_logo=logo_url,
+            brand=brand,
         )
 
     def list_jobs(
         self,
         org_id: uuid.UUID,
         *,
-        search: Optional[str] = None,
-        department_id: Optional[list[uuid.UUID]] = None,
-        location: Optional[str] = None,
-        employment_type: Optional[str] = None,
-        is_remote: Optional[bool] = None,
+        search: str | None = None,
+        department_id: list[uuid.UUID] | None = None,
+        location: str | None = None,
+        employment_type: str | None = None,
+        is_remote: bool | None = None,
         page: int = 1,
         page_size: int = 12,
     ) -> JobListResult:
@@ -151,13 +174,11 @@ class CareersWebService:
             locations=locations,
         )
 
-    def get_job_by_code(self, org_id: uuid.UUID, job_code: str) -> Optional[JobOpening]:
+    def get_job_by_code(self, org_id: uuid.UUID, job_code: str) -> JobOpening | None:
         """Get a job opening by its code."""
         return self._careers_service.get_job_by_code(org_id, job_code)
 
-    def get_public_job(
-        self, org_id: uuid.UUID, job_id: uuid.UUID
-    ) -> Optional[JobOpening]:
+    def get_public_job(self, org_id: uuid.UUID, job_id: uuid.UUID) -> JobOpening | None:
         """Get a job opening by ID."""
         return self._careers_service.get_public_job(org_id, job_id)
 
@@ -166,7 +187,7 @@ class CareersWebService:
         org_id: uuid.UUID,
         filename: str,
         content: bytes,
-    ) -> tuple[Optional[str], Optional[str]]:
+    ) -> tuple[str | None, str | None]:
         """
         Upload a resume file.
 
@@ -188,18 +209,18 @@ class CareersWebService:
         first_name: str,
         last_name: str,
         email: str,
-        phone: Optional[str] = None,
-        resume_file_id: Optional[str] = None,
-        cover_letter: Optional[str] = None,
-        current_employer: Optional[str] = None,
-        current_job_title: Optional[str] = None,
-        years_of_experience: Optional[int] = None,
-        highest_qualification: Optional[str] = None,
-        skills: Optional[str] = None,
-        city: Optional[str] = None,
-        country_code: Optional[str] = None,
-        captcha_token: Optional[str] = None,
-        client_ip: Optional[str] = None,
+        phone: str | None = None,
+        resume_file_id: str | None = None,
+        cover_letter: str | None = None,
+        current_employer: str | None = None,
+        current_job_title: str | None = None,
+        years_of_experience: int | None = None,
+        highest_qualification: str | None = None,
+        skills: str | None = None,
+        city: str | None = None,
+        country_code: str | None = None,
+        captcha_token: str | None = None,
+        client_ip: str | None = None,
     ) -> ApplicationResult:
         """
         Submit a job application with all validations.
@@ -270,7 +291,7 @@ class CareersWebService:
         self,
         org_id: uuid.UUID,
         email: str,
-        application_number: Optional[str] = None,
+        application_number: str | None = None,
     ) -> bool:
         """
         Request application status check via email.
@@ -285,7 +306,7 @@ class CareersWebService:
         self.db.commit()
         return True
 
-    def verify_status_token(self, org_id: uuid.UUID, token: str) -> Optional[dict]:
+    def verify_status_token(self, org_id: uuid.UUID, token: str) -> dict | None:
         """
         Verify status token and return application details.
         """

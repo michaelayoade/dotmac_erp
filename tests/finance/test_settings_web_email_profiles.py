@@ -3,8 +3,8 @@ from __future__ import annotations
 import uuid
 from unittest.mock import MagicMock, patch
 
-from app.services.finance.settings_web import SettingsWebService
 from app.models.domain_settings import SettingDomain
+from app.services.finance.settings_web import SettingsWebService
 
 
 def test_update_email_settings_uses_existing_password_for_validation():

@@ -6,7 +6,6 @@ Stores rules for auto-categorizing bank transactions to GL accounts.
 
 import enum
 from datetime import datetime
-from typing import Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -20,7 +19,8 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID as SAUUID
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as SAUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -77,7 +77,7 @@ class TransactionRule(Base):
 
     # Rule identification
     rule_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Rule type and conditions
     rule_type: Mapped[RuleType] = mapped_column(
@@ -102,7 +102,7 @@ class TransactionRule(Base):
     )
 
     # Optional: Bank account filter
-    bank_account_id: Mapped[Optional[UUID]] = mapped_column(
+    bank_account_id: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True),
         ForeignKey("banking.bank_accounts.bank_account_id"),
         nullable=True,
@@ -125,20 +125,20 @@ class TransactionRule(Base):
     )
 
     # Target account for categorization
-    target_account_id: Mapped[Optional[UUID]] = mapped_column(
+    target_account_id: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,
     )
 
     # Optional tax code
-    tax_code_id: Mapped[Optional[UUID]] = mapped_column(
+    tax_code_id: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True),
         nullable=True,
     )
 
     # Split configuration (for SPLIT action)
-    split_config: Mapped[Optional[dict]] = mapped_column(
+    split_config: Mapped[dict | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="""
@@ -153,7 +153,7 @@ class TransactionRule(Base):
     )
 
     # Linked payee (optional)
-    payee_id: Mapped[Optional[UUID]] = mapped_column(
+    payee_id: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True),
         ForeignKey("banking.payee.payee_id"),
         nullable=True,
@@ -180,7 +180,7 @@ class TransactionRule(Base):
 
     # Usage statistics
     match_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    last_matched_at: Mapped[Optional[datetime]] = mapped_column(
+    last_matched_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -206,11 +206,11 @@ class TransactionRule(Base):
         nullable=False,
         server_default=func.now(),
     )
-    created_by: Mapped[Optional[UUID]] = mapped_column(
+    created_by: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True),
         nullable=True,
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

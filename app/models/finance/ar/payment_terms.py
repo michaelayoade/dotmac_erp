@@ -5,7 +5,6 @@ Payment Terms Model - AR Schema.
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -50,8 +49,8 @@ class PaymentTerms(Base):
     terms_code: Mapped[str] = mapped_column(String(20), nullable=False)
     terms_name: Mapped[str] = mapped_column(String(100), nullable=False)
     due_days: Mapped[int] = mapped_column(Integer, nullable=False)
-    discount_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    discount_percentage: Mapped[Optional[Decimal]] = mapped_column(
+    discount_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    discount_percentage: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
     )

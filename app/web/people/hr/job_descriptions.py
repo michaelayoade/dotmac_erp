@@ -1,26 +1,23 @@
 """Job Descriptions routes."""
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.models.people.hr import JobDescriptionStatus
+from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.hr import (
-    OrganizationService,
     CompetencyService,
-    JobDescriptionService,
     DepartmentFilters,
     DesignationFilters,
+    JobDescriptionService,
+    OrganizationService,
 )
-from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.hr.web.constants import DEFAULT_PAGE_SIZE
 from app.templates import templates
-from app.web.deps import base_context, get_db, require_hr_access, WebAuthContext
+from app.web.deps import WebAuthContext, base_context, get_db, require_hr_access
 
 from ._common import _parse_bool
-
 
 router = APIRouter()
 
@@ -33,12 +30,12 @@ router = APIRouter()
 @router.get("/job-descriptions", response_class=HTMLResponse)
 def list_job_descriptions(
     request: Request,
-    status: Optional[str] = None,
-    department_id: Optional[str] = None,
-    search: Optional[str] = None,
+    status: str | None = None,
+    department_id: str | None = None,
+    search: str | None = None,
     page: int = Query(default=1, ge=1),
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -123,21 +120,21 @@ def create_job_description(
     jd_code: str = Form(...),
     job_title: str = Form(...),
     designation_id: str = Form(...),
-    department_id: Optional[str] = Form(None),
-    summary: Optional[str] = Form(None),
-    purpose: Optional[str] = Form(None),
-    key_responsibilities: Optional[str] = Form(None),
-    education_requirements: Optional[str] = Form(None),
-    experience_requirements: Optional[str] = Form(None),
-    min_years_experience: Optional[int] = Form(None),
-    max_years_experience: Optional[int] = Form(None),
-    technical_skills: Optional[str] = Form(None),
-    certifications_required: Optional[str] = Form(None),
-    certifications_preferred: Optional[str] = Form(None),
-    work_location: Optional[str] = Form(None),
-    travel_requirements: Optional[str] = Form(None),
-    reports_to: Optional[str] = Form(None),
-    direct_reports: Optional[str] = Form(None),
+    department_id: str | None = Form(None),
+    summary: str | None = Form(None),
+    purpose: str | None = Form(None),
+    key_responsibilities: str | None = Form(None),
+    education_requirements: str | None = Form(None),
+    experience_requirements: str | None = Form(None),
+    min_years_experience: int | None = Form(None),
+    max_years_experience: int | None = Form(None),
+    technical_skills: str | None = Form(None),
+    certifications_required: str | None = Form(None),
+    certifications_preferred: str | None = Form(None),
+    work_location: str | None = Form(None),
+    travel_requirements: str | None = Form(None),
+    reports_to: str | None = Form(None),
+    direct_reports: str | None = Form(None),
     status: str = Form("draft"),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -226,7 +223,7 @@ def create_job_description(
 def view_job_description(
     request: Request,
     jd_id: str,
-    success: Optional[str] = None,
+    success: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -310,21 +307,21 @@ def update_job_description(
     jd_code: str = Form(...),
     job_title: str = Form(...),
     designation_id: str = Form(...),
-    department_id: Optional[str] = Form(None),
-    summary: Optional[str] = Form(None),
-    purpose: Optional[str] = Form(None),
-    key_responsibilities: Optional[str] = Form(None),
-    education_requirements: Optional[str] = Form(None),
-    experience_requirements: Optional[str] = Form(None),
-    min_years_experience: Optional[int] = Form(None),
-    max_years_experience: Optional[int] = Form(None),
-    technical_skills: Optional[str] = Form(None),
-    certifications_required: Optional[str] = Form(None),
-    certifications_preferred: Optional[str] = Form(None),
-    work_location: Optional[str] = Form(None),
-    travel_requirements: Optional[str] = Form(None),
-    reports_to: Optional[str] = Form(None),
-    direct_reports: Optional[str] = Form(None),
+    department_id: str | None = Form(None),
+    summary: str | None = Form(None),
+    purpose: str | None = Form(None),
+    key_responsibilities: str | None = Form(None),
+    education_requirements: str | None = Form(None),
+    experience_requirements: str | None = Form(None),
+    min_years_experience: int | None = Form(None),
+    max_years_experience: int | None = Form(None),
+    technical_skills: str | None = Form(None),
+    certifications_required: str | None = Form(None),
+    certifications_preferred: str | None = Form(None),
+    work_location: str | None = Form(None),
+    travel_requirements: str | None = Form(None),
+    reports_to: str | None = Form(None),
+    direct_reports: str | None = Form(None),
     status: str = Form("draft"),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -453,8 +450,8 @@ def add_competency_to_jd(
     jd_id: str,
     competency_id: str = Form(...),
     required_level: int = Form(3),
-    is_mandatory: Optional[str] = Form(None),
-    notes: Optional[str] = Form(None),
+    is_mandatory: str | None = Form(None),
+    notes: str | None = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):

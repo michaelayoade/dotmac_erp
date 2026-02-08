@@ -5,7 +5,6 @@ Ownership Interest Model - Consolidation Schema.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -73,17 +72,15 @@ class OwnershipInterest(Base):
 
     # Effective dates
     effective_from: Mapped[date] = mapped_column(Date, nullable=False)
-    effective_to: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Investment details
-    shares_held: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(20, 6), nullable=True
-    )
-    total_shares_outstanding: Mapped[Optional[Decimal]] = mapped_column(
+    shares_held: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), nullable=True)
+    total_shares_outstanding: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
-    investment_cost: Mapped[Optional[Decimal]] = mapped_column(
+    investment_cost: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6), nullable=True
     )
 
@@ -91,10 +88,10 @@ class OwnershipInterest(Base):
     nci_percentage: Mapped[Decimal] = mapped_column(
         Numeric(10, 6), nullable=False, default=0
     )
-    nci_at_acquisition: Mapped[Optional[Decimal]] = mapped_column(
+    nci_at_acquisition: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6), nullable=True
     )
-    nci_measurement_basis: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    nci_measurement_basis: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Control indicators
     has_control: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -112,7 +109,7 @@ class OwnershipInterest(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

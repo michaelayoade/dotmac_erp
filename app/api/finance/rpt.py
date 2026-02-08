@@ -6,7 +6,6 @@ Financial Reporting API endpoints per IAS 1.
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -14,28 +13,27 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
-from app.services.auth_dependencies import require_tenant_permission
 from app.db import SessionLocal
 from app.models.finance.rpt.disclosure_checklist import DisclosureStatus
-from app.models.finance.rpt.report_definition import ReportType, ReportDefinition
 from app.models.finance.rpt.financial_statement_line import StatementType
+from app.models.finance.rpt.report_definition import ReportDefinition, ReportType
 from app.models.finance.rpt.report_instance import ReportStatus
 from app.models.finance.rpt.report_schedule import ScheduleFrequency
 from app.schemas.finance.common import ListResponse
+from app.services.auth_dependencies import require_tenant_permission
 from app.services.finance.rpt import (
-    report_definition_service,
-    financial_statement_service,
-    report_instance_service,
-    disclosure_checklist_service,
-    report_scheduler_service,
-    ReportDefinitionInput,
-    StatementLineInput,
-    ReportGenerationRequest,
-    DisclosureItemInput,
     DisclosureCompletionInput,
+    DisclosureItemInput,
+    ReportDefinitionInput,
+    ReportGenerationRequest,
     ScheduleInput,
+    StatementLineInput,
+    disclosure_checklist_service,
+    financial_statement_service,
+    report_definition_service,
+    report_instance_service,
+    report_scheduler_service,
 )
-
 
 router = APIRouter(
     prefix="/rpt",
@@ -79,18 +77,18 @@ class ReportDefinitionCreate(BaseModel):
     report_name: str = Field(max_length=200)
     report_type: str = Field(max_length=30)  # BALANCE_SHEET, INCOME_STATEMENT, etc
     data_source_type: str = Field(max_length=50)
-    description: Optional[str] = None
-    category: Optional[str] = None
-    subcategory: Optional[str] = None
+    description: str | None = None
+    category: str | None = None
+    subcategory: str | None = None
     default_format: str = "PDF"
-    supported_formats: Optional[list] = None
-    report_structure: Optional[dict] = None
-    column_definitions: Optional[dict] = None
-    row_definitions: Optional[dict] = None
-    filter_definitions: Optional[dict] = None
-    data_source_config: Optional[dict] = None
-    template_file_path: Optional[str] = None
-    required_permissions: Optional[list] = None
+    supported_formats: list | None = None
+    report_structure: dict | None = None
+    column_definitions: dict | None = None
+    row_definitions: dict | None = None
+    filter_definitions: dict | None = None
+    data_source_config: dict | None = None
+    template_file_path: str | None = None
+    required_permissions: list | None = None
     is_system_report: bool = False
 
 
@@ -101,8 +99,8 @@ class ReportColumnCreate(BaseModel):
     column_name: str = Field(max_length=100)
     column_type: str = Field(max_length=20)  # DATA, CALCULATED, PERIOD
     sequence: int
-    formula: Optional[str] = None
-    data_source: Optional[str] = None
+    formula: str | None = None
+    data_source: str | None = None
 
 
 class ReportFilterCreate(BaseModel):
@@ -111,7 +109,7 @@ class ReportFilterCreate(BaseModel):
     filter_code: str = Field(max_length=30)
     filter_name: str = Field(max_length=100)
     filter_type: str = Field(max_length=20)
-    default_value: Optional[str] = None
+    default_value: str | None = None
     is_required: bool = False
 
 
@@ -125,11 +123,11 @@ class ReportDefinitionRead(BaseModel):
     report_code: str
     report_name: str
     report_type: str
-    description: Optional[str]
-    category: Optional[str]
-    subcategory: Optional[str]
+    description: str | None
+    category: str | None
+    subcategory: str | None
     default_format: str
-    supported_formats: Optional[list]
+    supported_formats: list | None
     data_source_type: str
     is_system_report: bool
     is_active: bool
@@ -145,9 +143,9 @@ class StatementLineCreate(BaseModel):
     line_name: str = Field(max_length=200)
     line_type: str = Field(max_length=20)  # HEADER, DETAIL, TOTAL, SUBTOTAL
     sequence: int
-    parent_line_id: Optional[UUID] = None
-    account_id: Optional[UUID] = None
-    formula: Optional[str] = None
+    parent_line_id: UUID | None = None
+    account_id: UUID | None = None
+    formula: str | None = None
     is_bold: bool = False
     indent_level: int = 0
 
@@ -163,9 +161,9 @@ class StatementLineRead(BaseModel):
     line_name: str
     line_type: str
     sequence: int
-    parent_line_id: Optional[UUID]
-    account_id: Optional[UUID]
-    formula: Optional[str]
+    parent_line_id: UUID | None
+    account_id: UUID | None
+    formula: str | None
     is_bold: bool
     indent_level: int
 
@@ -173,11 +171,11 @@ class StatementLineRead(BaseModel):
 class ReportInstanceCreate(BaseModel):
     """Create report instance request."""
 
-    report_def_id: Optional[UUID] = None
-    report_code: Optional[str] = None
+    report_def_id: UUID | None = None
+    report_code: str | None = None
     output_format: str = "PDF"
-    fiscal_period_id: Optional[UUID] = None
-    parameters: Optional[dict] = None
+    fiscal_period_id: UUID | None = None
+    parameters: dict | None = None
 
 
 class ReportInstanceRead(BaseModel):
@@ -188,16 +186,16 @@ class ReportInstanceRead(BaseModel):
     instance_id: UUID
     organization_id: UUID
     report_def_id: UUID
-    fiscal_period_id: Optional[UUID]
-    parameters_used: Optional[dict]
+    fiscal_period_id: UUID | None
+    parameters_used: dict | None
     output_format: str
-    output_file_path: Optional[str]
-    output_size_bytes: Optional[int]
+    output_file_path: str | None
+    output_size_bytes: int | None
     status: str
     queued_at: datetime
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
-    generated_at: Optional[datetime]
+    started_at: datetime | None
+    completed_at: datetime | None
+    generated_at: datetime | None
     generated_by_user_id: UUID
 
 
@@ -218,12 +216,12 @@ class DisclosureItemCreate(BaseModel):
     disclosure_name: str = Field(max_length=300)
     ifrs_standard: str = Field(max_length=50)
     sequence_number: int
-    paragraph_reference: Optional[str] = Field(default=None, max_length=50)
-    description: Optional[str] = None
-    parent_checklist_id: Optional[UUID] = None
+    paragraph_reference: str | None = Field(default=None, max_length=50)
+    description: str | None = None
+    parent_checklist_id: UUID | None = None
     indent_level: int = 0
     is_mandatory: bool = True
-    applicability_criteria: Optional[str] = None
+    applicability_criteria: str | None = None
 
 
 class DisclosureItemRead(BaseModel):
@@ -236,23 +234,23 @@ class DisclosureItemRead(BaseModel):
     fiscal_period_id: UUID
     disclosure_code: str
     disclosure_name: str
-    description: Optional[str] = None
+    description: str | None = None
     ifrs_standard: str
-    paragraph_reference: Optional[str] = None
-    parent_checklist_id: Optional[UUID] = None
+    paragraph_reference: str | None = None
+    parent_checklist_id: UUID | None = None
     sequence_number: int
     indent_level: int
     is_mandatory: bool
-    applicability_criteria: Optional[str] = None
+    applicability_criteria: str | None = None
     status: DisclosureStatus
-    disclosure_location: Optional[str] = None
-    notes: Optional[str] = None
-    completed_by_user_id: Optional[UUID] = None
-    completed_at: Optional[datetime] = None
-    reviewed_by_user_id: Optional[UUID] = None
-    reviewed_at: Optional[datetime] = None
+    disclosure_location: str | None = None
+    notes: str | None = None
+    completed_by_user_id: UUID | None = None
+    completed_at: datetime | None = None
+    reviewed_by_user_id: UUID | None = None
+    reviewed_at: datetime | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class DisclosureCompletionCreate(BaseModel):
@@ -261,8 +259,8 @@ class DisclosureCompletionCreate(BaseModel):
     disclosure_item_id: UUID
     report_instance_id: UUID
     is_complete: bool = False
-    notes: Optional[str] = None
-    evidence_reference: Optional[str] = None
+    notes: str | None = None
+    evidence_reference: str | None = None
 
 
 class DisclosureCompletionRead(BaseModel):
@@ -274,11 +272,11 @@ class DisclosureCompletionRead(BaseModel):
     disclosure_item_id: UUID
     report_instance_id: UUID
     is_complete: bool
-    completed_by_user_id: Optional[UUID]
-    completed_at: Optional[datetime]
-    reviewed_by_user_id: Optional[UUID]
-    reviewed_at: Optional[datetime]
-    notes: Optional[str]
+    completed_by_user_id: UUID | None
+    completed_at: datetime | None
+    reviewed_by_user_id: UUID | None
+    reviewed_at: datetime | None
+    notes: str | None
 
 
 class DisclosureSummaryRead(BaseModel):
@@ -299,16 +297,16 @@ class ReportScheduleCreate(BaseModel):
     report_def_id: UUID
     frequency: ScheduleFrequency
     output_format: str = Field(default="PDF", max_length=20)
-    description: Optional[str] = None
-    cron_expression: Optional[str] = None
-    day_of_month: Optional[int] = None
-    day_of_week: Optional[int] = None
-    time_of_day: Optional[str] = Field(default=None, max_length=10)
+    description: str | None = None
+    cron_expression: str | None = None
+    day_of_month: int | None = None
+    day_of_week: int | None = None
+    time_of_day: str | None = Field(default=None, max_length=10)
     timezone: str = Field(default="UTC", max_length=50)
-    report_parameters: Optional[dict] = None
-    email_recipients: Optional[list] = None
-    storage_path: Optional[str] = None
-    retention_days: Optional[int] = None
+    report_parameters: dict | None = None
+    email_recipients: list | None = None
+    storage_path: str | None = None
+    retention_days: int | None = None
 
 
 class ReportScheduleRead(BaseModel):
@@ -320,24 +318,24 @@ class ReportScheduleRead(BaseModel):
     organization_id: UUID
     schedule_name: str
     report_def_id: UUID
-    description: Optional[str] = None
+    description: str | None = None
     frequency: ScheduleFrequency
-    cron_expression: Optional[str] = None
-    day_of_week: Optional[int] = None
-    day_of_month: Optional[int] = None
-    time_of_day: Optional[str] = None
+    cron_expression: str | None = None
+    day_of_week: int | None = None
+    day_of_month: int | None = None
+    time_of_day: str | None = None
     timezone: str
-    report_parameters: Optional[dict] = None
+    report_parameters: dict | None = None
     output_format: str
-    email_recipients: Optional[list] = None
-    storage_path: Optional[str] = None
-    retention_days: Optional[int] = None
+    email_recipients: list | None = None
+    storage_path: str | None = None
+    retention_days: int | None = None
     is_active: bool
-    last_run_at: Optional[datetime] = None
-    next_run_at: Optional[datetime] = None
+    last_run_at: datetime | None = None
+    next_run_at: datetime | None = None
     created_by_user_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class ScheduleExecutionRead(BaseModel):
@@ -349,8 +347,8 @@ class ScheduleExecutionRead(BaseModel):
     schedule_id: UUID
     execution_date: datetime
     status: str
-    report_instance_id: Optional[UUID]
-    error_message: Optional[str]
+    report_instance_id: UUID | None
+    error_message: str | None
 
 
 # =============================================================================
@@ -401,18 +399,19 @@ def create_report_definition(
 @router.get("/definitions/{report_id}", response_model=ReportDefinitionRead)
 def get_report_definition(
     report_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("rpt:definitions:read")),
     db: Session = Depends(get_db),
 ):
     """Get a report definition by ID."""
-    return report_definition_service.get(db, str(report_id))
+    return report_definition_service.get(db, str(report_id), organization_id)
 
 
 @router.get("/definitions", response_model=ListResponse[ReportDefinitionRead])
 def list_report_definitions(
     organization_id: UUID = Depends(require_organization_id),
-    report_type: Optional[str] = None,
-    is_active: Optional[bool] = None,
+    report_type: str | None = None,
+    is_active: bool | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("rpt:definitions:read")),
@@ -575,19 +574,20 @@ def create_report_instance(
 @router.get("/instances/{instance_id}", response_model=ReportInstanceRead)
 def get_report_instance(
     instance_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("rpt:instances:read")),
     db: Session = Depends(get_db),
 ):
     """Get a report instance by ID."""
-    return report_instance_service.get(db, str(instance_id))
+    return report_instance_service.get(db, str(instance_id), organization_id)
 
 
 @router.get("/instances", response_model=ListResponse[ReportInstanceRead])
 def list_report_instances(
     organization_id: UUID = Depends(require_organization_id),
-    report_def_id: Optional[UUID] = None,
-    fiscal_period_id: Optional[UUID] = None,
-    status: Optional[str] = None,
+    report_def_id: UUID | None = None,
+    fiscal_period_id: UUID | None = None,
+    status: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("rpt:instances:read")),
@@ -647,8 +647,10 @@ def get_report_data(
         organization_id=str(organization_id),
         instance_id=str(instance_id),
     )
-    instance = report_instance_service.get(db, str(instance_id))
-    definition = report_definition_service.get(db, str(instance.report_def_id))
+    instance = report_instance_service.get(db, str(instance_id), organization_id)
+    definition = report_definition_service.get(
+        db, str(instance.report_def_id), organization_id
+    )
     return ReportDataRead(
         instance_id=instance.instance_id,
         report_def_id=definition.report_def_id,
@@ -697,10 +699,10 @@ def create_disclosure_item(
 @router.get("/disclosures/items", response_model=ListResponse[DisclosureItemRead])
 def list_disclosure_items(
     organization_id: UUID = Depends(require_organization_id),
-    fiscal_period_id: Optional[UUID] = None,
-    ifrs_standard: Optional[str] = None,
-    status: Optional[DisclosureStatus] = None,
-    is_mandatory: Optional[bool] = None,
+    fiscal_period_id: UUID | None = None,
+    ifrs_standard: str | None = None,
+    status: DisclosureStatus | None = None,
+    is_mandatory: bool | None = None,
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("rpt:disclosures:read")),
@@ -790,7 +792,7 @@ def get_disclosure_summary(
     db: Session = Depends(get_db),
 ):
     """Get disclosure checklist summary for a report instance."""
-    instance = report_instance_service.get(db, str(instance_id))
+    instance = report_instance_service.get(db, str(instance_id), organization_id)
     if not instance.fiscal_period_id:
         raise HTTPException(
             status_code=400, detail="Report instance has no fiscal period"
@@ -845,19 +847,20 @@ def create_report_schedule(
 @router.get("/schedules/{schedule_id}", response_model=ReportScheduleRead)
 def get_report_schedule(
     schedule_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("rpt:schedules:read")),
     db: Session = Depends(get_db),
 ):
     """Get a report schedule by ID."""
-    return report_scheduler_service.get(db, str(schedule_id))
+    return report_scheduler_service.get(db, str(schedule_id), organization_id)
 
 
 @router.get("/schedules", response_model=ListResponse[ReportScheduleRead])
 def list_report_schedules(
     organization_id: UUID = Depends(require_organization_id),
-    report_def_id: Optional[UUID] = None,
-    frequency: Optional[ScheduleFrequency] = None,
-    is_active: Optional[bool] = None,
+    report_def_id: UUID | None = None,
+    frequency: ScheduleFrequency | None = None,
+    is_active: bool | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("rpt:schedules:read")),
@@ -926,7 +929,7 @@ def toggle_schedule_status(
 def list_schedule_executions(
     schedule_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    status: Optional[str] = None,
+    status: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("rpt:schedules:read")),

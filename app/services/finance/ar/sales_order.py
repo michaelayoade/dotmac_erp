@@ -7,7 +7,6 @@ Business logic for sales orders with fulfillment and invoicing.
 import logging
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -51,22 +50,22 @@ class SalesOrderService:
         created_by: str,
         currency_code: str = settings.default_functional_currency_code,
         exchange_rate: Decimal = Decimal("1"),
-        customer_po_number: Optional[str] = None,
-        reference: Optional[str] = None,
-        requested_date: Optional[date] = None,
-        promised_date: Optional[date] = None,
-        payment_terms_id: Optional[str] = None,
-        ship_to_name: Optional[str] = None,
-        ship_to_address: Optional[str] = None,
-        ship_to_city: Optional[str] = None,
-        ship_to_state: Optional[str] = None,
-        ship_to_postal_code: Optional[str] = None,
-        ship_to_country: Optional[str] = None,
-        shipping_method: Optional[str] = None,
+        customer_po_number: str | None = None,
+        reference: str | None = None,
+        requested_date: date | None = None,
+        promised_date: date | None = None,
+        payment_terms_id: str | None = None,
+        ship_to_name: str | None = None,
+        ship_to_address: str | None = None,
+        ship_to_city: str | None = None,
+        ship_to_state: str | None = None,
+        ship_to_postal_code: str | None = None,
+        ship_to_country: str | None = None,
+        shipping_method: str | None = None,
         allow_partial_shipment: bool = True,
-        internal_notes: Optional[str] = None,
-        customer_notes: Optional[str] = None,
-        lines: Optional[List[dict]] = None,
+        internal_notes: str | None = None,
+        customer_notes: str | None = None,
+        lines: list[dict] | None = None,
     ) -> SalesOrder:
         """Create a new sales order."""
         org_id = coerce_uuid(organization_id)
@@ -109,11 +108,13 @@ class SalesOrderService:
         # Recalculate totals
         SalesOrderService._recalculate_totals(so)
         db.flush()
+        db.commit()
+        db.refresh(so)
 
         return so
 
     @staticmethod
-    def _add_lines(db: Session, so: SalesOrder, lines: List[dict]) -> None:
+    def _add_lines(db: Session, so: SalesOrder, lines: list[dict]) -> None:
         """Add lines to sales order."""
         for idx, line_data in enumerate(lines, start=1):
             quantity = Decimal(
@@ -211,7 +212,7 @@ class SalesOrderService:
                 db=db,
                 organization_id=so.organization_id,
                 entity_type="SALES_ORDER",
-                entity_id=so.order_id,
+                entity_id=so.so_id,
                 event="ON_STATUS_CHANGE",
                 old_values={"status": "DRAFT"},
                 new_values={"status": "SUBMITTED"},
@@ -220,6 +221,8 @@ class SalesOrderService:
         except Exception:
             pass
 
+        db.commit()
+        db.refresh(so)
         return so
 
     @staticmethod
@@ -251,7 +254,7 @@ class SalesOrderService:
                 db=db,
                 organization_id=so.organization_id,
                 entity_type="SALES_ORDER",
-                entity_id=so.order_id,
+                entity_id=so.so_id,
                 event="ON_APPROVAL",
                 old_values={"status": "SUBMITTED"},
                 new_values={"status": "APPROVED"},
@@ -260,6 +263,8 @@ class SalesOrderService:
         except Exception:
             pass
 
+        db.commit()
+        db.refresh(so)
         return so
 
     @staticmethod
@@ -279,6 +284,8 @@ class SalesOrderService:
         so.confirmed_at = datetime.utcnow()
 
         db.flush()
+        db.commit()
+        db.refresh(so)
         return so
 
     @staticmethod
@@ -287,11 +294,11 @@ class SalesOrderService:
         so_id: str,
         shipment_date: date,
         created_by: str,
-        line_quantities: List[dict],  # [{"line_id": "...", "quantity": 10}, ...]
-        carrier: Optional[str] = None,
-        tracking_number: Optional[str] = None,
-        shipping_method: Optional[str] = None,
-        notes: Optional[str] = None,
+        line_quantities: list[dict],  # [{"line_id": "...", "quantity": 10}, ...]
+        carrier: str | None = None,
+        tracking_number: str | None = None,
+        shipping_method: str | None = None,
+        notes: str | None = None,
     ) -> Shipment:
         """Create a shipment for sales order lines."""
         so = db.get(SalesOrder, coerce_uuid(so_id))
@@ -370,6 +377,9 @@ class SalesOrderService:
             so.status = SOStatus.IN_PROGRESS
 
         db.flush()
+        db.commit()
+        db.refresh(shipment)
+        db.refresh(so)
         return shipment
 
     @staticmethod
@@ -386,6 +396,8 @@ class SalesOrderService:
         shipment.delivered_at = datetime.utcnow()
 
         db.flush()
+        db.commit()
+        db.refresh(shipment)
         return shipment
 
     @staticmethod
@@ -393,10 +405,9 @@ class SalesOrderService:
         db: Session,
         so_id: str,
         created_by: str,
-        invoice_date: Optional[date] = None,
-        line_quantities: Optional[
-            List[dict]
-        ] = None,  # If None, invoice all shipped but not invoiced
+        invoice_date: date | None = None,
+        line_quantities: list[dict]
+        | None = None,  # If None, invoice all shipped but not invoiced
     ) -> Invoice:
         """Create invoice from shipped SO lines."""
         so = db.get(SalesOrder, coerce_uuid(so_id))
@@ -488,9 +499,7 @@ class SalesOrderService:
         db.flush()
 
         # Create invoice lines
-        line_num = 0
-        for so_line, qty in lines_to_invoice:
-            line_num += 1
+        for line_num, (so_line, qty) in enumerate(lines_to_invoice, start=1):
             ratio = (
                 qty / so_line.quantity_ordered
                 if so_line.quantity_ordered
@@ -528,6 +537,9 @@ class SalesOrderService:
             so.completed_at = datetime.utcnow()
 
         db.flush()
+        db.commit()
+        db.refresh(invoice)
+        db.refresh(so)
         return invoice
 
     @staticmethod
@@ -535,7 +547,7 @@ class SalesOrderService:
         db: Session,
         so_id: str,
         cancelled_by: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> SalesOrder:
         """Cancel a sales order."""
         so = db.get(SalesOrder, coerce_uuid(so_id))
@@ -559,6 +571,8 @@ class SalesOrderService:
             line.fulfillment_status = FulfillmentStatus.CANCELLED
 
         db.flush()
+        db.commit()
+        db.refresh(so)
         return so
 
     @staticmethod
@@ -580,6 +594,8 @@ class SalesOrderService:
         so.updated_at = datetime.utcnow()
 
         db.flush()
+        db.commit()
+        db.refresh(so)
         return so
 
     @staticmethod
@@ -612,19 +628,21 @@ class SalesOrderService:
         so.updated_at = datetime.utcnow()
 
         db.flush()
+        db.commit()
+        db.refresh(so)
         return so
 
     @staticmethod
     def list_orders(
         db: Session,
         organization_id: str,
-        customer_id: Optional[str] = None,
-        status: Optional[SOStatus] = None,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
+        customer_id: str | None = None,
+        status: SOStatus | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[SalesOrder]:
+    ) -> list[SalesOrder]:
         """List sales orders with filters."""
         org_id = coerce_uuid(organization_id)
 

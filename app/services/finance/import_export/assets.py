@@ -7,7 +7,7 @@ Imports fixed assets from CSV data into the IFRS-based fixed asset system.
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -45,16 +45,16 @@ class AssetCategoryImporter(BaseImporter[AssetCategory]):
         self.accumulated_depreciation_account_id = accumulated_depreciation_account_id
         self.depreciation_expense_account_id = depreciation_expense_account_id
         self.gain_loss_disposal_account_id = gain_loss_disposal_account_id
-        self._category_cache: Dict[str, UUID] = {}
+        self._category_cache: dict[str, UUID] = {}
 
-    def get_field_mappings(self) -> List[FieldMapping]:
+    def get_field_mappings(self) -> list[FieldMapping]:
         return []
 
-    def get_unique_key(self, row: Dict[str, Any]) -> str:
+    def get_unique_key(self, row: dict[str, Any]) -> str:
         value = row.get("Asset Category") or row.get("Asset Class") or "General Assets"
         return str(value).strip()
 
-    def check_duplicate(self, row: Dict[str, Any]) -> Optional[AssetCategory]:
+    def check_duplicate(self, row: dict[str, Any]) -> AssetCategory | None:
         category_name = self.get_unique_key(row)
         category_code = self._make_category_code(category_name)
 
@@ -73,7 +73,7 @@ class AssetCategoryImporter(BaseImporter[AssetCategory]):
 
         return existing
 
-    def create_entity(self, row: Dict[str, Any]) -> AssetCategory:
+    def create_entity(self, row: dict[str, Any]) -> AssetCategory:
         category_name = self.get_unique_key(row)
         category_code = self._make_category_code(category_name)
 
@@ -126,11 +126,11 @@ class AssetCategoryImporter(BaseImporter[AssetCategory]):
         else:
             return (60, 5)  # Default: 5 years, 5% residual
 
-    def get_category_id(self, category_name: str) -> Optional[UUID]:
+    def get_category_id(self, category_name: str) -> UUID | None:
         code = self._make_category_code(category_name)
         return self._category_cache.get(code)
 
-    def ensure_categories(self, rows: List[Dict[str, Any]]) -> None:
+    def ensure_categories(self, rows: list[dict[str, Any]]) -> None:
         """Ensure all required categories exist."""
         unique_categories = set()
         for row in rows:
@@ -190,7 +190,7 @@ class AssetImporter(BaseImporter[Asset]):
             gain_loss_disposal_account_id,
         )
 
-    def get_field_mappings(self) -> List[FieldMapping]:
+    def get_field_mappings(self) -> list[FieldMapping]:
         """Define flexible field mappings supporting various CSV formats."""
         return [
             # Name
@@ -312,7 +312,7 @@ class AssetImporter(BaseImporter[Asset]):
             FieldMapping("Invoice Number", "invoice_number_alt", required=False),
         ]
 
-    def get_unique_key(self, row: Dict[str, Any]) -> str:
+    def get_unique_key(self, row: dict[str, Any]) -> str:
         """Unique key is asset number or code."""
         code = (
             row.get("Asset Number")
@@ -326,7 +326,7 @@ class AssetImporter(BaseImporter[Asset]):
         name = (row.get("Asset Name") or row.get("Name") or "").strip()
         return name
 
-    def check_duplicate(self, row: Dict[str, Any]) -> Optional[Asset]:
+    def check_duplicate(self, row: dict[str, Any]) -> Asset | None:
         """Check if asset already exists."""
         key = self.get_unique_key(row)
         if not key:
@@ -341,7 +341,7 @@ class AssetImporter(BaseImporter[Asset]):
 
         return existing
 
-    def create_entity(self, row: Dict[str, Any]) -> Asset:
+    def create_entity(self, row: dict[str, Any]) -> Asset:
         """Create a new asset from transformed row data."""
         # Get asset name
         asset_name = (
@@ -501,7 +501,7 @@ class AssetImporter(BaseImporter[Asset]):
             self.result.add_error(0, f"File not found: {file_path}", None)
             return self.result
 
-        with open(file_path, "r", encoding=self.config.encoding) as f:
+        with open(file_path, encoding=self.config.encoding) as f:
             reader = csv.DictReader(f)
             rows = list(reader)
 

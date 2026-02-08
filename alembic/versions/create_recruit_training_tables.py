@@ -7,11 +7,13 @@ Create Date: 2025-01-20
 Phase 4: Recruitment & Training tables for People module.
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 from app.alembic_utils import ensure_enum
 
 # revision identifiers, used by Alembic.

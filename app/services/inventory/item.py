@@ -6,10 +6,11 @@ Manages items, categories, and item-level configuration.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, List, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -34,11 +35,11 @@ class ItemCategoryInput:
     cogs_account_id: UUID
     revenue_account_id: UUID
     inventory_adjustment_account_id: UUID
-    description: Optional[str] = None
-    parent_category_id: Optional[UUID] = None
-    purchase_variance_account_id: Optional[UUID] = None
-    reorder_point: Optional[Decimal] = None
-    minimum_stock: Optional[Decimal] = None
+    description: str | None = None
+    parent_category_id: UUID | None = None
+    purchase_variance_account_id: UUID | None = None
+    reorder_point: Decimal | None = None
+    minimum_stock: Decimal | None = None
 
 
 @dataclass
@@ -52,31 +53,31 @@ class ItemInput:
     currency_code: str
     item_type: ItemType = ItemType.INVENTORY
     costing_method: CostingMethod = CostingMethod.WEIGHTED_AVERAGE
-    description: Optional[str] = None
-    purchase_uom: Optional[str] = None
-    sales_uom: Optional[str] = None
-    standard_cost: Optional[Decimal] = None
-    list_price: Optional[Decimal] = None
+    description: str | None = None
+    purchase_uom: str | None = None
+    sales_uom: str | None = None
+    standard_cost: Decimal | None = None
+    list_price: Decimal | None = None
     track_inventory: bool = True
     track_lots: bool = False
     track_serial_numbers: bool = False
-    reorder_point: Optional[Decimal] = None
-    reorder_quantity: Optional[Decimal] = None
-    minimum_stock: Optional[Decimal] = None
-    maximum_stock: Optional[Decimal] = None
-    lead_time_days: Optional[int] = None
-    weight: Optional[Decimal] = None
-    weight_uom: Optional[str] = None
-    volume: Optional[Decimal] = None
-    volume_uom: Optional[str] = None
-    barcode: Optional[str] = None
-    manufacturer_part_number: Optional[str] = None
-    tax_code_id: Optional[UUID] = None
+    reorder_point: Decimal | None = None
+    reorder_quantity: Decimal | None = None
+    minimum_stock: Decimal | None = None
+    maximum_stock: Decimal | None = None
+    lead_time_days: int | None = None
+    weight: Decimal | None = None
+    weight_uom: str | None = None
+    volume: Decimal | None = None
+    volume_uom: str | None = None
+    barcode: str | None = None
+    manufacturer_part_number: str | None = None
+    tax_code_id: UUID | None = None
     is_taxable: bool = True
-    inventory_account_id: Optional[UUID] = None
-    cogs_account_id: Optional[UUID] = None
-    revenue_account_id: Optional[UUID] = None
-    default_supplier_id: Optional[UUID] = None
+    inventory_account_id: UUID | None = None
+    cogs_account_id: UUID | None = None
+    revenue_account_id: UUID | None = None
+    default_supplier_id: UUID | None = None
     is_purchaseable: bool = True
     is_saleable: bool = True
 
@@ -252,22 +253,27 @@ class ItemCategoryService(ListResponseMixin):
     def get(
         db: Session,
         category_id: str,
+        organization_id: UUID | None = None,
     ) -> ItemCategory:
         """Get a category by ID."""
         category = db.get(ItemCategory, coerce_uuid(category_id))
         if not category:
+            raise HTTPException(status_code=404, detail="Item category not found")
+        if organization_id is not None and category.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Item category not found")
         return category
 
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        is_active: Optional[bool] = None,
-        search: Optional[str] = None,
+        organization_id: str | None = None,
+        is_active: bool | None = None,
+        search: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[ItemCategory]:
+    ) -> builtins.list[ItemCategory]:
         """List item categories."""
         query = db.query(ItemCategory)
 
@@ -292,9 +298,9 @@ class ItemCategoryService(ListResponseMixin):
     @staticmethod
     def count(
         db: Session,
-        organization_id: Optional[str] = None,
-        is_active: Optional[bool] = None,
-        search: Optional[str] = None,
+        organization_id: str | None = None,
+        is_active: bool | None = None,
+        search: str | None = None,
     ) -> int:
         """Count item categories with filters."""
         query = db.query(ItemCategory)
@@ -463,9 +469,9 @@ class ItemService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         item_id: UUID,
-        new_average_cost: Optional[Decimal] = None,
-        new_last_purchase_cost: Optional[Decimal] = None,
-        new_standard_cost: Optional[Decimal] = None,
+        new_average_cost: Decimal | None = None,
+        new_last_purchase_cost: Decimal | None = None,
+        new_standard_cost: Decimal | None = None,
     ) -> Item:
         """
         Update item cost fields.
@@ -526,10 +532,15 @@ class ItemService(ListResponseMixin):
     def get(
         db: Session,
         item_id: str,
+        organization_id: UUID | None = None,
     ) -> Item:
         """Get an item by ID."""
         item = db.get(Item, coerce_uuid(item_id))
         if not item:
+            raise HTTPException(status_code=404, detail="Item not found")
+        if organization_id is not None and item.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Item not found")
         return item
 
@@ -538,7 +549,7 @@ class ItemService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         item_code: str,
-    ) -> Optional[Item]:
+    ) -> Item | None:
         """Get an item by code."""
         org_id = coerce_uuid(organization_id)
 
@@ -556,16 +567,16 @@ class ItemService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        category_id: Optional[str] = None,
-        item_type: Optional[ItemType] = None,
-        is_active: Optional[bool] = None,
-        is_purchaseable: Optional[bool] = None,
-        is_saleable: Optional[bool] = None,
-        search: Optional[str] = None,
+        organization_id: str | None = None,
+        category_id: str | None = None,
+        item_type: ItemType | None = None,
+        is_active: bool | None = None,
+        is_purchaseable: bool | None = None,
+        is_saleable: bool | None = None,
+        search: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[Item]:
+    ) -> builtins.list[Item]:
         """List items with optional filters."""
         query = db.query(Item)
 

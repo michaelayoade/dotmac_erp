@@ -41,7 +41,7 @@ class TestRequiredFieldValidation:
             authenticated_page.wait_for_load_state("networkidle")
 
             # Look for validation errors
-            errors = authenticated_page.locator(
+            authenticated_page.locator(
                 ".error, .invalid-feedback, [class*='error'], text=required, :invalid"
             )
             # Form should show validation or stay on page
@@ -264,7 +264,7 @@ class TestBusinessRuleValidation:
             authenticated_page.wait_for_load_state("networkidle")
 
             # Should show balance error
-            balance_error = authenticated_page.locator(
+            authenticated_page.locator(
                 "text=balance, text=unbalanced, text=must equal, .error"
             )
             # Just verify page is visible - error may or may not show
@@ -309,9 +309,7 @@ class TestBusinessRuleValidation:
             amount_field.first.fill("9999999")
 
         # Check for warning
-        warning = authenticated_page.locator(
-            ".warning, .alert-warning, text=credit limit"
-        )
+        authenticated_page.locator(".warning, .alert-warning, text=credit limit")
         # Just verify page is visible
         expect(authenticated_page.locator("main")).to_be_visible()
 
@@ -328,7 +326,7 @@ class TestBusinessRuleValidation:
             amount_field.first.fill("9999999")
 
         # Look for overpayment warning
-        warning = authenticated_page.locator(".warning, text=overpayment, text=exceeds")
+        authenticated_page.locator(".warning, text=overpayment, text=exceeds")
         # Just verify page is visible
         expect(authenticated_page.locator("main")).to_be_visible()
 
@@ -344,7 +342,7 @@ class TestNotFoundHandling:
 
     def test_404_page_for_invalid_supplier_id(self, authenticated_page, base_url):
         """Test 404 page for invalid supplier ID."""
-        response = authenticated_page.goto(
+        authenticated_page.goto(
             f"{base_url}/ap/suppliers/00000000-0000-0000-0000-000000000000"
         )
 
@@ -363,7 +361,7 @@ class TestNotFoundHandling:
 
     def test_404_page_for_invalid_invoice_id(self, authenticated_page, base_url):
         """Test 404 page for invalid invoice ID."""
-        response = authenticated_page.goto(
+        authenticated_page.goto(
             f"{base_url}/ap/invoices/00000000-0000-0000-0000-000000000000"
         )
 
@@ -379,7 +377,7 @@ class TestNotFoundHandling:
 
     def test_404_page_for_invalid_account_id(self, authenticated_page, base_url):
         """Test 404 page for invalid account ID."""
-        response = authenticated_page.goto(
+        authenticated_page.goto(
             f"{base_url}/gl/accounts/00000000-0000-0000-0000-000000000000"
         )
 
@@ -395,7 +393,7 @@ class TestNotFoundHandling:
 
     def test_graceful_error_messages(self, authenticated_page, base_url):
         """Test that error pages show graceful messages."""
-        response = authenticated_page.goto(f"{base_url}/nonexistent-page-xyz123")
+        authenticated_page.goto(f"{base_url}/nonexistent-page-xyz123")
 
         authenticated_page.wait_for_load_state("networkidle")
 
@@ -424,7 +422,7 @@ class TestPermissionErrors:
     def test_unauthorized_access_redirect(self, unauthenticated_page, base_url):
         """Test unauthorized access redirects to login."""
         # Try to access protected page without auth
-        response = unauthenticated_page.goto(f"{base_url}/dashboard")
+        unauthenticated_page.goto(f"{base_url}/dashboard")
 
         unauthenticated_page.wait_for_load_state("networkidle")
 
@@ -440,7 +438,7 @@ class TestPermissionErrors:
             )
         else:
             # May show unauthorized message
-            unauthorized = unauthenticated_page.locator(
+            unauthenticated_page.locator(
                 "text=unauthorized, text=login required, text=please sign in"
             )
             expect(unauthenticated_page.locator("main")).to_be_visible()
@@ -448,7 +446,7 @@ class TestPermissionErrors:
     def test_admin_page_requires_admin_role(self, authenticated_page, base_url):
         """Test admin pages require admin role."""
         # Try to access admin page as regular user
-        response = authenticated_page.goto(f"{base_url}/admin/users")
+        authenticated_page.goto(f"{base_url}/admin/users")
 
         authenticated_page.wait_for_load_state("networkidle")
 
@@ -458,7 +456,7 @@ class TestPermissionErrors:
         # Check if we're still on admin page or redirected
         if "/admin" in current_url:
             # Either we have access or should see forbidden
-            forbidden = authenticated_page.locator(
+            authenticated_page.locator(
                 "text=forbidden, text=access denied, text=permission"
             )
             # Just verify page loaded
@@ -474,7 +472,7 @@ class TestPermissionErrors:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for permission-related messages
-        permission_msg = authenticated_page.locator(
+        authenticated_page.locator(
             "text=permission, text=access denied, text=not authorized, text=forbidden"
         )
 

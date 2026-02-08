@@ -6,18 +6,19 @@ Manages creation, approval workflow, posting, and payment tracking.
 
 from __future__ import annotations
 
+import builtins
 import logging
 import uuid as uuid_lib
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, delete, select
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.orm import Session
 
+from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
 from app.models.finance.ap.goods_receipt import GoodsReceipt
 from app.models.finance.ap.goods_receipt_line import GoodsReceiptLine
 from app.models.finance.ap.purchase_order import PurchaseOrder
@@ -30,6 +31,7 @@ from app.models.finance.ap.supplier_invoice import (
 )
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.finance.ap.supplier_invoice_line_tax import SupplierInvoiceLineTax
+from app.models.finance.audit.audit_log import AuditAction
 from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.models.finance.core_org.cost_center import CostCenter
 from app.models.finance.core_org.project import Project
@@ -37,9 +39,15 @@ from app.models.finance.core_org.reporting_segment import ReportingSegment
 from app.models.finance.gl.account import Account
 from app.models.finance.tax.tax_code import TaxCode
 from app.models.inventory.item import CostingMethod, Item
-from app.models.finance.audit.audit_log import AuditAction
 from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import coerce_uuid
+from app.services.finance.ap.input_utils import (
+    parse_date_str,
+    parse_decimal,
+    parse_json_list,
+    require_uuid,
+    resolve_currency_code,
+)
 from app.services.finance.platform.sequence import SequenceService
 from app.services.finance.tax.tax_calculation import (
     LineCalculationResult,
@@ -57,18 +65,18 @@ class InvoiceLineInput:
     description: str
     quantity: Decimal
     unit_price: Decimal
-    expense_account_id: Optional[UUID] = None
-    asset_account_id: Optional[UUID] = None
-    po_line_id: Optional[UUID] = None
-    goods_receipt_line_id: Optional[UUID] = None
-    item_id: Optional[UUID] = None
+    expense_account_id: UUID | None = None
+    asset_account_id: UUID | None = None
+    po_line_id: UUID | None = None
+    goods_receipt_line_id: UUID | None = None
+    item_id: UUID | None = None
     # Multiple tax codes per line (replaces single tax_code_id)
     tax_code_ids: list[UUID] = field(default_factory=list)
     # Keep legacy field for backwards compatibility
-    tax_code_id: Optional[UUID] = None
-    cost_center_id: Optional[UUID] = None
-    project_id: Optional[UUID] = None
-    segment_id: Optional[UUID] = None
+    tax_code_id: UUID | None = None
+    cost_center_id: UUID | None = None
+    project_id: UUID | None = None
+    segment_id: UUID | None = None
     capitalize_flag: bool = False
 
 
@@ -83,13 +91,13 @@ class SupplierInvoiceInput:
     due_date: date
     currency_code: str
     lines: list[InvoiceLineInput] = field(default_factory=list)
-    supplier_invoice_number: Optional[str] = None
-    exchange_rate: Optional[Decimal] = None
-    exchange_rate_type_id: Optional[UUID] = None
+    supplier_invoice_number: str | None = None
+    exchange_rate: Decimal | None = None
+    exchange_rate_type_id: UUID | None = None
     is_prepayment: bool = False
     is_intercompany: bool = False
-    intercompany_org_id: Optional[UUID] = None
-    correlation_id: Optional[str] = None
+    intercompany_org_id: UUID | None = None
+    correlation_id: str | None = None
 
 
 class SupplierInvoiceService(ListResponseMixin):
@@ -100,11 +108,79 @@ class SupplierInvoiceService(ListResponseMixin):
     """
 
     @staticmethod
+    def build_input_from_payload(
+        db: Session,
+        organization_id: UUID,
+        payload: dict,
+    ) -> SupplierInvoiceInput:
+        """Build SupplierInvoiceInput from raw payload (strings or JSON)."""
+        org_id = coerce_uuid(organization_id)
+
+        lines_data = parse_json_list(payload.get("lines"), "Lines")
+        lines: list[InvoiceLineInput] = []
+
+        for line in lines_data:
+            if not line.get("expense_account_id") or not line.get("description"):
+                continue
+
+            tax_code_ids: list[UUID] = []
+            if line.get("tax_code_ids"):
+                tax_code_ids = [
+                    coerce_uuid(tc_id) for tc_id in line.get("tax_code_ids") if tc_id
+                ]
+            legacy_tax_code_id = (
+                coerce_uuid(line.get("tax_code_id"))
+                if line.get("tax_code_id")
+                else None
+            )
+
+            lines.append(
+                InvoiceLineInput(
+                    description=line.get("description", ""),
+                    quantity=parse_decimal(line.get("quantity", 1), "Quantity"),
+                    unit_price=parse_decimal(line.get("unit_price", 0), "Unit price"),
+                    expense_account_id=coerce_uuid(line.get("expense_account_id"))
+                    if line.get("expense_account_id")
+                    else None,
+                    tax_code_ids=tax_code_ids,
+                    tax_code_id=legacy_tax_code_id,
+                    cost_center_id=coerce_uuid(line.get("cost_center_id"))
+                    if line.get("cost_center_id")
+                    else None,
+                    project_id=coerce_uuid(line.get("project_id"))
+                    if line.get("project_id")
+                    else None,
+                )
+            )
+
+        invoice_date = (
+            parse_date_str(payload.get("invoice_date"), "Invoice date") or date.today()
+        )
+        received_date = (
+            parse_date_str(payload.get("received_date"), "Received date")
+            or invoice_date
+        )
+        due_date = parse_date_str(payload.get("due_date"), "Due date") or invoice_date
+
+        return SupplierInvoiceInput(
+            supplier_id=require_uuid(payload.get("supplier_id"), "Supplier"),
+            invoice_type=SupplierInvoiceType.STANDARD,
+            invoice_date=invoice_date,
+            received_date=received_date,
+            due_date=due_date,
+            currency_code=resolve_currency_code(
+                db, org_id, payload.get("currency_code")
+            ),
+            supplier_invoice_number=payload.get("invoice_number"),
+            lines=lines,
+        )
+
+    @staticmethod
     def _require_org_match(
         db: Session,
         organization_id: UUID,
         model: type,
-        record_id: Optional[UUID],
+        record_id: UUID | None,
         label: str,
     ) -> None:
         """Ensure a referenced record belongs to the organization."""
@@ -118,7 +194,7 @@ class SupplierInvoiceService(ListResponseMixin):
     def _require_po_line_org(
         db: Session,
         organization_id: UUID,
-        po_line_id: Optional[UUID],
+        po_line_id: UUID | None,
     ) -> None:
         if not po_line_id:
             return
@@ -133,7 +209,7 @@ class SupplierInvoiceService(ListResponseMixin):
     def _require_gr_line_org(
         db: Session,
         organization_id: UUID,
-        gr_line_id: Optional[UUID],
+        gr_line_id: UUID | None,
     ) -> None:
         if not gr_line_id:
             return
@@ -644,7 +720,7 @@ class SupplierInvoiceService(ListResponseMixin):
 
         invoice.status = SupplierInvoiceStatus.SUBMITTED
         invoice.submitted_by_user_id = user_id
-        invoice.submitted_at = datetime.now(timezone.utc)
+        invoice.submitted_at = datetime.now(UTC)
 
         try:
             from app.services.finance.automation.event_dispatcher import (
@@ -732,7 +808,7 @@ class SupplierInvoiceService(ListResponseMixin):
 
         invoice.status = SupplierInvoiceStatus.APPROVED
         invoice.approved_by_user_id = user_id
-        invoice.approved_at = datetime.now(timezone.utc)
+        invoice.approved_at = datetime.now(UTC)
 
         try:
             from app.services.finance.automation.event_dispatcher import (
@@ -777,7 +853,7 @@ class SupplierInvoiceService(ListResponseMixin):
         organization_id: UUID,
         invoice_id: UUID,
         posted_by_user_id: UUID,
-        posting_date: Optional[date] = None,
+        posting_date: date | None = None,
     ) -> SupplierInvoice:
         """
         Post an approved invoice to the general ledger.
@@ -827,7 +903,7 @@ class SupplierInvoiceService(ListResponseMixin):
         # Update invoice status
         invoice.status = SupplierInvoiceStatus.POSTED
         invoice.posted_by_user_id = user_id
-        invoice.posted_at = datetime.now(timezone.utc)
+        invoice.posted_at = datetime.now(UTC)
         invoice.journal_entry_id = result.journal_entry_id
         invoice.posting_batch_id = result.posting_batch_id
         invoice.posting_status = "POSTED"
@@ -1068,7 +1144,7 @@ class SupplierInvoiceService(ListResponseMixin):
     def get(
         db: Session,
         invoice_id: str,
-        organization_id: Optional[UUID] = None,
+        organization_id: UUID | None = None,
     ) -> SupplierInvoice:
         """
         Get an invoice by ID.
@@ -1096,7 +1172,7 @@ class SupplierInvoiceService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         invoice_id: UUID,
-    ) -> List[SupplierInvoiceLine]:
+    ) -> builtins.list[SupplierInvoiceLine]:
         """
         Get lines for an invoice.
 
@@ -1126,16 +1202,16 @@ class SupplierInvoiceService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        supplier_id: Optional[str] = None,
-        status: Optional[SupplierInvoiceStatus] = None,
-        invoice_type: Optional[SupplierInvoiceType] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
+        organization_id: str | None = None,
+        supplier_id: str | None = None,
+        status: SupplierInvoiceStatus | None = None,
+        invoice_type: SupplierInvoiceType | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
         overdue_only: bool = False,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[SupplierInvoice]:
+    ) -> builtins.list[SupplierInvoice]:
         """
         List invoices with optional filters.
 
@@ -1282,6 +1358,57 @@ class SupplierInvoiceService(ListResponseMixin):
                     item.average_cost = new_avg.quantize(
                         Decimal("0.000001"), rounding=ROUND_HALF_UP
                     )
+
+    @staticmethod
+    def delete_invoice(
+        db: Session,
+        organization_id: UUID,
+        invoice_id: UUID,
+    ) -> None:
+        """Delete a supplier invoice (DRAFT only)."""
+        org_id = coerce_uuid(organization_id)
+        inv_id = coerce_uuid(invoice_id)
+
+        invoice = db.get(SupplierInvoice, inv_id)
+        if not invoice or invoice.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+
+        if invoice.status != SupplierInvoiceStatus.DRAFT:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Cannot delete invoice with status '{invoice.status.value}'. "
+                    "Only DRAFT invoices can be deleted."
+                ),
+            )
+
+        allocation_count = (
+            db.query(func.count(APPaymentAllocation.allocation_id))
+            .filter(APPaymentAllocation.invoice_id == inv_id)
+            .scalar()
+            or 0
+        )
+        if allocation_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot delete invoice with {allocation_count} payment allocation(s).",
+            )
+
+        line_ids = [
+            line.line_id
+            for line in db.query(SupplierInvoiceLine)
+            .filter(SupplierInvoiceLine.invoice_id == inv_id)
+            .all()
+        ]
+        if line_ids:
+            db.query(SupplierInvoiceLineTax).filter(
+                SupplierInvoiceLineTax.line_id.in_(line_ids)
+            ).delete()
+        db.query(SupplierInvoiceLine).filter(
+            SupplierInvoiceLine.invoice_id == inv_id
+        ).delete()
+        db.delete(invoice)
+        db.commit()
 
 
 # Module-level singleton instance

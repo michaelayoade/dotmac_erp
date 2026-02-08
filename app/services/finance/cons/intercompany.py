@@ -6,11 +6,11 @@ Manages intercompany balances, matching, and reconciliation (IFRS 10).
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -44,7 +44,7 @@ class IntercompanyBalanceInput:
     to_entity_functional_amount: Decimal
     reporting_currency_code: str
     reporting_currency_amount: Decimal
-    balance_description: Optional[str] = None
+    balance_description: str | None = None
 
 
 @dataclass
@@ -59,7 +59,7 @@ class MatchingResult:
     to_amount: Decimal
     difference: Decimal
     is_matched: bool
-    difference_reason: Optional[str]
+    difference_reason: str | None
 
 
 @dataclass
@@ -293,7 +293,7 @@ class IntercompanyService(ListResponseMixin):
         group_id: UUID,
         balance_id: UUID,
         resolution_reason: str,
-        adjusted_amount: Optional[Decimal] = None,
+        adjusted_amount: Decimal | None = None,
     ) -> IntercompanyBalance:
         """
         Resolve intercompany difference.
@@ -338,7 +338,7 @@ class IntercompanyService(ListResponseMixin):
         db: Session,
         group_id: UUID,
         fiscal_period_id: UUID,
-    ) -> List[IntercompanyBalance]:
+    ) -> builtins.list[IntercompanyBalance]:
         """
         Get unmatched intercompany balances.
 
@@ -451,7 +451,7 @@ class IntercompanyService(ListResponseMixin):
         db: Session,
         group_id: UUID,
         fiscal_period_id: UUID,
-    ) -> List[IntercompanyBalance]:
+    ) -> builtins.list[IntercompanyBalance]:
         """
         Get matched balances ready for elimination.
 
@@ -548,15 +548,15 @@ class IntercompanyService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        fiscal_period_id: Optional[str] = None,
-        from_entity_id: Optional[str] = None,
-        to_entity_id: Optional[str] = None,
-        balance_type: Optional[str] = None,
-        is_matched: Optional[bool] = None,
-        is_eliminated: Optional[bool] = None,
+        fiscal_period_id: str | None = None,
+        from_entity_id: str | None = None,
+        to_entity_id: str | None = None,
+        balance_type: str | None = None,
+        is_matched: bool | None = None,
+        is_eliminated: bool | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[IntercompanyBalance]:
+    ) -> builtins.list[IntercompanyBalance]:
         """List intercompany balances with optional filters."""
         query = db.query(IntercompanyBalance)
 

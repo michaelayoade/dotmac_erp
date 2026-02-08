@@ -7,8 +7,9 @@ Revises: 20260130_add_email_profiles
 Create Date: 2026-01-30
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260130_add_payslip_branding_options"

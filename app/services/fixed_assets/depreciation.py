@@ -8,9 +8,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -45,7 +44,7 @@ class DepreciationCalculation:
     remaining_life_closing: int
     expense_account_id: UUID
     accum_dep_account_id: UUID
-    cost_center_id: Optional[UUID] = None
+    cost_center_id: UUID | None = None
 
 
 @dataclass
@@ -260,7 +259,7 @@ class DepreciationService(ListResponseMixin):
         organization_id: UUID,
         fiscal_period_id: UUID,
         created_by_user_id: UUID,
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> DepreciationRun:
         """
         Create a new depreciation run for a fiscal period.
@@ -342,7 +341,7 @@ class DepreciationService(ListResponseMixin):
 
         # Update status
         run.status = DepreciationRunStatus.CALCULATING
-        run.calculation_started_at = datetime.now(timezone.utc)
+        run.calculation_started_at = datetime.now(UTC)
         db.flush()
 
         try:
@@ -396,7 +395,7 @@ class DepreciationService(ListResponseMixin):
                     assets_processed += 1
 
             run.status = DepreciationRunStatus.CALCULATED
-            run.calculation_completed_at = datetime.now(timezone.utc)
+            run.calculation_completed_at = datetime.now(UTC)
             run.assets_processed = assets_processed
             run.total_depreciation = total_depreciation
 
@@ -419,7 +418,7 @@ class DepreciationService(ListResponseMixin):
         organization_id: UUID,
         run_id: UUID,
         posted_by_user_id: UUID,
-        posting_date: Optional[date] = None,
+        posting_date: date | None = None,
     ) -> DepreciationRun:
         """
         Post a calculated depreciation run to the GL.
@@ -495,7 +494,7 @@ class DepreciationService(ListResponseMixin):
                         asset.status = AssetStatus.FULLY_DEPRECIATED
 
             run.status = DepreciationRunStatus.POSTED
-            run.posted_at = datetime.now(timezone.utc)
+            run.posted_at = datetime.now(UTC)
             run.posted_by_user_id = user_id
             run.journal_entry_id = result.journal_entry_id
             run.posting_batch_id = result.posting_batch_id
@@ -539,19 +538,24 @@ class DepreciationService(ListResponseMixin):
     def get(
         db: Session,
         run_id: str,
+        organization_id: UUID | None = None,
     ) -> DepreciationRun:
         """Get a depreciation run by ID."""
         run = db.get(DepreciationRun, coerce_uuid(run_id))
         if not run:
+            raise HTTPException(status_code=404, detail="Depreciation run not found")
+        if organization_id is not None and run.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Depreciation run not found")
         return run
 
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        fiscal_period_id: Optional[str] = None,
-        status: Optional[DepreciationRunStatus] = None,
+        organization_id: str | None = None,
+        fiscal_period_id: str | None = None,
+        status: DepreciationRunStatus | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[DepreciationRun]:

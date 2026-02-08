@@ -7,7 +7,7 @@ Handles file uploads and attachments for support tickets.
 import logging
 import uuid
 from pathlib import Path
-from typing import BinaryIO, List, Optional, Tuple
+from typing import BinaryIO
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -56,7 +56,7 @@ class AttachmentService:
         db: Session,
         ticket_id: uuid.UUID,
         include_deleted: bool = False,
-    ) -> List[TicketAttachment]:
+    ) -> list[TicketAttachment]:
         """
         List attachments for a ticket.
 
@@ -82,7 +82,7 @@ class AttachmentService:
         db: Session,
         organization_id: uuid.UUID,
         attachment_id: uuid.UUID,
-    ) -> Optional[TicketAttachment]:
+    ) -> TicketAttachment | None:
         """Get an attachment by ID, scoped to organization via ticket."""
         from app.models.support.ticket import Ticket
 
@@ -99,8 +99,8 @@ class AttachmentService:
         self,
         filename: str,
         file_size: int,
-        content_type: Optional[str] = None,
-    ) -> Tuple[bool, Optional[str]]:
+        content_type: str | None = None,
+    ) -> tuple[bool, str | None]:
         """
         Validate a file for upload.
 
@@ -125,9 +125,9 @@ class AttachmentService:
         filename: str,
         file_data: BinaryIO,
         content_type: str,
-        uploaded_by_id: Optional[uuid.UUID] = None,
-        comment_id: Optional[uuid.UUID] = None,
-    ) -> Tuple[Optional[TicketAttachment], Optional[str]]:
+        uploaded_by_id: uuid.UUID | None = None,
+        comment_id: uuid.UUID | None = None,
+    ) -> tuple[TicketAttachment | None, str | None]:
         """
         Save an uploaded file.
 
@@ -189,7 +189,7 @@ class AttachmentService:
         organization_id: uuid.UUID,
         attachment_id: uuid.UUID,
         hard_delete: bool = False,
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Delete an attachment.
 
@@ -240,7 +240,7 @@ class AttachmentService:
         db: Session,
         organization_id: uuid.UUID,
         attachment_id: uuid.UUID,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Get the file path for an attachment.
 

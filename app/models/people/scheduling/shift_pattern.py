@@ -82,7 +82,7 @@ class ShiftPattern(Base, AuditMixin):
         nullable=False,
         comment="Display name, e.g. 'Standard Day Shift', 'Bi-Weekly Rotation'",
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -116,7 +116,7 @@ class ShiftPattern(Base, AuditMixin):
         nullable=False,
         comment="Shift type to use for day shifts",
     )
-    night_shift_type_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    night_shift_type_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("attendance.shift_type.shift_type_id"),
         nullable=True,
@@ -134,7 +134,7 @@ class ShiftPattern(Base, AuditMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

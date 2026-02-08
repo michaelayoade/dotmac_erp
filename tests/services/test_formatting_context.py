@@ -14,21 +14,12 @@ Covers:
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
 
-from app.services.formatting_context import (
-    DATE_FORMAT_MAP,
-    NUMBER_FORMAT_MAP,
-    OrgFormattingPrefs,
-    clear_formatting_prefs,
-    get_formatting_prefs,
-    resolve_from_org,
-    set_formatting_prefs,
-)
 from app.services.formatters import (
     _format_number_with_seps,
     format_currency,
@@ -38,7 +29,15 @@ from app.services.formatters import (
     format_number,
     parse_decimal,
 )
-
+from app.services.formatting_context import (
+    DATE_FORMAT_MAP,
+    NUMBER_FORMAT_MAP,
+    OrgFormattingPrefs,
+    clear_formatting_prefs,
+    get_formatting_prefs,
+    resolve_from_org,
+    set_formatting_prefs,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -251,7 +250,7 @@ class TestFormatDatetimeOrgAware:
             )
         )
         # 14:00 UTC → 09:00 EST (UTC-5)
-        dt_utc = datetime(2025, 1, 15, 14, 0, tzinfo=timezone.utc)
+        dt_utc = datetime(2025, 1, 15, 14, 0, tzinfo=UTC)
         result = format_datetime(dt_utc)
         assert result == "2025-01-15 09:00"
 

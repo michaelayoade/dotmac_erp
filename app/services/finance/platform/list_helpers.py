@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, TypeVar
+from typing import Any, TypeVar
 from urllib.parse import urlencode
 
 from sqlalchemy.orm import Query
@@ -24,10 +24,10 @@ class ListParams:
 
     page: int = 1
     limit: int = 50
-    search: Optional[str] = None
-    sort_by: Optional[str] = None
+    search: str | None = None
+    sort_by: str | None = None
     sort_dir: str = "asc"
-    filters: Dict[str, Any] = field(default_factory=dict)
+    filters: dict[str, Any] = field(default_factory=dict)
 
     @property
     def offset(self) -> int:
@@ -38,10 +38,10 @@ class ListParams:
         cls,
         page: int = 1,
         limit: int = 50,
-        search: Optional[str] = None,
-        sort: Optional[str] = None,
+        search: str | None = None,
+        sort: str | None = None,
         **filters: Any,
-    ) -> "ListParams":
+    ) -> ListParams:
         """Create ListParams from request query parameters."""
         # Parse sort parameter (e.g., "name" or "-name" for descending)
         sort_by = None
@@ -70,12 +70,12 @@ class ListParams:
 class ListResult:
     """Result of a paginated list query."""
 
-    items: List[Any]
+    items: list[Any]
     total_count: int
     page: int
     limit: int
-    search: Optional[str] = None
-    filters: Dict[str, Any] = field(default_factory=dict)
+    search: str | None = None
+    filters: dict[str, Any] = field(default_factory=dict)
 
     @property
     def total_pages(self) -> int:
@@ -103,7 +103,7 @@ class ListResult:
         """1-based end index for display."""
         return min(self.page * self.limit, self.total_count)
 
-    def pagination_context(self, base_url: str = "") -> Dict[str, Any]:
+    def pagination_context(self, base_url: str = "") -> dict[str, Any]:
         """Generate context for pagination template component."""
         return {
             "page": self.page,

@@ -1,5 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
+{% from "components/macros.html" import empty_state %}
 {% block page_title %}AR Invoice{% endblock %}
 
 {% block breadcrumbs %}
@@ -37,6 +38,7 @@
         Edit
     </a>
     <form method="POST" action="/finance/ar/invoices/{{ invoice.invoice_id }}/submit" class="inline">
+        {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-primary btn-loading">
             <span class="btn-spinner"></span>
             <svg class="h-4 w-4 btn-hide-on-load" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -47,6 +49,7 @@
     </form>
     <form method="POST" action="/finance/ar/invoices/{{ invoice.invoice_id }}/delete"
           onsubmit="return confirm('Are you sure you want to delete this invoice? This action cannot be undone.');">
+        {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-danger-outline btn-loading">
             <span class="btn-spinner"></span>
             <svg class="h-4 w-4 btn-hide-on-load" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -60,6 +63,7 @@
     {# SUBMITTED status actions #}
     {% if invoice.status == 'SUBMITTED' %}
     <form method="POST" action="/finance/ar/invoices/{{ invoice.invoice_id }}/approve" class="inline">
+        {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-success btn-loading">
             <span class="btn-spinner"></span>
             <svg class="h-4 w-4 btn-hide-on-load" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -70,6 +74,7 @@
     </form>
     <form method="POST" action="/finance/ar/invoices/{{ invoice.invoice_id }}/cancel"
           onsubmit="return confirm('Cancel this invoice and return to Draft for editing?');">
+        {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-secondary btn-loading">
             <span class="btn-spinner"></span>
             <svg class="h-4 w-4 btn-hide-on-load" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -80,6 +85,7 @@
     </form>
     <form method="POST" action="/finance/ar/invoices/{{ invoice.invoice_id }}/void"
           onsubmit="return confirm('Are you sure you want to void this invoice?');">
+        {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-danger-outline btn-loading">
             <span class="btn-spinner"></span>
             <span class="btn-hide-on-load">Void</span>
@@ -90,6 +96,7 @@
     {# APPROVED status actions #}
     {% if invoice.status == 'APPROVED' %}
     <form method="POST" action="/finance/ar/invoices/{{ invoice.invoice_id }}/post" class="inline">
+        {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-success btn-loading">
             <span class="btn-spinner"></span>
             <svg class="h-4 w-4 btn-hide-on-load" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -100,6 +107,7 @@
     </form>
     <form method="POST" action="/finance/ar/invoices/{{ invoice.invoice_id }}/cancel"
           onsubmit="return confirm('Cancel this invoice and return to Draft for editing?');">
+        {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-secondary btn-loading">
             <span class="btn-spinner"></span>
             <svg class="h-4 w-4 btn-hide-on-load" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -110,6 +118,7 @@
     </form>
     <form method="POST" action="/finance/ar/invoices/{{ invoice.invoice_id }}/void"
           onsubmit="return confirm('Are you sure you want to void this invoice?');">
+        {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-danger-outline btn-loading">
             <span class="btn-spinner"></span>
             <span class="btn-hide-on-load">Void</span>
@@ -181,7 +190,7 @@
 <div class="workflow-stepper print:hidden">
     {% for step in workflow_steps %}
     {% set step_index = loop.index0 %}
-    {% set is_complete = current_status_index > step_index %}
+    {% set is_complete = current_status_index > step_index or (loop.last and current_status_index == step_index) %}
     {% set is_current = current_status_index == step_index %}
     {% set is_voided = invoice.status in ['VOIDED', 'CANCELLED'] %}
     <div class="workflow-step {% if is_complete %}workflow-step-complete{% elif is_current and not is_voided %}workflow-step-current{% endif %}">
@@ -210,7 +219,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
         </svg>
         <div>
-            <p class="font-semibold text-red-700 dark:text-red-400">Invoice {{ invoice.status }}</p>
+            <p class="font-semibold text-red-700 dark:text-red-400">Invoice {{ invoice.status | replace('_', ' ') | title }}</p>
             <p class="text-sm text-red-600 dark:text-red-500">This invoice has been {{ invoice.status|lower }} and cannot be modified.</p>
         </div>
     </div>
@@ -225,36 +234,8 @@
         {% set doc_status = invoice.status | replace('_', ' ') | title %}
         {% include "partials/_document_header.html" %}
         <div class="document-header">
-            <div class="flex flex-wrap items-start justify-between gap-4">
-                <div></div>
-                <div class="flex flex-col items-end gap-2">
-                    {# Status Badge #}
-                    {% if invoice.is_overdue %}
-                    <span class="badge-overdue">Overdue</span>
-                    {% elif invoice.status == 'DRAFT' %}
-                    <span class="badge-draft">Draft</span>
-                    {% elif invoice.status == 'SUBMITTED' %}
-                    <span class="badge-pending">Pending Approval</span>
-                    {% elif invoice.status == 'APPROVED' %}
-                    <span class="badge-approved">Approved</span>
-                    {% elif invoice.status == 'POSTED' %}
-                    <span class="badge-posted">Posted</span>
-                    {% elif invoice.status == 'PARTIALLY_PAID' %}
-                    <span class="badge-partial">Partially Paid</span>
-                    {% elif invoice.status == 'PAID' %}
-                    <span class="badge-paid">Paid</span>
-                    {% elif invoice.status == 'VOIDED' %}
-                    <span class="badge-cancelled">Voided</span>
-                    {% elif invoice.status == 'CANCELLED' %}
-                    <span class="badge-cancelled">Cancelled</span>
-                    {% else %}
-                    <span class="badge-draft">{{ invoice.status }}</span>
-                    {% endif %}
-                </div>
-            </div>
-
             {# Invoice Dates Row #}
-            <div class="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:grid-cols-4">
                 <div>
                     <div class="text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">Invoice Date</div>
                     <div class="mt-1 font-medium text-slate-900 dark:text-white">{{ invoice.invoice_date }}</div>
@@ -320,11 +301,11 @@
                     <table class="w-full min-w-[500px]">
                         <thead>
                             <tr class="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500 dark:border-slate-700 dark:text-slate-400">
-                                <th scope="col" class="px-4 py-3 sm:pl-0">Description</th>
-                                <th scope="col" class="px-4 py-3 text-right font-mono">Qty</th>
-                                <th scope="col" class="px-4 py-3 text-right font-mono">Unit Price</th>
-                                <th scope="col" class="px-4 py-3 text-right font-mono">Tax</th>
-                                <th scope="col" class="px-4 py-3 text-right font-mono sm:pr-0">Amount</th>
+                                <th scope="col" class="px-4 py-3 sm:pl-0 text-xs font-semibold uppercase tracking-wider">Description</th>
+                                <th scope="col" class="px-4 py-3 text-right font-mono text-xs font-semibold uppercase tracking-wider">Qty</th>
+                                <th scope="col" class="px-4 py-3 text-right font-mono text-xs font-semibold uppercase tracking-wider">Unit Price</th>
+                                <th scope="col" class="px-4 py-3 text-right font-mono text-xs font-semibold uppercase tracking-wider">Tax</th>
+                                <th scope="col" class="px-4 py-3 text-right font-mono sm:pr-0 text-xs font-semibold uppercase tracking-wider">Amount</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -443,14 +424,14 @@
             </svg>
             Payment History
         </h3>
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="w-full text-sm">
                 <thead>
                     <tr class="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500 dark:border-slate-700">
-                        <th scope="col" class="py-2 pr-4">Date</th>
-                        <th scope="col" class="py-2 pr-4">Reference</th>
-                        <th scope="col" class="py-2 pr-4">Method</th>
-                        <th scope="col" class="py-2 text-right font-mono">Amount</th>
+                        <th scope="col" class="py-2 pr-4 text-xs font-semibold uppercase tracking-wider">Date</th>
+                        <th scope="col" class="py-2 pr-4 text-xs font-semibold uppercase tracking-wider">Reference</th>
+                        <th scope="col" class="py-2 pr-4 text-xs font-semibold uppercase tracking-wider">Method</th>
+                        <th scope="col" class="py-2 text-right font-mono text-xs font-semibold uppercase tracking-wider">Amount</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -464,6 +445,12 @@
                         </td>
                         <td class="py-2 pr-4 text-slate-600 dark:text-slate-400">{{ payment.payment_method | default("-") }}</td>
                         <td class="py-2 text-right font-mono font-medium text-emerald-600 dark:text-emerald-400">{{ payment.amount }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No payments found", "There are no payments to display.") }}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>

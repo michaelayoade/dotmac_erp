@@ -565,7 +565,7 @@ def generate_bootstrap_db_script() -> str:
 
 def generate_setup_script(org_code: str) -> str:
     """Shell script to bring up the instance and bootstrap the DB."""
-    slug = org_code.lower()
+    org_code.lower()
     return textwrap.dedent(f"""\
         #!/usr/bin/env bash
         set -euo pipefail

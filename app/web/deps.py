@@ -7,21 +7,26 @@ proper tenant context handling.
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import Depends, Header, HTTPException, Request, Cookie
+from fastapi import Cookie, Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.db import AsyncSessionLocal, SessionLocal, get_auth_db_session
-from app.models.auth import Session as AuthSession, SessionStatus
+from app.models.auth import Session as AuthSession
+from app.models.auth import SessionStatus
 from app.models.person import Person
-from app.models.rbac import Role, PersonRole
+from app.models.rbac import PersonRole, Role
 from app.rls import set_current_organization_sync
-from app.services.auth_flow import decode_access_token
 from app.services.auth_dependencies import is_session_inactive
+from app.services.auth_flow import (
+    AuthFlow,
+    _load_rbac_claims,
+    decode_access_token,
+    hash_session_token,
+)
 from app.services.common import coerce_uuid
 from app.services.finance.branding import BrandingService, CSSGenerator
 from app.templates import templates  # noqa: F401 - re-exported for web routes
@@ -63,7 +68,7 @@ def _validate_session_sso(
     # Handle timezone-naive expires_at (SQLite doesn't preserve timezone)
     expires_at = session.expires_at
     if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
+        expires_at = expires_at.replace(tzinfo=UTC)
 
     if expires_at <= now:
         return None
@@ -117,11 +122,12 @@ def brand_context() -> dict:
     }
 
 
-def org_brand_context(db: Session, org_id: Optional[UUID]) -> dict:
+def org_brand_context(db: Session, org_id: UUID | None) -> dict:
     """
     Get organization-specific brand context for templates.
 
     Falls back to system defaults if no org branding exists.
+    Uses Redis cache for CSS generation (1 hour TTL).
 
     Returns dict with:
         - name: Display name
@@ -136,33 +142,44 @@ def org_brand_context(db: Session, org_id: Optional[UUID]) -> dict:
     """
     base = brand_context()
 
+    no_branding = {
+        **base,
+        "logo_dark_url": None,
+        "favicon_url": None,
+        "css": "",
+        "fonts_url": None,
+        "has_custom_branding": False,
+    }
+
     if not org_id:
-        return {
-            **base,
-            "logo_dark_url": None,
-            "favicon_url": None,
-            "css": "",
-            "fonts_url": None,
-            "has_custom_branding": False,
-        }
+        return no_branding
 
     service = BrandingService(db)
     branding = service.get_by_org_id(org_id)
 
     if not branding:
-        return {
-            **base,
-            "logo_dark_url": None,
-            "favicon_url": None,
-            "css": "",
-            "fonts_url": None,
-            "has_custom_branding": False,
-        }
+        return no_branding
 
-    # Generate CSS and fonts URL
-    css_gen = CSSGenerator(branding)
-    css = css_gen.generate()
-    fonts_url = css_gen.get_google_fonts_url()
+    # Try cache for CSS generation (expensive HSL color math)
+    from app.services.cache import CacheKeys, CacheService, cache_service
+
+    cache_key = CacheKeys.org_branding_css(org_id)
+    cached = cache_service.get(cache_key)
+
+    if cached and isinstance(cached, dict):
+        css = cached.get("css", "")
+        fonts_url = cached.get("fonts_url")
+    else:
+        css_gen = CSSGenerator(branding)
+        css = css_gen.generate()
+        fonts_url = css_gen.get_google_fonts_url()
+
+        # Cache the result
+        cache_service.set(
+            cache_key,
+            {"css": css, "fonts_url": fonts_url},
+            ttl_seconds=CacheService.TTL_BRANDING,
+        )
 
     return {
         "name": branding.display_name or base["name"],
@@ -177,6 +194,31 @@ def org_brand_context(db: Session, org_id: Optional[UUID]) -> dict:
         "primary_color": branding.primary_color,
         "accent_color": branding.accent_color,
     }
+
+
+def resolve_brand_context(
+    db: Session | None,
+    organization,
+    organization_id: UUID | None,
+) -> dict:
+    """Resolve brand context with consistent fallback order."""
+    brand = (
+        org_brand_context(db, organization_id)
+        if db and organization_id
+        else brand_context()
+    )
+    if organization:
+        org_name = organization.trading_name or organization.legal_name
+        # Prefer org name/logo when branding isn't explicitly configured.
+        if org_name and (
+            not brand.get("name") or brand.get("name") == settings.brand_name
+        ):
+            brand["name"] = org_name
+        if organization.logo_url and not brand.get("logo_url"):
+            brand["logo_url"] = organization.logo_url
+        if not brand.get("mark"):
+            brand["mark"] = _brand_mark(brand.get("name") or org_name or "DB")
+    return brand
 
 
 def _merge_dicts(base: dict, override: dict) -> dict:
@@ -447,7 +489,7 @@ def base_context(
     page_title: str,
     active_module: str = "",
     notifications: list | None = None,
-    db: Optional[Session] = None,
+    db: Session | None = None,
 ) -> dict:
     """
     Get base template context with authentication.
@@ -502,8 +544,9 @@ def base_context(
     if notifications is None and db and auth.is_authenticated and auth.person_id:
         try:
             # Import here to avoid circular import
-            from app.services.notification import notification_service
             from datetime import datetime, timedelta
+
+            from app.services.notification import notification_service
 
             def _format_relative_time(dt: datetime) -> str:
                 now = datetime.utcnow()
@@ -588,11 +631,13 @@ def base_context(
     elif active_module in {"support", "inventory", "projects", "fleet", "procurement"}:
         settings_url = f"/settings/{active_module}"
 
+    brand = resolve_brand_context(db, organization, auth.organization_id)
+
     context = {
         "request": request,
         "title": page_title,
         "page_title": page_title,
-        "brand": org_branding or brand_context(),
+        "brand": brand,
         "org_branding": org_branding,
         "active_module": active_module,
         "settings_url": settings_url,
@@ -627,11 +672,11 @@ def base_context(
 class WebPrincipal:
     """Lightweight principal for web routes."""
 
-    id: Optional[UUID]
-    user_id: Optional[UUID]
-    person_id: Optional[UUID]
-    organization_id: Optional[UUID]
-    employee_id: Optional[UUID]
+    id: UUID | None
+    user_id: UUID | None
+    person_id: UUID | None
+    organization_id: UUID | None
+    employee_id: UUID | None
     roles: list[str]
     scopes: list[str]
 
@@ -642,13 +687,13 @@ class WebAuthContext:
     def __init__(
         self,
         is_authenticated: bool = False,
-        person_id: Optional[UUID] = None,
-        organization_id: Optional[UUID] = None,
-        employee_id: Optional[UUID] = None,
+        person_id: UUID | None = None,
+        organization_id: UUID | None = None,
+        employee_id: UUID | None = None,
         user_name: str = "Guest",
         user_initials: str = "GU",
-        roles: Optional[list[str]] = None,
-        scopes: Optional[list[str]] = None,
+        roles: list[str] | None = None,
+        scopes: list[str] | None = None,
     ):
         self.is_authenticated = is_authenticated
         self.person_id = person_id
@@ -670,7 +715,7 @@ class WebAuthContext:
         }
 
     @property
-    def user_id(self) -> Optional[UUID]:
+    def user_id(self) -> UUID | None:
         """Alias for person_id for backward compatibility."""
         return self.person_id
 
@@ -759,7 +804,7 @@ class WebAuthContext:
         return set(permissions).issubset(set(self.scopes))
 
     @property
-    def default_module(self) -> Optional[str]:
+    def default_module(self) -> str | None:
         """Get the user's default module (first accessible module)."""
         modules = self.accessible_modules
         return modules[0] if modules else None
@@ -807,6 +852,47 @@ def _extract_bearer_token(authorization: str | None) -> str | None:
     if len(parts) == 2 and parts[0].lower() == "bearer":
         return parts[1].strip()
     return None
+
+
+def _refresh_cookie_name(db: Session | None) -> str:
+    try:
+        name = AuthFlow.refresh_cookie_settings(db).get("key")
+    except Exception:
+        name = None
+    return name or "refresh_token"
+
+
+def _get_refresh_token_cookie(request: Request, db: Session | None) -> str | None:
+    return request.cookies.get(_refresh_cookie_name(db))
+
+
+def _resolve_session_from_refresh_token(
+    db: Session,
+    refresh_token: str,
+    now: datetime,
+) -> tuple[UUID, UUID] | None:
+    """Resolve (person_id, session_id) from refresh token with SSO support."""
+    token_hash = hash_session_token(refresh_token)
+    auth_db = _get_auth_db_for_sso()
+    try:
+        target_db = auth_db if auth_db else db
+        session = (
+            target_db.query(AuthSession)
+            .filter(AuthSession.token_hash == token_hash)
+            .filter(AuthSession.status == SessionStatus.active)
+            .filter(AuthSession.revoked_at.is_(None))
+            .filter(AuthSession.expires_at > now)
+            .first()
+        )
+        if not session or is_session_inactive(session, now):
+            return None
+        if auth_db:
+            session.last_seen_at = now
+            auth_db.commit()
+        return session.person_id, session.id
+    finally:
+        if auth_db:
+            auth_db.close()
 
 
 def _normalize_roles_scopes(
@@ -871,69 +957,91 @@ def require_web_auth(
     """
     # Try to get token from header or cookie
     token = _extract_bearer_token(authorization) or access_token
+    payload = None
+    if token:
+        try:
+            # Decode token (uses SSO secret when SSO is enabled)
+            payload = decode_access_token(db, token)
+        except HTTPException:
+            payload = None
 
-    if not token:
-        raise HTTPException(
-            status_code=401,
-            detail="Authentication required",
-            headers={"WWW-Authenticate": "Bearer"},
+    now = datetime.now(UTC)
+
+    if payload:
+        person_id = payload.get("sub")
+        session_id = payload.get("session_id")
+
+        if not person_id or not session_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        person_uuid = coerce_uuid(person_id)
+        session_uuid = coerce_uuid(session_id)
+
+        # SSO: validate session against shared auth database
+        auth_db = _get_auth_db_for_sso()
+        try:
+            if auth_db:
+                # SSO client mode - validate against shared auth database
+                session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
+            else:
+                # SSO provider or non-SSO mode - validate against local database
+                session = (
+                    db.query(AuthSession)
+                    .filter(AuthSession.id == session_uuid)
+                    .filter(AuthSession.person_id == person_uuid)
+                    .filter(AuthSession.status == SessionStatus.active)
+                    .filter(AuthSession.revoked_at.is_(None))
+                    .filter(AuthSession.expires_at > now)
+                    .first()
+                )
+
+            if not session:
+                raise HTTPException(
+                    status_code=401, detail="Session expired or invalid"
+                )
+
+            # Check for activity timeout (session idle too long)
+            if is_session_inactive(session, now):
+                raise HTTPException(
+                    status_code=401, detail="Session expired due to inactivity"
+                )
+
+            # Update session activity in auth database
+            if auth_db:
+                session.last_seen_at = now
+                auth_db.commit()
+
+        finally:
+            if auth_db:
+                auth_db.close()
+
+        roles_value = payload.get("roles")
+        roles = (
+            [str(role) for role in roles_value] if isinstance(roles_value, list) else []
         )
-
-    try:
-        # Decode token (uses SSO secret when SSO is enabled)
-        payload = decode_access_token(db, token)
-    except HTTPException:
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
+        scopes_value = payload.get("scopes")
+        scopes = (
+            [str(scope) for scope in scopes_value]
+            if isinstance(scopes_value, list)
+            else []
         )
-
-    person_id = payload.get("sub")
-    session_id = payload.get("session_id")
-
-    if not person_id or not session_id:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    now = datetime.now(timezone.utc)
-    person_uuid = coerce_uuid(person_id)
-    session_uuid = coerce_uuid(session_id)
-
-    # SSO: validate session against shared auth database
-    auth_db = _get_auth_db_for_sso()
-    try:
-        if auth_db:
-            # SSO client mode - validate against shared auth database
-            session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
-        else:
-            # SSO provider or non-SSO mode - validate against local database
-            session = (
-                db.query(AuthSession)
-                .filter(AuthSession.id == session_uuid)
-                .filter(AuthSession.person_id == person_uuid)
-                .filter(AuthSession.status == SessionStatus.active)
-                .filter(AuthSession.revoked_at.is_(None))
-                .filter(AuthSession.expires_at > now)
-                .first()
-            )
-
-        if not session:
-            raise HTTPException(status_code=401, detail="Session expired or invalid")
-
-        # Check for activity timeout (session idle too long)
-        if is_session_inactive(session, now):
+        roles, scopes = _normalize_roles_scopes(roles, scopes)
+        roles = _ensure_admin_role(db, person_uuid, roles)
+    else:
+        refresh_token = _get_refresh_token_cookie(request, db)
+        if not refresh_token:
             raise HTTPException(
-                status_code=401, detail="Session expired due to inactivity"
+                status_code=401,
+                detail="Authentication required",
+                headers={"WWW-Authenticate": "Bearer"},
             )
-
-        # Update session activity in auth database
-        if auth_db:
-            session.last_seen_at = now
-            auth_db.commit()
-
-    finally:
-        if auth_db:
-            auth_db.close()
+        resolved = _resolve_session_from_refresh_token(db, refresh_token, now)
+        if not resolved:
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+        person_uuid, _ = resolved
+        roles, scopes = _load_rbac_claims(db, str(person_uuid))
+        roles, scopes = _normalize_roles_scopes(roles, scopes)
+        roles = _ensure_admin_role(db, person_uuid, roles)
 
     # Get person details
     person = db.get(Person, person_uuid)
@@ -947,10 +1055,10 @@ def require_web_auth(
         set_current_organization_sync(db, organization_id)
         request.state.organization_id = str(organization_id)
 
-    request.state.actor_id = str(person_id)
+    request.state.actor_id = str(person_uuid)
 
     # Build user display info
-    def _clean_name(value: Optional[str]) -> str:
+    def _clean_name(value: str | None) -> str:
         cleaned = (value or "").strip()
         return "" if cleaned.lower() in {"none", "null"} else cleaned
 
@@ -965,17 +1073,9 @@ def require_web_auth(
         else "US"
     )
 
-    roles_value = payload.get("roles")
-    roles = [str(role) for role in roles_value] if isinstance(roles_value, list) else []
-    scopes_value = payload.get("scopes")
-    scopes = (
-        [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
-    )
-    roles, scopes = _normalize_roles_scopes(roles, scopes)
-    roles = _ensure_admin_role(db, person_uuid, roles)
-
     # Look up employee_id for the person (may be None if person is not an employee)
     from sqlalchemy import select
+
     from app.models.people.hr.employee import Employee
 
     employee = db.scalar(select(Employee).where(Employee.person_id == person_uuid))
@@ -1009,58 +1109,82 @@ def optional_web_auth(
     but show different content for authenticated users.
     """
     token = _extract_bearer_token(authorization) or access_token
+    payload = None
+    if token:
+        try:
+            payload = decode_access_token(db, token)
+        except HTTPException:
+            payload = None
 
-    if not token:
-        return WebAuthContext(is_authenticated=False)
+    now = datetime.now(UTC)
 
-    try:
-        payload = decode_access_token(db, token)
-    except HTTPException:
-        return WebAuthContext(is_authenticated=False)
+    if payload:
+        person_id = payload.get("sub")
+        session_id = payload.get("session_id")
 
-    person_id = payload.get("sub")
-    session_id = payload.get("session_id")
-
-    if not person_id or not session_id:
-        return WebAuthContext(is_authenticated=False)
-
-    now = datetime.now(timezone.utc)
-    person_uuid = coerce_uuid(person_id)
-    session_uuid = coerce_uuid(session_id)
-
-    # SSO: validate session against shared auth database
-    auth_db = _get_auth_db_for_sso()
-    try:
-        if auth_db:
-            # SSO client mode - validate against shared auth database
-            session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
-        else:
-            # SSO provider or non-SSO mode - validate against local database
-            session = (
-                db.query(AuthSession)
-                .filter(AuthSession.id == session_uuid)
-                .filter(AuthSession.person_id == person_uuid)
-                .filter(AuthSession.status == SessionStatus.active)
-                .filter(AuthSession.revoked_at.is_(None))
-                .filter(AuthSession.expires_at > now)
-                .first()
-            )
-
-        if not session:
+        if not person_id or not session_id:
             return WebAuthContext(is_authenticated=False)
 
-        # Check for activity timeout (session idle too long)
-        if is_session_inactive(session, now):
+        person_uuid = coerce_uuid(person_id)
+        session_uuid = coerce_uuid(session_id)
+
+        # SSO: validate session against shared auth database
+        auth_db = _get_auth_db_for_sso()
+        try:
+            if auth_db:
+                # SSO client mode - validate against shared auth database
+                session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
+            else:
+                # SSO provider or non-SSO mode - validate against local database
+                session = (
+                    db.query(AuthSession)
+                    .filter(AuthSession.id == session_uuid)
+                    .filter(AuthSession.person_id == person_uuid)
+                    .filter(AuthSession.status == SessionStatus.active)
+                    .filter(AuthSession.revoked_at.is_(None))
+                    .filter(AuthSession.expires_at > now)
+                    .first()
+                )
+
+            if not session:
+                return WebAuthContext(is_authenticated=False)
+
+            # Check for activity timeout (session idle too long)
+            if is_session_inactive(session, now):
+                return WebAuthContext(is_authenticated=False)
+
+            # Update session activity in auth database
+            if auth_db:
+                session.last_seen_at = now
+                auth_db.commit()
+
+        finally:
+            if auth_db:
+                auth_db.close()
+
+        roles_value = payload.get("roles")
+        roles = (
+            [str(role) for role in roles_value] if isinstance(roles_value, list) else []
+        )
+        scopes_value = payload.get("scopes")
+        scopes = (
+            [str(scope) for scope in scopes_value]
+            if isinstance(scopes_value, list)
+            else []
+        )
+        roles, scopes = _normalize_roles_scopes(roles, scopes)
+        roles = _ensure_admin_role(db, person_uuid, roles)
+    else:
+        refresh_token = _get_refresh_token_cookie(request, db)
+        if not refresh_token:
             return WebAuthContext(is_authenticated=False)
-
-        # Update session activity in auth database
-        if auth_db:
-            session.last_seen_at = now
-            auth_db.commit()
-
-    finally:
-        if auth_db:
-            auth_db.close()
+        resolved = _resolve_session_from_refresh_token(db, refresh_token, now)
+        if not resolved:
+            return WebAuthContext(is_authenticated=False)
+        person_uuid, _ = resolved
+        roles, scopes = _load_rbac_claims(db, str(person_uuid))
+        roles, scopes = _normalize_roles_scopes(roles, scopes)
+        roles = _ensure_admin_role(db, person_uuid, roles)
 
     # Get person details
     person = db.get(Person, person_uuid)
@@ -1074,10 +1198,10 @@ def optional_web_auth(
         set_current_organization_sync(db, organization_id)
         request.state.organization_id = str(organization_id)
 
-    request.state.actor_id = str(person_id)
+    request.state.actor_id = str(person_uuid)
 
     # Build user display info
-    def _clean_name(value: Optional[str]) -> str:
+    def _clean_name(value: str | None) -> str:
         cleaned = (value or "").strip()
         return "" if cleaned.lower() in {"none", "null"} else cleaned
 
@@ -1092,17 +1216,9 @@ def optional_web_auth(
         else "US"
     )
 
-    roles_value = payload.get("roles")
-    roles = [str(role) for role in roles_value] if isinstance(roles_value, list) else []
-    scopes_value = payload.get("scopes")
-    scopes = (
-        [str(scope) for scope in scopes_value] if isinstance(scopes_value, list) else []
-    )
-    roles, scopes = _normalize_roles_scopes(roles, scopes)
-    roles = _ensure_admin_role(db, person_uuid, roles)
-
     # Look up employee_id for the person (may be None if person is not an employee)
     from sqlalchemy import select
+
     from app.models.people.hr.employee import Employee
 
     employee = db.scalar(select(Employee).where(Employee.person_id == person_uuid))
@@ -1145,6 +1261,22 @@ def require_finance_access(
         raise HTTPException(
             status_code=403,
             detail="Finance module access required",
+        )
+    return auth
+
+
+def require_finance_admin(
+    auth: WebAuthContext = Depends(require_finance_access),
+) -> WebAuthContext:
+    """
+    Require finance admin access.
+
+    Use this dependency for sensitive finance admin routes like opening balance.
+    """
+    if not auth.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Finance admin access required",
         )
     return auth
 

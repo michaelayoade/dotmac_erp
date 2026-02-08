@@ -7,7 +7,6 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import date, datetime
-from typing import Optional
 
 from sqlalchemy import Date, Enum, ForeignKey, Index, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -72,22 +71,22 @@ class AssetAssignment(Base, AuditMixin, ERPNextSyncMixin):
         index=True,
     )
     issued_on: Mapped[date] = mapped_column(Date, nullable=False)
-    expected_return_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    returned_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    expected_return_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    returned_on: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[AssignmentStatus] = mapped_column(
         Enum(AssignmentStatus, name="asset_assignment_status"),
         default=AssignmentStatus.ISSUED,
     )
-    condition_on_issue: Mapped[Optional[AssetCondition]] = mapped_column(
+    condition_on_issue: Mapped[AssetCondition | None] = mapped_column(
         Enum(AssetCondition, name="asset_condition"),
         nullable=True,
     )
-    condition_on_return: Mapped[Optional[AssetCondition]] = mapped_column(
+    condition_on_return: Mapped[AssetCondition | None] = mapped_column(
         Enum(AssetCondition, name="asset_condition"),
         nullable=True,
     )
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    transfer_from_assignment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    transfer_from_assignment_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.asset_assignment.assignment_id"),
         nullable=True,
@@ -96,12 +95,12 @@ class AssetAssignment(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )
 
-    previous_assignment: Mapped[Optional["AssetAssignment"]] = relationship(
+    previous_assignment: Mapped[AssetAssignment | None] = relationship(
         "AssetAssignment",
         remote_side="AssetAssignment.assignment_id",
     )

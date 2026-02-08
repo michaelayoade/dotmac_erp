@@ -7,7 +7,7 @@ Represents imported bank statements and their transaction lines.
 import enum
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -22,7 +22,8 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID as SAUUID
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as SAUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.config import settings
@@ -39,6 +40,16 @@ class BankStatementStatus(str, enum.Enum):
     processing = "processing"  # Being matched/reconciled
     reconciled = "reconciled"  # Fully reconciled
     closed = "closed"  # Closed, no more changes
+
+
+class CategorizationStatus(str, enum.Enum):
+    """Status of rule-based categorization on a statement line."""
+
+    SUGGESTED = "SUGGESTED"  # Rule matched, awaiting user review
+    ACCEPTED = "ACCEPTED"  # User accepted the suggestion
+    REJECTED = "REJECTED"  # User rejected the suggestion
+    AUTO_APPLIED = "AUTO_APPLIED"  # High-confidence rule auto-applied
+    FLAGGED = "FLAGGED"  # Flagged for manual review
 
 
 class StatementLineType(str, enum.Enum):
@@ -135,7 +146,7 @@ class BankStatement(Base):
         nullable=False,
         default=datetime.utcnow,
     )
-    imported_by: Mapped[Optional[UUID]] = mapped_column(
+    imported_by: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True), nullable=True
     )
 
@@ -166,7 +177,7 @@ class BankStatement(Base):
         foreign_keys=[bank_account_id],
         lazy="select",
     )
-    lines: Mapped[List["BankStatementLine"]] = relationship(
+    lines: Mapped[list["BankStatementLine"]] = relationship(
         "BankStatementLine",
         back_populates="statement",
         cascade="all, delete-orphan",
@@ -259,15 +270,13 @@ class BankStatementLine(Base):
 
     # Matching status
     is_matched: Mapped[bool] = mapped_column(Boolean, default=False)
-    matched_at: Mapped[Optional[datetime]] = mapped_column(
+    matched_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    matched_by: Mapped[Optional[UUID]] = mapped_column(
-        SAUUID(as_uuid=True), nullable=True
-    )
+    matched_by: Mapped[UUID | None] = mapped_column(SAUUID(as_uuid=True), nullable=True)
 
     # GL matching (for matched transactions)
-    matched_journal_line_id: Mapped[Optional[UUID]] = mapped_column(
+    matched_journal_line_id: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True),
         nullable=True,
     )
@@ -277,6 +286,32 @@ class BankStatementLine(Base):
 
     # Notes
     notes: Mapped[str] = mapped_column(Text, nullable=True)
+
+    # Categorization (rule-based suggestions)
+    categorization_status: Mapped[CategorizationStatus | None] = mapped_column(
+        Enum(
+            CategorizationStatus,
+            name="categorization_status",
+            schema="banking",
+        ),
+        nullable=True,
+    )
+    suggested_account_id: Mapped[UUID | None] = mapped_column(
+        SAUUID(as_uuid=True),
+        ForeignKey("gl.account.account_id"),
+        nullable=True,
+    )
+    suggested_rule_id: Mapped[UUID | None] = mapped_column(
+        SAUUID(as_uuid=True),
+        ForeignKey("banking.transaction_rule.rule_id"),
+        nullable=True,
+    )
+    suggested_confidence: Mapped[int | None] = mapped_column(
+        nullable=True,
+    )
+    suggested_match_reason: Mapped[str | None] = mapped_column(
+        String(200), nullable=True
+    )
 
     # Audit
     created_at: Mapped[datetime] = mapped_column(

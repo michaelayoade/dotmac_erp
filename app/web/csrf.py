@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 from urllib.parse import urlsplit
 
 from fastapi import HTTPException, Request
-import logging
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
+
+from app.net import get_request_scheme, is_from_trusted_proxy
 
 CSRF_COOKIE_NAME = "csrf_token"
 CSRF_HEADER_NAME = "x-csrf-token"
@@ -38,6 +40,8 @@ def _parse_host_port(value: str, scheme: str | None) -> tuple[str | None, int | 
 def _forwarded_host_parts(request: Request) -> tuple[str | None, int | None]:
     forwarded_host = request.headers.get("x-forwarded-host")
     if not forwarded_host:
+        return None, None
+    if not is_from_trusted_proxy(request):
         return None, None
     forwarded_host = forwarded_host.split(",")[0].strip()
     forwarded_proto = request.headers.get("x-forwarded-proto") or request.url.scheme
@@ -82,7 +86,7 @@ def _origin_matches_request(request: Request, origin_value: str) -> bool:
 
 
 def _is_secure_request(request: Request) -> bool:
-    return request.url.scheme == "https"
+    return get_request_scheme(request) == "https"
 
 
 def _should_enforce_csrf(request: Request) -> bool:

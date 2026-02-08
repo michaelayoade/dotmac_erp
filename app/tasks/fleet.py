@@ -8,7 +8,7 @@ Handles:
 
 import logging
 from datetime import date, datetime, time, timedelta
-from typing import Any, List
+from typing import Any
 from uuid import UUID
 
 from celery import shared_task
@@ -29,7 +29,7 @@ from app.models.notification import (
 logger = logging.getLogger(__name__)
 
 
-def _get_operations_recipients(db: Session, organization_id: UUID) -> List[UUID]:
+def _get_operations_recipients(db: Session, organization_id: UUID) -> list[UUID]:
     """
     Get user IDs with operations/fleet management roles for an organization.
 
@@ -61,7 +61,7 @@ def _get_operations_recipients(db: Session, organization_id: UUID) -> List[UUID]
 
 def _get_organization_ids_with_documents(
     db: Session, expiry_cutoff: date
-) -> List[UUID]:
+) -> list[UUID]:
     """Get distinct organization IDs that have documents expiring within cutoff."""
     stmt = select(distinct(VehicleDocument.organization_id)).where(
         VehicleDocument.expiry_date.isnot(None),
@@ -89,7 +89,7 @@ def _notification_already_sent_today(
 
 def _get_organization_ids_with_maintenance(
     db: Session, date_cutoff: date
-) -> List[UUID]:
+) -> list[UUID]:
     """Get distinct organization IDs that have scheduled maintenance due within cutoff."""
     stmt = select(distinct(MaintenanceRecord.organization_id)).where(
         MaintenanceRecord.status == MaintenanceStatus.SCHEDULED,

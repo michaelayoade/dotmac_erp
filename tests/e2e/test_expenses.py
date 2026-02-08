@@ -200,7 +200,7 @@ class TestExpenseDetail:
             expense_link.click()
             authenticated_page.wait_for_load_state("networkidle")
 
-            receipt = authenticated_page.locator(
+            authenticated_page.locator(
                 "img, a:has-text('Receipt'), a:has-text('View Receipt'), .receipt"
             )
             # Receipt may or may not exist

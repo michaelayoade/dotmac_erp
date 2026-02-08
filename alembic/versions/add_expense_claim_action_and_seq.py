@@ -5,8 +5,9 @@ Revises: add_expense_cost_allocation
 Create Date: 2026-01-26
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "add_expense_claim_action_seq"

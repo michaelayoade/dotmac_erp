@@ -318,10 +318,8 @@ class TestCustomFieldCreate:
 
             # Check for text option
             options = type_field.first.locator("option")
-            has_text_option = False
             for i in range(options.count()):
                 if "text" in options.nth(i).text_content().lower():
-                    has_text_option = True
                     break
 
     def test_custom_field_create_number(self, authenticated_page, base_url):

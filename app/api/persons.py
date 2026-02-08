@@ -2,12 +2,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
-from app.schemas.common import ListResponse
 
 from app.db import SessionLocal
-from app.services.auth_dependencies import require_permission
+from app.schemas.common import ListResponse
 from app.schemas.person import PersonCreate, PersonRead, PersonUpdate
 from app.services import person as person_service
+from app.services.auth_dependencies import require_permission
 
 router = APIRouter(prefix="/people", tags=["people"])
 

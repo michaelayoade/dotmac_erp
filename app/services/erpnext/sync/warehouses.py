@@ -5,7 +5,7 @@ Warehouse Sync Service - ERPNext to DotMac ERP.
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -34,7 +34,7 @@ class WarehouseSyncService(BaseSyncService[Warehouse]):
         self._mapping = WarehouseMapping()
         self._warehouse_cache: dict[str, Warehouse] = {}
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         """Fetch warehouses from ERPNext."""
         if since:
             yield from client.get_modified_since(
@@ -90,7 +90,7 @@ class WarehouseSyncService(BaseSyncService[Warehouse]):
         """Get warehouse ID."""
         return entity.warehouse_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[Warehouse]:
+    def find_existing_entity(self, source_name: str) -> Warehouse | None:
         """Find existing warehouse by code."""
         if source_name in self._warehouse_cache:
             return self._warehouse_cache[source_name]

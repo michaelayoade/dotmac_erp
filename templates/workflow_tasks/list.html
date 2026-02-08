@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block title %}My Tasks - {{ brand.name | default("Dotmac") }}{% endblock %}
 
 {% block body %}
@@ -40,7 +41,7 @@
         {% else %}
 
         <!-- Summary Cards -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div class="bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 p-4">
                 <div class="flex items-center gap-3">
                     <div class="h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
@@ -180,9 +181,7 @@
                                                 {% else %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400{% endif %}">
                                                 {{ task.status | replace("_", " ") | title }}
                                             </span>
-                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400">
-                                                {{ task.module | replace("_", " ") | title }}
-                                            </span>
+                                            {{ status_badge(task.module, size="sm") }}
                                             <span class="{% if task.is_overdue %}text-rose-600 dark:text-rose-400 font-medium{% endif %}">
                                                 {{ task.due_display }}
                                             </span>

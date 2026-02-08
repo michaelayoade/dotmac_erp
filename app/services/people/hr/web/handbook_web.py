@@ -17,6 +17,7 @@ from app.services.people.hr.handbook_service import (
     HRDocumentService,
     HRDocumentValidationError,
 )
+from app.services.upload_utils import get_env_max_bytes, read_upload_bytes
 from app.templates import templates
 from app.web.deps import WebAuthContext
 
@@ -182,7 +183,14 @@ class HRHandbookWebService:
                 if not file or not file.filename:
                     raise HRDocumentValidationError("Please upload a document file")
 
-                file_content = await file.read()
+                max_bytes = get_env_max_bytes("MAX_HR_DOC_SIZE", 10 * 1024 * 1024)
+                file_content = await read_upload_bytes(
+                    file,
+                    max_bytes,
+                    error_detail=(
+                        f"File too large. Maximum size: {max_bytes // 1024 // 1024}MB"
+                    ),
+                )
                 if len(file_content) == 0:
                     raise HRDocumentValidationError("Uploaded file is empty")
 

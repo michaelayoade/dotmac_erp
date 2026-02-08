@@ -5,7 +5,6 @@ Builds context dictionaries for Jinja2 templates, keeping route handlers thin.
 """
 
 import logging
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -26,8 +25,8 @@ class IPSASWebService:
     def fund_list_context(
         self,
         organization_id: UUID,
-        status: Optional[str] = None,
-        fund_type: Optional[str] = None,
+        status: str | None = None,
+        fund_type: str | None = None,
         page: int = 1,
     ) -> dict:
         """Build context for fund list page."""
@@ -86,9 +85,9 @@ class IPSASWebService:
         self,
         organization_id: UUID,
         *,
-        fiscal_year_id: Optional[UUID] = None,
-        fund_id: Optional[UUID] = None,
-        status: Optional[str] = None,
+        fiscal_year_id: UUID | None = None,
+        fund_id: UUID | None = None,
+        status: str | None = None,
         page: int = 1,
     ) -> dict:
         """Build context for appropriation list page."""
@@ -162,8 +161,8 @@ class IPSASWebService:
         self,
         organization_id: UUID,
         *,
-        fund_id: Optional[UUID] = None,
-        status: Optional[str] = None,
+        fund_id: UUID | None = None,
+        status: str | None = None,
         page: int = 1,
     ) -> dict:
         """Build context for commitment register page."""
@@ -209,8 +208,8 @@ class IPSASWebService:
         self,
         organization_id: UUID,
         *,
-        fiscal_year_id: Optional[UUID] = None,
-        status: Optional[str] = None,
+        fiscal_year_id: UUID | None = None,
+        status: str | None = None,
         page: int = 1,
     ) -> dict:
         """Build context for virement list page."""
@@ -268,7 +267,7 @@ class IPSASWebService:
         organization_id: UUID,
         fiscal_year_id: UUID,
         *,
-        fund_id: Optional[UUID] = None,
+        fund_id: UUID | None = None,
     ) -> dict:
         """Build context for budget comparison page."""
         from app.services.finance.ipsas.budget_comparison_service import (
@@ -288,7 +287,7 @@ class IPSASWebService:
         self,
         organization_id: UUID,
         *,
-        fund_id: Optional[UUID] = None,
+        fund_id: UUID | None = None,
     ) -> dict:
         """Build context for available balance dashboard."""
         from app.services.finance.ipsas.available_balance_service import (

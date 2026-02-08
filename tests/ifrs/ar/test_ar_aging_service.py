@@ -11,16 +11,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.models.finance.ar.ar_aging_snapshot import ARAgingSnapshot
 from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus
-from app.models.finance.ar.ar_aging_snapshot import ARAgingSnapshot
 from app.services.finance.ar.ar_aging import (
     ARAgingService,
     CustomerAgingSummary,
     OrganizationARAgingSummary,
 )
 from app.services.finance.common.aging_helper import AgingBucket
-
 
 # -----------------------------------------------------------------------------
 # Fixtures
@@ -848,7 +847,7 @@ class TestList:
         mock_snapshots = [MagicMock(spec=ARAgingSnapshot)]
         mock_db.query.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_snapshots
 
-        result = ARAgingService.list(
+        ARAgingService.list(
             db=mock_db,
             limit=25,
             offset=50,

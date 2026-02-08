@@ -9,9 +9,8 @@ Handles:
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 import httpx
@@ -29,7 +28,7 @@ logger = logging.getLogger(__name__)
 class InventoryPushError(Exception):
     """Error pushing inventory to CRM."""
 
-    def __init__(self, message: str, status_code: Optional[int] = None):
+    def __init__(self, message: str, status_code: int | None = None):
         self.message = message
         self.status_code = status_code
         super().__init__(message)
@@ -42,7 +41,7 @@ class PushResult:
     success: bool
     items_pushed: int
     errors: list[str]
-    crm_response: Optional[dict] = None
+    crm_response: dict | None = None
 
 
 class InventoryPushService:
@@ -55,7 +54,7 @@ class InventoryPushService:
 
     def __init__(self, db: Session):
         self.db = db
-        self._client: Optional[httpx.Client] = None
+        self._client: httpx.Client | None = None
 
     @property
     def is_configured(self) -> bool:
@@ -128,7 +127,7 @@ class InventoryPushService:
         payload = {
             "sync_type": "full",
             "organization_id": str(organization_id),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "items": items,
         }
 
@@ -172,7 +171,7 @@ class InventoryPushService:
         payload = {
             "sync_type": "incremental",
             "organization_id": str(organization_id),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "items": items,
         }
 
@@ -226,7 +225,7 @@ class InventoryPushService:
         payload = {
             "sync_type": "low_stock_alert",
             "organization_id": str(organization_id),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "items": items,
         }
 
@@ -236,7 +235,7 @@ class InventoryPushService:
         self,
         organization_id: UUID,
         include_zero_stock: bool = False,
-        item_ids: Optional[list[UUID]] = None,
+        item_ids: list[UUID] | None = None,
     ) -> list[dict]:
         """
         Get inventory items with stock data for push.
@@ -417,7 +416,7 @@ class InventoryPushService:
                 settings.crm_inventory_webhook_url,  # type: ignore
                 json={
                     "sync_type": "health_check",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "items": [],
                 },
             )

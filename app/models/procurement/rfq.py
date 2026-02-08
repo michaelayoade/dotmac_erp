@@ -7,7 +7,7 @@ RFQ sent to vendors for competitive bidding.
 import uuid
 from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     Date,
@@ -79,26 +79,26 @@ class RequestForQuotation(Base, ProcurementBaseMixin):
     procurement_method: Mapped[ProcurementMethod] = mapped_column(
         default=ProcurementMethod.OPEN_COMPETITIVE,
     )
-    requisition_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    requisition_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="Source purchase requisition",
     )
-    plan_item_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    plan_item_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="Link to procurement plan item",
     )
-    evaluation_criteria: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+    evaluation_criteria: Mapped[list[dict[str, Any]] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="[{name, weight, description}]",
     )
-    terms_and_conditions: Mapped[Optional[str]] = mapped_column(
+    terms_and_conditions: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    estimated_value: Mapped[Optional[Decimal]] = mapped_column(
+    estimated_value: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
@@ -113,13 +113,13 @@ class RequestForQuotation(Base, ProcurementBaseMixin):
     )
 
     # Relationships
-    invitations: Mapped[List["RFQInvitation"]] = relationship(
+    invitations: Mapped[list["RFQInvitation"]] = relationship(
         "RFQInvitation",
         back_populates="rfq",
         cascade="all, delete-orphan",
         lazy="selectin",
     )
-    responses: Mapped[List["QuotationResponse"]] = relationship(
+    responses: Mapped[list["QuotationResponse"]] = relationship(
         "QuotationResponse",
         back_populates="rfq",
         lazy="selectin",

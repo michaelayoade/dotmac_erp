@@ -82,12 +82,12 @@ class VehicleReservation(Base, FleetBaseMixin, AuditMixin):
         DateTime(timezone=True),
         nullable=False,
     )
-    actual_start_datetime: Mapped[Optional[datetime]] = mapped_column(
+    actual_start_datetime: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="When vehicle was actually picked up",
     )
-    actual_end_datetime: Mapped[Optional[datetime]] = mapped_column(
+    actual_end_datetime: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="When vehicle was actually returned",
@@ -98,11 +98,11 @@ class VehicleReservation(Base, FleetBaseMixin, AuditMixin):
         String(500),
         nullable=False,
     )
-    destination: Mapped[Optional[str]] = mapped_column(
+    destination: Mapped[str | None] = mapped_column(
         String(300),
         nullable=True,
     )
-    estimated_distance_km: Mapped[Optional[int]] = mapped_column(
+    estimated_distance_km: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
     )
@@ -113,34 +113,34 @@ class VehicleReservation(Base, FleetBaseMixin, AuditMixin):
     )
 
     # Approval
-    approved_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    rejection_reason: Mapped[Optional[str]] = mapped_column(
+    rejection_reason: Mapped[str | None] = mapped_column(
         String(300),
         nullable=True,
     )
 
     # Odometer tracking
-    start_odometer: Mapped[Optional[int]] = mapped_column(
+    start_odometer: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Odometer at pickup",
     )
-    end_odometer: Mapped[Optional[int]] = mapped_column(
+    end_odometer: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Odometer at return",
     )
 
     # Notes
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -168,7 +168,7 @@ class VehicleReservation(Base, FleetBaseMixin, AuditMixin):
         return delta.total_seconds() / 3600
 
     @property
-    def actual_duration_hours(self) -> Optional[float]:
+    def actual_duration_hours(self) -> float | None:
         """Calculate actual usage duration in hours."""
         if self.actual_start_datetime and self.actual_end_datetime:
             delta = self.actual_end_datetime - self.actual_start_datetime
@@ -176,7 +176,7 @@ class VehicleReservation(Base, FleetBaseMixin, AuditMixin):
         return None
 
     @property
-    def actual_distance_km(self) -> Optional[int]:
+    def actual_distance_km(self) -> int | None:
         """Calculate actual distance traveled."""
         if self.start_odometer is not None and self.end_odometer is not None:
             return self.end_odometer - self.start_odometer

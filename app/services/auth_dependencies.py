@@ -1,7 +1,7 @@
 import logging
 import os
-from datetime import datetime, timedelta, timezone
-from typing import Optional, cast
+from datetime import UTC, datetime, timedelta
+from typing import cast
 from uuid import UUID
 
 from fastapi import Cookie, Depends, Header, HTTPException, Request
@@ -77,7 +77,7 @@ def _validate_session_sso(
     # Handle timezone-naive expires_at (SQLite doesn't preserve timezone)
     expires_at = session.expires_at
     if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
+        expires_at = expires_at.replace(tzinfo=UTC)
 
     if expires_at <= now:
         return None
@@ -153,7 +153,7 @@ def _validate_session_cached(
                         try:
                             expires_dt = datetime.fromisoformat(cached_expires)
                             if expires_dt.tzinfo is None:
-                                expires_dt = expires_dt.replace(tzinfo=timezone.utc)
+                                expires_dt = expires_dt.replace(tzinfo=UTC)
                             if expires_dt > now:
                                 logger.debug(
                                     "Session %s validated from cache", session_id
@@ -175,7 +175,7 @@ def _validate_session_cached(
         # Cache the valid session
         expires_at = session.expires_at
         if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
+            expires_at = expires_at.replace(tzinfo=UTC)
 
         cache_service.set(
             cache_key,
@@ -284,7 +284,7 @@ def get_current_user_id(
     if not person_id or not session_id:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     person_uuid = cast(UUID, coerce_uuid(person_id))
     session_uuid = coerce_uuid(session_id)
 
@@ -329,7 +329,7 @@ def get_current_org_id(
     if not person_id or not session_id:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     person_uuid = coerce_uuid(person_id)
     session_uuid = coerce_uuid(session_id)
 
@@ -361,7 +361,7 @@ def _make_aware(dt: datetime) -> datetime:
     if dt is None:
         return None
     if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
+        return dt.replace(tzinfo=UTC)
     return dt
 
 
@@ -421,7 +421,7 @@ def require_audit_auth(
     Supports JWT tokens, session tokens, and API keys.
     """
     token = _extract_bearer_token(authorization) or x_session_token
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if token:
         if _is_jwt(token):
             payload = decode_access_token(db, token)
@@ -518,7 +518,7 @@ def require_user_auth(
     if not person_id or not session_id:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     person_uuid = coerce_uuid(person_id)
     session_uuid = coerce_uuid(session_id)
 
@@ -672,7 +672,7 @@ def require_tenant_auth(
     if not person_id or not session_id:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     person_uuid = coerce_uuid(person_id)
     session_uuid = coerce_uuid(session_id)
 
@@ -851,7 +851,7 @@ def require_admin_bypass(
     if not person_id or not session_id:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     person_uuid = coerce_uuid(person_id)
     session_uuid = coerce_uuid(session_id)
 
@@ -975,8 +975,8 @@ def _resolve_web_session_from_access_token(
 
 def require_web_session(
     request: Request,
-    session_token: Optional[str] = Cookie(default=None, alias=WEB_SESSION_COOKIE),
-    access_token: Optional[str] = Cookie(default=None),
+    session_token: str | None = Cookie(default=None, alias=WEB_SESSION_COOKIE),
+    access_token: str | None = Cookie(default=None),
     db: Session = Depends(_get_db),
 ):
     """
@@ -1000,7 +1000,7 @@ def require_web_session(
     if not session_token and not access_token:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     session = None
     person = None
 
@@ -1049,7 +1049,7 @@ def require_web_session(
 
     request.state.actor_id = str(person.id)
 
-    def _clean_name(value: Optional[str]) -> str:
+    def _clean_name(value: str | None) -> str:
         cleaned = (value or "").strip()
         return "" if cleaned.lower() in {"none", "null"} else cleaned
 
@@ -1071,7 +1071,7 @@ def require_web_session(
 def _get_initials(person: Person) -> str:
     """Get user initials from person record."""
 
-    def _clean_name(value: Optional[str]) -> str:
+    def _clean_name(value: str | None) -> str:
         cleaned = (value or "").strip()
         return "" if cleaned.lower() in {"none", "null"} else cleaned
 
@@ -1091,8 +1091,8 @@ def _get_initials(person: Person) -> str:
 
 def optional_web_session(
     request: Request,
-    session_token: Optional[str] = Cookie(default=None, alias=WEB_SESSION_COOKIE),
-    access_token: Optional[str] = Cookie(default=None),
+    session_token: str | None = Cookie(default=None, alias=WEB_SESSION_COOKIE),
+    access_token: str | None = Cookie(default=None),
     db: Session = Depends(_get_db),
 ):
     """
@@ -1114,7 +1114,7 @@ def optional_web_session(
     if not session_token and not access_token:
         return None
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     session = None
     person = None
 
@@ -1162,7 +1162,7 @@ def optional_web_session(
 
     request.state.actor_id = str(person.id)
 
-    def _clean_name(value: Optional[str]) -> str:
+    def _clean_name(value: str | None) -> str:
         cleaned = (value or "").strip()
         return "" if cleaned.lower() in {"none", "null"} else cleaned
 

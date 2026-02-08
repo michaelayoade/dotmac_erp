@@ -15,6 +15,7 @@ class TestSettings:
         with patch.dict(os.environ, {}, clear=True):
             # Re-import to get fresh settings
             import importlib
+
             import app.config as config_module
 
             importlib.reload(config_module)
@@ -62,6 +63,7 @@ class TestSettings:
 
         with patch.dict(os.environ, {"DATABASE_URL": custom_url}):
             import importlib
+
             import app.config as config_module
 
             importlib.reload(config_module)
@@ -72,6 +74,7 @@ class TestSettings:
         """Test that DB_POOL_SIZE env var is respected."""
         with patch.dict(os.environ, {"DB_POOL_SIZE": "20"}):
             import importlib
+
             import app.config as config_module
 
             importlib.reload(config_module)
@@ -88,6 +91,7 @@ class TestSettings:
             },
         ):
             import importlib
+
             import app.config as config_module
 
             importlib.reload(config_module)
@@ -106,6 +110,7 @@ class TestSettings:
             },
         ):
             import importlib
+
             import app.config as config_module
 
             importlib.reload(config_module)

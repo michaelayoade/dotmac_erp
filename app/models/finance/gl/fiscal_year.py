@@ -4,7 +4,6 @@ Fiscal Year Model - GL Schema.
 
 import uuid
 from datetime import date, datetime
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -54,16 +53,16 @@ class FiscalYear(Base):
         Boolean, nullable=False, default=False
     )
     is_closed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    closed_at: Mapped[Optional[datetime]] = mapped_column(
+    closed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    closed_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    closed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
 
-    retained_earnings_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    retained_earnings_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,

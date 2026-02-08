@@ -5,7 +5,6 @@ HTML template routes for lease contracts, schedules, and modifications.
 """
 
 from datetime import date
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
@@ -18,8 +17,7 @@ from app.services.finance.lease import (
 from app.services.finance.lease.web import lease_web_service
 from app.services.finance.platform.currency_context import get_currency_context
 from app.templates import templates
-from app.web.deps import get_db, require_finance_access, WebAuthContext, base_context
-
+from app.web.deps import WebAuthContext, base_context, get_db, require_finance_access
 
 router = APIRouter(prefix="/lease", tags=["lease-web"])
 
@@ -33,9 +31,9 @@ router = APIRouter(prefix="/lease", tags=["lease-web"])
 def list_contracts(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    search: Optional[str] = None,
-    status: Optional[str] = None,
-    lease_type: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
+    lease_type: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -121,8 +119,8 @@ def view_schedule(
 def list_modifications(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    lease_id: Optional[str] = None,
-    modification_type: Optional[str] = None,
+    lease_id: str | None = None,
+    modification_type: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -162,7 +160,7 @@ def list_modifications(
 def list_variable_payments(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    lease_id: Optional[str] = None,
+    lease_id: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -179,7 +177,7 @@ def list_variable_payments(
 def overdue_payments(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    as_of_date: Optional[str] = None,
+    as_of_date: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Overdue lease payments page."""

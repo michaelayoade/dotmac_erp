@@ -10,20 +10,20 @@ import os
 import sys
 from datetime import date
 from decimal import Decimal
-from uuid import uuid4, UUID
+from uuid import UUID, uuid4
 
 from openpyxl import load_workbook
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.db import SessionLocal
+from app.models.finance.core_org.organization import Organization
 from app.models.finance.gl.account import Account, AccountType, NormalBalance
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 from app.models.finance.gl.fiscal_year import FiscalYear
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
-from app.models.finance.core_org.organization import Organization
 from app.services.finance.gl.ledger_posting import (
     LedgerPostingService,
     PostingRequest,
@@ -189,7 +189,7 @@ def parse_decimal(val) -> Decimal:
             return Decimal("0")
     try:
         return Decimal(str(val))
-    except:
+    except Exception:
         return Decimal("0")
 
 

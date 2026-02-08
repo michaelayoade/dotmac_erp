@@ -11,10 +11,9 @@ import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
-from fastapi import Request, UploadFile
+from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, load_only
@@ -72,7 +71,7 @@ _format_currency = format_currency
 _format_file_size = format_file_size
 
 
-def _parse_customer_type(value: Optional[str]) -> CustomerType:
+def _parse_customer_type(value: str | None) -> CustomerType:
     return parse_enum_safe(CustomerType, value, CustomerType.COMPANY)
 
 
@@ -248,7 +247,7 @@ def _invoice_line_view(line: InvoiceLine, currency_code: str) -> dict:
     }
 
 
-def _invoice_detail_view(invoice: Invoice, customer: Optional[Customer]) -> dict:
+def _invoice_detail_view(invoice: Invoice, customer: Customer | None) -> dict:
     balance = invoice.total_amount - invoice.amount_paid
     today = date.today()
     return {
@@ -275,9 +274,7 @@ def _invoice_detail_view(invoice: Invoice, customer: Optional[Customer]) -> dict
     }
 
 
-def _receipt_detail_view(
-    payment: CustomerPayment, customer: Optional[Customer]
-) -> dict:
+def _receipt_detail_view(payment: CustomerPayment, customer: Customer | None) -> dict:
     return {
         "receipt_id": payment.payment_id,
         "receipt_number": payment.payment_number,
@@ -305,7 +302,7 @@ def _receipt_detail_view(
 
 def _allocation_view(
     allocation: PaymentAllocation,
-    invoice: Optional[Invoice],
+    invoice: Invoice | None,
     currency_code: str,
 ) -> dict:
     return {
@@ -343,7 +340,7 @@ def _receipt_status_label(status: PaymentStatus) -> str:
     return str(status.value)
 
 
-def _parse_invoice_status(value: Optional[str]) -> Optional[InvoiceStatus]:
+def _parse_invoice_status(value: str | None) -> InvoiceStatus | None:
     if not value:
         return None
     if value == "PARTIAL":
@@ -354,7 +351,7 @@ def _parse_invoice_status(value: Optional[str]) -> Optional[InvoiceStatus]:
         return None
 
 
-def _parse_receipt_status(value: Optional[str]) -> Optional[PaymentStatus]:
+def _parse_receipt_status(value: str | None) -> PaymentStatus | None:
     if not value:
         return None
     status_map = {
@@ -369,7 +366,7 @@ def _get_accounts(
     db: Session,
     organization_id: UUID,
     ifrs_category: IFRSCategory,
-    subledger_type: Optional[str] = None,
+    subledger_type: str | None = None,
 ) -> list[Account]:
     query = (
         db.query(Account)
@@ -536,8 +533,8 @@ class ARWebService:
     def list_customers_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        status: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -625,7 +622,7 @@ class ARWebService:
     def customer_form_context(
         db: Session,
         organization_id: str,
-        customer_id: Optional[str] = None,
+        customer_id: str | None = None,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
         customer = None
@@ -681,7 +678,9 @@ class ARWebService:
         default_tax_code_label = None
         if customer.default_tax_code_id:
             try:
-                tax_code = tax_code_service.get(db, str(customer.default_tax_code_id))
+                tax_code = tax_code_service.get(
+                    db, str(customer.default_tax_code_id), org_id
+                )
                 if tax_code and tax_code.organization_id == org_id:
                     default_tax_code_label = (
                         f"{tax_code.tax_code} - {tax_code.tax_name}"
@@ -780,11 +779,11 @@ class ARWebService:
     def list_invoices_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        customer_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        customer_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -1061,11 +1060,11 @@ class ARWebService:
     def list_receipts_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        customer_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        customer_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -1158,9 +1157,9 @@ class ARWebService:
     def receipt_form_context(
         db: Session,
         organization_id: str,
-        invoice_id: Optional[str] = None,
-        receipt_id: Optional[str] = None,
-        customer_id: Optional[str] = None,
+        invoice_id: str | None = None,
+        receipt_id: str | None = None,
+        customer_id: str | None = None,
     ) -> dict:
         from app.models.finance.tax.tax_code import TaxCode, TaxType
 
@@ -1412,8 +1411,8 @@ class ARWebService:
     def aging_context(
         db: Session,
         organization_id: str,
-        as_of_date: Optional[str],
-        customer_id: Optional[str],
+        as_of_date: str | None,
+        customer_id: str | None,
     ) -> dict:
         import logging as _log
 
@@ -1455,7 +1454,9 @@ class ARWebService:
 
         # Build template-ready context from raw aging data
         currency = aging_data[0].currency_code if aging_data else "NGN"
-        fmt = lambda v: _format_currency(v, currency)
+
+        def fmt(v):
+            return _format_currency(v, currency)
 
         # Aggregate totals across all customers
         total_current = sum(r.current for r in aging_data)
@@ -1552,47 +1553,18 @@ class ARWebService:
         db: Session,
         organization_id: str,
         customer_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete a customer. Returns error message or None on success."""
         org_id = coerce_uuid(organization_id)
         cust_id = coerce_uuid(customer_id)
 
-        customer = db.get(Customer, cust_id)
-        if not customer or customer.organization_id != org_id:
-            return "Customer not found"
-
-        # Check for existing invoices
-        invoice_count = (
-            db.query(func.count(Invoice.invoice_id))
-            .filter(
-                Invoice.organization_id == org_id,
-                Invoice.customer_id == cust_id,
-            )
-            .scalar()
-            or 0
-        )
-
-        if invoice_count > 0:
-            return f"Cannot delete customer with {invoice_count} invoice(s). Deactivate instead."
-
-        # Check for existing payments
-        payment_count = (
-            db.query(func.count(CustomerPayment.payment_id))
-            .filter(
-                CustomerPayment.organization_id == org_id,
-                CustomerPayment.customer_id == cust_id,
-            )
-            .scalar()
-            or 0
-        )
-
-        if payment_count > 0:
-            return f"Cannot delete customer with {payment_count} receipt(s). Deactivate instead."
-
         try:
-            db.delete(customer)
+            customer_service.delete_customer(db, org_id, cust_id)
             db.commit()
             return None
+        except HTTPException as exc:
+            db.rollback()
+            return exc.detail
         except Exception as e:
             db.rollback()
             return f"Failed to delete customer: {str(e)}"
@@ -1602,38 +1574,18 @@ class ARWebService:
         db: Session,
         organization_id: str,
         invoice_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete an invoice. Returns error message or None on success."""
         org_id = coerce_uuid(organization_id)
         inv_id = coerce_uuid(invoice_id)
 
-        invoice = db.get(Invoice, inv_id)
-        if not invoice or invoice.organization_id != org_id:
-            return "Invoice not found"
-
-        # Only DRAFT invoices can be deleted
-        if invoice.status != InvoiceStatus.DRAFT:
-            return f"Cannot delete invoice with status '{invoice.status.value}'. Only DRAFT invoices can be deleted."
-
-        # Check for existing payment allocations
-        allocation_count = (
-            db.query(func.count(PaymentAllocation.allocation_id))
-            .filter(PaymentAllocation.invoice_id == inv_id)
-            .scalar()
-            or 0
-        )
-
-        if allocation_count > 0:
-            return (
-                f"Cannot delete invoice with {allocation_count} payment allocation(s)."
-            )
-
         try:
-            # Delete invoice lines first
-            db.query(InvoiceLine).filter(InvoiceLine.invoice_id == inv_id).delete()
-            db.delete(invoice)
+            ar_invoice_service.delete_invoice(db, org_id, inv_id)
             db.commit()
             return None
+        except HTTPException as exc:
+            db.rollback()
+            return exc.detail
         except Exception as e:
             db.rollback()
             return f"Failed to delete invoice: {str(e)}"
@@ -1714,27 +1666,18 @@ class ARWebService:
         db: Session,
         organization_id: str,
         receipt_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete a receipt. Returns error message or None on success."""
         org_id = coerce_uuid(organization_id)
         pay_id = coerce_uuid(receipt_id)
 
-        payment = db.get(CustomerPayment, pay_id)
-        if not payment or payment.organization_id != org_id:
-            return "Receipt not found"
-
-        # Only PENDING (DRAFT) receipts can be deleted
-        if payment.status != PaymentStatus.PENDING:
-            return f"Cannot delete receipt with status '{payment.status.value}'. Only draft receipts can be deleted."
-
         try:
-            # Delete allocations first
-            db.query(PaymentAllocation).filter(
-                PaymentAllocation.payment_id == pay_id
-            ).delete()
-            db.delete(payment)
+            customer_payment_service.delete_receipt(db, org_id, pay_id)
             db.commit()
             return None
+        except HTTPException as exc:
+            db.rollback()
+            return exc.detail
         except Exception as e:
             db.rollback()
             return f"Failed to delete receipt: {str(e)}"
@@ -1747,11 +1690,11 @@ class ARWebService:
     def list_credit_notes_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        customer_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        customer_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -1885,7 +1828,7 @@ class ARWebService:
     def credit_note_form_context(
         db: Session,
         organization_id: str,
-        invoice_id: Optional[str] = None,
+        invoice_id: str | None = None,
     ) -> dict:
         """Context for credit note form (optionally linked to an invoice)."""
         org_id = coerce_uuid(organization_id)
@@ -2118,39 +2061,18 @@ class ARWebService:
         db: Session,
         organization_id: str,
         credit_note_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete a credit note. Returns error message or None on success."""
         org_id = coerce_uuid(organization_id)
         cn_id = coerce_uuid(credit_note_id)
 
-        credit_note = db.get(Invoice, cn_id)
-        if not credit_note or credit_note.organization_id != org_id:
-            return "Credit note not found"
-
-        if credit_note.invoice_type != InvoiceType.CREDIT_NOTE:
-            return "Document is not a credit note"
-
-        # Only DRAFT credit notes can be deleted
-        if credit_note.status != InvoiceStatus.DRAFT:
-            return f"Cannot delete credit note with status '{credit_note.status.value}'. Only DRAFT credit notes can be deleted."
-
-        # Check for payment allocations
-        allocation_count = (
-            db.query(func.count(PaymentAllocation.allocation_id))
-            .filter(PaymentAllocation.invoice_id == cn_id)
-            .scalar()
-            or 0
-        )
-
-        if allocation_count > 0:
-            return f"Cannot delete credit note with {allocation_count} allocation(s)."
-
         try:
-            # Delete lines first
-            db.query(InvoiceLine).filter(InvoiceLine.invoice_id == cn_id).delete()
-            db.delete(credit_note)
+            ar_invoice_service.delete_credit_note(db, org_id, cn_id)
             db.commit()
             return None
+        except HTTPException as exc:
+            db.rollback()
+            return exc.detail
         except Exception as e:
             db.rollback()
             return f"Failed to delete credit note: {str(e)}"
@@ -2160,8 +2082,8 @@ class ARWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        status: str | None,
         page: int,
     ) -> HTMLResponse:
         context = base_context(request, auth, "Customers", "ar")
@@ -2318,11 +2240,11 @@ class ARWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str],
-        customer_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        customer_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
     ) -> HTMLResponse:
         context = base_context(request, auth, "AR Invoices", "ar")
@@ -2469,7 +2391,7 @@ class ARWebService:
         context.update(self.invoice_form_context(db, str(auth.organization_id)))
 
         # Add existing invoice data
-        customer = db.get(Customer, invoice.customer_id)
+        db.get(Customer, invoice.customer_id)
         lines = (
             db.query(InvoiceLine)
             .filter(InvoiceLine.invoice_id == inv_id)
@@ -2697,11 +2619,11 @@ class ARWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str],
-        customer_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        customer_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
     ) -> HTMLResponse:
         context = base_context(request, auth, "AR Receipts", "ar")
@@ -2724,8 +2646,8 @@ class ARWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        invoice_id: Optional[str],
-        customer_id: Optional[str] = None,
+        invoice_id: str | None,
+        customer_id: str | None = None,
     ) -> HTMLResponse:
         context = base_context(request, auth, "New AR Receipt", "ar")
         context.update(
@@ -2912,11 +2834,11 @@ class ARWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str],
-        customer_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        customer_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
     ) -> HTMLResponse:
         context = base_context(request, auth, "AR Credit Notes", "ar")
@@ -2941,7 +2863,7 @@ class ARWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        invoice_id: Optional[str],
+        invoice_id: str | None,
     ) -> HTMLResponse:
         context = base_context(request, auth, "New Credit Note", "ar")
         context.update(
@@ -3236,8 +3158,8 @@ class ARWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        as_of_date: Optional[str],
-        customer_id: Optional[str],
+        as_of_date: str | None,
+        customer_id: str | None,
     ) -> HTMLResponse:
         context = base_context(request, auth, "AR Aging Report", "ar")
         context.update(
@@ -3254,7 +3176,7 @@ class ARWebService:
         self,
         invoice_id: str,
         file: UploadFile,
-        description: Optional[str],
+        description: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:
@@ -3303,7 +3225,7 @@ class ARWebService:
         self,
         receipt_id: str,
         file: UploadFile,
-        description: Optional[str],
+        description: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:
@@ -3352,7 +3274,7 @@ class ARWebService:
         self,
         credit_note_id: str,
         file: UploadFile,
-        description: Optional[str],
+        description: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:
@@ -3403,7 +3325,7 @@ class ARWebService:
         self,
         customer_id: str,
         file: UploadFile,
-        description: Optional[str],
+        description: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:

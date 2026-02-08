@@ -6,7 +6,6 @@ import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -62,7 +61,7 @@ class DeferredTaxBasis(Base):
 
     basis_code: Mapped[str] = mapped_column(String(50), nullable=False)
     basis_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     difference_type: Mapped[DifferenceType] = mapped_column(
         Enum(DifferenceType, name="difference_type"),
@@ -71,10 +70,10 @@ class DeferredTaxBasis(Base):
 
     # Source of difference
     source_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    source_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    source_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    gl_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    gl_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
 
@@ -96,7 +95,7 @@ class DeferredTaxBasis(Base):
 
     # Recognition
     is_recognized: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    recognition_probability: Mapped[Optional[Decimal]] = mapped_column(
+    recognition_probability: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 4),
         nullable=True,
     )
@@ -105,7 +104,7 @@ class DeferredTaxBasis(Base):
     )
 
     # Reversal expectation
-    expected_reversal_year: Mapped[Optional[int]] = mapped_column(
+    expected_reversal_year: Mapped[int | None] = mapped_column(
         Numeric(4, 0), nullable=True
     )
     is_current_year_reversal: Mapped[bool] = mapped_column(
@@ -119,7 +118,7 @@ class DeferredTaxBasis(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

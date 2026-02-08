@@ -4,10 +4,12 @@ Tests for BankStatementService.
 
 from datetime import date
 from decimal import Decimal
+from io import BytesIO
 from unittest.mock import MagicMock
 from uuid import uuid4
 
 import pytest
+from openpyxl import Workbook
 
 from app.services.finance.banking.bank_statement import (
     BankStatementService,
@@ -144,6 +146,53 @@ class TestImportStatement:
             )
 
         assert exc.value.status_code == 403
+
+
+class TestParseXlsxRows:
+    def _build_workbook_bytes(self, headers, rows):
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(headers)
+        for row in rows:
+            sheet.append(row)
+        buf = BytesIO()
+        workbook.save(buf)
+        return buf.getvalue()
+
+    def test_parse_xlsx_rows_type_format(self, service):
+        content = self._build_workbook_bytes(
+            headers=["transaction_date", "transaction_type", "amount", "description"],
+            rows=[
+                [date(2026, 1, 15), "credit", 50000.0, "Salary deposit"],
+                [date(2026, 1, 16), "debit", 2500.0, "Office rent"],
+            ],
+        )
+
+        rows, errors = service.parse_xlsx_rows(content, "type")
+
+        assert errors == []
+        assert len(rows) == 2
+        assert rows[0]["transaction_type"] == "credit"
+        assert rows[0]["amount"] == Decimal("50000.0")
+        assert rows[1]["transaction_type"] == "debit"
+        assert rows[1]["amount"] == Decimal("2500.0")
+
+    def test_parse_xlsx_rows_debit_credit_format(self, service):
+        content = self._build_workbook_bytes(
+            headers=["Transaction Date", "Debit", "Credit", "Description"],
+            rows=[
+                [date(2026, 1, 17), 150.75, None, "ATM withdrawal"],
+                [date(2026, 1, 18), None, 12000.0, "Customer payment"],
+            ],
+        )
+
+        rows, errors = service.parse_xlsx_rows(content, "debit_credit")
+
+        assert errors == []
+        assert len(rows) == 2
+        assert rows[0]["debit"] == Decimal("150.75")
+        assert rows[0]["credit"] is None
+        assert rows[1]["credit"] == Decimal("12000.0")
 
     def test_import_duplicate_statement_fails(
         self, service, mock_db, org_id, sample_statement_lines
@@ -371,7 +420,7 @@ class TestUpdateStatus:
         statement = MockBankStatement(status="imported")
         mock_db.get.return_value = statement
 
-        result = service.update_status(
+        service.update_status(
             mock_db, statement.statement_id, BankStatementStatus.processing
         )
 
@@ -380,6 +429,7 @@ class TestUpdateStatus:
     def test_update_status_nonexistent_fails(self, service, mock_db):
         """Test updating status of non-existent statement fails."""
         from fastapi import HTTPException
+
         from app.models.finance.banking.bank_statement import BankStatementStatus
 
         mock_db.get.return_value = None
@@ -414,6 +464,7 @@ class TestDeleteStatement:
     def test_delete_reconciled_statement_fails(self, service, mock_db):
         """Test deleting reconciled statement fails."""
         from fastapi import HTTPException
+
         from app.models.finance.banking.bank_statement import BankStatementStatus
 
         statement = MockBankStatement(status=BankStatementStatus.reconciled)
@@ -430,6 +481,9 @@ class TestGetStatementSummary:
 
     def test_get_statement_summary(self, service, mock_db):
         """Test getting statement summary."""
+        org_id = uuid4()
+        bank_account = MockBankAccount(organization_id=org_id)
+        mock_db.get.return_value = bank_account
         mock_row = MagicMock()
         mock_row.total_statements = 5
         mock_row.total_lines = 100
@@ -437,7 +491,9 @@ class TestGetStatementSummary:
         mock_row.unmatched_lines = 20
         mock_db.execute.return_value.one.return_value = mock_row
 
-        result = service.get_statement_summary(mock_db, uuid4())
+        result = service.get_statement_summary(
+            mock_db, org_id, bank_account.bank_account_id
+        )
 
         assert result["total_statements"] == 5
         assert result["total_lines"] == 100
@@ -447,6 +503,9 @@ class TestGetStatementSummary:
 
     def test_get_statement_summary_empty(self, service, mock_db):
         """Test getting summary with no statements."""
+        org_id = uuid4()
+        bank_account = MockBankAccount(organization_id=org_id)
+        mock_db.get.return_value = bank_account
         mock_row = MagicMock()
         mock_row.total_statements = None
         mock_row.total_lines = None
@@ -454,7 +513,9 @@ class TestGetStatementSummary:
         mock_row.unmatched_lines = None
         mock_db.execute.return_value.one.return_value = mock_row
 
-        result = service.get_statement_summary(mock_db, uuid4())
+        result = service.get_statement_summary(
+            mock_db, org_id, bank_account.bank_account_id
+        )
 
         assert result["total_statements"] == 0
         assert result["match_rate"] == 0

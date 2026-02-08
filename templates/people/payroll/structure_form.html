@@ -27,7 +27,7 @@
 
         <div class="p-6 space-y-6">
             {# Basic Information #}
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <label for="structure_code" class="form-label">Code <span class="text-red-500">*</span></label>
                     <input type="text" name="structure_code" id="structure_code" required
@@ -74,7 +74,7 @@
                     </button>
                 </div>
 
-                <div class="space-y-3">
+                <div class="space-y-4">
                     <template x-for="(earning, index) in earnings" :key="index">
                         <div class="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-emerald-100 dark:border-emerald-800">
                             <select x-model="earning.component_id" name="earning_component[]" required class="form-select flex-1 text-sm">
@@ -116,7 +116,7 @@
                     </button>
                 </div>
 
-                <div class="space-y-3">
+                <div class="space-y-4">
                     <template x-for="(deduction, index) in deductions" :key="index">
                         <div class="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 rounded-lg border border-red-100 dark:border-red-800">
                             <select x-model="deduction.component_id" name="deduction_component[]" required class="form-select flex-1 text-sm">
@@ -145,7 +145,7 @@
             </div>
 
             {# Settings #}
-            <div class="space-y-3">
+            <div class="space-y-4">
                 <label class="flex items-center gap-3">
                     <input type="checkbox" name="is_active" value="true"
                         {% if (structure and (form_data.get('is_active') if form_data else structure.is_active)) or (not structure and form_data.get('is_active', True)) %}checked{% endif %}

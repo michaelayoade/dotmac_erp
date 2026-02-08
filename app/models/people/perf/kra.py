@@ -7,7 +7,7 @@ Defines areas of responsibility and goals.
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     ForeignKey,
@@ -67,19 +67,19 @@ class KRA(Base, AuditMixin, ERPNextSyncMixin):
         String(200),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Scope (can be org-wide, department, or designation specific)
-    department_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    department_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.department.department_id"),
         nullable=True,
         comment="If set, KRA applies to this department only",
     )
-    designation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    designation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.designation.designation_id"),
         nullable=True,
@@ -94,14 +94,14 @@ class KRA(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # Category
-    category: Mapped[Optional[str]] = mapped_column(
+    category: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="PERFORMANCE, BEHAVIOR, SKILL, LEARNING, etc.",
     )
 
     # Measurement
-    measurement_criteria: Mapped[Optional[str]] = mapped_column(
+    measurement_criteria: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="How this KRA is measured",
@@ -117,7 +117,7 @@ class KRA(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

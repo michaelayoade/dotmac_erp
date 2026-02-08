@@ -21,13 +21,13 @@
 
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
-                    <label for="fund_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fund Code</label>
+                    <label for="fund_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fund Code <span class="text-rose-500">*</span></label>
                     <input type="text" id="fund_code" name="fund_code" required maxlength="20"
                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white"
                            placeholder="e.g. GF-001">
                 </div>
                 <div>
-                    <label for="fund_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fund Type</label>
+                    <label for="fund_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fund Type <span class="text-rose-500">*</span></label>
                     <select id="fund_type" name="fund_type" required
                             class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                         {% for ft in fund_types %}
@@ -38,7 +38,7 @@
             </div>
 
             <div class="mt-4">
-                <label for="fund_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fund Name</label>
+                <label for="fund_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fund Name <span class="text-rose-500">*</span></label>
                 <input type="text" id="fund_name" name="fund_name" required maxlength="200"
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white"
                        placeholder="General Revenue Fund">
@@ -52,7 +52,7 @@
             </div>
 
             <div class="mt-4">
-                <label for="effective_from" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Effective From</label>
+                <label for="effective_from" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Effective From <span class="text-rose-500">*</span></label>
                 <input type="date" id="effective_from" name="effective_from" required
                        class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
             </div>

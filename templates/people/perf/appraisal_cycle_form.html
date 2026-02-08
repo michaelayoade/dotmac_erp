@@ -36,7 +36,7 @@
                 <h3 class="font-medium text-slate-900 dark:text-white">Basic Information</h3>
             </div>
             <div class="card-body space-y-4">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="cycle_code" class="form-label required">Cycle Code</label>
                         <input type="text" name="cycle_code" id="cycle_code" required
@@ -70,7 +70,7 @@
                 <p class="text-sm text-slate-500 dark:text-slate-400">The time period being evaluated (e.g., fiscal year)</p>
             </div>
             <div class="card-body">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="review_period_start" class="form-label required">Period Start</label>
                         <input type="date" name="review_period_start" id="review_period_start" required
@@ -94,7 +94,7 @@
                 <p class="text-sm text-slate-500 dark:text-slate-400">When the appraisal process runs</p>
             </div>
             <div class="card-body space-y-4">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="start_date" class="form-label required">Process Start</label>
                         <input type="date" name="start_date" id="start_date" required
@@ -120,7 +120,7 @@
                 <p class="text-sm text-slate-500 dark:text-slate-400">Optional deadlines for each phase</p>
             </div>
             <div class="card-body">
-                <div class="grid grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
                         <label for="self_assessment_deadline" class="form-label">Self-Assessment</label>
                         <input type="date" name="self_assessment_deadline" id="self_assessment_deadline"
@@ -149,7 +149,7 @@
                 <h3 class="font-medium text-slate-900 dark:text-white">Eligibility Settings</h3>
             </div>
             <div class="card-body space-y-4">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="min_tenure_months" class="form-label">Minimum Tenure (months)</label>
                         <input type="number" name="min_tenure_months" id="min_tenure_months"
@@ -169,7 +169,7 @@
             </div>
         </div>
 
-        <div class="flex justify-end gap-3">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/people/perf/cycles{% if cycle %}/{{ cycle.cycle_id }}{% endif %}" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 {% if cycle %}Save Changes{% else %}Create Cycle{% endif %}

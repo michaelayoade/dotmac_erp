@@ -6,7 +6,6 @@ Handles team management, assignment, and workload distribution.
 
 import logging
 import uuid
-from typing import List, Optional, Tuple
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
@@ -25,7 +24,7 @@ class TeamService:
         db: Session,
         organization_id: uuid.UUID,
         active_only: bool = True,
-    ) -> List[SupportTeam]:
+    ) -> list[SupportTeam]:
         """
         List support teams for an organization.
 
@@ -54,7 +53,7 @@ class TeamService:
         self,
         db: Session,
         team_id: uuid.UUID,
-    ) -> Optional[SupportTeam]:
+    ) -> SupportTeam | None:
         """Get a team by ID with members loaded."""
         return db.execute(
             select(SupportTeam)
@@ -67,7 +66,7 @@ class TeamService:
         db: Session,
         organization_id: uuid.UUID,
         team_code: str,
-    ) -> Optional[SupportTeam]:
+    ) -> SupportTeam | None:
         """Get a team by code."""
         return db.execute(
             select(SupportTeam).where(
@@ -82,10 +81,10 @@ class TeamService:
         organization_id: uuid.UUID,
         team_code: str,
         team_name: str,
-        description: Optional[str] = None,
-        lead_id: Optional[uuid.UUID] = None,
+        description: str | None = None,
+        lead_id: uuid.UUID | None = None,
         auto_assign: bool = False,
-    ) -> Tuple[Optional[SupportTeam], Optional[str]]:
+    ) -> tuple[SupportTeam | None, str | None]:
         """
         Create a new support team.
 
@@ -125,12 +124,12 @@ class TeamService:
         self,
         db: Session,
         team_id: uuid.UUID,
-        team_name: Optional[str] = None,
-        description: Optional[str] = None,
-        lead_id: Optional[uuid.UUID] = None,
-        is_active: Optional[bool] = None,
-        auto_assign: Optional[bool] = None,
-    ) -> Optional[SupportTeam]:
+        team_name: str | None = None,
+        description: str | None = None,
+        lead_id: uuid.UUID | None = None,
+        is_active: bool | None = None,
+        auto_assign: bool | None = None,
+    ) -> SupportTeam | None:
         """Update a team."""
         team = self.get_team(db, team_id)
         if not team:
@@ -156,10 +155,10 @@ class TeamService:
         db: Session,
         team_id: uuid.UUID,
         employee_id: uuid.UUID,
-        role: Optional[str] = None,
+        role: str | None = None,
         is_available: bool = True,
         assignment_weight: int = 1,
-    ) -> Tuple[Optional[SupportTeamMember], Optional[str]]:
+    ) -> tuple[SupportTeamMember | None, str | None]:
         """
         Add a member to a team.
 
@@ -227,10 +226,10 @@ class TeamService:
         self,
         db: Session,
         member_id: uuid.UUID,
-        role: Optional[str] = None,
-        is_available: Optional[bool] = None,
-        assignment_weight: Optional[int] = None,
-    ) -> Optional[SupportTeamMember]:
+        role: str | None = None,
+        is_available: bool | None = None,
+        assignment_weight: int | None = None,
+    ) -> SupportTeamMember | None:
         """Update a team member."""
         member = db.get(SupportTeamMember, member_id)
         if not member:
@@ -251,7 +250,7 @@ class TeamService:
         self,
         db: Session,
         team_id: uuid.UUID,
-    ) -> Optional[uuid.UUID]:
+    ) -> uuid.UUID | None:
         """
         Get the next employee to assign a ticket to (weighted round-robin).
 
@@ -273,10 +272,8 @@ class TeamService:
                     SupportTeamMember.is_available == True,  # noqa: E712
                 )
                 .order_by(
-                    (
-                        SupportTeamMember.assigned_count
-                        / SupportTeamMember.assignment_weight
-                    )
+                    SupportTeamMember.assigned_count
+                    / SupportTeamMember.assignment_weight
                 )
             )
             .scalars()
@@ -301,7 +298,7 @@ class TeamService:
         ticket: Ticket,
         team_id: uuid.UUID,
         auto_assign_member: bool = False,
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Assign a ticket to a team.
 

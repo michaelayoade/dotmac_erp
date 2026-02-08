@@ -7,9 +7,9 @@ Setup Dotmac Technologies and sync expense data from ERPNext.
 3. Sync expense categories and claims
 """
 
-import sys
-import os
 import logging
+import os
+import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -28,17 +28,17 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from sqlalchemy import select
+
 from app.db import SessionLocal
 from app.models.finance.core_org.organization import Organization
 from app.models.person import Person
 from app.models.sync import IntegrationType
-from app.services.integration_config import IntegrationConfigService
 from app.services.erpnext.sync.orchestrator import (
     ERPNextSyncOrchestrator,
     MigrationConfig,
     SyncType,
 )
-
+from app.services.integration_config import IntegrationConfigService
 
 # ERPNext credentials (from existing config)
 ERPNEXT_URL = "https://erp.dotmac.ng"
@@ -160,7 +160,7 @@ def run_expense_sync(db, org, user_id):
     # Preview
     print("\nPreviewing data to sync...")
     preview = orchestrator.preview()
-    for entity_type, info in preview.get("entity_types", {}).items():
+    for _entity_type, info in preview.get("entity_types", {}).items():
         print(f"  {info['name']}: {info['count']} records")
 
     # Run sync
@@ -203,7 +203,7 @@ def main():
             user_id = get_admin_user(db, org)
 
             # Step 4: Run expense sync
-            history = run_expense_sync(db, org, user_id)
+            run_expense_sync(db, org, user_id)
             db.commit()
 
             print("\n✓ Setup and sync complete!")

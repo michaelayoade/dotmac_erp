@@ -543,7 +543,7 @@
                                     Failed
                                 </span>
                                 {% else %}
-                                <span class="badge badge-neutral">{{ report.status }}</span>
+                                <span class="badge badge-neutral">{{ report.status | replace('_', ' ') | title }}</span>
                                 {% endif %}
                             </td>
                             <td>

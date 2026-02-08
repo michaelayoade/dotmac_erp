@@ -93,7 +93,7 @@ def identify_icon(content: str) -> str | None:
 
 def process_file(filepath: str) -> int:
     """Process a single HTML file. Returns number of elements modified."""
-    with open(filepath, "r", encoding="utf-8") as f:
+    with open(filepath, encoding="utf-8") as f:
         content = f.read()
 
     # Quick checks

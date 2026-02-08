@@ -7,11 +7,12 @@ and tax payments/refunds.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -21,6 +22,7 @@ from sqlalchemy.orm import Session
 from app.models.finance.tax.tax_code import TaxCode
 from app.models.finance.tax.tax_transaction import TaxTransaction, TaxTransactionType
 from app.services.common import coerce_uuid
+from app.services.finance.platform.org_context import org_context_service
 from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
@@ -43,17 +45,42 @@ class TaxTransactionInput:
     tax_amount: Decimal
     functional_base_amount: Decimal
     functional_tax_amount: Decimal
-    source_document_line_id: Optional[UUID] = None
-    source_document_reference: Optional[str] = None
-    counterparty_type: Optional[str] = None
-    counterparty_id: Optional[UUID] = None
-    counterparty_name: Optional[str] = None
-    counterparty_tax_id: Optional[str] = None
-    exchange_rate: Optional[Decimal] = None
+    source_document_line_id: UUID | None = None
+    source_document_reference: str | None = None
+    counterparty_type: str | None = None
+    counterparty_id: UUID | None = None
+    counterparty_name: str | None = None
+    counterparty_tax_id: str | None = None
+    exchange_rate: Decimal | None = None
     recoverable_amount: Decimal = Decimal("0")
     non_recoverable_amount: Decimal = Decimal("0")
-    tax_return_period: Optional[str] = None
-    tax_return_box: Optional[str] = None
+    tax_return_period: str | None = None
+    tax_return_box: str | None = None
+
+
+@dataclass
+class TaxTransactionCreateInput:
+    """Input for creating a tax transaction from external requests."""
+
+    fiscal_period_id: UUID
+    tax_code_id: UUID
+    transaction_type: TaxTransactionType | None
+    transaction_date: date
+    source_document_type: str
+    source_document_id: UUID
+    base_amount: Decimal
+    tax_amount: Decimal
+    is_input_tax: bool | None = None
+    source_document_line_id: UUID | None = None
+    source_document_reference: str | None = None
+    counterparty_type: str | None = None
+    counterparty_id: UUID | None = None
+    counterparty_name: str | None = None
+    counterparty_tax_id: str | None = None
+    currency_code: str | None = None
+    exchange_rate: Decimal | None = None
+    tax_return_period: str | None = None
+    tax_return_box: str | None = None
 
 
 @dataclass
@@ -152,6 +179,88 @@ class TaxTransactionService(ListResponseMixin):
         return transaction
 
     @staticmethod
+    def create_transaction_from_input(
+        db: Session,
+        organization_id: UUID,
+        input: TaxTransactionCreateInput,
+    ) -> TaxTransaction:
+        """
+        Create a tax transaction from external inputs.
+
+        Computes transaction type defaults, functional amounts, and
+        recoverable vs non-recoverable portions based on tax code settings.
+        """
+        org_id = coerce_uuid(organization_id)
+
+        tax_code = db.get(TaxCode, input.tax_code_id)
+        if not tax_code or tax_code.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Tax code not found")
+
+        tx_type = input.transaction_type
+        if tx_type is None:
+            if input.is_input_tax is None:
+                tx_type = TaxTransactionType.INPUT
+            else:
+                tx_type = (
+                    TaxTransactionType.INPUT
+                    if input.is_input_tax
+                    else TaxTransactionType.OUTPUT
+                )
+
+        exchange_rate = input.exchange_rate or Decimal("1.0")
+        functional_base = (input.base_amount * exchange_rate).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+        functional_tax = (input.tax_amount * exchange_rate).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+
+        recoverable = Decimal("0")
+        non_recoverable = Decimal("0")
+        if tx_type == TaxTransactionType.INPUT:
+            if tax_code.is_recoverable:
+                recoverable = (input.tax_amount * tax_code.recovery_rate).quantize(
+                    Decimal("0.01"), rounding=ROUND_HALF_UP
+                )
+                non_recoverable = input.tax_amount - recoverable
+            else:
+                non_recoverable = input.tax_amount
+
+        currency_code = (
+            input.currency_code
+            or org_context_service.get_functional_currency(db, organization_id)
+        )
+
+        input_data = TaxTransactionInput(
+            fiscal_period_id=input.fiscal_period_id,
+            tax_code_id=input.tax_code_id,
+            jurisdiction_id=tax_code.jurisdiction_id,
+            transaction_type=tx_type,
+            transaction_date=input.transaction_date,
+            source_document_type=input.source_document_type,
+            source_document_id=input.source_document_id,
+            source_document_line_id=input.source_document_line_id,
+            source_document_reference=input.source_document_reference,
+            counterparty_type=input.counterparty_type,
+            counterparty_id=input.counterparty_id,
+            counterparty_name=input.counterparty_name,
+            counterparty_tax_id=input.counterparty_tax_id,
+            currency_code=currency_code,
+            base_amount=input.base_amount,
+            tax_rate=tax_code.tax_rate,
+            tax_amount=input.tax_amount,
+            exchange_rate=exchange_rate,
+            functional_base_amount=functional_base,
+            functional_tax_amount=functional_tax,
+            recoverable_amount=recoverable,
+            non_recoverable_amount=non_recoverable,
+            tax_return_period=input.tax_return_period,
+            tax_return_box=input.tax_return_box,
+        )
+
+        return TaxTransactionService.create_transaction(db, org_id, input_data)
+
+    @staticmethod
     def create_from_invoice_line(
         db: Session,
         organization_id: UUID,
@@ -164,8 +273,8 @@ class TaxTransactionService(ListResponseMixin):
         is_purchase: bool,
         base_amount: Decimal,
         currency_code: str,
-        counterparty_name: Optional[str] = None,
-        counterparty_tax_id: Optional[str] = None,
+        counterparty_name: str | None = None,
+        counterparty_tax_id: str | None = None,
         exchange_rate: Decimal = Decimal("1.0"),
     ) -> TaxTransaction:
         """
@@ -378,7 +487,7 @@ class TaxTransactionService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         fiscal_period_id: UUID,
-        transaction_type: Optional[TaxTransactionType] = None,
+        transaction_type: TaxTransactionType | None = None,
     ) -> list[TaxByCodeSummary]:
         """
         Get tax summary grouped by tax code.
@@ -473,26 +582,31 @@ class TaxTransactionService(ListResponseMixin):
     def get(
         db: Session,
         transaction_id: str,
+        organization_id: UUID | None = None,
     ) -> TaxTransaction:
         """Get a tax transaction by ID."""
         transaction = db.get(TaxTransaction, coerce_uuid(transaction_id))
         if not transaction:
+            raise HTTPException(status_code=404, detail="Tax transaction not found")
+        if organization_id is not None and transaction.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Tax transaction not found")
         return transaction
 
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        fiscal_period_id: Optional[str] = None,
-        tax_code_id: Optional[str] = None,
-        transaction_type: Optional[TaxTransactionType] = None,
-        is_included_in_return: Optional[bool] = None,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
+        organization_id: str | None = None,
+        fiscal_period_id: str | None = None,
+        tax_code_id: str | None = None,
+        transaction_type: TaxTransactionType | None = None,
+        is_included_in_return: bool | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[TaxTransaction]:
+    ) -> builtins.list[TaxTransaction]:
         """List tax transactions with optional filters."""
         query = db.query(TaxTransaction)
 
@@ -531,7 +645,7 @@ class TaxTransactionService(ListResponseMixin):
         db: Session,
         organization_id: str,
         fiscal_period_id: str,
-    ) -> List[TaxTransaction]:
+    ) -> builtins.list[TaxTransaction]:
         """Get transactions not yet included in a tax return."""
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(fiscal_period_id)
@@ -553,11 +667,11 @@ class TaxTransactionService(ListResponseMixin):
         organization_id: str,
         start_date: date,
         end_date: date,
-        transaction_type: Optional[TaxTransactionType] = None,
-        tax_code_id: Optional[str] = None,
+        transaction_type: TaxTransactionType | None = None,
+        tax_code_id: str | None = None,
         page: int = 1,
         limit: int = 50,
-    ) -> Tuple[List[Dict[str, Any]], int]:
+    ) -> tuple[builtins.list[dict[str, Any]], int]:
         """
         Get VAT register - detailed list of all tax transactions.
 
@@ -646,7 +760,7 @@ class TaxTransactionService(ListResponseMixin):
         start_date: date,
         end_date: date,
         group_by: str = "period",
-    ) -> List[Dict[str, Any]]:
+    ) -> builtins.list[dict[str, Any]]:
         """
         Get tax liability summary (Output Tax - Input Tax = Net Payable).
 

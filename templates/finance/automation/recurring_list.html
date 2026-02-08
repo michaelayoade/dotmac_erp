@@ -53,7 +53,7 @@
 
     <!-- Templates Table -->
     <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="w-full">
                 <thead>
                     <tr class="border-b border-slate-200 dark:border-slate-700">
@@ -74,8 +74,8 @@
                                 {{ template.template_name }}
                             </a>
                         </td>
-                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ template.entity_type }}</td>
-                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ template.frequency }}</td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ template.entity_type | replace('_', ' ') | title }}</td>
+                        <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ template.frequency | replace('_', ' ') | title }}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
                             {% if template.next_run_date %}{{ template.next_run_date }}{% else %}-{% endif %}
                         </td>
@@ -113,6 +113,7 @@
                                 </a>
                                 {% if template.is_active %}
                                 <form method="post" action="/automation/recurring/{{ template.template_id }}/generate" class="inline">
+                                    {{ request.state.csrf_form | safe }}
                                     <button type="submit"
                                             class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-teal-600 dark:hover:bg-slate-700 dark:hover:text-teal-400"
                                             title="Generate Now">

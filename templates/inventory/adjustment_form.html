@@ -28,7 +28,8 @@
         </p>
     </div>
 
-    <form method="post" action="/inventory/transactions/adjustment/new" class="space-y-8">
+    <form method="post" action="/inventory/transactions/adjustment/new" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
         <!-- Transaction Details -->
         <div class="card stagger-in" style="animation-delay: 50ms;">
             <div class="card-header border-b border-slate-100 dark:border-slate-700">
@@ -131,7 +132,7 @@
         </div>
 
         <!-- Actions -->
-        <div class="flex justify-end gap-4 stagger-in" style="animation-delay: 100ms;">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700 stagger-in" style="animation-delay: 100ms;">
             <a href="/inventory/transactions" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn-primary">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

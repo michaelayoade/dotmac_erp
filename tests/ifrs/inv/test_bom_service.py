@@ -5,7 +5,7 @@ Tests Bill of Materials management and assembly/disassembly operations.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -14,14 +14,13 @@ from fastapi import HTTPException
 
 from app.models.inventory.bom import BOMType
 from app.services.inventory.bom import (
-    BOMService,
-    BOMInput,
-    BOMComponentInput,
     AssemblyInput,
     AssemblyResult,
+    BOMComponentInput,
+    BOMInput,
+    BOMService,
 )
 from tests.ifrs.inv.conftest import MockItem
-
 
 # ============ Mock Classes ============
 
@@ -421,7 +420,7 @@ class TestProcessAssembly:
             warehouse_id=warehouse_id,
             quantity=Decimal("10"),
             fiscal_period_id=fiscal_period_id,
-            transaction_date=datetime.now(timezone.utc),
+            transaction_date=datetime.now(UTC),
         )
 
         with pytest.raises(HTTPException) as exc:
@@ -441,7 +440,7 @@ class TestProcessAssembly:
             warehouse_id=warehouse_id,
             quantity=Decimal("10"),
             fiscal_period_id=fiscal_period_id,
-            transaction_date=datetime.now(timezone.utc),
+            transaction_date=datetime.now(UTC),
         )
 
         with pytest.raises(HTTPException) as exc:
@@ -462,7 +461,7 @@ class TestProcessAssembly:
             warehouse_id=warehouse_id,
             quantity=Decimal("10"),
             fiscal_period_id=fiscal_period_id,
-            transaction_date=datetime.now(timezone.utc),
+            transaction_date=datetime.now(UTC),
         )
 
         with pytest.raises(HTTPException) as exc:
@@ -497,7 +496,7 @@ class TestProcessAssembly:
             warehouse_id=warehouse_id,
             quantity=Decimal("100"),  # Requires 500 components
             fiscal_period_id=fiscal_period_id,
-            transaction_date=datetime.now(timezone.utc),
+            transaction_date=datetime.now(UTC),
         )
 
         with patch(
@@ -543,7 +542,7 @@ class TestProcessAssembly:
             warehouse_id=warehouse_id,
             quantity=Decimal("10"),
             fiscal_period_id=fiscal_period_id,
-            transaction_date=datetime.now(timezone.utc),
+            transaction_date=datetime.now(UTC),
         )
 
         with patch(
@@ -606,7 +605,7 @@ class TestProcessAssembly:
             warehouse_id=warehouse_id,
             quantity=Decimal("5"),  # Produce 5 finished goods
             fiscal_period_id=fiscal_period_id,
-            transaction_date=datetime.now(timezone.utc),
+            transaction_date=datetime.now(UTC),
         )
 
         with patch(
@@ -664,7 +663,7 @@ class TestProcessAssembly:
             warehouse_id=warehouse_id,
             quantity=Decimal("1"),
             fiscal_period_id=fiscal_period_id,
-            transaction_date=datetime.now(timezone.utc),
+            transaction_date=datetime.now(UTC),
         )
 
         with patch(
@@ -705,7 +704,7 @@ class TestProcessDisassembly:
             warehouse_id=warehouse_id,
             quantity=Decimal("10"),
             fiscal_period_id=fiscal_period_id,
-            transaction_date=datetime.now(timezone.utc),
+            transaction_date=datetime.now(UTC),
         )
 
         with pytest.raises(HTTPException) as exc:
@@ -724,7 +723,7 @@ class TestProcessDisassembly:
             warehouse_id=warehouse_id,
             quantity=Decimal("100"),
             fiscal_period_id=fiscal_period_id,
-            transaction_date=datetime.now(timezone.utc),
+            transaction_date=datetime.now(UTC),
         )
 
         with patch(
@@ -771,7 +770,7 @@ class TestProcessDisassembly:
             warehouse_id=warehouse_id,
             quantity=Decimal("5"),  # Disassemble 5 units
             fiscal_period_id=fiscal_period_id,
-            transaction_date=datetime.now(timezone.utc),
+            transaction_date=datetime.now(UTC),
         )
 
         with patch(

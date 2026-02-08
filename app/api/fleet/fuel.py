@@ -5,7 +5,6 @@ REST API for fuel log management.
 """
 
 from datetime import date
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -38,10 +37,10 @@ def get_db():
 @router.get("", response_model=FuelLogListResponse)
 def list_fuel_logs(
     organization_id: UUID = Depends(require_organization_id),
-    vehicle_id: Optional[UUID] = None,
-    employee_id: Optional[UUID] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    vehicle_id: UUID | None = None,
+    employee_id: UUID | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -64,11 +63,11 @@ def list_fuel_logs(
     )
 
 
-@router.get("/efficiency/{vehicle_id}", response_model=Optional[FuelEfficiencyReport])
+@router.get("/efficiency/{vehicle_id}", response_model=FuelEfficiencyReport | None)
 def get_fuel_efficiency(
     vehicle_id: UUID,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     organization_id: UUID = Depends(require_organization_id),
     db: Session = Depends(get_db),
 ):

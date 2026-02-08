@@ -2,7 +2,6 @@
 Quotation Response API Endpoints.
 """
 
-from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -29,7 +28,7 @@ def get_db():
         db.close()
 
 
-@router.get("/rfq/{rfq_id}", response_model=List[QuotationResponseSchema])
+@router.get("/rfq/{rfq_id}", response_model=list[QuotationResponseSchema])
 def list_for_rfq(
     rfq_id: UUID,
     organization_id: UUID = Depends(require_organization_id),

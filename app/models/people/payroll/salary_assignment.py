@@ -7,7 +7,7 @@ Links employees to their salary structures.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Date,
@@ -84,7 +84,7 @@ class SalaryStructureAssignment(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         comment="Assignment effective from",
     )
-    to_date: Mapped[Optional[date]] = mapped_column(
+    to_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="Assignment effective until (null = current)",
@@ -103,7 +103,7 @@ class SalaryStructureAssignment(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # Tax settings
-    income_tax_slab: Mapped[Optional[str]] = mapped_column(
+    income_tax_slab: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Tax slab/bracket for PAYE calculation",
@@ -114,7 +114,7 @@ class SalaryStructureAssignment(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

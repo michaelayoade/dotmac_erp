@@ -12,9 +12,10 @@ Revises: 20260127_add_salary_slip_bank_branch_code
 Create Date: 2026-01-27
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
+
+from alembic import op
 from app.alembic_utils import ensure_enum
 
 # revision identifiers, used by Alembic.

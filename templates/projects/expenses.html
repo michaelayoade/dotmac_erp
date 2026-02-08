@@ -1,5 +1,6 @@
 {% extends "modules/base_modules.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block title %}Expenses - {{ project.project_name }}{% endblock %}
 
 {% block content %}
@@ -110,9 +111,7 @@
                             'REJECTED': 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
                             'PAID': 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
                         } %}
-                        <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium {{ status_colors.get(expense_status, 'bg-slate-100') }}">
-                            {{ expense_status | replace('_', ' ') | title }}
-                        </span>
+                        {{ status_badge(expense_status, size="sm") }}
                     </td>
                 </tr>
                 {% else %}

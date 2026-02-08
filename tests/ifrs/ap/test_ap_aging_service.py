@@ -4,11 +4,12 @@ Tests for APAgingService.
 Tests AP aging calculations, snapshots, and overdue invoice analysis.
 """
 
-import pytest
 from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
+
+import pytest
 
 from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus
 from app.services.finance.ap.ap_aging import (
@@ -494,7 +495,7 @@ class TestCreateAgingSnapshot:
 
         mock_snapshot_class.return_value = MockAPAgingSnapshot()
 
-        result = APAgingService.create_aging_snapshot(
+        APAgingService.create_aging_snapshot(
             mock_db, org_id, fiscal_period_id, created_by_user_id=user_id
         )
 

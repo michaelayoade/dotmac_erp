@@ -11,7 +11,6 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -31,8 +30,8 @@ from app.services.finance.gl.journal import (
     JournalInput,
     JournalLineInput,
 )
-from app.services.finance.posting.base import BasePostingAdapter, PostingResult
 from app.services.finance.platform.org_context import org_context_service
+from app.services.finance.posting.base import BasePostingAdapter, PostingResult
 
 logger = logging.getLogger(__name__)
 
@@ -58,8 +57,8 @@ class FAPostingAdapter:
         posting_date: date,
         posted_by_user_id: UUID,
         credit_account_id: UUID,
-        description: Optional[str] = None,
-        idempotency_key: Optional[str] = None,
+        description: str | None = None,
+        idempotency_key: str | None = None,
     ) -> FAPostingResult:
         """
         Post an asset acquisition to the general ledger.
@@ -177,7 +176,7 @@ class FAPostingAdapter:
         run_id: UUID,
         posting_date: date,
         posted_by_user_id: UUID,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> FAPostingResult:
         """
         Post a depreciation run to the general ledger.
@@ -337,7 +336,7 @@ class FAPostingAdapter:
         disposal_id: UUID,
         posting_date: date,
         posted_by_user_id: UUID,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> FAPostingResult:
         """
         Post an asset disposal to the general ledger.
@@ -508,7 +507,7 @@ class FAPostingAdapter:
         revaluation_id: UUID,
         posting_date: date,
         posted_by_user_id: UUID,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> FAPostingResult:
         """
         Post an asset revaluation to the general ledger.

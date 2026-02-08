@@ -3,9 +3,8 @@ Fixtures for Lease module tests.
 """
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
@@ -14,7 +13,6 @@ import pytest
 from app.models.finance.lease.lease_contract import LeaseClassification, LeaseStatus
 from app.models.finance.lease.lease_modification import ModificationType
 from app.models.finance.lease.lease_payment_schedule import PaymentStatus
-
 
 # ============ Mock Models ============
 
@@ -28,51 +26,51 @@ class MockLeaseContract:
         organization_id: uuid.UUID = None,
         lease_number: str = "LEASE-0001",
         lease_name: str = "Office Lease",
-        description: Optional[str] = None,
-        lessor_supplier_id: Optional[uuid.UUID] = None,
+        description: str | None = None,
+        lessor_supplier_id: uuid.UUID | None = None,
         lessor_name: str = "Property Holdings Inc.",
-        external_reference: Optional[str] = None,
+        external_reference: str | None = None,
         classification: LeaseClassification = LeaseClassification.FINANCE,
         is_lessee: bool = True,
         commencement_date: date = None,
         end_date: date = None,
         lease_term_months: int = 60,
         has_renewal_option: bool = False,
-        renewal_option_term_months: Optional[int] = None,
+        renewal_option_term_months: int | None = None,
         renewal_reasonably_certain: bool = False,
         has_purchase_option: bool = False,
-        purchase_option_price: Optional[Decimal] = None,
+        purchase_option_price: Decimal | None = None,
         purchase_reasonably_certain: bool = False,
         has_termination_option: bool = False,
-        termination_penalty: Optional[Decimal] = None,
+        termination_penalty: Decimal | None = None,
         currency_code: str = "USD",
         payment_frequency: str = "MONTHLY",
         payment_timing: str = "ADVANCE",
         base_payment_amount: Decimal = Decimal("5000.00"),
         has_variable_payments: bool = False,
-        variable_payment_basis: Optional[str] = None,
+        variable_payment_basis: str | None = None,
         is_index_linked: bool = False,
-        index_type: Optional[str] = None,
-        index_base_value: Optional[Decimal] = None,
+        index_type: str | None = None,
+        index_base_value: Decimal | None = None,
         residual_value_guarantee: Decimal = Decimal("0"),
         incremental_borrowing_rate: Decimal = Decimal("0.05"),
         implicit_rate_known: bool = False,
-        implicit_rate: Optional[Decimal] = None,
+        implicit_rate: Decimal | None = None,
         discount_rate_used: Decimal = Decimal("0.05"),
         initial_direct_costs: Decimal = Decimal("0"),
         lease_incentives_received: Decimal = Decimal("0"),
         restoration_obligation: Decimal = Decimal("0"),
         asset_description: str = "Office Space",
-        asset_category_id: Optional[uuid.UUID] = None,
-        location_id: Optional[uuid.UUID] = None,
+        asset_category_id: uuid.UUID | None = None,
+        location_id: uuid.UUID | None = None,
         status: LeaseStatus = LeaseStatus.DRAFT,
-        cost_center_id: Optional[uuid.UUID] = None,
-        project_id: Optional[uuid.UUID] = None,
+        cost_center_id: uuid.UUID | None = None,
+        project_id: uuid.UUID | None = None,
         created_by_user_id: uuid.UUID = None,
-        approved_by_user_id: Optional[uuid.UUID] = None,
-        approved_at: Optional[datetime] = None,
+        approved_by_user_id: uuid.UUID | None = None,
+        approved_at: datetime | None = None,
         created_at: datetime = None,
-        updated_at: Optional[datetime] = None,
+        updated_at: datetime | None = None,
         **kwargs,
     ):
         self.lease_id = lease_id or uuid.uuid4()
@@ -122,7 +120,7 @@ class MockLeaseContract:
         self.created_by_user_id = created_by_user_id or uuid.uuid4()
         self.approved_by_user_id = approved_by_user_id
         self.approved_at = approved_at
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -151,10 +149,10 @@ class MockLeaseLiability:
         non_current_portion: Decimal = Decimal("200000.00"),
         lease_liability_account_id: uuid.UUID = None,
         interest_expense_account_id: uuid.UUID = None,
-        last_interest_date: Optional[date] = None,
-        last_interest_period_id: Optional[uuid.UUID] = None,
+        last_interest_date: date | None = None,
+        last_interest_period_id: uuid.UUID | None = None,
         created_at: datetime = None,
-        updated_at: Optional[datetime] = None,
+        updated_at: datetime | None = None,
         incremental_borrowing_rate: Decimal = Decimal("0.05"),
         **kwargs,
     ):
@@ -178,7 +176,7 @@ class MockLeaseLiability:
         self.interest_expense_account_id = interest_expense_account_id or uuid.uuid4()
         self.last_interest_date = last_interest_date
         self.last_interest_period_id = last_interest_period_id
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
         self.incremental_borrowing_rate = incremental_borrowing_rate
         for k, v in kwargs.items():
@@ -210,10 +208,10 @@ class MockLeaseAsset:
         rou_asset_account_id: uuid.UUID = None,
         accumulated_depreciation_account_id: uuid.UUID = None,
         depreciation_expense_account_id: uuid.UUID = None,
-        last_depreciation_date: Optional[date] = None,
-        last_depreciation_period_id: Optional[uuid.UUID] = None,
+        last_depreciation_date: date | None = None,
+        last_depreciation_period_id: uuid.UUID | None = None,
         created_at: datetime = None,
-        updated_at: Optional[datetime] = None,
+        updated_at: datetime | None = None,
         **kwargs,
     ):
         self.asset_id = asset_id or uuid.uuid4()
@@ -242,7 +240,7 @@ class MockLeaseAsset:
         )
         self.last_depreciation_date = last_depreciation_date
         self.last_depreciation_period_id = last_depreciation_period_id
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -259,24 +257,24 @@ class MockLeaseModification:
         modification_date: date = None,
         effective_date: date = None,
         modification_type: ModificationType = ModificationType.PAYMENT_CHANGE,
-        description: Optional[str] = None,
+        description: str | None = None,
         is_separate_lease: bool = False,
         liability_before: Decimal = Decimal("200000.00"),
         rou_asset_before: Decimal = Decimal("200000.00"),
         remaining_lease_term_before: int = 48,
         discount_rate_before: Decimal = Decimal("0.05"),
-        new_lease_payments: Optional[Decimal] = None,
-        revised_discount_rate: Optional[Decimal] = None,
-        revised_lease_term_months: Optional[int] = None,
+        new_lease_payments: Decimal | None = None,
+        revised_discount_rate: Decimal | None = None,
+        revised_lease_term_months: int | None = None,
         liability_after: Decimal = Decimal("210000.00"),
         rou_asset_after: Decimal = Decimal("210000.00"),
         liability_adjustment: Decimal = Decimal("10000.00"),
         rou_asset_adjustment: Decimal = Decimal("10000.00"),
         gain_loss_on_modification: Decimal = Decimal("0"),
-        journal_entry_id: Optional[uuid.UUID] = None,
+        journal_entry_id: uuid.UUID | None = None,
         created_by_user_id: uuid.UUID = None,
-        approved_by_user_id: Optional[uuid.UUID] = None,
-        approved_at: Optional[datetime] = None,
+        approved_by_user_id: uuid.UUID | None = None,
+        approved_at: datetime | None = None,
         created_at: datetime = None,
         **kwargs,
     ):
@@ -304,7 +302,7 @@ class MockLeaseModification:
         self.created_by_user_id = created_by_user_id or uuid.uuid4()
         self.approved_by_user_id = approved_by_user_id
         self.approved_at = approved_at
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -319,7 +317,7 @@ class MockLeasePaymentSchedule:
         liability_id: uuid.UUID = None,
         payment_number: int = 1,
         payment_date: date = None,
-        fiscal_period_id: Optional[uuid.UUID] = None,
+        fiscal_period_id: uuid.UUID | None = None,
         total_payment: Decimal = Decimal("5000.00"),
         principal_portion: Decimal = Decimal("4000.00"),
         interest_portion: Decimal = Decimal("1000.00"),
@@ -329,14 +327,14 @@ class MockLeasePaymentSchedule:
         is_index_adjusted: bool = False,
         index_adjustment_amount: Decimal = Decimal("0"),
         status: PaymentStatus = PaymentStatus.SCHEDULED,
-        actual_payment_date: Optional[date] = None,
-        actual_payment_amount: Optional[Decimal] = None,
-        payment_reference: Optional[uuid.UUID] = None,
-        invoice_reference: Optional[uuid.UUID] = None,
-        interest_journal_entry_id: Optional[uuid.UUID] = None,
-        payment_journal_entry_id: Optional[uuid.UUID] = None,
+        actual_payment_date: date | None = None,
+        actual_payment_amount: Decimal | None = None,
+        payment_reference: uuid.UUID | None = None,
+        invoice_reference: uuid.UUID | None = None,
+        interest_journal_entry_id: uuid.UUID | None = None,
+        payment_journal_entry_id: uuid.UUID | None = None,
         created_at: datetime = None,
-        updated_at: Optional[datetime] = None,
+        updated_at: datetime | None = None,
         **kwargs,
     ):
         self.schedule_id = schedule_id or uuid.uuid4()
@@ -360,7 +358,7 @@ class MockLeasePaymentSchedule:
         self.invoice_reference = invoice_reference
         self.interest_journal_entry_id = interest_journal_entry_id
         self.payment_journal_entry_id = payment_journal_entry_id
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
         for k, v in kwargs.items():
             setattr(self, k, v)
@@ -413,7 +411,7 @@ def mock_active_contract(org_id, user_id, approver_id) -> MockLeaseContract:
         organization_id=org_id,
         created_by_user_id=user_id,
         approved_by_user_id=approver_id,
-        approved_at=datetime.now(timezone.utc),
+        approved_at=datetime.now(UTC),
         status=LeaseStatus.ACTIVE,
     )
 

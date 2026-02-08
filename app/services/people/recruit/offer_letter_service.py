@@ -7,18 +7,17 @@ Wraps DocumentGeneratorService with offer-specific context building.
 
 import logging
 from pathlib import Path
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.finance.automation.document_template import (
-    TemplateType,
     DocumentTemplate,
+    TemplateType,
 )
 from app.models.finance.automation.generated_document import GeneratedDocument
-from app.models.people.recruit.job_offer import JobOffer, OfferStatus
 from app.models.finance.core_org.organization import Organization
+from app.models.people.recruit.job_offer import JobOffer, OfferStatus
 from app.schemas.document_context import OfferLetterContext
 from app.services.automation.document_generator import (
     DocumentGeneratorService,
@@ -59,7 +58,7 @@ class OfferLetterService:
         self.db = db
         self._doc_service = DocumentGeneratorService(db)
 
-    def get_offer_with_relations(self, offer_id: UUID) -> Optional[JobOffer]:
+    def get_offer_with_relations(self, offer_id: UUID) -> JobOffer | None:
         """
         Get a job offer with all related data loaded.
 
@@ -82,13 +81,13 @@ class OfferLetterService:
         offer_id: UUID,
         user_id: UUID,
         *,
-        template_name: Optional[str] = None,
-        organization_name: Optional[str] = None,
-        organization_address: Optional[str] = None,
-        organization_logo_url: Optional[str] = None,
-        signatory_name: Optional[str] = None,
-        signatory_title: Optional[str] = None,
-        additional_context: Optional[dict] = None,
+        template_name: str | None = None,
+        organization_name: str | None = None,
+        organization_address: str | None = None,
+        organization_logo_url: str | None = None,
+        signatory_name: str | None = None,
+        signatory_title: str | None = None,
+        additional_context: dict | None = None,
     ) -> tuple[bytes, GeneratedDocument]:
         """
         Generate an offer letter PDF for a job offer.
@@ -213,12 +212,12 @@ class OfferLetterService:
         self,
         offer: JobOffer,
         *,
-        organization_name: Optional[str] = None,
-        organization_address: Optional[str] = None,
-        organization_logo_url: Optional[str] = None,
-        signatory_name: Optional[str] = None,
-        signatory_title: Optional[str] = None,
-        additional_context: Optional[dict] = None,
+        organization_name: str | None = None,
+        organization_address: str | None = None,
+        organization_logo_url: str | None = None,
+        signatory_name: str | None = None,
+        signatory_title: str | None = None,
+        additional_context: dict | None = None,
     ) -> OfferLetterContext:
         """
         Build offer letter context from JobOffer and related data.

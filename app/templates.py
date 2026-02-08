@@ -205,7 +205,7 @@ def sanitize_html(value: str | None) -> Markup:
     sanitized = TAG_PATTERN.sub(replace_tag, value)
 
     # Mark as safe for Jinja2
-    return Markup(sanitized)
+    return Markup(sanitized)  # noqa: S704
 
 
 def nl2br(value: str | None) -> Markup:
@@ -222,13 +222,13 @@ def nl2br(value: str | None) -> Markup:
         {{ content | replace('\\n', '<br>') | safe }}
     """
     if value is None:
-        return Markup("")
+        return Markup("")  # noqa: S704
 
     # Escape HTML characters first
     escaped = html.escape(str(value))
     # Replace newlines with <br> tags
     with_breaks = escaped.replace("\n", "<br>")
-    return Markup(with_breaks)
+    return Markup(with_breaks)  # noqa: S704
 
 
 # Register custom filters

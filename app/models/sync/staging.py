@@ -8,7 +8,6 @@ importing to production tables.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -76,66 +75,64 @@ class StagingEmployee(Base):
         nullable=False,
         comment="ERPNext document name (e.g., HR-EMP-00001)",
     )
-    source_modified: Mapped[Optional[datetime]] = mapped_column(
+    source_modified: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True, comment="ERPNext modified timestamp"
     )
 
     # Raw ERPNext data (stored as-is for reference)
-    raw_data: Mapped[Optional[dict]] = mapped_column(
+    raw_data: Mapped[dict | None] = mapped_column(
         JSONB, nullable=True, comment="Complete ERPNext document"
     )
 
     # Mapped fields (transformed from ERPNext)
     employee_code: Mapped[str] = mapped_column(String(30), nullable=False)
     employee_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    first_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    last_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    gender: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    date_of_birth: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    first_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    last_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    gender: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    date_of_birth: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Contact info
-    company_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    personal_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    preferred_email: Mapped[Optional[str]] = mapped_column(
+    company_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    personal_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    preferred_email: Mapped[str | None] = mapped_column(
         String(255), nullable=True, comment="company_email or personal_email"
     )
-    cell_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    cell_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Organization references (ERPNext names, not UUIDs)
-    department_name: Mapped[Optional[str]] = mapped_column(String(140), nullable=True)
-    designation_name: Mapped[Optional[str]] = mapped_column(String(140), nullable=True)
-    employment_type_name: Mapped[Optional[str]] = mapped_column(
-        String(140), nullable=True
-    )
-    grade_name: Mapped[Optional[str]] = mapped_column(String(140), nullable=True)
-    reports_to_name: Mapped[Optional[str]] = mapped_column(String(140), nullable=True)
+    department_name: Mapped[str | None] = mapped_column(String(140), nullable=True)
+    designation_name: Mapped[str | None] = mapped_column(String(140), nullable=True)
+    employment_type_name: Mapped[str | None] = mapped_column(String(140), nullable=True)
+    grade_name: Mapped[str | None] = mapped_column(String(140), nullable=True)
+    reports_to_name: Mapped[str | None] = mapped_column(String(140), nullable=True)
 
     # Employment details
-    date_of_joining: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    date_of_leaving: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    date_of_joining: Mapped[date | None] = mapped_column(Date, nullable=True)
+    date_of_leaving: Mapped[date | None] = mapped_column(Date, nullable=True)
+    status: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Bank details
-    bank_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    bank_ac_no: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    bank_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    bank_ac_no: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Validation state
     validation_status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=StagingStatus.PENDING
     )
-    validation_errors: Mapped[Optional[list]] = mapped_column(
+    validation_errors: Mapped[list | None] = mapped_column(
         JSONB, nullable=True, comment="List of validation error messages"
     )
-    validation_warnings: Mapped[Optional[list]] = mapped_column(
+    validation_warnings: Mapped[list | None] = mapped_column(
         JSONB, nullable=True, comment="List of validation warnings"
     )
 
     # Import tracking
-    imported_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    imported_employee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    imported_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    imported_employee_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True, comment="Production employee_id after import"
     )
-    imported_person_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    imported_person_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True, comment="Production person_id after import"
     )
 
@@ -143,7 +140,7 @@ class StagingEmployee(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True, onupdate=func.now()
     )
 
@@ -172,13 +169,13 @@ class StagingDepartment(Base):
 
     # ERPNext source
     source_name: Mapped[str] = mapped_column(String(140), nullable=False)
-    source_modified: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    raw_data: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    source_modified: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    raw_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     # Mapped fields
     department_code: Mapped[str] = mapped_column(String(50), nullable=False)
     department_name: Mapped[str] = mapped_column(String(140), nullable=False)
-    parent_department_name: Mapped[Optional[str]] = mapped_column(
+    parent_department_name: Mapped[str | None] = mapped_column(
         String(140), nullable=True
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -187,12 +184,12 @@ class StagingDepartment(Base):
     validation_status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=StagingStatus.PENDING
     )
-    validation_errors: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
-    validation_warnings: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    validation_errors: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    validation_warnings: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
     # Import tracking
-    imported_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    imported_department_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    imported_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    imported_department_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
 
@@ -223,8 +220,8 @@ class StagingDesignation(Base):
     batch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     source_name: Mapped[str] = mapped_column(String(140), nullable=False)
-    source_modified: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    raw_data: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    source_modified: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    raw_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     designation_code: Mapped[str] = mapped_column(String(50), nullable=False)
     designation_name: Mapped[str] = mapped_column(String(140), nullable=False)
@@ -233,11 +230,11 @@ class StagingDesignation(Base):
     validation_status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=StagingStatus.PENDING
     )
-    validation_errors: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
-    validation_warnings: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    validation_errors: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    validation_warnings: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
-    imported_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    imported_designation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    imported_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    imported_designation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
 
@@ -267,8 +264,8 @@ class StagingEmploymentType(Base):
     batch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     source_name: Mapped[str] = mapped_column(String(140), nullable=False)
-    source_modified: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    raw_data: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    source_modified: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    raw_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     type_code: Mapped[str] = mapped_column(String(30), nullable=False)
     type_name: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -277,10 +274,10 @@ class StagingEmploymentType(Base):
     validation_status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=StagingStatus.PENDING
     )
-    validation_errors: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    validation_errors: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
-    imported_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    imported_employment_type_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    imported_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    imported_employment_type_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
 
@@ -310,12 +307,12 @@ class StagingEmployeeGrade(Base):
     batch_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
 
     source_name: Mapped[str] = mapped_column(String(140), nullable=False)
-    source_modified: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    raw_data: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    source_modified: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    raw_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     grade_code: Mapped[str] = mapped_column(String(30), nullable=False)
     grade_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    default_base_pay: Mapped[Optional[Decimal]] = mapped_column(
+    default_base_pay: Mapped[Decimal | None] = mapped_column(
         Numeric(15, 2), nullable=True
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -323,10 +320,10 @@ class StagingEmployeeGrade(Base):
     validation_status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=StagingStatus.PENDING
     )
-    validation_errors: Mapped[Optional[list]] = mapped_column(JSONB, nullable=True)
+    validation_errors: Mapped[list | None] = mapped_column(JSONB, nullable=True)
 
-    imported_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    imported_grade_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    imported_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    imported_grade_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
 
@@ -362,7 +359,7 @@ class StagingSyncBatch(Base):
     source_system: Mapped[str] = mapped_column(
         String(50), nullable=False, default="erpnext"
     )
-    entity_types: Mapped[Optional[list]] = mapped_column(
+    entity_types: Mapped[list | None] = mapped_column(
         JSONB, nullable=True, comment="Entity types included in this batch"
     )
 
@@ -381,7 +378,7 @@ class StagingSyncBatch(Base):
     imported_records: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # Validation summary
-    validation_summary: Mapped[Optional[dict]] = mapped_column(
+    validation_summary: Mapped[dict | None] = mapped_column(
         JSONB, nullable=True, comment="Summary of validation results by type"
     )
 
@@ -389,12 +386,12 @@ class StagingSyncBatch(Base):
     started_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, server_default=func.now()
     )
-    synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    validated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
-    imported_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    validated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    imported_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # User tracking
-    initiated_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    initiated_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)

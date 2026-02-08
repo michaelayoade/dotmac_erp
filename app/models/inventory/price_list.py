@@ -8,7 +8,6 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -65,7 +64,7 @@ class PriceList(Base):
 
     price_list_code: Mapped[str] = mapped_column(String(30), nullable=False)
     price_list_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     price_list_type: Mapped[PriceListType] = mapped_column(
         Enum(PriceListType, name="price_list_type"),
@@ -76,20 +75,20 @@ class PriceList(Base):
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
 
     # Effective dates
-    effective_from: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    effective_to: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    effective_from: Mapped[date | None] = mapped_column(Date, nullable=True)
+    effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Priority for overlapping price lists (higher = checked first)
     priority: Mapped[int] = mapped_column(Numeric(5, 0), nullable=False, default=0)
 
     # Base price list for inheritance/markup
-    base_price_list_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    base_price_list_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("inv.price_list.price_list_id"),
         nullable=True,
     )
     # Markup/markdown percentage from base price list
-    markup_percent: Mapped[Optional[Decimal]] = mapped_column(
+    markup_percent: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 4), nullable=True
     )
 
@@ -101,7 +100,7 @@ class PriceList(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -156,16 +155,16 @@ class PriceListItem(Base):
     )
 
     # Discount options
-    discount_percent: Mapped[Optional[Decimal]] = mapped_column(
+    discount_percent: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 4), nullable=True
     )
-    discount_amount: Mapped[Optional[Decimal]] = mapped_column(
+    discount_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6), nullable=True
     )
 
     # Override effective dates at item level
-    effective_from: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    effective_to: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    effective_from: Mapped[date | None] = mapped_column(Date, nullable=True)
+    effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
@@ -174,7 +173,7 @@ class PriceListItem(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

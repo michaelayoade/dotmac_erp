@@ -6,7 +6,6 @@ Extends existing RBAC with data scope validation and segregation of duties
 """
 
 import logging
-from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -34,7 +33,7 @@ class AuthorizationService(ListResponseMixin):
         db: Session,
         user_id: UUID,
         permission_key: str,
-        organization_id: Optional[UUID] = None,
+        organization_id: UUID | None = None,
     ) -> bool:
         """
         Check if user has a specific permission.
@@ -96,7 +95,7 @@ class AuthorizationService(ListResponseMixin):
         db: Session,
         user_id: UUID,
         permission_key: str,
-        organization_id: Optional[UUID] = None,
+        organization_id: UUID | None = None,
     ) -> None:
         """
         Require a permission, raising exception if not granted.
@@ -194,7 +193,7 @@ class AuthorizationService(ListResponseMixin):
         action_type: str,
         document_id: UUID,
         previous_actors: list[UUID],
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Validate segregation of duties requirements.
 
@@ -231,7 +230,7 @@ class AuthorizationService(ListResponseMixin):
         user_id: UUID,
         rule: str,
         context: dict,
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Validate a specific SoD rule.
 
@@ -272,7 +271,7 @@ class AuthorizationService(ListResponseMixin):
     def get_user_permissions(
         db: Session,
         user_id: UUID,
-        organization_id: Optional[UUID] = None,
+        organization_id: UUID | None = None,
     ) -> list[str]:
         """
         Get all permissions for a user.
@@ -359,7 +358,7 @@ class AuthorizationService(ListResponseMixin):
         db: Session,
         user_id: UUID,
         permission_keys: list[str],
-        organization_id: Optional[UUID] = None,
+        organization_id: UUID | None = None,
     ) -> bool:
         """
         Check if user has any of the specified permissions.
@@ -383,7 +382,7 @@ class AuthorizationService(ListResponseMixin):
         db: Session,
         user_id: UUID,
         permission_keys: list[str],
-        organization_id: Optional[UUID] = None,
+        organization_id: UUID | None = None,
     ) -> bool:
         """
         Check if user has all of the specified permissions.

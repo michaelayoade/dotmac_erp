@@ -1,5 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
+{% from "components/macros.html" import empty_state %}
 {% block page_title %}Ship {{ order.so_number }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -128,6 +129,12 @@
                                    placeholder="0">
                         </td>
                     </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No lines found", "There are no lines to display.") }}
+                        </td>
+                    </tr>
                     {% endfor %}
                 </tbody>
                 </table>
@@ -140,7 +147,7 @@
         </div>
 
         <!-- Actions -->
-        <div class="flex items-center justify-end gap-4 py-4">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/finance/sales-orders/{{ order.so_id }}" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary" :disabled="!hasItemsToShip">
                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

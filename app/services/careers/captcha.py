@@ -5,7 +5,6 @@ Verifies CAPTCHA tokens to protect public forms from automated submissions.
 """
 
 import logging
-from typing import Optional
 
 import httpx
 
@@ -16,7 +15,7 @@ logger = logging.getLogger(__name__)
 TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
 
-async def verify_captcha(token: str, remote_ip: Optional[str] = None) -> bool:
+async def verify_captcha(token: str, remote_ip: str | None = None) -> bool:
     """
     Verify a Cloudflare Turnstile CAPTCHA token.
 
@@ -74,6 +73,6 @@ def is_captcha_enabled() -> bool:
     return bool(settings.captcha_site_key and settings.captcha_secret_key)
 
 
-def get_captcha_site_key() -> Optional[str]:
+def get_captcha_site_key() -> str | None:
     """Get the CAPTCHA site key for client-side rendering."""
     return settings.captcha_site_key

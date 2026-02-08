@@ -6,20 +6,13 @@ Provides view-focused data and operations for AP payment and aging web routes.
 
 from __future__ import annotations
 
-import json
-import logging
-from datetime import date
-from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
-from fastapi import Request, UploadFile
+from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.config import settings
-from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
 from app.models.finance.ap.payment_batch import APBatchStatus
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import (
@@ -28,7 +21,6 @@ from app.models.finance.ap.supplier_invoice import (
 )
 from app.models.finance.ap.supplier_payment import (
     APPaymentMethod,
-    APPaymentStatus,
     SupplierPayment,
 )
 from app.models.finance.banking.bank_account import BankAccountStatus
@@ -39,7 +31,6 @@ from app.services.finance.ap.ap_aging import ap_aging_service
 from app.services.finance.ap.payment_batch import payment_batch_service
 from app.services.finance.ap.supplier import supplier_service
 from app.services.finance.ap.supplier_payment import (
-    PaymentAllocationInput,
     SupplierPaymentInput,
     supplier_payment_service,
 )
@@ -51,7 +42,6 @@ from app.services.finance.ap.web.base import (
     get_accounts,
     logger,
     parse_date,
-    parse_payment_status,
     payment_detail_view,
     payment_status_label,
     supplier_display_name,
@@ -64,89 +54,32 @@ from app.services.finance.platform.currency_context import get_currency_context
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
-logger = logging.getLogger(__name__)
-
 
 class PaymentWebService:
     """Web service methods for AP payments/supplier payments and aging reports."""
 
     @staticmethod
-    def build_payment_input(data: dict) -> SupplierPaymentInput:
+    def build_payment_input(
+        db: Session, data: dict, organization_id: UUID
+    ) -> SupplierPaymentInput:
         """Build SupplierPaymentInput from form data."""
         logger.debug("build_payment_input: building input from form data")
-        payment_date = parse_date(data.get("payment_date")) or date.today()
-
-        # Parse payment method
-        method_str = data.get("payment_method", "BANK_TRANSFER")
-        try:
-            payment_method = APPaymentMethod(method_str)
-        except ValueError:
-            payment_method = APPaymentMethod.BANK_TRANSFER
-
-        # Parse allocations if provided
-        allocations = []
-        allocations_data = data.get("allocations", [])
-        if isinstance(allocations_data, str):
-            try:
-                allocations_data = json.loads(allocations_data)
-            except json.JSONDecodeError:
-                allocations_data = []
-
-        for alloc in allocations_data:
-            if alloc.get("invoice_id") and alloc.get("amount"):
-                allocations.append(
-                    PaymentAllocationInput(
-                        invoice_id=UUID(alloc["invoice_id"]),
-                        amount=Decimal(str(alloc["amount"])),
-                    )
-                )
-
-        # Parse WHT fields
-        wht_code_id = None
-        wht_amount = Decimal("0")
-        gross_amount = None
-
-        # Check if WHT is applied (has_wht checkbox or wht_amount > 0)
-        has_wht = data.get("has_wht") in ("true", "1", True, "on")
-        if has_wht:
-            if data.get("wht_code_id"):
-                wht_code_id = UUID(data["wht_code_id"])
-            if data.get("wht_amount"):
-                wht_amount = Decimal(str(data["wht_amount"]))
-            if data.get("gross_amount"):
-                gross_amount = Decimal(str(data["gross_amount"]))
-
-        if not data.get("bank_account_id"):
-            raise ValueError("Bank account is required for supplier payments")
-
-        return SupplierPaymentInput(
-            supplier_id=UUID(data["supplier_id"]),
-            payment_date=payment_date,
-            payment_method=payment_method,
-            currency_code=data.get(
-                "currency_code",
-                settings.default_functional_currency_code,
-            ),
-            amount=Decimal(str(data.get("amount", 0))),
-            bank_account_id=UUID(data["bank_account_id"]),
-            reference=data.get("reference"),
-            description=data.get("description"),
-            allocations=allocations,
-            # WHT fields
-            gross_amount=gross_amount,
-            wht_code_id=wht_code_id,
-            wht_amount=wht_amount,
+        payload = dict(data)
+        return supplier_payment_service.build_input_from_payload(
+            db=db,
+            organization_id=organization_id,
+            payload=payload,
         )
 
     @staticmethod
     def list_payments_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        supplier_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        supplier_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -159,43 +92,26 @@ class PaymentWebService:
             status,
             page,
         )
-        org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
+        org_id = coerce_uuid(organization_id)
+        from app.services.finance.ap.payment_query import build_payment_query
 
-        status_value = parse_payment_status(status)
-        from_date = parse_date(start_date)
-        to_date = parse_date(end_date)
-
-        query = (
-            db.query(SupplierPayment, Supplier)
-            .join(Supplier, SupplierPayment.supplier_id == Supplier.supplier_id)
-            .filter(SupplierPayment.organization_id == org_id)
+        query = build_payment_query(
+            db=db,
+            organization_id=organization_id,
+            search=search,
+            supplier_id=supplier_id,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
         )
-
-        if supplier_id:
-            query = query.filter(
-                SupplierPayment.supplier_id == coerce_uuid(supplier_id)
-            )
-        if status_value:
-            query = query.filter(SupplierPayment.status == status_value)
-        if from_date:
-            query = query.filter(SupplierPayment.payment_date >= from_date)
-        if to_date:
-            query = query.filter(SupplierPayment.payment_date <= to_date)
-        if search:
-            search_pattern = f"%{search}%"
-            query = query.filter(
-                or_(
-                    SupplierPayment.payment_number.ilike(search_pattern),
-                    SupplierPayment.reference.ilike(search_pattern),
-                )
-            )
 
         total_count = (
             query.with_entities(func.count(SupplierPayment.payment_id)).scalar() or 0
         )
         payments = (
-            query.order_by(SupplierPayment.payment_date.desc())
+            query.with_entities(SupplierPayment, Supplier)
+            .order_by(SupplierPayment.payment_date.desc())
             .limit(limit)
             .offset(offset)
             .all()
@@ -249,7 +165,7 @@ class PaymentWebService:
     def payment_form_context(
         db: Session,
         organization_id: str,
-        invoice_id: Optional[str] = None,
+        invoice_id: str | None = None,
     ) -> dict:
         """Get context for payment create/edit form."""
         logger.debug(
@@ -444,7 +360,7 @@ class PaymentWebService:
         db: Session,
         organization_id: str,
         payment_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete a payment. Returns error message or None on success."""
         logger.debug(
             "delete_payment: org=%s payment_id=%s", organization_id, payment_id
@@ -452,25 +368,13 @@ class PaymentWebService:
         org_id = coerce_uuid(organization_id)
         pay_id = coerce_uuid(payment_id)
 
-        payment = db.get(SupplierPayment, pay_id)
-        if not payment or payment.organization_id != org_id:
-            return "Payment not found"
-
-        # Only DRAFT payments can be deleted
-        if payment.status != APPaymentStatus.DRAFT:
-            return f"Cannot delete payment with status '{payment.status.value}'. Only draft payments can be deleted."
-
         try:
-            # Delete allocations first
-            db.query(APPaymentAllocation).filter(
-                APPaymentAllocation.payment_id == pay_id
-            ).delete()
-            db.delete(payment)
-            db.commit()
+            supplier_payment_service.delete_payment(db, org_id, pay_id)
             logger.info("delete_payment: deleted payment %s for org %s", pay_id, org_id)
             return None
+        except HTTPException as exc:
+            return exc.detail
         except Exception as e:
-            db.rollback()
             logger.exception("delete_payment: failed for org %s", org_id)
             return f"Failed to delete payment: {str(e)}"
 
@@ -478,8 +382,8 @@ class PaymentWebService:
     def aging_context(
         db: Session,
         organization_id: str,
-        as_of_date: Optional[str],
-        supplier_id: Optional[str],
+        as_of_date: str | None,
+        supplier_id: str | None,
     ) -> dict:
         """Get context for AP aging report."""
         logger.debug(
@@ -526,11 +430,11 @@ class PaymentWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        search: Optional[str],
-        supplier_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        supplier_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         db: Session,
     ) -> HTMLResponse:
@@ -555,7 +459,7 @@ class PaymentWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        invoice_id: Optional[str] = None,
+        invoice_id: str | None = None,
     ) -> HTMLResponse:
         """Render new payment form."""
         context = base_context(request, auth, "New AP Payment", "ap")
@@ -610,7 +514,7 @@ class PaymentWebService:
             data = dict(form_data)
 
         try:
-            input_data = self.build_payment_input(data)
+            input_data = self.build_payment_input(db, data, org_id)
 
             payment = supplier_payment_service.create_payment(
                 db=db,
@@ -673,8 +577,8 @@ class PaymentWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        as_of_date: Optional[str],
-        supplier_id: Optional[str],
+        as_of_date: str | None,
+        supplier_id: str | None,
         db: Session,
     ) -> HTMLResponse:
         """Render AP aging report page."""
@@ -693,7 +597,7 @@ class PaymentWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        status: Optional[str],
+        status: str | None,
         page: int,
         db: Session,
     ) -> HTMLResponse:
@@ -779,7 +683,7 @@ class PaymentWebService:
         self,
         payment_id: str,
         file: UploadFile,
-        description: Optional[str],
+        description: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:

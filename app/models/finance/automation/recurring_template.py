@@ -7,7 +7,7 @@ Defines templates for recurring transactions (invoices, bills, expenses, journal
 import enum
 import uuid
 from datetime import date, datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -93,7 +93,7 @@ class RecurringTemplate(Base):
 
     # Template identification
     template_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Entity type and template data
     entity_type: Mapped[RecurringEntityType] = mapped_column(
@@ -120,11 +120,11 @@ class RecurringTemplate(Base):
 
     # Date range
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
-    end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    next_run_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    next_run_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Occurrence limits
-    occurrences_limit: Mapped[Optional[int]] = mapped_column(
+    occurrences_limit: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Max number of occurrences (null = unlimited)",
@@ -136,11 +136,11 @@ class RecurringTemplate(Base):
     )
 
     # Last generation info
-    last_generated_at: Mapped[Optional[datetime]] = mapped_column(
+    last_generated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    last_generated_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    last_generated_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="ID of the last generated entity",
@@ -172,7 +172,7 @@ class RecurringTemplate(Base):
         nullable=False,
         default=True,
     )
-    notify_email: Mapped[Optional[str]] = mapped_column(
+    notify_email: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
     )
@@ -185,8 +185,8 @@ class RecurringTemplate(Base):
     )
 
     # Source reference (original entity this was created from)
-    source_entity_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    source_entity_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    source_entity_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    source_entity_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -201,11 +201,11 @@ class RecurringTemplate(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -233,7 +233,7 @@ class RecurringTemplate(Base):
         return date.today() >= self.next_run_date
 
     @property
-    def remaining_occurrences(self) -> Optional[int]:
+    def remaining_occurrences(self) -> int | None:
         """Get remaining occurrences if limited."""
         if self.occurrences_limit is None:
             return None

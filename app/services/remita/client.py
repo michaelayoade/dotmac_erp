@@ -10,7 +10,7 @@ import logging
 import re
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 import httpx
 
@@ -26,8 +26,8 @@ class RemitaError(Exception):
     def __init__(
         self,
         message: str,
-        status_code: Optional[str] = None,
-        response_data: Optional[dict] = None,
+        status_code: str | None = None,
+        response_data: dict | None = None,
     ):
         super().__init__(message)
         self.message = message
@@ -52,10 +52,10 @@ class RRRStatusResponse:
     rrr: str
     status: str  # 00=success, 01=pending, 02=failed, etc.
     status_message: str
-    amount: Optional[Decimal]
-    transaction_id: Optional[str]
-    payment_date: Optional[str]
-    debitted_account: Optional[str]
+    amount: Decimal | None
+    transaction_id: str | None
+    payment_date: str | None
+    debitted_account: str | None
     raw_response: dict
 
 
@@ -87,7 +87,7 @@ class RemitaClient:
         self.merchant_id = merchant_id
         self.api_key = api_key
         self.base_url = REMITA_LIVE_URL if is_live else REMITA_DEMO_URL
-        self._client: Optional[httpx.Client] = None
+        self._client: httpx.Client | None = None
 
     def _get_client(self) -> httpx.Client:
         """Get or create HTTP client."""
@@ -147,7 +147,7 @@ class RemitaClient:
         order_id: str,
         payer_name: str,
         payer_email: str,
-        payer_phone: Optional[str] = None,
+        payer_phone: str | None = None,
         description: str = "",
     ) -> RRRGenerateResponse:
         """

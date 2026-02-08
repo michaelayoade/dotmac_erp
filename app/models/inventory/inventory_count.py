@@ -5,7 +5,7 @@ Inventory Count Model - Inventory Schema.
 import enum
 import uuid
 from datetime import date, datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     Boolean,
@@ -24,6 +24,12 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
+
+if TYPE_CHECKING:
+    from app.models.inventory.warehouse import Warehouse
+
+if TYPE_CHECKING:
+    from app.models.inventory.warehouse import Warehouse
 
 
 class CountStatus(str, enum.Enum):
@@ -58,7 +64,7 @@ class InventoryCount(Base):
     )
 
     count_number: Mapped[str] = mapped_column(String(30), nullable=False)
-    count_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    count_description: Mapped[str | None] = mapped_column(Text, nullable=True)
     count_date: Mapped[date] = mapped_column(Date, nullable=False)
     fiscal_period_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -67,16 +73,16 @@ class InventoryCount(Base):
     )
 
     # Scope
-    warehouse_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    warehouse_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("inv.warehouse.warehouse_id"),
         nullable=True,
     )
-    location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    location_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    category_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    category_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
     is_full_count: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -94,7 +100,7 @@ class InventoryCount(Base):
     items_with_variance: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     # Adjustment journal
-    adjustment_journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    adjustment_journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -104,19 +110,19 @@ class InventoryCount(Base):
         UUID(as_uuid=True),
         nullable=False,
     )
-    approved_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    posted_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    posted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    posted_at: Mapped[Optional[datetime]] = mapped_column(
+    posted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -126,7 +132,7 @@ class InventoryCount(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

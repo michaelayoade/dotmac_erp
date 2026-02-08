@@ -7,8 +7,9 @@ Handles create/update detection and field mapping.
 
 import logging
 import uuid
+from collections.abc import Generator
 from datetime import date, datetime
-from typing import Any, Generator, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -76,7 +77,7 @@ class TicketSyncService(BaseCRMSyncService[Ticket]):
         self,
         db: Session,
         organization_id: uuid.UUID,
-        user_id: Optional[uuid.UUID] = None,
+        user_id: uuid.UUID | None = None,
     ):
         super().__init__(db, organization_id, user_id)
         self._ticket_number_counter: int = 0
@@ -84,7 +85,7 @@ class TicketSyncService(BaseCRMSyncService[Ticket]):
     def fetch_records(
         self,
         client: CRMClient,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
     ) -> Generator[dict[str, Any], None, None]:
         """Fetch tickets from CRM API."""
         yield from client.get_tickets(since=since)
@@ -164,7 +165,7 @@ class TicketSyncService(BaseCRMSyncService[Ticket]):
         """Get primary key from Ticket."""
         return entity.ticket_id
 
-    def get_existing_entity(self, sync_entity) -> Optional[Ticket]:
+    def get_existing_entity(self, sync_entity) -> Ticket | None:
         """Look up existing ticket by sync entity's target_id."""
         if not sync_entity.target_id:
             return None
@@ -174,19 +175,19 @@ class TicketSyncService(BaseCRMSyncService[Ticket]):
     # Helper Methods
     # =========================================================================
 
-    def _map_status(self, status: Optional[str]) -> TicketStatus:
+    def _map_status(self, status: str | None) -> TicketStatus:
         """Map CRM status to ERP status."""
         if not status:
             return TicketStatus.OPEN
         return CRM_STATUS_MAP.get(status, TicketStatus.OPEN)
 
-    def _map_priority(self, priority: Optional[str]) -> TicketPriority:
+    def _map_priority(self, priority: str | None) -> TicketPriority:
         """Map CRM priority to ERP priority."""
         if not priority:
             return TicketPriority.MEDIUM
         return CRM_PRIORITY_MAP.get(priority, TicketPriority.MEDIUM)
 
-    def _parse_date(self, value: Any) -> Optional[date]:
+    def _parse_date(self, value: Any) -> date | None:
         """Parse date from CRM value."""
         if not value:
             return None
@@ -201,7 +202,7 @@ class TicketSyncService(BaseCRMSyncService[Ticket]):
         except (ValueError, AttributeError):
             return None
 
-    def _lookup_customer_by_subscriber(self, subscriber_id: str) -> Optional[Any]:
+    def _lookup_customer_by_subscriber(self, subscriber_id: str) -> Any | None:
         """
         Look up customer by CRM subscriber ID.
 
@@ -258,7 +259,7 @@ class TicketSyncService(BaseCRMSyncService[Ticket]):
 
         return results
 
-    def get_by_crm_id(self, crm_ticket_id: str) -> Optional[Ticket]:
+    def get_by_crm_id(self, crm_ticket_id: str) -> Ticket | None:
         """
         Get ERP ticket by CRM ticket ID.
 

@@ -9,8 +9,8 @@ from uuid import uuid4
 import pytest
 
 from app.services.finance.banking.bank_account import (
-    BankAccountService,
     BankAccountInput,
+    BankAccountService,
 )
 from tests.ifrs.banking.conftest import (
     MockBankAccount,
@@ -68,7 +68,7 @@ class TestCreateBankAccount:
         mock_result.scalar_one_or_none.return_value = None
         mock_db.execute.return_value = mock_result
 
-        result = service.create(mock_db, org_id, sample_bank_account_input, user_id)
+        service.create(mock_db, org_id, sample_bank_account_input, user_id)
 
         mock_db.add.assert_called_once()
         mock_db.flush.assert_called_once()
@@ -130,7 +130,7 @@ class TestCreateBankAccount:
         mock_result.scalar_one_or_none.return_value = None
         mock_db.execute.return_value = mock_result
 
-        result = service.create(mock_db, org_id, sample_bank_account_input)
+        service.create(mock_db, org_id, sample_bank_account_input)
 
         # Verify execute was called (for duplicate check and unset other primary)
         assert mock_db.execute.call_count >= 1
@@ -311,7 +311,7 @@ class TestUpdateStatus:
         account = MockBankAccount(organization_id=org_id, status="active")
         mock_db.get.return_value = account
 
-        result = service.update_status(
+        service.update_status(
             mock_db, org_id, account.bank_account_id, BankAccountStatus.suspended
         )
 
@@ -320,6 +320,7 @@ class TestUpdateStatus:
     def test_update_status_nonexistent_fails(self, service, mock_db, org_id):
         """Test updating status of non-existent account fails."""
         from fastapi import HTTPException
+
         from app.models.finance.banking.bank_account import BankAccountStatus
 
         mock_db.get.return_value = None
@@ -356,6 +357,7 @@ class TestUpdateReconciledBalance:
     ):
         """Test updating reconciled balance of non-existent account fails."""
         from datetime import datetime
+
         from fastapi import HTTPException
 
         mock_db.get.return_value = None
@@ -413,6 +415,7 @@ class TestDeactivateBankAccount:
     def test_deactivate_already_closed_fails(self, service, mock_db, org_id):
         """Test deactivating already closed account fails."""
         from fastapi import HTTPException
+
         from app.models.finance.banking.bank_account import BankAccountStatus
 
         account = MockBankAccount(

@@ -11,7 +11,7 @@ import logging
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -49,7 +49,7 @@ class LeaveTypeSyncService(BaseSyncService[LeaveType]):
         self._mapping = LeaveTypeMapping()
         self._leave_type_cache: dict[str, LeaveType] = {}
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         if since:
             yield from client.get_modified_since(
                 doctype="Leave Type",
@@ -106,7 +106,7 @@ class LeaveTypeSyncService(BaseSyncService[LeaveType]):
     def get_entity_id(self, entity: LeaveType) -> uuid.UUID:
         return entity.leave_type_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[LeaveType]:
+    def find_existing_entity(self, source_name: str) -> LeaveType | None:
         if source_name in self._leave_type_cache:
             return self._leave_type_cache[source_name]
 
@@ -136,7 +136,7 @@ class LeaveAllocationSyncService(BaseSyncService[LeaveAllocation]):
         self._mapping = LeaveAllocationMapping()
         self._allocation_cache: dict[str, LeaveAllocation] = {}
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         if since:
             yield from client.get_modified_since(
                 doctype="Leave Allocation",
@@ -149,8 +149,8 @@ class LeaveAllocationSyncService(BaseSyncService[LeaveAllocation]):
         return self._mapping.transform_record(record)
 
     def _resolve_entity_id(
-        self, source_name: Optional[str], source_doctype: str
-    ) -> Optional[uuid.UUID]:
+        self, source_name: str | None, source_doctype: str
+    ) -> uuid.UUID | None:
         """Resolve a foreign key ID from ERPNext source name."""
         if not source_name:
             return None
@@ -223,7 +223,7 @@ class LeaveAllocationSyncService(BaseSyncService[LeaveAllocation]):
     def get_entity_id(self, entity: LeaveAllocation) -> uuid.UUID:
         return entity.allocation_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[LeaveAllocation]:
+    def find_existing_entity(self, source_name: str) -> LeaveAllocation | None:
         if source_name in self._allocation_cache:
             return self._allocation_cache[source_name]
 
@@ -253,7 +253,7 @@ class LeaveApplicationSyncService(BaseSyncService[LeaveApplication]):
         self._mapping = LeaveApplicationMapping()
         self._application_cache: dict[str, LeaveApplication] = {}
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         if since:
             yield from client.get_modified_since(
                 doctype="Leave Application",
@@ -266,8 +266,8 @@ class LeaveApplicationSyncService(BaseSyncService[LeaveApplication]):
         return self._mapping.transform_record(record)
 
     def _resolve_entity_id(
-        self, source_name: Optional[str], source_doctype: str
-    ) -> Optional[uuid.UUID]:
+        self, source_name: str | None, source_doctype: str
+    ) -> uuid.UUID | None:
         if not source_name:
             return None
 
@@ -352,7 +352,7 @@ class LeaveApplicationSyncService(BaseSyncService[LeaveApplication]):
     def get_entity_id(self, entity: LeaveApplication) -> uuid.UUID:
         return entity.application_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[LeaveApplication]:
+    def find_existing_entity(self, source_name: str) -> LeaveApplication | None:
         if source_name in self._application_cache:
             return self._application_cache[source_name]
 

@@ -4,7 +4,6 @@ Assignment API Endpoints.
 REST API for vehicle assignment management.
 """
 
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -37,9 +36,9 @@ def get_db():
 @router.get("", response_model=AssignmentListResponse)
 def list_assignments(
     organization_id: UUID = Depends(require_organization_id),
-    vehicle_id: Optional[UUID] = None,
-    employee_id: Optional[UUID] = None,
-    department_id: Optional[UUID] = None,
+    vehicle_id: UUID | None = None,
+    employee_id: UUID | None = None,
+    department_id: UUID | None = None,
     active_only: bool = False,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),

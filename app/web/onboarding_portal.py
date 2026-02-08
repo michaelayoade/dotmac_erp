@@ -7,7 +7,6 @@ Authentication is token-based (no login required).
 
 import logging
 import uuid
-from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -116,6 +115,14 @@ def onboarding_portal_landing(
         "total": total,
     }
 
+    # Get org branding for portal styling
+    from app.web.deps import org_brand_context
+
+    org_id = None
+    if employee and hasattr(employee, "organization_id"):
+        org_id = employee.organization_id
+    brand = org_brand_context(db, org_id)
+
     return templates.TemplateResponse(
         "onboarding/portal/dashboard.html",
         {
@@ -135,7 +142,8 @@ def onboarding_portal_landing(
                 "ONGOING": "Ongoing",
                 "GENERAL": "General Tasks",
             },
-            "brand_name": settings.brand_name,
+            "brand_name": brand.get("name") or settings.brand_name,
+            "brand": brand,
         },
     )
 
@@ -197,8 +205,8 @@ def complete_onboarding_task(
     request: Request,
     token: str,
     activity_id: uuid.UUID,
-    notes: Optional[str] = Form(None),
-    document: Optional[UploadFile] = None,
+    notes: str | None = Form(None),
+    document: UploadFile | None = None,
     db: Session = Depends(get_db),
 ):
     """

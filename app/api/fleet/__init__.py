@@ -14,14 +14,13 @@ REST API endpoints for:
 from fastapi import APIRouter, Depends
 
 from app.api.deps import require_tenant_permission
-
-from app.api.fleet.vehicles import router as vehicles_router
-from app.api.fleet.maintenance import router as maintenance_router
+from app.api.fleet.assignments import router as assignments_router
+from app.api.fleet.documents import router as documents_router
 from app.api.fleet.fuel import router as fuel_router
 from app.api.fleet.incidents import router as incidents_router
-from app.api.fleet.documents import router as documents_router
+from app.api.fleet.maintenance import router as maintenance_router
 from app.api.fleet.reservations import router as reservations_router
-from app.api.fleet.assignments import router as assignments_router
+from app.api.fleet.vehicles import router as vehicles_router
 
 router = APIRouter(
     prefix="/fleet",

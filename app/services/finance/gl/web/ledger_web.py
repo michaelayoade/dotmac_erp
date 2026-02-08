@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 from decimal import Decimal
-from typing import Optional
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse
@@ -37,10 +36,10 @@ class LedgerWebService:
     def list_ledger_context(
         db: Session,
         organization_id: str,
-        account_id: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
-        search: Optional[str],
+        account_id: str | None,
+        start_date: str | None,
+        end_date: str | None,
+        search: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -276,10 +275,10 @@ class LedgerWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        account_id: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
-        search: Optional[str],
+        account_id: str | None,
+        start_date: str | None,
+        end_date: str | None,
+        search: str | None,
         page: int,
     ) -> HTMLResponse:
         """

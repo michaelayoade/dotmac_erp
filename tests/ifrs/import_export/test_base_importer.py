@@ -20,7 +20,6 @@ from app.services.finance.import_export.base import (
     resolve_column_alias,
 )
 
-
 # ============ TestDetectCSVFormat ============
 
 
@@ -464,7 +463,7 @@ class TestImportFile:
         )
         importer = ConcreteTestImporter(mock_db, config)
 
-        result = importer.importer.import_file(sample_account_csv)
+        importer.importer.import_file(sample_account_csv)
 
         # Should have imported_count but no db.add calls
         mock_db.add.assert_not_called()

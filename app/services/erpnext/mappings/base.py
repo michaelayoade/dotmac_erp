@@ -3,10 +3,11 @@ Base mapping utilities for ERPNext to DotMac ERP transformations.
 """
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Any, Callable, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +20,7 @@ class FieldMapping:
     target: str  # DotMac ERP field name
     required: bool = False
     default: Any = None
-    transformer: Optional[Callable[[Any], Any]] = None
+    transformer: Callable[[Any], Any] | None = None
 
     def transform(self, value: Any) -> Any:
         """Transform value from source to target format."""
@@ -53,7 +54,7 @@ class DocTypeMapping:
 # --------------------------
 
 
-def parse_date(value: Any) -> Optional[date]:
+def parse_date(value: Any) -> date | None:
     """Parse date from ERPNext format.
 
     Handles both date-only and datetime formats from ERPNext.
@@ -75,7 +76,7 @@ def parse_date(value: Any) -> Optional[date]:
     return None
 
 
-def parse_datetime(value: Any) -> Optional[datetime]:
+def parse_datetime(value: Any) -> datetime | None:
     """Parse datetime from ERPNext format."""
     if value is None:
         return None
@@ -93,7 +94,7 @@ def parse_datetime(value: Any) -> Optional[datetime]:
     return None
 
 
-def parse_decimal(value: Any) -> Optional[Decimal]:
+def parse_decimal(value: Any) -> Decimal | None:
     """Parse decimal from ERPNext format."""
     if value is None:
         return None
@@ -105,7 +106,7 @@ def parse_decimal(value: Any) -> Optional[Decimal]:
         return None
 
 
-def parse_int(value: Any) -> Optional[int]:
+def parse_int(value: Any) -> int | None:
     """Parse integer from ERPNext format."""
     if value is None:
         return None
@@ -128,7 +129,7 @@ def invert_bool(value: Any) -> bool:
     return True
 
 
-def clean_string(value: Any, max_length: Optional[int] = None) -> Optional[str]:
+def clean_string(value: Any, max_length: int | None = None) -> str | None:
     """Clean and truncate string value."""
     if value is None:
         return None

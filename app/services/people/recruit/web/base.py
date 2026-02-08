@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import logging
 from datetime import date, datetime, time
-from typing import Optional, cast
+from enum import Enum
+from typing import TypeVar, cast
 from uuid import UUID
 
 from app.models.people.recruit import (
@@ -28,23 +29,24 @@ from app.services.formatters import parse_int as parse_int  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
+E = TypeVar("E", bound=Enum)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Parsing Utilities
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def parse_uuid(value: Optional[str]) -> Optional[UUID]:
+def parse_uuid(value: str | None) -> UUID | None:
     """Parse a string to UUID, returning None on failure."""
     if not value:
         return None
     try:
-        return cast(Optional[UUID], coerce_uuid(value))
+        return cast(UUID | None, coerce_uuid(value))
     except Exception:
         return None
 
 
-def parse_date(value: Optional[str], *, end_of_day: bool = False) -> Optional[datetime]:
+def parse_date(value: str | None, *, end_of_day: bool = False) -> datetime | None:
     """Parse a date string to datetime, optionally at end of day."""
     if not value:
         return None
@@ -60,7 +62,7 @@ def parse_date(value: Optional[str], *, end_of_day: bool = False) -> Optional[da
             return None
 
 
-def parse_status(value: Optional[str], status_enum):  # type: ignore[type-arg]
+def parse_status(value: str | None, status_enum: type[E]) -> E | None:
     """Parse a status string to enum, returning None on failure."""
     if not value:
         return None

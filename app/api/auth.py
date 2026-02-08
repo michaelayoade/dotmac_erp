@@ -1,10 +1,7 @@
-from app.schemas.common import ListResponse
-
 from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.services.auth_dependencies import require_permission
 from app.schemas.auth import (
     ApiKeyCreate,
     ApiKeyGenerateRequest,
@@ -21,7 +18,9 @@ from app.schemas.auth import (
     UserCredentialRead,
     UserCredentialUpdate,
 )
+from app.schemas.common import ListResponse
 from app.services import auth as auth_service
+from app.services.auth_dependencies import require_permission
 
 router = APIRouter()
 

@@ -10,29 +10,28 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.models.people.payroll.salary_slip import SalarySlipStatus
 from app.models.people.payroll.payroll_entry import PayrollEntryStatus
-from app.services.people.payroll.lifecycle import (
-    PayrollLifecycle,
-    PayrollLifecycleError,
-    SLIP_TRANSITIONS,
-    RUN_TRANSITIONS,
-)
+from app.models.people.payroll.salary_slip import SalarySlipStatus
 from app.services.people.payroll.events import (
     PayrollEventDispatcher,
-    SlipSubmitted,
-    SlipApproved,
-    SlipPosted,
-    SlipPaid,
-    SlipCancelled,
-    SlipRejected,
-    RunSubmitted,
     RunApproved,
-    RunPosted,
     RunCancelled,
+    RunPosted,
     RunSlipsCreated,
+    RunSubmitted,
+    SlipApproved,
+    SlipCancelled,
+    SlipPaid,
+    SlipPosted,
+    SlipRejected,
+    SlipSubmitted,
 )
-
+from app.services.people.payroll.lifecycle import (
+    RUN_TRANSITIONS,
+    SLIP_TRANSITIONS,
+    PayrollLifecycle,
+    PayrollLifecycleError,
+)
 
 # ---------------------------------------------------------------------------
 # Fixtures

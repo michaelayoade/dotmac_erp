@@ -10,7 +10,6 @@ import logging
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -43,15 +42,15 @@ class TransactionInput:
     unit_cost: Decimal
     uom: str
     currency_code: str
-    location_id: Optional[UUID] = None
-    lot_id: Optional[UUID] = None
-    to_warehouse_id: Optional[UUID] = None
-    to_location_id: Optional[UUID] = None
-    source_document_type: Optional[str] = None
-    source_document_id: Optional[UUID] = None
-    source_document_line_id: Optional[UUID] = None
-    reference: Optional[str] = None
-    reason_code: Optional[str] = None
+    location_id: UUID | None = None
+    lot_id: UUID | None = None
+    to_warehouse_id: UUID | None = None
+    to_location_id: UUID | None = None
+    source_document_type: str | None = None
+    source_document_id: UUID | None = None
+    source_document_line_id: UUID | None = None
+    reference: str | None = None
+    reason_code: str | None = None
 
 
 @dataclass
@@ -324,7 +323,7 @@ class InventoryTransactionService(ListResponseMixin):
         item: Item,
         transaction: InventoryTransaction,
         input: TransactionInput,
-    ) -> Optional[InventoryLot]:
+    ) -> InventoryLot | None:
         """
         Create or update a lot for a receipt transaction.
 
@@ -461,7 +460,6 @@ class InventoryTransactionService(ListResponseMixin):
             lot_id = lot.lot_id
 
         # Determine unit cost and consume from lots based on costing method
-        fifo_layers_used = None
         if item.costing_method == CostingMethod.STANDARD_COST:
             unit_cost = item.standard_cost or Decimal("0")
             total_cost = input.quantity * unit_cost
@@ -477,7 +475,7 @@ class InventoryTransactionService(ListResponseMixin):
             )
             unit_cost = fifo_result["unit_cost"]
             total_cost = fifo_result["total_cost"]
-            fifo_layers_used = fifo_result["layers_used"]
+            fifo_result["layers_used"]
             # Use the first lot from FIFO if not lot-tracked
             if not lot_id and fifo_result.get("first_lot_id"):
                 lot_id = fifo_result["first_lot_id"]
@@ -904,10 +902,15 @@ class InventoryTransactionService(ListResponseMixin):
     def get(
         db: Session,
         transaction_id: str,
+        organization_id: UUID | None = None,
     ) -> InventoryTransaction:
         """Get an inventory transaction by ID."""
         txn = db.get(InventoryTransaction, coerce_uuid(transaction_id))
         if not txn:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        if organization_id is not None and txn.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Transaction not found")
         return txn
 
@@ -970,13 +973,13 @@ class InventoryTransactionService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        item_id: Optional[str] = None,
-        warehouse_id: Optional[str] = None,
-        transaction_type: Optional[TransactionType] = None,
-        fiscal_period_id: Optional[str] = None,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
+        organization_id: str | None = None,
+        item_id: str | None = None,
+        warehouse_id: str | None = None,
+        transaction_type: TransactionType | None = None,
+        fiscal_period_id: str | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[InventoryTransaction]:

@@ -5,9 +5,11 @@ Revises: 20260206_add_module_email_overrides
 Create Date: 2026-02-06
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision: str = "20260206_add_inv_count_indexes"

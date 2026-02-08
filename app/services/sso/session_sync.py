@@ -5,8 +5,7 @@ and session management.
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import List
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -62,7 +61,7 @@ class SSOSessionSync:
                 return True
 
             session.status = SessionStatus.revoked
-            session.revoked_at = datetime.now(timezone.utc)
+            session.revoked_at = datetime.now(UTC)
             self.auth_db.commit()
 
             logger.info("SSO session revoked: %s", session_id)
@@ -113,7 +112,7 @@ class SSOSessionSync:
             if not sessions:
                 return 0
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             for session in sessions:
                 session.status = SessionStatus.revoked
                 session.revoked_at = now
@@ -163,7 +162,7 @@ class SSOSessionSync:
             logger.error("Failed to count sessions for %s: %s", person_id, e)
             return 0
 
-    def get_active_sessions(self, person_id: UUID | str) -> List[AuthSession]:
+    def get_active_sessions(self, person_id: UUID | str) -> list[AuthSession]:
         """Get all active sessions for a user.
 
         Useful for displaying session list to users for management.
@@ -178,7 +177,7 @@ class SSOSessionSync:
             if isinstance(person_id, str):
                 person_id = coerce_uuid(person_id)
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             stmt = (
                 select(AuthSession)
                 .where(AuthSession.person_id == person_id)
@@ -219,7 +218,7 @@ class SSOSessionSync:
             if not session:
                 return False
 
-            session.last_seen_at = datetime.now(timezone.utc)
+            session.last_seen_at = datetime.now(UTC)
             if ip_address:
                 session.ip_address = ip_address
             if user_agent:

@@ -5,11 +5,12 @@ Revises: add_banking_categorization
 Create Date: 2025-02-04
 """
 
-from alembic import op
-from app.alembic_utils import ensure_enum
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
+
+from alembic import op
+from app.alembic_utils import ensure_enum
 
 # revision identifiers, used by Alembic.
 revision = "add_automation_schema"

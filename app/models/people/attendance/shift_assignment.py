@@ -6,7 +6,7 @@ Tracks employee shift assignments over time.
 
 import uuid
 from datetime import date, datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Date, ForeignKey, Index, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -16,8 +16,8 @@ from app.db import Base
 from app.models.people.base import AuditMixin, ERPNextSyncMixin
 
 if TYPE_CHECKING:
-    from app.models.people.hr.employee import Employee
     from app.models.people.attendance.shift_type import ShiftType
+    from app.models.people.hr.employee import Employee
 
 
 class ShiftAssignment(Base, AuditMixin, ERPNextSyncMixin):
@@ -61,7 +61,7 @@ class ShiftAssignment(Base, AuditMixin, ERPNextSyncMixin):
         Date,
         nullable=False,
     )
-    end_date: Mapped[Optional[date]] = mapped_column(
+    end_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -75,7 +75,7 @@ class ShiftAssignment(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

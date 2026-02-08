@@ -34,7 +34,6 @@ from app.db import SessionLocal
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
 
-
 # =============================================================================
 # Platform Permissions (system-wide)
 # =============================================================================

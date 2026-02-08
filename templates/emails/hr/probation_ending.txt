@@ -1,0 +1,10 @@
+{% extends "emails/base_email.txt" %}
+{% block content %}Hi {{ manager_first }},
+
+This is a reminder that the probation period for {{ employee_name }} is ending {{ urgency }}.
+
+Probation End Date: {{ probation_end_date }}
+
+Please review their performance and make a decision about their confirmation.
+
+View Employee: {{ employee_url }}{% endblock %}

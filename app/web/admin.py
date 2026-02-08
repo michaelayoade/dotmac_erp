@@ -12,11 +12,15 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.services.admin.settings_web import admin_settings_web_service
-from app.services.branding_assets import delete_branding_asset, save_branding_asset
 from app.services.admin.web import admin_web_service
+from app.services.branding_assets import delete_branding_asset, save_branding_asset
 from app.templates import templates
-from app.web.deps import get_db, optional_web_auth, org_brand_context, WebAuthContext
-
+from app.web.deps import (
+    WebAuthContext,
+    get_db,
+    optional_web_auth,
+    resolve_brand_context,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin-web"])
 
@@ -811,12 +815,19 @@ def _admin_base_context(
     request: Request, auth: WebAuthContext, page_title: str, db: Session
 ) -> dict:
     """Build base context for admin settings pages."""
+    organization = None
+    if auth and auth.organization_id:
+        from app.models.finance.core_org.organization import Organization
+
+        organization = db.get(Organization, auth.organization_id)
     context = {
         "request": request,
         "user": {"name": "Admin", "initials": "AD"} if auth else {},
         "page_title": page_title,
         "active_page": "settings",
-        "brand": org_brand_context(db, auth.organization_id if auth else None),
+        "brand": resolve_brand_context(
+            db, organization, auth.organization_id if auth else None
+        ),
     }
     return context
 
@@ -917,13 +928,20 @@ async def admin_settings_branding_update(
     if auth and auth.organization_id:
         logo_file = form.get("logo_file")
         favicon_file = form.get("favicon_file")
-        remove_logo = (form.get("remove_logo") or "").lower() in {
+        logo_dark_file = form.get("logo_dark_file")
+        remove_logo = str(form.get("remove_logo") or "").lower() in {
             "1",
             "true",
             "yes",
             "on",
         }
-        remove_favicon = (form.get("remove_favicon") or "").lower() in {
+        remove_logo_dark = str(form.get("remove_logo_dark") or "").lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        remove_favicon = str(form.get("remove_favicon") or "").lower() in {
             "1",
             "true",
             "yes",
@@ -941,6 +959,10 @@ async def admin_settings_branding_update(
                 existing_logo = branding.logo_url
             elif organization and getattr(organization, "logo_url", None):
                 existing_logo = organization.logo_url
+
+            existing_logo_dark = None
+            if branding and getattr(branding, "logo_dark_url", None):
+                existing_logo_dark = branding.logo_dark_url
 
             existing_favicon = None
             if branding and getattr(branding, "favicon_url", None):
@@ -969,6 +991,18 @@ async def admin_settings_branding_update(
                 data["favicon_url"] = ""
                 if existing_favicon:
                     delete_branding_asset(existing_favicon)
+
+            if isinstance(logo_dark_file, UploadFile) and logo_dark_file.filename:
+                uploaded_dark = await save_branding_asset(
+                    logo_dark_file, str(auth.organization_id), "logo_dark"
+                )
+                data["logo_dark_url"] = uploaded_dark
+                if existing_logo_dark and existing_logo_dark != uploaded_dark:
+                    delete_branding_asset(existing_logo_dark)
+            elif remove_logo_dark:
+                data["logo_dark_url"] = ""
+                if existing_logo_dark:
+                    delete_branding_asset(existing_logo_dark)
         except Exception as exc:
             context = _admin_base_context(request, auth, "Branding", db)
             context.update(
@@ -1015,7 +1049,7 @@ async def admin_settings_branding_update(
                 request, "admin/settings/branding.html", context
             )
 
-    return RedirectResponse(url="/admin/settings/branding?saved=1", status_code=303)
+    return RedirectResponse(url="/admin/settings/branding?success=1", status_code=303)
 
 
 @router.get("/settings/email", response_class=HTMLResponse)

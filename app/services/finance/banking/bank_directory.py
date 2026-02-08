@@ -8,7 +8,6 @@ Supports exact matching, alias matching, and fuzzy matching.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -31,11 +30,11 @@ class BankDirectoryService:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_by_code(self, bank_code: str) -> Optional[BankDirectory]:
+    def get_by_code(self, bank_code: str) -> BankDirectory | None:
         """Get bank entry by code."""
         return self.db.get(BankDirectory, bank_code)
 
-    def get_by_name(self, bank_name: str) -> Optional[BankDirectory]:
+    def get_by_name(self, bank_name: str) -> BankDirectory | None:
         """
         Look up bank by exact name match.
 
@@ -51,7 +50,7 @@ class BankDirectoryService:
         )
         return self.db.scalar(stmt)
 
-    def lookup_bank_code(self, bank_name: str) -> Optional[str]:
+    def lookup_bank_code(self, bank_name: str) -> str | None:
         """
         Look up bank code from bank name using multiple matching strategies.
 
@@ -107,7 +106,7 @@ class BankDirectoryService:
         logger.warning("Bank code not found for: %s", bank_name)
         return None
 
-    def lookup_bank(self, bank_name: str) -> Optional[BankDirectory]:
+    def lookup_bank(self, bank_name: str) -> BankDirectory | None:
         """
         Look up full bank entry from bank name.
 

@@ -93,8 +93,9 @@ class TestLeaseContractService:
 
     def test_get_contract_not_found(self, mock_db):
         """Test getting non-existent contract raises HTTPException."""
-        from app.services.finance.lease.lease_contract import LeaseContractService
         from fastapi import HTTPException
+
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         mock_db.get.return_value = None
 
@@ -124,8 +125,9 @@ class TestLeaseContractService:
 
     def test_approve_contract_not_found(self, mock_db, org_id, approver_id):
         """Test approving non-existent contract fails."""
-        from app.services.finance.lease.lease_contract import LeaseContractService
         from fastapi import HTTPException
+
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         mock_db.get.return_value = None
 
@@ -143,8 +145,9 @@ class TestLeaseContractService:
         self, mock_db, org_id, mock_contract, approver_id
     ):
         """Test approving contract with wrong status fails."""
-        from app.services.finance.lease.lease_contract import LeaseContractService
         from fastapi import HTTPException
+
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         mock_contract.status = LeaseStatus.ACTIVE  # Already active
         mock_db.get.return_value = mock_contract
@@ -164,8 +167,9 @@ class TestLeaseContractService:
         self, mock_db, org_id, mock_contract, user_id
     ):
         """Test segregation of duties violation (creator cannot approve)."""
-        from app.services.finance.lease.lease_contract import LeaseContractService
         from fastapi import HTTPException
+
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         mock_contract.status = LeaseStatus.DRAFT
         mock_contract.created_by_user_id = user_id
@@ -201,8 +205,9 @@ class TestLeaseContractService:
 
     def test_terminate_contract_not_found(self, mock_db, org_id):
         """Test terminating non-existent contract fails."""
-        from app.services.finance.lease.lease_contract import LeaseContractService
         from fastapi import HTTPException
+
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         mock_db.get.return_value = None
 
@@ -218,8 +223,9 @@ class TestLeaseContractService:
 
     def test_terminate_contract_wrong_status(self, mock_db, org_id, mock_contract):
         """Test terminating contract with wrong status fails."""
-        from app.services.finance.lease.lease_contract import LeaseContractService
         from fastapi import HTTPException
+
+        from app.services.finance.lease.lease_contract import LeaseContractService
 
         mock_contract.status = LeaseStatus.DRAFT  # Not active
         mock_db.get.return_value = mock_contract

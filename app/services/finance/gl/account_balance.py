@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -65,12 +65,12 @@ class AccountBalanceService(ListResponseMixin):
         fiscal_period_id: UUID,
         debit_amount: Decimal,
         credit_amount: Decimal,
-        currency_code: Optional[str] = None,
+        currency_code: str | None = None,
         balance_type: BalanceType = BalanceType.ACTUAL,
-        business_unit_id: Optional[UUID] = None,
-        cost_center_id: Optional[UUID] = None,
-        project_id: Optional[UUID] = None,
-        segment_id: Optional[UUID] = None,
+        business_unit_id: UUID | None = None,
+        cost_center_id: UUID | None = None,
+        project_id: UUID | None = None,
+        segment_id: UUID | None = None,
     ) -> AccountBalance:
         """
         Update balance for a posting.
@@ -132,7 +132,7 @@ class AccountBalanceService(ListResponseMixin):
             balance.closing_credit = balance.opening_credit + balance.period_credit
             balance.net_balance = balance.closing_debit - balance.closing_credit
             balance.transaction_count += 1
-            balance.last_updated_at = datetime.now(timezone.utc)
+            balance.last_updated_at = datetime.now(UTC)
         else:
             # Create new
             balance = AccountBalance(
@@ -170,12 +170,12 @@ class AccountBalanceService(ListResponseMixin):
         account_id: UUID,
         fiscal_period_id: UUID,
         balance_type: BalanceType = BalanceType.ACTUAL,
-        currency_code: Optional[str] = None,
-        business_unit_id: Optional[UUID] = None,
-        cost_center_id: Optional[UUID] = None,
-        project_id: Optional[UUID] = None,
-        segment_id: Optional[UUID] = None,
-    ) -> Optional[AccountBalance]:
+        currency_code: str | None = None,
+        business_unit_id: UUID | None = None,
+        cost_center_id: UUID | None = None,
+        project_id: UUID | None = None,
+        segment_id: UUID | None = None,
+    ) -> AccountBalance | None:
         """
         Get balance for specific dimensions.
 
@@ -226,7 +226,7 @@ class AccountBalanceService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         fiscal_period_id: UUID,
-        account_ids: Optional[list[UUID]] = None,
+        account_ids: list[UUID] | None = None,
         balance_type: BalanceType = BalanceType.ACTUAL,
         aggregate_dimensions: bool = True,
     ) -> list[BalanceSummary]:
@@ -607,10 +607,10 @@ class AccountBalanceService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        fiscal_period_id: Optional[str] = None,
-        account_id: Optional[str] = None,
-        balance_type: Optional[BalanceType] = None,
+        organization_id: str | None = None,
+        fiscal_period_id: str | None = None,
+        account_id: str | None = None,
+        balance_type: BalanceType | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[AccountBalance]:
@@ -655,8 +655,8 @@ class AccountBalanceService(ListResponseMixin):
         db: Session,
         organization_id: str,
         fiscal_period_id: str,
-        as_of_date: Optional[datetime] = None,
-    ) -> "TrialBalanceRead":
+        as_of_date: datetime | None = None,
+    ) -> TrialBalanceRead:
         """
         Get trial balance for a fiscal period.
 

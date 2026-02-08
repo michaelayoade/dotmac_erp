@@ -7,7 +7,7 @@ Syncs ERPNext Project DocType to DotMac core_org.project.
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -35,9 +35,9 @@ class ProjectSyncService(BaseSyncService[Project]):
         super().__init__(db, organization_id, user_id)
         self._mapping = ProjectMapping()
         self._project_cache: dict[str, Project] = {}
-        self._customer_cache: dict[str, Optional[uuid.UUID]] = {}
+        self._customer_cache: dict[str, uuid.UUID | None] = {}
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         if since:
             yield from client.get_modified_since(
                 doctype="Project",
@@ -49,7 +49,7 @@ class ProjectSyncService(BaseSyncService[Project]):
     def transform_record(self, record: dict[str, Any]) -> dict[str, Any]:
         return self._mapping.transform_record(record)
 
-    def _resolve_customer_id(self, source_name: Optional[str]) -> Optional[uuid.UUID]:
+    def _resolve_customer_id(self, source_name: str | None) -> uuid.UUID | None:
         """Resolve customer ID from ERPNext customer name."""
         if not source_name:
             return None
@@ -152,7 +152,7 @@ class ProjectSyncService(BaseSyncService[Project]):
     def get_entity_id(self, entity: Project) -> uuid.UUID:
         return entity.project_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[Project]:
+    def find_existing_entity(self, source_name: str) -> Project | None:
         if source_name in self._project_cache:
             return self._project_cache[source_name]
 

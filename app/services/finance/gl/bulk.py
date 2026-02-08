@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 from uuid import UUID
 
+from fastapi import Response
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.account import Account, AccountType
@@ -37,6 +38,7 @@ class AccountBulkService(BulkActionService[Account]):
     model = Account
     id_field = "account_id"
     org_field = "organization_id"
+    search_fields = ["account_code", "account_name"]
 
     # Fields to export in CSV
     export_fields = [
@@ -103,16 +105,47 @@ class AccountBulkService(BulkActionService[Account]):
                 return ""
             name = getattr(category, "category_name", None)
             if name is not None:
-                return name
+                return str(name)
             value = getattr(category, "value", category)
             return str(value)
 
-        return super()._get_export_value(entity, field_name)
+        return str(super()._get_export_value(entity, field_name))
 
     def _get_export_filename(self) -> str:
         """Get account export filename."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return f"accounts_export_{timestamp}.csv"
+
+    async def export_all(
+        self,
+        search: str = "",
+        status: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        extra_filters: dict[str, object] | None = None,
+        format: str = "csv",
+    ) -> Response:
+        """
+        Export all accounts matching filters to CSV.
+        """
+        from app.services.finance.gl.account_query import build_account_query
+
+        category = ""
+        if extra_filters:
+            category = str(
+                extra_filters.get("category") or extra_filters.get("account_type") or ""
+            )
+
+        query = build_account_query(
+            db=self.db,
+            organization_id=str(self.organization_id),
+            search=search,
+            category=category or None,
+            status=status,
+        )
+
+        entities = query.all()
+        return self._build_csv(entities)
 
 
 def get_account_bulk_service(
@@ -137,6 +170,8 @@ class JournalBulkService(BulkActionService[JournalEntry]):
     model = JournalEntry
     id_field = "journal_entry_id"
     org_field = "organization_id"
+    search_fields = ["entry_number", "description", "reference"]
+    date_field = "entry_date"
 
     # Fields to export in CSV
     export_fields = [
@@ -172,12 +207,38 @@ class JournalBulkService(BulkActionService[JournalEntry]):
             val = getattr(entity, field_name, None)
             return val.isoformat() if val else ""
 
-        return super()._get_export_value(entity, field_name)
+        return str(super()._get_export_value(entity, field_name))
 
     def _get_export_filename(self) -> str:
         """Get journal export filename."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         return f"journals_export_{timestamp}.csv"
+
+    async def export_all(
+        self,
+        search: str = "",
+        status: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        extra_filters: dict[str, object] | None = None,
+        format: str = "csv",
+    ) -> Response:
+        """
+        Export all journal entries matching filters to CSV.
+        """
+        from app.services.finance.gl.journal_query import build_journal_query
+
+        query = build_journal_query(
+            db=self.db,
+            organization_id=str(self.organization_id),
+            search=search,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        entities = query.all()
+        return self._build_csv(entities)
 
     async def bulk_post(self, ids: list[UUID]) -> BulkActionResult:
         """

@@ -5,39 +5,37 @@ HTML template routes for the workflow tasks dashboard.
 """
 
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Request, Form
+from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.models.workflow_task import WorkflowTaskStatus, WorkflowTaskPriority
+from app.models.workflow_task import WorkflowTaskPriority, WorkflowTaskStatus
 from app.services.common import PaginationParams
 from app.services.people.hr.employees import EmployeeService
 from app.services.workflow_task_service import WorkflowTaskService
+from app.templates import templates
 from app.web.deps import (
     WebAuthContext,
     base_context,
     get_db,
     require_web_auth,
 )
-from app.templates import templates
-
 
 router = APIRouter(prefix="/tasks", tags=["workflow-tasks-web"])
 
 
 def _get_employee_id(
     db: Session, organization_id: UUID, person_id: UUID
-) -> Optional[UUID]:
+) -> UUID | None:
     """Get employee ID from person ID, returns None if not found."""
     svc = EmployeeService(db, organization_id)
     employee = svc.get_employee_by_person(person_id)
     return employee.employee_id if employee else None
 
 
-def format_relative_time(dt: Optional[datetime]) -> str:
+def format_relative_time(dt: datetime | None) -> str:
     """Format datetime as relative time string."""
     if not dt:
         return "No due date"
@@ -96,8 +94,8 @@ def format_task_for_template(task) -> dict:
 @router.get("", response_class=HTMLResponse)
 async def workflow_tasks_list(
     request: Request,
-    status: Optional[str] = Query(None, description="Filter by status"),
-    priority: Optional[str] = Query(None, description="Filter by priority"),
+    status: str | None = Query(None, description="Filter by status"),
+    priority: str | None = Query(None, description="Filter by priority"),
     page: int = Query(1, ge=1),
     auth: WebAuthContext = Depends(require_web_auth),
     db: Session = Depends(get_db),

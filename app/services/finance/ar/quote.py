@@ -7,7 +7,6 @@ Business logic for sales quotes with conversion to invoices/sales orders.
 import logging
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -26,6 +25,12 @@ from app.models.finance.core_org.project import Project
 from app.models.finance.gl.account import Account
 from app.models.finance.tax.tax_code import TaxCode
 from app.services.common import coerce_uuid
+from app.services.finance.ar.input_utils import (
+    parse_date_str,
+    parse_json_list,
+    require_uuid,
+    resolve_currency_code,
+)
 from app.services.finance.common import SyncNumberingService, get_org_scoped_entity
 
 logger = logging.getLogger(__name__)
@@ -70,14 +75,14 @@ class QuoteService:
         created_by: str,
         currency_code: str = settings.default_functional_currency_code,
         exchange_rate: Decimal = Decimal("1"),
-        reference: Optional[str] = None,
-        contact_name: Optional[str] = None,
-        contact_email: Optional[str] = None,
-        payment_terms_id: Optional[str] = None,
-        terms_and_conditions: Optional[str] = None,
-        internal_notes: Optional[str] = None,
-        customer_notes: Optional[str] = None,
-        lines: Optional[List[dict]] = None,
+        reference: str | None = None,
+        contact_name: str | None = None,
+        contact_email: str | None = None,
+        payment_terms_id: str | None = None,
+        terms_and_conditions: str | None = None,
+        internal_notes: str | None = None,
+        customer_notes: str | None = None,
+        lines: list[dict] | None = None,
     ) -> Quote:
         """Create a new quote."""
         org_id = coerce_uuid(organization_id)
@@ -129,11 +134,46 @@ class QuoteService:
         # Recalculate totals
         QuoteService._recalculate_totals(quote)
         db.flush()
+        db.commit()
+        db.refresh(quote)
 
         return quote
 
     @staticmethod
-    def _add_lines(db: Session, quote: Quote, lines: List[dict], org_id: UUID) -> None:
+    def create_from_payload(
+        db: Session,
+        organization_id: UUID | str,
+        created_by: UUID | str,
+        payload: dict,
+    ) -> Quote:
+        """Create a new quote from raw payload (strings or JSON)."""
+        org_id = coerce_uuid(organization_id)
+
+        customer_id = require_uuid(payload.get("customer_id"), "Customer")
+        quote_date = parse_date_str(payload.get("quote_date"), "Quote date", True)
+        valid_until = parse_date_str(payload.get("valid_until"), "Valid until", True)
+        currency_code = resolve_currency_code(db, org_id, payload.get("currency_code"))
+        lines = parse_json_list(payload.get("lines"), "Lines")
+
+        return QuoteService.create(
+            db=db,
+            organization_id=org_id,
+            customer_id=customer_id,
+            quote_date=quote_date,
+            valid_until=valid_until,
+            created_by=created_by,
+            currency_code=currency_code,
+            contact_name=payload.get("contact_name"),
+            contact_email=payload.get("contact_email"),
+            payment_terms_id=payload.get("payment_terms_id") or None,
+            customer_notes=payload.get("customer_notes"),
+            internal_notes=payload.get("internal_notes"),
+            terms_and_conditions=payload.get("terms_and_conditions"),
+            lines=lines,
+        )
+
+    @staticmethod
+    def _add_lines(db: Session, quote: Quote, lines: list[dict], org_id: UUID) -> None:
         """Add lines to quote."""
         for idx, line_data in enumerate(lines, start=1):
             tax_code_id = line_data.get("tax_code_id")
@@ -284,6 +324,8 @@ class QuoteService:
         quote.updated_at = datetime.utcnow()
 
         db.flush()
+        db.commit()
+        db.refresh(quote)
         return quote
 
     @staticmethod
@@ -304,6 +346,8 @@ class QuoteService:
         quote.sent_at = datetime.utcnow()
 
         db.flush()
+        db.commit()
+        db.refresh(quote)
         return quote
 
     @staticmethod
@@ -319,6 +363,8 @@ class QuoteService:
             quote.status = QuoteStatus.VIEWED
             quote.viewed_at = datetime.utcnow()
             db.flush()
+            db.commit()
+            db.refresh(quote)
 
         return quote
 
@@ -344,6 +390,8 @@ class QuoteService:
         quote.accepted_at = datetime.utcnow()
 
         db.flush()
+        db.commit()
+        db.refresh(quote)
         return quote
 
     @staticmethod
@@ -351,7 +399,7 @@ class QuoteService:
         db: Session,
         organization_id: str,
         quote_id: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> Quote:
         """Mark quote as rejected by customer."""
         quote = QuoteService._get_quote(db, organization_id, quote_id)
@@ -383,6 +431,8 @@ class QuoteService:
         except Exception:
             pass
 
+        db.commit()
+        db.refresh(quote)
         return quote
 
     @staticmethod
@@ -391,7 +441,7 @@ class QuoteService:
         organization_id: str,
         quote_id: str,
         created_by: str,
-        invoice_date: Optional[date] = None,
+        invoice_date: date | None = None,
     ) -> Invoice:
         """Convert accepted quote to invoice."""
         quote = QuoteService._get_quote(db, organization_id, quote_id)
@@ -458,6 +508,9 @@ class QuoteService:
         quote.converted_at = datetime.utcnow()
 
         db.flush()
+        db.commit()
+        db.refresh(invoice)
+        db.refresh(quote)
         return invoice
 
     @staticmethod
@@ -466,8 +519,8 @@ class QuoteService:
         organization_id: str,
         quote_id: str,
         created_by: str,
-        order_date: Optional[date] = None,
-        customer_po_number: Optional[str] = None,
+        order_date: date | None = None,
+        customer_po_number: str | None = None,
     ) -> SalesOrder:
         """Convert accepted quote to sales order."""
         quote = QuoteService._get_quote(db, organization_id, quote_id)
@@ -537,6 +590,9 @@ class QuoteService:
         quote.converted_at = datetime.utcnow()
 
         db.flush()
+        db.commit()
+        db.refresh(so)
+        db.refresh(quote)
         return so
 
     @staticmethod
@@ -557,6 +613,8 @@ class QuoteService:
         quote.updated_at = datetime.utcnow()
 
         db.flush()
+        db.commit()
+        db.refresh(quote)
         return quote
 
     @staticmethod
@@ -574,19 +632,20 @@ class QuoteService:
             .update({"status": QuoteStatus.EXPIRED}, synchronize_session=False)
         )
         db.flush()
+        db.commit()
         return count
 
     @staticmethod
     def list_quotes(
         db: Session,
         organization_id: str,
-        customer_id: Optional[str] = None,
-        status: Optional[QuoteStatus] = None,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
+        customer_id: str | None = None,
+        status: QuoteStatus | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[Quote]:
+    ) -> list[Quote]:
         """List quotes with filters."""
         org_id = coerce_uuid(organization_id)
 

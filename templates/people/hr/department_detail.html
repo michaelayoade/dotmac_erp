@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 
+{% from "components/macros.html" import empty_state %}
 {% block page_title %}Department: {{ department.department_name }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -92,7 +93,7 @@
             <p class="text-sm text-slate-500 dark:text-slate-400">Designation, employment type, and shift assignment for this department.</p>
         </div>
         {% if employees %}
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-800">
                 <thead class="bg-slate-50 dark:bg-slate-900/50">
                     <tr>
@@ -126,6 +127,12 @@
                         </td>
                         <td class="px-5 py-4 text-sm text-slate-600 dark:text-slate-300">
                             {{ employee.default_shift_type.shift_name if employee.default_shift_type else '-' }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No employees found", "There are no employees to display.") }}
                         </td>
                     </tr>
                     {% endfor %}

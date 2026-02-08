@@ -24,7 +24,6 @@ from app.services.finance.banking.bank_statement import (
     StatementLineInput,
 )
 
-
 # ============ Fixtures ============
 
 

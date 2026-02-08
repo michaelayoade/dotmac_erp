@@ -11,7 +11,6 @@ import pytest
 
 from tests.ifrs.bulk.conftest import MockSupplier, MockSupplierType
 
-
 # ============ TestCanDelete ============
 
 

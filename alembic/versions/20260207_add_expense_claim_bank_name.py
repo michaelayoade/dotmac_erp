@@ -5,8 +5,9 @@ Revises: 20260206_merge_heads_cancel_reason
 Create Date: 2026-02-07
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260207_add_expense_claim_bank_name"

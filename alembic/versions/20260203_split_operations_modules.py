@@ -5,8 +5,9 @@ Revises: 20260203_create_ipsas_schema
 Create Date: 2026-02-03
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "20260203_split_operations_modules"
 down_revision = "20260203_create_ipsas_schema"
@@ -32,7 +33,7 @@ def _ensure_permission(key: str, description: str) -> None:
 
 def _grant_permission_from_role_source(source_key: str, target_key: str) -> None:
     op.execute(
-        """
+        f"""
         INSERT INTO role_permissions (id, role_id, permission_id)
         SELECT gen_random_uuid(), rp.role_id, p_target.id
         FROM role_permissions rp
@@ -46,13 +47,13 @@ def _grant_permission_from_role_source(source_key: str, target_key: str) -> None
                 AND rp2.permission_id = p_target.id
           )
         ON CONFLICT DO NOTHING
-        """.format(source_key=source_key, target_key=target_key)
+        """
     )
 
 
 def _grant_permission_from_prefix(prefix: str, target_key: str) -> None:
     op.execute(
-        """
+        f"""
         INSERT INTO role_permissions (id, role_id, permission_id)
         SELECT DISTINCT gen_random_uuid(), rp.role_id, p_target.id
         FROM role_permissions rp
@@ -66,7 +67,7 @@ def _grant_permission_from_prefix(prefix: str, target_key: str) -> None:
                 AND rp2.permission_id = p_target.id
           )
         ON CONFLICT DO NOTHING
-        """.format(prefix=prefix, target_key=target_key)
+        """
     )
 
 

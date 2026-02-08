@@ -5,7 +5,7 @@ Document 11: API Design.
 
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import (
     JSON,
@@ -56,7 +56,7 @@ class IdempotencyRecord(Base):
     request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
 
     response_status: Mapped[int] = mapped_column(Integer, nullable=False)
-    response_body: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    response_body: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB().with_variant(JSON, "sqlite"),
         nullable=True,
     )

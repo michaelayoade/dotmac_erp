@@ -6,7 +6,6 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Date,
@@ -91,12 +90,12 @@ class ExchangeRate(Base):
     effective_date: Mapped[date] = mapped_column(Date, nullable=False)
     exchange_rate: Mapped[Decimal] = mapped_column(Numeric(20, 10), nullable=False)
 
-    source: Mapped[Optional[ExchangeRateSource]] = mapped_column(
+    source: Mapped[ExchangeRateSource | None] = mapped_column(
         Enum(ExchangeRateSource, name="exchange_rate_source"),
         nullable=True,
     )
 
-    created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )

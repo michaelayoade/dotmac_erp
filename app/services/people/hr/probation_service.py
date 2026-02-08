@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -73,9 +72,9 @@ class ProbationStatus:
     employee_name: str
     is_on_probation: bool
     is_confirmed: bool
-    date_of_joining: Optional[date]
-    probation_end_date: Optional[date]
-    confirmation_date: Optional[date]
+    date_of_joining: date | None
+    probation_end_date: date | None
+    confirmation_date: date | None
     days_remaining: int  # Negative if probation ended
 
 
@@ -126,12 +125,12 @@ class ProbationService:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_employee(self, employee_id: UUID) -> Optional[Employee]:
+    def get_employee(self, employee_id: UUID) -> Employee | None:
         """Get employee by ID."""
         return self.db.get(Employee, employee_id)
 
     def is_on_probation(
-        self, employee_id: UUID, as_of_date: Optional[date] = None
+        self, employee_id: UUID, as_of_date: date | None = None
     ) -> bool:
         """
         Check if employee is currently on probation.
@@ -173,8 +172,8 @@ class ProbationService:
     def get_probation_status(
         self,
         employee_id: UUID,
-        as_of_date: Optional[date] = None,
-    ) -> Optional[ProbationStatus]:
+        as_of_date: date | None = None,
+    ) -> ProbationStatus | None:
         """
         Get detailed probation status for an employee.
 
@@ -250,7 +249,7 @@ class ProbationService:
         organization_id: UUID,
         employee_id: UUID,
         confirmed_by_id: UUID,
-        confirmation_date: Optional[date] = None,
+        confirmation_date: date | None = None,
         *,
         allow_early_confirmation: bool = False,
     ) -> Employee:
@@ -315,7 +314,7 @@ class ProbationService:
         employee_id: UUID,
         new_end_date: date,
         extended_by_id: UUID,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> Employee:
         """
         Extend an employee's probation period.
@@ -380,7 +379,7 @@ class ProbationService:
         self,
         organization_id: UUID,
         days_threshold: int = 7,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
     ) -> list[ProbationStatus]:
         """
         Get employees whose probation is ending within the threshold.
@@ -434,7 +433,7 @@ class ProbationService:
     def get_employees_due_for_confirmation(
         self,
         organization_id: UUID,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
     ) -> list[ProbationStatus]:
         """
         Get employees whose probation has ended but are not yet confirmed.

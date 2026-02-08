@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, joinedload
 
@@ -56,10 +56,10 @@ class SubmitClaimResult:
     """
 
     claim: ExpenseClaim
-    evaluation_result: Optional["EvaluationResult"] = None
+    evaluation_result: EvaluationResult | None = None
     requires_approval: bool = False
-    eligible_approvers: List["EligibleApprover"] = field(default_factory=list)
-    warning_message: Optional[str] = None
+    eligible_approvers: list[EligibleApprover] = field(default_factory=list)
+    warning_message: str | None = None
 
     @property
     def success(self) -> bool:
@@ -132,7 +132,7 @@ class ExpenseClaimStatusError(ExpenseServiceError):
 class ExpenseLimitBlockedError(ExpenseServiceError):
     """Expense limit exceeded and blocks submission."""
 
-    def __init__(self, message: str, rule: Optional["ExpenseLimitRule"] = None):
+    def __init__(self, message: str, rule: ExpenseLimitRule | None = None):
         self.rule = rule
         super().__init__(message)
 
@@ -190,7 +190,7 @@ class ExpenseService:
     def __init__(
         self,
         db: Session,
-        ctx: Optional["WebAuthContext"] = None,
+        ctx: WebAuthContext | None = None,
     ) -> None:
         self.db = db
         self.ctx = ctx
@@ -241,7 +241,7 @@ class ExpenseService:
             return True
         if existing.status == ExpenseClaimActionStatus.STARTED:
             if existing.created_at:
-                age = datetime.now(timezone.utc) - existing.created_at
+                age = datetime.now(UTC) - existing.created_at
                 if age > timedelta(minutes=STALE_ACTION_MINUTES):
                     # Allow retry if previous action got stuck.
                     self.db.flush()
@@ -253,7 +253,7 @@ class ExpenseService:
         org_id: UUID,
         claim_id: UUID,
         action: ExpenseClaimActionType,
-        status: "ExpenseClaimActionStatus",
+        status: ExpenseClaimActionStatus,
     ) -> None:
         record = self.db.scalar(
             select(ExpenseClaimAction).where(
@@ -266,14 +266,17 @@ class ExpenseService:
             record.status = status
             self.db.flush()
 
-    def _next_claim_number(self) -> str:
-        if self.db.bind and self.db.bind.dialect.name == "postgresql":
-            seq = self.db.scalar(
-                text("select nextval('expense.expense_claim_number_seq')")
-            )
-            return f"EXP-{date.today().year}-{int(seq):05d}"
-        count = self.db.scalar(select(func.count(ExpenseClaim.claim_id))) or 0
-        return f"EXP-{date.today().year}-{count + 1:05d}"
+    def _next_claim_number(self, org_id: UUID) -> str:
+        """Generate next expense claim number.
+
+        Delegates to SyncNumberingService for race-condition-safe generation.
+        """
+        from app.models.finance.core_config.numbering_sequence import SequenceType
+        from app.services.finance.common.numbering import SyncNumberingService
+
+        return SyncNumberingService(self.db).generate_next_number(
+            org_id, SequenceType.EXPENSE
+        )
 
     # =========================================================================
     # Expense Categories
@@ -283,9 +286,9 @@ class ExpenseService:
         self,
         org_id: UUID,
         *,
-        is_active: Optional[bool] = None,
-        search: Optional[str] = None,
-        pagination: Optional[PaginationParams] = None,
+        is_active: bool | None = None,
+        search: str | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[ExpenseCategory]:
         """List expense categories."""
         query = select(ExpenseCategory).where(ExpenseCategory.organization_id == org_id)
@@ -339,11 +342,11 @@ class ExpenseService:
         *,
         category_code: str,
         category_name: str,
-        expense_account_id: Optional[UUID] = None,
-        max_amount_per_claim: Optional[Decimal] = None,
+        expense_account_id: UUID | None = None,
+        max_amount_per_claim: Decimal | None = None,
         requires_receipt: bool = True,
         is_active: bool = True,
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> ExpenseCategory:
         """Create a new expense category."""
         category = ExpenseCategory(
@@ -392,12 +395,12 @@ class ExpenseService:
         self,
         org_id: UUID,
         *,
-        employee_id: Optional[UUID] = None,
-        status: Optional[ExpenseClaimStatus] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
-        search: Optional[str] = None,
-        pagination: Optional[PaginationParams] = None,
+        employee_id: UUID | None = None,
+        status: ExpenseClaimStatus | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        search: str | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[ExpenseClaim]:
         """List expense claims."""
         query = select(ExpenseClaim).where(ExpenseClaim.organization_id == org_id)
@@ -461,25 +464,27 @@ class ExpenseService:
         self,
         org_id: UUID,
         *,
-        employee_id: Optional[UUID] = None,
+        employee_id: UUID | None = None,
         claim_date: date,
         purpose: str,
-        expense_period_start: Optional[date] = None,
-        expense_period_end: Optional[date] = None,
-        project_id: Optional[UUID] = None,
-        task_id: Optional[UUID] = None,
+        expense_period_start: date | None = None,
+        expense_period_end: date | None = None,
+        project_id: UUID | None = None,
+        ticket_id: UUID | None = None,
+        task_id: UUID | None = None,
         currency_code: str = "NGN",
-        cost_center_id: Optional[UUID] = None,
-        recipient_bank_code: Optional[str] = None,
-        recipient_bank_name: Optional[str] = None,
-        recipient_account_number: Optional[str] = None,
-        recipient_name: Optional[str] = None,
-        notes: Optional[str] = None,
-        items: Optional[List[dict]] = None,
+        cost_center_id: UUID | None = None,
+        recipient_bank_code: str | None = None,
+        recipient_bank_name: str | None = None,
+        recipient_account_number: str | None = None,
+        recipient_name: str | None = None,
+        requested_approver_id: UUID | None = None,
+        notes: str | None = None,
+        items: list[dict] | None = None,
     ) -> ExpenseClaim:
         """Create a new expense claim."""
         # Generate claim number via DB sequence (concurrency-safe)
-        claim_number = self._next_claim_number()
+        claim_number = self._next_claim_number(org_id)
 
         claim = ExpenseClaim(
             organization_id=org_id,
@@ -490,6 +495,7 @@ class ExpenseService:
             expense_period_start=expense_period_start,
             expense_period_end=expense_period_end,
             project_id=project_id,
+            ticket_id=ticket_id,
             task_id=task_id,
             currency_code=currency_code,
             cost_center_id=cost_center_id,
@@ -497,6 +503,7 @@ class ExpenseService:
             recipient_bank_name=recipient_bank_name,
             recipient_account_number=recipient_account_number,
             recipient_name=recipient_name,
+            requested_approver_id=requested_approver_id,
             notes=notes,
             status=ExpenseClaimStatus.DRAFT,
             total_claimed_amount=Decimal("0"),
@@ -627,6 +634,63 @@ class ExpenseService:
         self.db.flush()
         return item
 
+    def update_claim_item(
+        self,
+        org_id: UUID,
+        *,
+        claim_id: UUID,
+        item_id: UUID,
+        expense_date: date,
+        category_id: UUID,
+        description: str,
+        claimed_amount: Decimal,
+        receipt_number: str | None = None,
+        receipt_url: str | None = None,
+    ) -> ExpenseClaimItem:
+        """Update an item on an expense claim."""
+        claim = self.get_claim(org_id, claim_id)
+
+        if claim.status != ExpenseClaimStatus.DRAFT:
+            raise ExpenseClaimStatusError(claim.status.value, "update item")
+
+        item = self.db.scalar(
+            select(ExpenseClaimItem).where(
+                ExpenseClaimItem.item_id == item_id,
+                ExpenseClaimItem.claim_id == claim_id,
+            )
+        )
+        if not item:
+            raise ExpenseServiceError(f"Claim item {item_id} not found")
+
+        category = self.db.scalar(
+            select(ExpenseCategory).where(
+                ExpenseCategory.organization_id == org_id,
+                ExpenseCategory.category_id == category_id,
+            )
+        )
+        if not category:
+            raise ExpenseCategoryNotFoundError(category_id)
+        if (
+            category.max_amount_per_claim is not None
+            and claimed_amount > category.max_amount_per_claim
+        ):
+            raise ExpenseServiceError("Claimed amount exceeds category limit")
+
+        # Update claim total
+        claim.total_claimed_amount = (
+            claim.total_claimed_amount - item.claimed_amount + claimed_amount
+        )
+
+        item.expense_date = expense_date
+        item.category_id = category_id
+        item.description = description
+        item.claimed_amount = claimed_amount
+        item.receipt_number = receipt_number
+        item.receipt_url = receipt_url
+
+        self.db.flush()
+        return item
+
     def submit_claim(
         self,
         org_id: UUID,
@@ -635,7 +699,7 @@ class ExpenseService:
         skip_limit_check: bool = False,
         skip_receipt_validation: bool = False,
         notify_approvers: bool = True,
-    ) -> "SubmitClaimResult":
+    ) -> SubmitClaimResult:
         """
         Submit an expense claim for approval.
 
@@ -739,6 +803,9 @@ class ExpenseService:
                             claim, evaluation_result.eligible_approvers
                         )
 
+                    # Confirm submission to the submitter
+                    self._notify_submission_confirmed(claim)
+
                     # Combine warnings
                     warning_msg = None
                     if receipt_warnings:
@@ -773,6 +840,9 @@ class ExpenseService:
                         old_values={"status": ExpenseClaimStatus.DRAFT.value},
                         new_values={"status": ExpenseClaimStatus.SUBMITTED.value},
                     )
+
+                    # Confirm submission to the submitter
+                    self._notify_submission_confirmed(claim)
 
                     # Combine limit warning with receipt warnings
                     all_warnings = [evaluation_result.message] + receipt_warnings
@@ -822,6 +892,9 @@ class ExpenseService:
             except Exception as e:
                 logger.exception("Workflow event failed for claim %s: %s", claim_id, e)
 
+            # Confirm submission to the submitter
+            self._notify_submission_confirmed(claim)
+
             # Include any receipt warnings
             warning_msg = "; ".join(receipt_warnings) if receipt_warnings else None
 
@@ -845,30 +918,93 @@ class ExpenseService:
             )
             raise
 
+    def _notify_submission_confirmed(self, claim: ExpenseClaim) -> None:
+        """Send in-app confirmation to the submitter that their claim was received."""
+        if not claim.employee or not claim.employee.person_id:
+            return
+
+        try:
+            from app.models.notification import (
+                EntityType,
+                NotificationChannel,
+                NotificationType,
+            )
+            from app.services.notification import NotificationService
+
+            NotificationService().create(
+                self.db,
+                organization_id=claim.organization_id,
+                recipient_id=claim.employee.person_id,
+                entity_type=EntityType.EXPENSE,
+                entity_id=claim.claim_id,
+                notification_type=NotificationType.STATUS_CHANGE,
+                title=f"Expense {claim.claim_number} submitted",
+                message="Your expense claim has been submitted for approval.",
+                channel=NotificationChannel.IN_APP,
+                action_url=f"/expense/claims/{claim.claim_id}",
+                actor_id=claim.employee_id,
+            )
+        except Exception as e:
+            logger.exception("Submission confirmation notification failed: %s", e)
+
     def _notify_approvers(
-        self, claim: ExpenseClaim, approvers: List["EligibleApprover"]
+        self, claim: ExpenseClaim, approvers: list[EligibleApprover]
     ) -> None:
-        """Send approval request notifications to eligible approvers."""
+        """Send approval request notifications to eligible approvers (email + in-app)."""
         from app.models.people.hr.employee import Employee
         from app.services.expense.expense_notifications import (
             ExpenseNotificationService,
         )
+        from app.services.notification import NotificationService
 
-        notification_service = ExpenseNotificationService(self.db)
+        email_service = ExpenseNotificationService(self.db)
+        inapp_service = NotificationService()
+
+        submitter_name = ""
+        if claim.employee:
+            submitter_name = f"{claim.employee.first_name} {claim.employee.last_name}"
 
         for approver_info in approvers[:3]:  # Limit to top 3 approvers
             approver = self.db.get(Employee, approver_info.employee_id)
             if approver:
-                notification_service.notify_approval_needed(claim, approver)
+                # Email notification
+                try:
+                    email_service.notify_approval_needed(claim, approver)
+                except Exception as e:
+                    logger.exception(
+                        "Email notification failed for approver %s: %s",
+                        approver.employee_id,
+                        e,
+                    )
+
+                # In-app notification
+                if approver.person_id:
+                    try:
+                        inapp_service.notify_expense_submitted(
+                            self.db,
+                            organization_id=claim.organization_id,
+                            claim_id=claim.claim_id,
+                            claim_number=claim.claim_number,
+                            recipient_id=approver.person_id,
+                            submitter_name=submitter_name,
+                            amount=str(claim.total_claimed_amount),
+                            actor_id=claim.employee_id,
+                        )
+                    except Exception as e:
+                        logger.exception(
+                            "In-app notification failed for approver %s: %s",
+                            approver.employee_id,
+                            e,
+                        )
 
     def approve_claim(
         self,
         org_id: UUID,
         claim_id: UUID,
         *,
-        approver_id: Optional[UUID] = None,
-        approved_amounts: Optional[List[dict]] = None,
-        notes: Optional[str] = None,
+        approver_id: UUID | None = None,
+        approved_amounts: list[dict] | None = None,
+        notes: str | None = None,
         auto_post_gl: bool = False,
         create_supplier_invoice: bool = False,
         send_notification: bool = True,
@@ -991,13 +1127,8 @@ class ExpenseService:
                         invoice_result.message,
                     )
 
-            # Send notification if requested
-            if send_notification and claim.employee and claim.employee.work_email:
-                from app.services.expense.expense_notifications import (
-                    ExpenseNotificationService,
-                )
-
-                notification_service = ExpenseNotificationService(self.db)
+            # Send notifications if requested
+            if send_notification:
                 approver_name = None
                 if approver_id:
                     from app.models.people.hr.employee import Employee
@@ -1006,9 +1137,35 @@ class ExpenseService:
                     if approver:
                         approver_name = f"{approver.first_name} {approver.last_name}"
 
-                notification_service.notify_claim_approved(
-                    claim, approver_name=approver_name
-                )
+                # Email notification
+                if claim.employee and claim.employee.work_email:
+                    try:
+                        from app.services.expense.expense_notifications import (
+                            ExpenseNotificationService,
+                        )
+
+                        ExpenseNotificationService(self.db).notify_claim_approved(
+                            claim, approver_name=approver_name
+                        )
+                    except Exception as e:
+                        logger.exception("Email approval notification failed: %s", e)
+
+                # In-app notification
+                if claim.employee and claim.employee.person_id:
+                    try:
+                        from app.services.notification import NotificationService
+
+                        NotificationService().notify_expense_approved(
+                            self.db,
+                            organization_id=org_id,
+                            claim_id=claim.claim_id,
+                            claim_number=claim.claim_number,
+                            recipient_id=claim.employee.person_id,
+                            approver_name=approver_name or "Manager",
+                            actor_id=approver_id,
+                        )
+                    except Exception as e:
+                        logger.exception("In-app approval notification failed: %s", e)
 
             self.db.flush()
 
@@ -1107,7 +1264,7 @@ class ExpenseService:
         org_id: UUID,
         claim_id: UUID,
         *,
-        approver_id: Optional[UUID] = None,
+        approver_id: UUID | None = None,
         reason: str,
         send_notification: bool = True,
     ) -> ExpenseClaim:
@@ -1143,13 +1300,8 @@ class ExpenseService:
             claim.approver_id = approver_id
             claim.rejection_reason = reason
 
-            # Send notification if requested
-            if send_notification and claim.employee and claim.employee.work_email:
-                from app.services.expense.expense_notifications import (
-                    ExpenseNotificationService,
-                )
-
-                notification_service = ExpenseNotificationService(self.db)
+            # Send notifications if requested
+            if send_notification:
                 approver_name = None
                 if approver_id:
                     from app.models.people.hr.employee import Employee
@@ -1158,11 +1310,38 @@ class ExpenseService:
                     if approver:
                         approver_name = f"{approver.first_name} {approver.last_name}"
 
-                notification_service.notify_claim_rejected(
-                    claim,
-                    reason,
-                    approver_name=approver_name,
-                )
+                # Email notification
+                if claim.employee and claim.employee.work_email:
+                    try:
+                        from app.services.expense.expense_notifications import (
+                            ExpenseNotificationService,
+                        )
+
+                        ExpenseNotificationService(self.db).notify_claim_rejected(
+                            claim,
+                            reason,
+                            approver_name=approver_name,
+                        )
+                    except Exception as e:
+                        logger.exception("Email rejection notification failed: %s", e)
+
+                # In-app notification
+                if claim.employee and claim.employee.person_id:
+                    try:
+                        from app.services.notification import NotificationService
+
+                        NotificationService().notify_expense_rejected(
+                            self.db,
+                            organization_id=org_id,
+                            claim_id=claim.claim_id,
+                            claim_number=claim.claim_number,
+                            recipient_id=claim.employee.person_id,
+                            rejector_name=approver_name or "Manager",
+                            reason=reason,
+                            actor_id=approver_id,
+                        )
+                    except Exception as e:
+                        logger.exception("In-app rejection notification failed: %s", e)
 
             self.db.flush()
 
@@ -1283,8 +1462,8 @@ class ExpenseService:
         org_id: UUID,
         claim_id: UUID,
         *,
-        payment_reference: Optional[str] = None,
-        payment_date: Optional[date] = None,
+        payment_reference: str | None = None,
+        payment_date: date | None = None,
         send_notification: bool = True,
     ) -> ExpenseClaim:
         """
@@ -1353,7 +1532,7 @@ class ExpenseService:
         org_id: UUID,
         claim_id: UUID,
         *,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> ExpenseClaim:
         """
         Cancel an expense claim.
@@ -1500,7 +1679,7 @@ class ExpenseService:
     ) -> ExpenseClaim:
         """Link a cash advance to an expense claim."""
         claim = self.get_claim(org_id, claim_id)
-        advance = self.get_advance(org_id, advance_id)
+        self.get_advance(org_id, advance_id)
 
         if claim.status not in {ExpenseClaimStatus.DRAFT, ExpenseClaimStatus.SUBMITTED}:
             raise ExpenseClaimStatusError(claim.status.value, "link advance")
@@ -1544,11 +1723,11 @@ class ExpenseService:
         self,
         org_id: UUID,
         *,
-        employee_id: Optional[UUID] = None,
-        status: Optional[CashAdvanceStatus] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
-        pagination: Optional[PaginationParams] = None,
+        employee_id: UUID | None = None,
+        status: CashAdvanceStatus | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[CashAdvance]:
         """List cash advances."""
         query = select(CashAdvance).where(CashAdvance.organization_id == org_id)
@@ -1600,15 +1779,15 @@ class ExpenseService:
         self,
         org_id: UUID,
         *,
-        employee_id: Optional[UUID] = None,
+        employee_id: UUID | None = None,
         request_date: date,
         purpose: str,
         requested_amount: Decimal,
         currency_code: str = "NGN",
-        expected_settlement_date: Optional[date] = None,
-        cost_center_id: Optional[UUID] = None,
-        advance_account_id: Optional[UUID] = None,
-        notes: Optional[str] = None,
+        expected_settlement_date: date | None = None,
+        cost_center_id: UUID | None = None,
+        advance_account_id: UUID | None = None,
+        notes: str | None = None,
     ) -> CashAdvance:
         """Create a new cash advance request."""
         # Generate advance number
@@ -1695,7 +1874,7 @@ class ExpenseService:
         advance_id: UUID,
         *,
         approver_id: UUID,
-        approved_amount: Optional[Decimal] = None,
+        approved_amount: Decimal | None = None,
     ) -> CashAdvance:
         """Approve a cash advance."""
         advance = self.get_advance(org_id, advance_id)
@@ -1718,7 +1897,7 @@ class ExpenseService:
         org_id: UUID,
         advance_id: UUID,
         *,
-        approver_id: Optional[UUID] = None,
+        approver_id: UUID | None = None,
         reason: str,
     ) -> CashAdvance:
         """Reject a cash advance."""
@@ -1742,9 +1921,9 @@ class ExpenseService:
         org_id: UUID,
         advance_id: UUID,
         *,
-        disbursed_amount: Optional[Decimal] = None,
-        disbursement_date: Optional[date] = None,
-        payment_reference: Optional[str] = None,
+        disbursed_amount: Decimal | None = None,
+        disbursement_date: date | None = None,
+        payment_reference: str | None = None,
     ) -> CashAdvance:
         """Mark a cash advance as disbursed."""
         advance = self.get_advance(org_id, advance_id)
@@ -1767,7 +1946,7 @@ class ExpenseService:
         advance_id: UUID,
         *,
         refund_amount: Decimal,
-        payment_reference: Optional[str] = None,
+        payment_reference: str | None = None,
     ) -> CashAdvance:
         """Record a refund from employee for unused advance."""
         advance = self.get_advance(org_id, advance_id)
@@ -1794,8 +1973,8 @@ class ExpenseService:
         advance_id: UUID,
         *,
         settled_amount: Decimal,
-        settlement_date: Optional[date] = None,
-        notes: Optional[str] = None,
+        settlement_date: date | None = None,
+        notes: str | None = None,
     ) -> CashAdvance:
         """Settle a cash advance (link to expense claim)."""
         advance = self.get_advance(org_id, advance_id)
@@ -1826,9 +2005,9 @@ class ExpenseService:
         self,
         org_id: UUID,
         *,
-        employee_id: Optional[UUID] = None,
-        is_active: Optional[bool] = None,
-        pagination: Optional[PaginationParams] = None,
+        employee_id: UUID | None = None,
+        is_active: bool | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[CorporateCard]:
         """List corporate cards."""
         query = select(CorporateCard).where(CorporateCard.organization_id == org_id)
@@ -1877,15 +2056,15 @@ class ExpenseService:
         card_number_last4: str,
         card_name: str,
         card_type: str,
-        employee_id: Optional[UUID] = None,
-        assigned_date: Optional[date] = None,
-        issuer: Optional[str] = None,
-        expiry_date: Optional[date] = None,
-        credit_limit: Optional[Decimal] = None,
-        single_transaction_limit: Optional[Decimal] = None,
-        monthly_limit: Optional[Decimal] = None,
+        employee_id: UUID | None = None,
+        assigned_date: date | None = None,
+        issuer: str | None = None,
+        expiry_date: date | None = None,
+        credit_limit: Decimal | None = None,
+        single_transaction_limit: Decimal | None = None,
+        monthly_limit: Decimal | None = None,
         currency_code: str = "NGN",
-        liability_account_id: Optional[UUID] = None,
+        liability_account_id: UUID | None = None,
     ) -> CorporateCard:
         """Create a new corporate card."""
         card = CorporateCard(
@@ -1930,7 +2109,7 @@ class ExpenseService:
         org_id: UUID,
         card_id: UUID,
         *,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> CorporateCard:
         """Deactivate a corporate card."""
         card = self.get_card(org_id, card_id)
@@ -1949,12 +2128,12 @@ class ExpenseService:
         self,
         org_id: UUID,
         *,
-        card_id: Optional[UUID] = None,
-        status: Optional[CardTransactionStatus | str] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
+        card_id: UUID | None = None,
+        status: CardTransactionStatus | str | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
         unmatched_only: bool = False,
-        pagination: Optional[PaginationParams] = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[CardTransaction]:
         """List card transactions."""
         query = select(CardTransaction).where(CardTransaction.organization_id == org_id)
@@ -1963,7 +2142,7 @@ class ExpenseService:
             query = query.where(CardTransaction.card_id == card_id)
 
         if status:
-            status_value: Optional[CardTransactionStatus] = None
+            status_value: CardTransactionStatus | None = None
             if isinstance(status, CardTransactionStatus):
                 status_value = status
             elif isinstance(status, str):
@@ -2022,14 +2201,14 @@ class ExpenseService:
         transaction_date: date,
         merchant_name: str,
         amount: Decimal,
-        posting_date: Optional[date] = None,
-        merchant_category: Optional[str] = None,
+        posting_date: date | None = None,
+        merchant_category: str | None = None,
         currency_code: str = "NGN",
-        original_currency: Optional[str] = None,
-        original_amount: Optional[Decimal] = None,
-        external_reference: Optional[str] = None,
-        description: Optional[str] = None,
-        notes: Optional[str] = None,
+        original_currency: str | None = None,
+        original_amount: Decimal | None = None,
+        external_reference: str | None = None,
+        description: str | None = None,
+        notes: str | None = None,
     ) -> CardTransaction:
         """Create a new card transaction."""
         # Verify card exists
@@ -2194,8 +2373,8 @@ class ExpenseService:
         org_id: UUID,
         employee_id: UUID,
         *,
-        year: Optional[int] = None,
-        month: Optional[int] = None,
+        year: int | None = None,
+        month: int | None = None,
     ) -> dict:
         """Get expense summary for a specific employee."""
         today = date.today()
@@ -2288,8 +2467,8 @@ class ExpenseService:
         self,
         org_id: UUID,
         *,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> dict:
         """
         Get expense summary report with totals by status.
@@ -2395,8 +2574,8 @@ class ExpenseService:
         self,
         org_id: UUID,
         *,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> dict:
         """
         Get expense breakdown by category.
@@ -2475,9 +2654,9 @@ class ExpenseService:
         self,
         org_id: UUID,
         *,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-        department_id: Optional[UUID] = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        department_id: UUID | None = None,
     ) -> dict:
         """
         Get expense breakdown by employee.

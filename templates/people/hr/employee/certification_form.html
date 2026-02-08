@@ -38,7 +38,7 @@
                            placeholder="e.g., Amazon Web Services">
                 </div>
 
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label for="issue_date" class="form-label required">Issue Date</label>
                         <input type="date" name="issue_date" id="issue_date" required
@@ -81,7 +81,7 @@
             </div>
         </div>
 
-        <div class="flex justify-end gap-3">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/people/hr/employees/{{ employee.employee_id }}/certifications" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">Add Certification</button>
         </div>

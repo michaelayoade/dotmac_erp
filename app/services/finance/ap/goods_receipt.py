@@ -6,11 +6,11 @@ Manages goods receipt creation, inspection, and acceptance/rejection.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import UTC, date
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -41,9 +41,9 @@ class GRLineInput:
 
     po_line_id: UUID
     quantity_received: Decimal
-    location_id: Optional[UUID] = None
-    lot_number: Optional[str] = None
-    serial_numbers: Optional[list[str]] = None
+    location_id: UUID | None = None
+    lot_number: str | None = None
+    serial_numbers: list[str] | None = None
 
 
 @dataclass
@@ -53,8 +53,8 @@ class GoodsReceiptInput:
     po_id: UUID
     receipt_date: date
     lines: list[GRLineInput] = field(default_factory=list)
-    warehouse_id: Optional[UUID] = None
-    notes: Optional[str] = None
+    warehouse_id: UUID | None = None
+    notes: str | None = None
 
 
 @dataclass
@@ -64,7 +64,7 @@ class InspectionResult:
     line_id: UUID
     quantity_accepted: Decimal
     quantity_rejected: Decimal = Decimal("0")
-    rejection_reason: Optional[str] = None
+    rejection_reason: str | None = None
 
 
 class GoodsReceiptService(ListResponseMixin):
@@ -433,7 +433,7 @@ class GoodsReceiptService(ListResponseMixin):
         """
         from app.models.finance.gl.fiscal_period import FiscalPeriod
 
-        transaction_ids: List[UUID] = []
+        transaction_ids: list[UUID] = []
 
         # Get fiscal period for the receipt date
         fiscal_period = db.scalars(
@@ -480,12 +480,11 @@ class GoodsReceiptService(ListResponseMixin):
             try:
                 # Convert date to datetime for transaction
                 from datetime import datetime as dt
-                from datetime import timezone as tz
 
                 transaction_datetime = dt.combine(
                     receipt.receipt_date,
                     dt.min.time(),
-                    tzinfo=tz.utc,
+                    tzinfo=UTC,
                 )
 
                 txn_input = TransactionInput(
@@ -559,8 +558,8 @@ class GoodsReceiptService(ListResponseMixin):
     def get(
         db: Session,
         receipt_id: str,
-        organization_id: Optional[UUID] = None,
-    ) -> Optional[GoodsReceipt]:
+        organization_id: UUID | None = None,
+    ) -> GoodsReceipt | None:
         """Get a goods receipt by ID with optional org_id isolation."""
         receipt = db.get(GoodsReceipt, coerce_uuid(receipt_id))
         if receipt is None:
@@ -574,7 +573,7 @@ class GoodsReceiptService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         receipt_number: str,
-    ) -> Optional[GoodsReceipt]:
+    ) -> GoodsReceipt | None:
         """Get a goods receipt by number."""
         return db.scalars(
             select(GoodsReceipt).where(
@@ -584,7 +583,9 @@ class GoodsReceiptService(ListResponseMixin):
         ).first()
 
     @staticmethod
-    def get_receipt_lines(db: Session, receipt_id: str) -> List[GoodsReceiptLine]:
+    def get_receipt_lines(
+        db: Session, receipt_id: str
+    ) -> builtins.list[GoodsReceiptLine]:
         """Get all lines for a goods receipt."""
         return list(
             db.scalars(
@@ -599,7 +600,7 @@ class GoodsReceiptService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         po_id: UUID,
-    ) -> List[GoodsReceipt]:
+    ) -> builtins.list[GoodsReceipt]:
         """List all goods receipts for a purchase order."""
         return list(
             db.scalars(
@@ -615,15 +616,15 @@ class GoodsReceiptService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        supplier_id: Optional[str] = None,
-        po_id: Optional[str] = None,
-        status: Optional[ReceiptStatus] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
+        organization_id: str | None = None,
+        supplier_id: str | None = None,
+        po_id: str | None = None,
+        status: ReceiptStatus | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[GoodsReceipt]:
+    ) -> builtins.list[GoodsReceipt]:
         """
         List goods receipts with filters.
 

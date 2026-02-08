@@ -206,7 +206,7 @@
                 </div>
 
                 <div>
-                    <label for="required_skills" class="form-label">Required Skills</label>
+                    <label for="required_skills" class="form-label">Required Skills <span class="text-rose-500">*</span></label>
                     <textarea name="required_skills" id="required_skills" rows="3" class="form-input w-full"
                         placeholder="List required skills, one per line">{{ opening.required_skills if opening else form_data.required_skills | default('', true) }}</textarea>
                 </div>
@@ -237,7 +237,7 @@
         </div>
 
         {# Form Actions #}
-        <div class="flex justify-end gap-3">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/people/recruit/jobs{% if opening %}/{{ opening.job_opening_id }}{% endif %}" class="btn btn-secondary">
                 Cancel
             </a>

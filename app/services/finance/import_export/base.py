@@ -18,6 +18,7 @@ import csv
 import logging
 import re
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -25,15 +26,7 @@ from enum import Enum
 from pathlib import Path
 from typing import (
     Any,
-    Callable,
-    Dict,
     Generic,
-    List,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-    Type,
     TypeVar,
     Union,
 )
@@ -48,7 +41,7 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Maps standard field names to various source column aliases
-COLUMN_ALIASES: Dict[str, List[str]] = {
+COLUMN_ALIASES: dict[str, list[str]] = {
     # Account fields
     "account_name": [
         "Account Name",
@@ -501,7 +494,6 @@ VALID_ACCOUNT_TYPES = {
     "stock",
     "payment_clearing",
     # QuickBooks types
-    "bank",
     "accounts receivable",
     "other current asset",
     "fixed asset",
@@ -510,14 +502,10 @@ VALID_ACCOUNT_TYPES = {
     "credit card",
     "other current liability",
     "long term liability",
-    "equity",
-    "income",
     "cost of goods sold",
-    "expense",
     "other income",
     "other expense",
     # Xero types
-    "bank",
     "current",
     "fixed",
     "inventory",
@@ -527,20 +515,16 @@ VALID_ACCOUNT_TYPES = {
     "liability",
     "current liability",
     "non-current liability",
-    "equity",
     "direct costs",
-    "expense",
     "overhead",
     "revenue",
     "sales",
-    "other income",
     # Sage types
     "current assets",
     "fixed assets",
     "current liabilities",
     "long term liabilities",
     "capital & reserves",
-    "sales",
     "purchases",
     "direct expenses",
     "overheads",
@@ -554,9 +538,9 @@ class ValidationRule:
     field_name: str
     rule_type: str  # required, pattern, min_length, max_length, min_value, max_value, choices, custom
     value: Any = None
-    message: Optional[str] = None
+    message: str | None = None
 
-    def validate(self, field_value: Any) -> Tuple[bool, Optional[str]]:
+    def validate(self, field_value: Any) -> tuple[bool, str | None]:
         """
         Validate a value against this rule.
         Returns (is_valid, error_message).
@@ -727,8 +711,8 @@ class ImportError:
     """Represents an import error."""
 
     row_number: int
-    field: Optional[str]
-    value: Optional[str]
+    field: str | None
+    value: str | None
     message: str
 
     def __str__(self) -> str:
@@ -742,7 +726,7 @@ class ImportWarning:
     """Represents an import warning (non-fatal issue)."""
 
     row_number: int
-    field: Optional[str]
+    field: str | None
     message: str
 
     def __str__(self) -> str:
@@ -762,9 +746,9 @@ class ImportResult:
     skipped_count: int = 0
     duplicate_count: int = 0
     error_count: int = 0
-    errors: List[ImportError] = field(default_factory=list)
-    warnings: List[ImportWarning] = field(default_factory=list)
-    imported_ids: List[UUID] = field(default_factory=list)
+    errors: list[ImportError] = field(default_factory=list)
+    warnings: list[ImportWarning] = field(default_factory=list)
+    imported_ids: list[UUID] = field(default_factory=list)
     duration_seconds: float = 0.0
 
     @property
@@ -778,18 +762,18 @@ class ImportResult:
         self,
         row: int,
         message: str,
-        field: Optional[str] = None,
-        value: Optional[str] = None,
+        field: str | None = None,
+        value: str | None = None,
     ):
         """Add an error to the result."""
         self.errors.append(ImportError(row, field, value, message))
         self.error_count += 1
 
-    def add_warning(self, row: int, message: str, field: Optional[str] = None):
+    def add_warning(self, row: int, message: str, field: str | None = None):
         """Add a warning to the result."""
         self.warnings.append(ImportWarning(row, field, message))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert result to dictionary for API responses."""
         return {
             "entity_type": self.entity_type,
@@ -813,7 +797,7 @@ class FieldMapping:
     source_field: str  # CSV column name
     target_field: str  # Model attribute name
     required: bool = False
-    transformer: Optional[Callable[[Any], Any]] = None
+    transformer: Callable[[Any], Any] | None = None
     default: Any = None
 
     def transform(self, value: Any) -> Any:
@@ -840,7 +824,7 @@ class ImportConfig:
     thousands_separator: str = ","
     encoding: str = "utf-8"
     # Column mapping overrides (source_column -> target_field)
-    column_mapping: Optional[Dict[str, str]] = None
+    column_mapping: dict[str, str] | None = None
 
 
 @dataclass
@@ -850,7 +834,7 @@ class ColumnMapping:
     source_column: str  # Column name in the CSV
     target_field: str  # Standard field name
     confidence: float  # 0.0 to 1.0
-    sample_values: List[str] = field(default_factory=list)
+    sample_values: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -859,17 +843,17 @@ class PreviewResult:
 
     entity_type: str
     total_rows: int
-    detected_columns: List[str]
-    required_columns: List[str]
-    optional_columns: List[str]
-    missing_required: List[str]
-    column_mappings: List[ColumnMapping]
-    sample_data: List[Dict[str, Any]]  # First N rows for preview
-    validation_errors: List[str]
+    detected_columns: list[str]
+    required_columns: list[str]
+    optional_columns: list[str]
+    missing_required: list[str]
+    column_mappings: list[ColumnMapping]
+    sample_data: list[dict[str, Any]]  # First N rows for preview
+    validation_errors: list[str]
     detected_format: str  # "zoho", "quickbooks", "xero", "sage", "generic"
     is_valid: bool
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for API response."""
         return {
             "entity_type": self.entity_type,
@@ -898,7 +882,7 @@ class PreviewResult:
 T = TypeVar("T")
 
 
-def resolve_column_alias(column_name: str, field_type: str) -> Optional[str]:
+def resolve_column_alias(column_name: str, field_type: str) -> str | None:
     """
     Check if a column name matches any known alias for a field type.
     Returns the standardized field name if matched, None otherwise.
@@ -976,7 +960,7 @@ def detect_csv_format(columns: Sequence[str]) -> str:
 
 def find_account_by_subledger_type(
     db: Session, organization_id: UUID, subledger_type: str
-) -> Optional[UUID]:
+) -> UUID | None:
     """Find account by subledger type.
 
     Args:
@@ -1002,7 +986,7 @@ def find_account_by_subledger_type(
 
 def find_account_by_name_pattern(
     db: Session, organization_id: UUID, pattern: str
-) -> Optional[UUID]:
+) -> UUID | None:
     """Find account by name pattern (case-insensitive).
 
     Args:
@@ -1041,36 +1025,36 @@ class BaseImporter(ABC, Generic[T]):
 
     # Subclasses must define these
     entity_name: str = "Entity"
-    model_class: Optional[Type[T]] = None
+    model_class: type[T] | None = None
 
     def __init__(self, db: Session, config: ImportConfig):
         self.db = db
         self.config = config
         self.result = ImportResult(entity_type=self.entity_name)
-        self._field_mappings: List[FieldMapping] = []
-        self._id_cache: Dict[str, UUID] = {}  # Cache for lookups
+        self._field_mappings: list[FieldMapping] = []
+        self._id_cache: dict[str, UUID] = {}  # Cache for lookups
 
     @abstractmethod
-    def get_field_mappings(self) -> List[FieldMapping]:
+    def get_field_mappings(self) -> list[FieldMapping]:
         """Return the field mappings for this entity type."""
         pass
 
     @abstractmethod
-    def get_unique_key(self, row: Dict[str, Any]) -> str:
+    def get_unique_key(self, row: dict[str, Any]) -> str:
         """Return a unique key for duplicate detection."""
         pass
 
     @abstractmethod
-    def check_duplicate(self, row: Dict[str, Any]) -> Optional[T]:
+    def check_duplicate(self, row: dict[str, Any]) -> T | None:
         """Check if the entity already exists. Return existing entity or None."""
         pass
 
     @abstractmethod
-    def create_entity(self, row: Dict[str, Any]) -> T:
+    def create_entity(self, row: dict[str, Any]) -> T:
         """Create a new entity from the row data."""
         pass
 
-    def validate_row(self, row: Dict[str, Any], row_num: int) -> bool:
+    def validate_row(self, row: dict[str, Any], row_num: int) -> bool:
         """
         Validate a row of data. Return True if valid.
         Override in subclasses for entity-specific validation.
@@ -1091,7 +1075,7 @@ class BaseImporter(ABC, Generic[T]):
 
         return is_valid
 
-    def transform_row(self, row: Dict[str, Any], row_num: int) -> Dict[str, Any]:
+    def transform_row(self, row: dict[str, Any], row_num: int) -> dict[str, Any]:
         """Transform CSV row data to model field values."""
         transformed = {}
         mappings = self.get_field_mappings()
@@ -1137,7 +1121,7 @@ class BaseImporter(ABC, Generic[T]):
         self.result.status = ImportStatus.IN_PROGRESS
 
         try:
-            with open(file_path, "r", encoding=self.config.encoding) as f:
+            with open(file_path, encoding=self.config.encoding) as f:
                 reader = csv.DictReader(f)
                 rows = list(reader)
                 self.result.total_rows = len(rows)
@@ -1164,7 +1148,7 @@ class BaseImporter(ABC, Generic[T]):
 
         return self.result
 
-    def import_rows(self, rows: List[Dict[str, Any]]) -> ImportResult:
+    def import_rows(self, rows: list[dict[str, Any]]) -> ImportResult:
         """
         Import data from a list of dictionaries.
 
@@ -1197,7 +1181,7 @@ class BaseImporter(ABC, Generic[T]):
 
         return self.result
 
-    def _import_rows(self, rows: List[Dict[str, Any]]) -> None:
+    def _import_rows(self, rows: list[dict[str, Any]]) -> None:
         """Internal method to process rows."""
         batch = []
 
@@ -1246,7 +1230,7 @@ class BaseImporter(ABC, Generic[T]):
         if batch and not self.config.dry_run:
             self._commit_batch(batch)
 
-    def _commit_batch(self, batch: List[T]) -> None:
+    def _commit_batch(self, batch: list[T]) -> None:
         """Commit a batch of entities to the database."""
         try:
             for entity in batch:
@@ -1267,7 +1251,7 @@ class BaseImporter(ABC, Generic[T]):
     # === Utility Methods for Field Transformation ===
 
     @staticmethod
-    def parse_date(value: Any, format: str = "%Y-%m-%d") -> Optional[date]:
+    def parse_date(value: Any, format: str = "%Y-%m-%d") -> date | None:
         """Parse a date string to a date object."""
         if value is None or value == "":
             return None
@@ -1289,7 +1273,7 @@ class BaseImporter(ABC, Generic[T]):
     @staticmethod
     def parse_decimal(
         value: Any, thousands_sep: str = ",", decimal_sep: str = "."
-    ) -> Optional[Decimal]:
+    ) -> Decimal | None:
         """Parse a string to Decimal, handling various formats."""
         if value is None or value == "":
             return None
@@ -1313,7 +1297,7 @@ class BaseImporter(ABC, Generic[T]):
             raise ValueError(f"Cannot parse decimal: {value}")
 
     @staticmethod
-    def parse_boolean(value: Any) -> Optional[bool]:
+    def parse_boolean(value: Any) -> bool | None:
         """Parse a value to boolean."""
         if value is None or value == "":
             return None
@@ -1329,7 +1313,7 @@ class BaseImporter(ABC, Generic[T]):
         raise ValueError(f"Cannot parse boolean: {value}")
 
     @staticmethod
-    def clean_string(value: Any, max_length: Optional[int] = None) -> Optional[str]:
+    def clean_string(value: Any, max_length: int | None = None) -> str | None:
         """Clean and optionally truncate a string value."""
         if value is None:
             return None
@@ -1342,8 +1326,8 @@ class BaseImporter(ABC, Generic[T]):
 
     @staticmethod
     def parse_enum(
-        value: Any, enum_class: Type[Enum], default: Optional[Enum] = None
-    ) -> Optional[Enum]:
+        value: Any, enum_class: type[Enum], default: Enum | None = None
+    ) -> Enum | None:
         """Parse a string to an enum value."""
         if value is None or value == "":
             return default
@@ -1365,22 +1349,22 @@ class BaseImporter(ABC, Generic[T]):
 
     # === Preview and Validation Methods ===
 
-    def get_validation_rules(self) -> List[ValidationRule]:
+    def get_validation_rules(self) -> list[ValidationRule]:
         """
         Return validation rules for this entity type.
         Override in subclasses to add entity-specific validation.
         """
         return []
 
-    def get_required_fields(self) -> List[str]:
+    def get_required_fields(self) -> list[str]:
         """Return list of required field names from mappings."""
         return [m.source_field for m in self.get_field_mappings() if m.required]
 
-    def get_optional_fields(self) -> List[str]:
+    def get_optional_fields(self) -> list[str]:
         """Return list of optional field names from mappings."""
         return [m.source_field for m in self.get_field_mappings() if not m.required]
 
-    def resolve_column(self, columns: Sequence[str], field_type: str) -> Optional[str]:
+    def resolve_column(self, columns: Sequence[str], field_type: str) -> str | None:
         """
         Find a matching column for a field type using column aliases.
         Returns the actual column name from the CSV if found.
@@ -1400,13 +1384,13 @@ class BaseImporter(ABC, Generic[T]):
 
         return None
 
-    def auto_map_columns(self, columns: Sequence[str]) -> Dict[str, ColumnMapping]:
+    def auto_map_columns(self, columns: Sequence[str]) -> dict[str, ColumnMapping]:
         """
         Automatically map CSV columns to expected fields.
         Returns dict of target_field -> ColumnMapping.
         """
         mappings = {}
-        used_columns: Set[str] = set()
+        used_columns: set[str] = set()
 
         # First pass: try exact matches and aliases
         for mapping in self.get_field_mappings():
@@ -1513,7 +1497,7 @@ class BaseImporter(ABC, Generic[T]):
             )
 
         try:
-            with open(file_path, "r", encoding=self.config.encoding) as f:
+            with open(file_path, encoding=self.config.encoding) as f:
                 reader = csv.DictReader(f)
                 columns = list(reader.fieldnames or [])
                 rows = []
@@ -1544,7 +1528,7 @@ class BaseImporter(ABC, Generic[T]):
         column_mappings_dict = self.auto_map_columns(columns)
 
         # Add sample values to mappings
-        for target_field, mapping in column_mappings_dict.items():
+        for _target_field, mapping in column_mappings_dict.items():
             samples = []
             for row in rows[:5]:
                 val = row.get(mapping.source_column, "")
@@ -1553,7 +1537,7 @@ class BaseImporter(ABC, Generic[T]):
             mapping.sample_values = samples
 
         # Find missing required fields
-        mapped_sources = {m.source_column for m in column_mappings_dict.values()}
+        {m.source_column for m in column_mappings_dict.values()}
         required_fields = self.get_required_fields()
         missing_required = []
 
@@ -1579,17 +1563,22 @@ class BaseImporter(ABC, Generic[T]):
         validation_rules = self.get_validation_rules()
         for idx, row in enumerate(rows[:20], start=1):  # Validate first 20 rows
             # Check required fields
-            for field in required_fields:
-                col: Optional[str] = None
+            for required_field in required_fields:
+                col: str | None = None
                 for m in column_mappings_dict.values():
-                    if m.target_field == field or m.source_column == field:
+                    if (
+                        m.target_field == required_field
+                        or m.source_column == required_field
+                    ):
                         col = m.source_column
                         break
 
                 if col:
                     value = str(row.get(col, "") or "").strip()
                     if not value:
-                        errors.append(f"Row {idx}: Required field '{field}' is empty")
+                        errors.append(
+                            f"Row {idx}: Required field '{required_field}' is empty"
+                        )
 
             # Apply validation rules
             for rule in validation_rules:
@@ -1617,7 +1606,7 @@ class BaseImporter(ABC, Generic[T]):
 
         # Count total rows (re-read for accurate count)
         try:
-            with open(file_path, "r", encoding=self.config.encoding) as f:
+            with open(file_path, encoding=self.config.encoding) as f:
                 total_rows = sum(1 for _ in f) - 1  # Subtract header
         except (OSError, UnicodeDecodeError):
             total_rows = len(rows)
@@ -1638,7 +1627,7 @@ class BaseImporter(ABC, Generic[T]):
             is_valid=is_valid,
         )
 
-    def validate_with_rules(self, row: Dict[str, Any], row_num: int) -> bool:
+    def validate_with_rules(self, row: dict[str, Any], row_num: int) -> bool:
         """
         Validate a row using both field mappings and validation rules.
         Enhanced version of validate_row with full rule support.

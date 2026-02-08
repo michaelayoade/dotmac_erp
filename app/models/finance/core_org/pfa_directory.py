@@ -5,7 +5,6 @@ System-wide directory of Nigerian Pension Fund Administrators (PFAs).
 """
 
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, String, func, text
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -41,29 +40,29 @@ class PFADirectory(Base):
     )
 
     # Short name/abbreviation
-    short_name: Mapped[Optional[str]] = mapped_column(
+    short_name: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Common short name or abbreviation",
     )
 
     # Alternative names for matching
-    aliases: Mapped[Optional[list[str]]] = mapped_column(
+    aliases: Mapped[list[str] | None] = mapped_column(
         ARRAY(String(100)),
         nullable=True,
         comment="Alternative names for fuzzy matching",
     )
 
     # Contact info (optional)
-    website: Mapped[Optional[str]] = mapped_column(
+    website: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
     )
-    email: Mapped[Optional[str]] = mapped_column(
+    email: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
     )
-    phone: Mapped[Optional[str]] = mapped_column(
+    phone: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
     )

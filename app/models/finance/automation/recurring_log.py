@@ -7,7 +7,6 @@ Tracks generation history for recurring templates.
 import enum
 import uuid
 from datetime import date, datetime
-from typing import Optional
 
 from sqlalchemy import (
     Date,
@@ -80,26 +79,26 @@ class RecurringLog(Base):
     )
 
     # Generated entity reference
-    generated_entity_type: Mapped[Optional[str]] = mapped_column(
+    generated_entity_type: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
     )
-    generated_entity_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    generated_entity_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    generated_entity_number: Mapped[Optional[str]] = mapped_column(
+    generated_entity_number: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Document number of generated entity",
     )
 
     # Error details
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    error_details: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_details: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Skip reason (if skipped)
-    skip_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    skip_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     # Relationship
     template: Mapped["RecurringTemplate"] = relationship(
@@ -109,4 +108,6 @@ class RecurringLog(Base):
 
 
 # Forward reference
-from app.models.finance.automation.recurring_template import RecurringTemplate  # noqa: E402
+from app.models.finance.automation.recurring_template import (  # noqa: E402
+    RecurringTemplate,
+)

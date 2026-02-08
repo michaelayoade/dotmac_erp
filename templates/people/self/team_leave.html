@@ -40,7 +40,7 @@
 
     {% if applications %}
     <div class="card overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
@@ -66,9 +66,11 @@
                             {% if app.status.value == "SUBMITTED" %}
                             <div class="flex items-center justify-end gap-2">
                                 <form method="post" action="/people/self/team/leave/{{ app.application_id }}/approve">
+                                    {{ request.state.csrf_form | safe }}
                                     <button type="submit" class="text-emerald-600 hover:text-emerald-700 dark:text-emerald-300 dark:hover:text-emerald-200">Approve</button>
                                 </form>
                                 <form method="post" action="/people/self/team/leave/{{ app.application_id }}/reject">
+                                    {{ request.state.csrf_form | safe }}
                                     <input type="hidden" name="reason" value="Rejected">
                                     <button type="submit" class="text-rose-600 hover:text-rose-700 dark:text-rose-300 dark:hover:text-rose-200">Reject</button>
                                 </form>

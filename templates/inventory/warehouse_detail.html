@@ -189,7 +189,7 @@
                     <address class="text-sm text-slate-600 dark:text-slate-300 not-italic">
                         {% if warehouse.address.line1 %}{{ warehouse.address.line1 }}<br>{% endif %}
                         {% if warehouse.address.line2 %}{{ warehouse.address.line2 }}<br>{% endif %}
-                        {% if warehouse.address.city %}{{ warehouse.address.city }}{% endif %}{% if warehouse.address.state %}, {{ warehouse.address.state }}{% endif %}
+                        {% if warehouse.address.city %}{{ warehouse.address.city }}{% endif %}{% if warehouse.address.state %}, {{ warehouse.address.state | replace('_', ' ') | title }}{% endif %}
                         {% if warehouse.address.postal_code %} {{ warehouse.address.postal_code }}{% endif %}
                         {% if warehouse.address.country %}<br>{{ warehouse.address.country }}{% endif %}
                     </address>

@@ -13,14 +13,14 @@ Routes and tasks should delegate to this service - no logic in routes!
 """
 
 import logging
-from datetime import date, datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.errors import NotFoundError, ValidationError
+from app.models.finance.audit.audit_log import AuditAction
 from app.models.people.discipline import (
     ActionType,
     CaseAction,
@@ -45,7 +45,6 @@ from app.schemas.people.discipline import (
     RecordDecisionRequest,
     ScheduleHearingRequest,
 )
-from app.models.finance.audit.audit_log import AuditAction
 from app.services.audit_dispatcher import fire_audit_event
 from app.services.notification import notification_service
 from app.services.state_machine import StateMachine
@@ -103,7 +102,7 @@ class DisciplineService:
     # Case CRUD Operations
     # =========================================================================
 
-    def get_case(self, case_id: UUID) -> Optional[DisciplinaryCase]:
+    def get_case(self, case_id: UUID) -> DisciplinaryCase | None:
         """Get a single case by ID."""
         return self.db.get(DisciplinaryCase, case_id)
 
@@ -138,7 +137,7 @@ class DisciplineService:
     def list_cases(
         self,
         organization_id: UUID,
-        filters: Optional[CaseListFilter] = None,
+        filters: CaseListFilter | None = None,
         offset: int = 0,
         limit: int = 50,
     ) -> tuple[list[DisciplinaryCase], int]:
@@ -225,7 +224,7 @@ class DisciplineService:
         self,
         organization_id: UUID,
         data: DisciplinaryCaseCreate,
-        created_by_id: Optional[UUID] = None,
+        created_by_id: UUID | None = None,
     ) -> DisciplinaryCase:
         """Create a new disciplinary case."""
         # Verify employee exists and belongs to organization
@@ -285,7 +284,7 @@ class DisciplineService:
         self,
         case_id: UUID,
         data: DisciplinaryCaseUpdate,
-        updated_by_id: Optional[UUID] = None,
+        updated_by_id: UUID | None = None,
     ) -> DisciplinaryCase:
         """Update case details (only allowed in DRAFT status)."""
         case = self.get_case_or_404(case_id)
@@ -326,19 +325,19 @@ class DisciplineService:
         self,
         case: DisciplinaryCase,
         new_status: CaseStatus,
-        changed_by_id: Optional[UUID] = None,
+        changed_by_id: UUID | None = None,
     ) -> None:
         """Update case status with tracking."""
         self._validate_transition(case.status, new_status)
         case.status = new_status
-        case.status_changed_at = datetime.now(timezone.utc)
+        case.status_changed_at = datetime.now(UTC)
         case.status_changed_by_id = changed_by_id
 
     def issue_query(
         self,
         case_id: UUID,
         data: IssueQueryRequest,
-        issued_by_id: Optional[UUID] = None,
+        issued_by_id: UUID | None = None,
     ) -> DisciplinaryCase:
         """Issue a formal query to the employee."""
         case = self.get_case_or_404(case_id)
@@ -427,7 +426,7 @@ class DisciplineService:
             response_text=data.response_text,
             is_initial_response=case.status == CaseStatus.QUERY_ISSUED,
             is_appeal_response=case.status == CaseStatus.APPEAL_FILED,
-            submitted_at=datetime.now(timezone.utc),
+            submitted_at=datetime.now(UTC),
         )
 
         self.db.add(response)
@@ -467,14 +466,14 @@ class DisciplineService:
     def acknowledge_response(
         self,
         response_id: UUID,
-        acknowledged_by_id: Optional[UUID] = None,
+        acknowledged_by_id: UUID | None = None,
     ) -> CaseResponse:
         """Acknowledge that HR has reviewed the response."""
         response = self.db.get(CaseResponse, response_id)
         if not response:
             raise NotFoundError(f"Response {response_id} not found")
 
-        response.acknowledged_at = datetime.now(timezone.utc)
+        response.acknowledged_at = datetime.now(UTC)
         self.db.flush()
 
         logger.info("Response %s acknowledged", response_id)
@@ -484,7 +483,7 @@ class DisciplineService:
         self,
         case_id: UUID,
         data: ScheduleHearingRequest,
-        scheduled_by_id: Optional[UUID] = None,
+        scheduled_by_id: UUID | None = None,
     ) -> DisciplinaryCase:
         """Schedule a disciplinary hearing."""
         case = self.get_case_or_404(case_id)
@@ -566,7 +565,7 @@ class DisciplineService:
         self,
         case_id: UUID,
         hearing_notes: str,
-        recorded_by_id: Optional[UUID] = None,
+        recorded_by_id: UUID | None = None,
     ) -> DisciplinaryCase:
         """Record notes from the hearing and mark as completed."""
         case = self.get_case_or_404(case_id)
@@ -587,7 +586,7 @@ class DisciplineService:
         self,
         case_id: UUID,
         data: RecordDecisionRequest,
-        decided_by_id: Optional[UUID] = None,
+        decided_by_id: UUID | None = None,
     ) -> DisciplinaryCase:
         """Record the decision and any disciplinary actions."""
         case = self.get_case_or_404(case_id)
@@ -755,7 +754,7 @@ class DisciplineService:
         self,
         case_id: UUID,
         data: DecideAppealRequest,
-        decided_by_id: Optional[UUID] = None,
+        decided_by_id: UUID | None = None,
     ) -> DisciplinaryCase:
         """Record the decision on an appeal."""
         case = self.get_case_or_404(case_id)
@@ -806,7 +805,7 @@ class DisciplineService:
     def close_case(
         self,
         case_id: UUID,
-        closed_by_id: Optional[UUID] = None,
+        closed_by_id: UUID | None = None,
     ) -> DisciplinaryCase:
         """Close a case after decision or appeal."""
         case = self.get_case_or_404(case_id)
@@ -857,7 +856,7 @@ class DisciplineService:
     def withdraw_case(
         self,
         case_id: UUID,
-        withdrawn_by_id: Optional[UUID] = None,
+        withdrawn_by_id: UUID | None = None,
     ) -> DisciplinaryCase:
         """Withdraw a case (can be done at most stages)."""
         case = self.get_case_or_404(case_id)
@@ -909,7 +908,7 @@ class DisciplineService:
             raise NotFoundError(f"Witness {witness_id} not found")
 
         witness.statement = statement
-        witness.statement_date = datetime.now(timezone.utc)
+        witness.statement_date = datetime.now(UTC)
         self.db.flush()
 
         logger.info("Statement recorded for witness %s", witness_id)
@@ -926,10 +925,10 @@ class DisciplineService:
         title: str,
         file_path: str,
         file_name: str,
-        file_size: Optional[int] = None,
-        mime_type: Optional[str] = None,
-        uploaded_by_id: Optional[UUID] = None,
-        description: Optional[str] = None,
+        file_size: int | None = None,
+        mime_type: str | None = None,
+        uploaded_by_id: UUID | None = None,
+        description: str | None = None,
     ) -> CaseDocument:
         """Add a document to a case."""
         case = self.get_case_or_404(case_id)
@@ -1126,7 +1125,7 @@ class DisciplineService:
         Returns:
             List of cases with hearings scheduled within the window
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cutoff = now + timedelta(days=days_before)
 
         stmt = (
@@ -1175,7 +1174,7 @@ class DisciplineService:
         self,
         case: DisciplinaryCase,
         action_data: CaseActionCreate,
-        triggered_by_id: Optional[UUID] = None,
+        triggered_by_id: UUID | None = None,
     ) -> None:
         """
         Trigger the separation workflow when a termination action is recorded.
@@ -1240,7 +1239,7 @@ class DisciplineService:
         self,
         case: DisciplinaryCase,
         action_data: CaseActionCreate,
-        assigned_by_id: Optional[UUID] = None,
+        assigned_by_id: UUID | None = None,
     ) -> None:
         """
         Trigger mandatory training assignment for corrective actions.

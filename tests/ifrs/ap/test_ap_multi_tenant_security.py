@@ -21,7 +21,6 @@ from tests.ifrs.ap.conftest import (
     MockSupplier,
 )
 
-
 # ───── Shared fixtures ─────
 
 

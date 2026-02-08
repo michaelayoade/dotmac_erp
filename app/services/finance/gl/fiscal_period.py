@@ -6,10 +6,10 @@ Manages fiscal periods including creation, status changes, and queries.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
-from typing import List, Optional
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -202,7 +202,7 @@ class FiscalPeriodService(ListResponseMixin):
             )
 
         period.status = PeriodStatus.SOFT_CLOSED
-        period.soft_closed_at = datetime.now(timezone.utc)
+        period.soft_closed_at = datetime.now(UTC)
         period.soft_closed_by_user_id = user_id
 
         db.commit()
@@ -247,7 +247,7 @@ class FiscalPeriodService(ListResponseMixin):
             )
 
         period.status = PeriodStatus.HARD_CLOSED
-        period.hard_closed_at = datetime.now(timezone.utc)
+        period.hard_closed_at = datetime.now(UTC)
         period.hard_closed_by_user_id = user_id
 
         db.commit()
@@ -312,6 +312,7 @@ class FiscalPeriodService(ListResponseMixin):
     def get(
         db: Session,
         fiscal_period_id: str,
+        organization_id: UUID | None = None,
     ) -> FiscalPeriod:
         """
         Get a fiscal period by ID.
@@ -329,17 +330,21 @@ class FiscalPeriodService(ListResponseMixin):
         period = db.get(FiscalPeriod, coerce_uuid(fiscal_period_id))
         if not period:
             raise HTTPException(status_code=404, detail="Fiscal period not found")
+        if organization_id is not None and period.organization_id != coerce_uuid(
+            organization_id
+        ):
+            raise HTTPException(status_code=404, detail="Fiscal period not found")
         return period
 
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        fiscal_year_id: Optional[str] = None,
-        status: Optional[PeriodStatus] = None,
+        organization_id: str | None = None,
+        fiscal_year_id: str | None = None,
+        status: PeriodStatus | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[FiscalPeriod]:
+    ) -> builtins.list[FiscalPeriod]:
         """
         List fiscal periods with filters.
 

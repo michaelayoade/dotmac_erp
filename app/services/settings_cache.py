@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Dict, Optional, cast
+from typing import Any, cast
 
 from sqlalchemy.orm import Session
 
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 # only affect how long stale data persists if invalidation fails or if
 # settings are changed directly in the database.
 #
-DOMAIN_TTL_CONFIG: Dict[SettingDomain, int] = {
+DOMAIN_TTL_CONFIG: dict[SettingDomain, int] = {
     # === HIGH FREQUENCY / SECURITY CRITICAL (60s) ===
     # These are checked on nearly every request or have security implications.
     # Short TTL ensures changes take effect quickly.
@@ -91,11 +91,11 @@ class InMemoryCache:
     DEFAULT_MAX_SIZE = 10000
 
     def __init__(self, max_size: int = DEFAULT_MAX_SIZE):
-        self._cache: Dict[str, tuple[Any, float]] = {}  # key -> (value, expiry_time)
+        self._cache: dict[str, tuple[Any, float]] = {}  # key -> (value, expiry_time)
         self._max_size = max_size
         self._operation_count = 0
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """Get value if exists and not expired."""
         entry = self._cache.get(key)
         if entry is None:
@@ -133,7 +133,7 @@ class InMemoryCache:
         # Simple implementation: treat pattern as prefix if it ends with *
         if pattern.endswith("*"):
             prefix = pattern[:-1]
-            keys_to_delete = [k for k in self._cache.keys() if k.startswith(prefix)]
+            keys_to_delete = [k for k in self._cache if k.startswith(prefix)]
         else:
             keys_to_delete = [pattern] if pattern in self._cache else []
 
@@ -204,7 +204,7 @@ class InMemoryCache:
 
         return evicted
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """
         Get cache statistics.
 
@@ -258,13 +258,13 @@ class SettingsCache:
         """Get TTL for a domain."""
         return DOMAIN_TTL_CONFIG.get(domain, DEFAULT_TTL)
 
-    def _make_key(self, domain: SettingDomain, key: Optional[str] = None) -> str:
+    def _make_key(self, domain: SettingDomain, key: str | None = None) -> str:
         """Create cache key for settings."""
         if key:
             return f"settings:{domain.value}:{key}"
         return f"settings:{domain.value}:_all"
 
-    def _cache_get(self, cache_key: str) -> Optional[Any]:
+    def _cache_get(self, cache_key: str) -> Any | None:
         """Get from cache (Redis first, then in-memory)."""
         # Try Redis first
         if self._redis.is_available:
@@ -361,7 +361,7 @@ class SettingsCache:
         self,
         db: Session,
         domain: SettingDomain,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get all settings for a domain with caching.
 
@@ -377,7 +377,7 @@ class SettingsCache:
         # Check cache
         cached = self._cache_get(cache_key)
         if isinstance(cached, dict):
-            return cast(Dict[str, Any], cached)
+            return cast(dict[str, Any], cached)
 
         # Query database
         settings = (
@@ -483,7 +483,7 @@ def get_setting_value(
     return settings_cache.get_setting_value(db, domain, key, default)
 
 
-def invalidate_setting_cache(domain: SettingDomain, key: Optional[str] = None) -> None:
+def invalidate_setting_cache(domain: SettingDomain, key: str | None = None) -> None:
     """
     Convenience function to invalidate settings cache.
 

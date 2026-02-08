@@ -10,7 +10,7 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Date,
@@ -106,38 +106,38 @@ class MaterialRequest(Base):
         default=MaterialRequestStatus.DRAFT,
     )
 
-    schedule_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    schedule_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
-    requested_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    requested_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
     )
 
-    default_warehouse_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    default_warehouse_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("inv.warehouse.warehouse_id"),
         nullable=True,
     )
 
-    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.project.project_id"),
         nullable=True,
     )
 
-    ticket_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    ticket_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("support.ticket.ticket_id"),
         nullable=True,
     )
 
-    remarks: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    cancel_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # ERPNext sync tracking
-    erpnext_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    last_synced_at: Mapped[Optional[datetime]] = mapped_column(
+    erpnext_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
@@ -147,7 +147,7 @@ class MaterialRequest(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -155,11 +155,11 @@ class MaterialRequest(Base):
     # Note: No FK constraint to people table for sync compatibility
     # The actual DB table has the FK, but SQLAlchemy model omits it
     # to avoid import order issues during sync operations
-    created_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    updated_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    updated_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -221,7 +221,7 @@ class MaterialRequestItem(Base):
     )
 
     # Warehouse for this specific line item
-    warehouse_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    warehouse_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("inv.warehouse.warehouse_id"),
         nullable=True,
@@ -232,23 +232,23 @@ class MaterialRequestItem(Base):
     ordered_qty: Mapped[Decimal] = mapped_column(
         Numeric(20, 6), nullable=False, default=Decimal("0")
     )
-    uom: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    uom: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Line-item specific schedule date (can override header)
-    schedule_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    schedule_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Cross-module links for inventory-to-project/support integration
-    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.project.project_id"),
         nullable=True,
     )
-    ticket_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    ticket_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("support.ticket.ticket_id"),
         nullable=True,
     )
-    task_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    task_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("pm.task.task_id"),
         nullable=True,
@@ -258,8 +258,8 @@ class MaterialRequestItem(Base):
     sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     # ERPNext sync tracking
-    erpnext_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    last_synced_at: Mapped[Optional[datetime]] = mapped_column(
+    erpnext_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
@@ -269,7 +269,7 @@ class MaterialRequestItem(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

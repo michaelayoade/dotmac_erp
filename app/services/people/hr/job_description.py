@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session, selectinload
@@ -80,13 +80,13 @@ class CompetencyService:
         self,
         db: Session,
         organization_id: uuid.UUID,
-        principal: Optional["Principal"] = None,
+        principal: Principal | None = None,
     ) -> None:
         self.db = db
         self.organization_id = organization_id
         self.principal = principal
 
-    def get_competency(self, competency_id: uuid.UUID) -> Optional[Competency]:
+    def get_competency(self, competency_id: uuid.UUID) -> Competency | None:
         """Get a competency by ID."""
         stmt = select(Competency).where(
             and_(
@@ -97,7 +97,7 @@ class CompetencyService:
         )
         return self.db.execute(stmt).scalar_one_or_none()
 
-    def get_competency_by_code(self, code: str) -> Optional[Competency]:
+    def get_competency_by_code(self, code: str) -> Competency | None:
         """Get a competency by code."""
         stmt = select(Competency).where(
             and_(
@@ -111,10 +111,10 @@ class CompetencyService:
     def list_competencies(
         self,
         *,
-        category: Optional[CompetencyCategory] = None,
-        is_active: Optional[bool] = None,
-        search: Optional[str] = None,
-        pagination: Optional[PaginationParams] = None,
+        category: CompetencyCategory | None = None,
+        is_active: bool | None = None,
+        search: str | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[Competency]:
         """List competencies with filtering."""
         stmt = select(Competency).where(
@@ -156,12 +156,12 @@ class CompetencyService:
         competency_code: str,
         competency_name: str,
         category: CompetencyCategory,
-        description: Optional[str] = None,
-        level_1_description: Optional[str] = None,
-        level_2_description: Optional[str] = None,
-        level_3_description: Optional[str] = None,
-        level_4_description: Optional[str] = None,
-        level_5_description: Optional[str] = None,
+        description: str | None = None,
+        level_1_description: str | None = None,
+        level_2_description: str | None = None,
+        level_3_description: str | None = None,
+        level_4_description: str | None = None,
+        level_5_description: str | None = None,
         is_active: bool = True,
     ) -> Competency:
         """Create a new competency."""
@@ -241,7 +241,7 @@ class CompetencyService:
             raise CompetencyNotFoundError(f"Competency {competency_id} not found")
 
         competency.is_deleted = True
-        competency.deleted_at = datetime.now(timezone.utc)
+        competency.deleted_at = datetime.now(UTC)
         if self.principal:
             competency.deleted_by_id = self.principal.user_id
 
@@ -258,7 +258,7 @@ class JobDescriptionService:
         self,
         db: Session,
         organization_id: uuid.UUID,
-        principal: Optional["Principal"] = None,
+        principal: Principal | None = None,
     ) -> None:
         self.db = db
         self.organization_id = organization_id
@@ -267,7 +267,7 @@ class JobDescriptionService:
     def _validate_org_reference(
         self,
         model: type,
-        entity_id: Optional[uuid.UUID],
+        entity_id: uuid.UUID | None,
         label: str,
     ) -> None:
         if entity_id is None:
@@ -283,7 +283,7 @@ class JobDescriptionService:
 
     def get_job_description(
         self, jd_id: uuid.UUID, *, load_competencies: bool = False
-    ) -> Optional[JobDescription]:
+    ) -> JobDescription | None:
         """Get a job description by ID."""
         stmt = select(JobDescription).where(
             and_(
@@ -302,7 +302,7 @@ class JobDescriptionService:
 
         return self.db.execute(stmt).scalar_one_or_none()
 
-    def get_job_description_by_code(self, code: str) -> Optional[JobDescription]:
+    def get_job_description_by_code(self, code: str) -> JobDescription | None:
         """Get a job description by code."""
         stmt = select(JobDescription).where(
             and_(
@@ -316,11 +316,11 @@ class JobDescriptionService:
     def list_job_descriptions(
         self,
         *,
-        designation_id: Optional[uuid.UUID] = None,
-        department_id: Optional[uuid.UUID] = None,
-        status: Optional[JobDescriptionStatus] = None,
-        search: Optional[str] = None,
-        pagination: Optional[PaginationParams] = None,
+        designation_id: uuid.UUID | None = None,
+        department_id: uuid.UUID | None = None,
+        status: JobDescriptionStatus | None = None,
+        search: str | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[JobDescription]:
         """List job descriptions with filtering."""
         stmt = (
@@ -372,25 +372,25 @@ class JobDescriptionService:
         jd_code: str,
         job_title: str,
         designation_id: uuid.UUID,
-        department_id: Optional[uuid.UUID] = None,
-        summary: Optional[str] = None,
-        purpose: Optional[str] = None,
-        key_responsibilities: Optional[str] = None,
-        education_requirements: Optional[str] = None,
-        experience_requirements: Optional[str] = None,
-        min_years_experience: Optional[int] = None,
-        max_years_experience: Optional[int] = None,
-        technical_skills: Optional[str] = None,
-        certifications_required: Optional[str] = None,
-        certifications_preferred: Optional[str] = None,
-        work_location: Optional[str] = None,
-        travel_requirements: Optional[str] = None,
-        physical_requirements: Optional[str] = None,
-        reports_to: Optional[str] = None,
-        direct_reports: Optional[str] = None,
-        additional_notes: Optional[str] = None,
+        department_id: uuid.UUID | None = None,
+        summary: str | None = None,
+        purpose: str | None = None,
+        key_responsibilities: str | None = None,
+        education_requirements: str | None = None,
+        experience_requirements: str | None = None,
+        min_years_experience: int | None = None,
+        max_years_experience: int | None = None,
+        technical_skills: str | None = None,
+        certifications_required: str | None = None,
+        certifications_preferred: str | None = None,
+        work_location: str | None = None,
+        travel_requirements: str | None = None,
+        physical_requirements: str | None = None,
+        reports_to: str | None = None,
+        direct_reports: str | None = None,
+        additional_notes: str | None = None,
         status: JobDescriptionStatus = JobDescriptionStatus.DRAFT,
-        effective_from: Optional[date] = None,
+        effective_from: date | None = None,
     ) -> JobDescription:
         """Create a new job description."""
         # Check for duplicate code
@@ -503,7 +503,7 @@ class JobDescriptionService:
             raise JobDescriptionNotFoundError(f"Job description {jd_id} not found")
 
         jd.is_deleted = True
-        jd.deleted_at = datetime.now(timezone.utc)
+        jd.deleted_at = datetime.now(UTC)
         if self.principal:
             jd.deleted_by_id = self.principal.user_id
 
@@ -546,9 +546,9 @@ class JobDescriptionService:
         competency_id: uuid.UUID,
         *,
         required_level: int = 3,
-        weight: Optional[float] = None,
+        weight: float | None = None,
         is_mandatory: bool = True,
-        notes: Optional[str] = None,
+        notes: str | None = None,
     ) -> JobDescriptionCompetency:
         """Add a competency requirement to a job description."""
         jd = self.get_job_description(jd_id)
@@ -606,7 +606,7 @@ class JobDescriptionService:
 
     def list_competencies_for_jd(
         self, jd_id: uuid.UUID
-    ) -> List[JobDescriptionCompetency]:
+    ) -> list[JobDescriptionCompetency]:
         """List all competencies for a job description."""
         stmt = (
             select(JobDescriptionCompetency)

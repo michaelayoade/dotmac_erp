@@ -4,15 +4,12 @@ Support Web Routes.
 HTML template routes for helpdesk/support ticket management.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.services.support.web import support_web_service
-from app.web.deps import get_db, require_support_access, WebAuthContext
-
+from app.web.deps import WebAuthContext, get_db, require_support_access
 
 router = APIRouter(prefix="/support", tags=["support-web"])
 
@@ -26,8 +23,8 @@ router = APIRouter(prefix="/support", tags=["support-web"])
 def sla_dashboard(
     request: Request,
     auth: WebAuthContext = Depends(require_support_access),
-    date_from: Optional[str] = None,
-    date_to: Optional[str] = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
     db: Session = Depends(get_db),
 ):
     """SLA dashboard with metrics and reports."""
@@ -62,7 +59,7 @@ def breached_tickets(
 def aging_report(
     request: Request,
     auth: WebAuthContext = Depends(require_support_access),
-    status: Optional[str] = None,
+    status: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Ticket aging report."""
@@ -83,14 +80,14 @@ def aging_report(
 def list_tickets(
     request: Request,
     auth: WebAuthContext = Depends(require_support_access),
-    search: Optional[str] = None,
-    status: Optional[str] = None,
-    priority: Optional[str] = None,
-    assigned_to: Optional[str] = None,
-    category: Optional[str] = None,
-    team: Optional[str] = None,
-    date_from: Optional[str] = None,
-    date_to: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
+    priority: str | None = None,
+    assigned_to: str | None = None,
+    category: str | None = None,
+    team: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=50, ge=10, le=200),
     db: Session = Depends(get_db),
@@ -122,7 +119,7 @@ def list_tickets(
 def archived_tickets(
     request: Request,
     auth: WebAuthContext = Depends(require_support_access),
-    search: Optional[str] = None,
+    search: str | None = None,
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=50, ge=10, le=200),
     db: Session = Depends(get_db),
@@ -221,18 +218,18 @@ def update_ticket(
     request: Request,
     ticket_id: str,
     auth: WebAuthContext = Depends(require_support_access),
-    subject: Optional[str] = Form(default=None),
-    description: Optional[str] = Form(default=None),
-    priority: Optional[str] = Form(default=None),
-    raised_by_email: Optional[str] = Form(default=None),
-    assigned_to_id: Optional[str] = Form(default=None),
-    project_id: Optional[str] = Form(default=None),
-    customer_id: Optional[str] = Form(default=None),
-    category_id: Optional[str] = Form(default=None),
-    team_id: Optional[str] = Form(default=None),
-    contact_email: Optional[str] = Form(default=None),
-    contact_phone: Optional[str] = Form(default=None),
-    contact_address: Optional[str] = Form(default=None),
+    subject: str | None = Form(default=None),
+    description: str | None = Form(default=None),
+    priority: str | None = Form(default=None),
+    raised_by_email: str | None = Form(default=None),
+    assigned_to_id: str | None = Form(default=None),
+    project_id: str | None = Form(default=None),
+    customer_id: str | None = Form(default=None),
+    category_id: str | None = Form(default=None),
+    team_id: str | None = Form(default=None),
+    contact_email: str | None = Form(default=None),
+    contact_phone: str | None = Form(default=None),
+    contact_address: str | None = Form(default=None),
     files: list[UploadFile] = File(default=None),
     db: Session = Depends(get_db),
 ):
@@ -269,7 +266,7 @@ def update_ticket_status(
     ticket_id: str,
     auth: WebAuthContext = Depends(require_support_access),
     status: str = Form(...),
-    notes: Optional[str] = Form(default=None),
+    notes: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Update ticket status."""
@@ -283,7 +280,7 @@ def assign_ticket(
     request: Request,
     ticket_id: str,
     auth: WebAuthContext = Depends(require_support_access),
-    assigned_to_id: Optional[str] = Form(default=None),
+    assigned_to_id: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Assign ticket to an employee."""
@@ -477,12 +474,12 @@ def create_category(
     auth: WebAuthContext = Depends(require_support_access),
     category_code: str = Form(...),
     category_name: str = Form(...),
-    description: Optional[str] = Form(default=None),
-    color: Optional[str] = Form(default=None),
-    icon: Optional[str] = Form(default=None),
-    default_priority: Optional[str] = Form(default=None),
-    response_hours: Optional[int] = Form(default=None),
-    resolution_hours: Optional[int] = Form(default=None),
+    description: str | None = Form(default=None),
+    color: str | None = Form(default=None),
+    icon: str | None = Form(default=None),
+    default_priority: str | None = Form(default=None),
+    response_hours: int | None = Form(default=None),
+    resolution_hours: int | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Create a new category."""
@@ -524,13 +521,13 @@ def update_category(
     request: Request,
     category_id: str,
     auth: WebAuthContext = Depends(require_support_access),
-    category_name: Optional[str] = Form(default=None),
-    description: Optional[str] = Form(default=None),
-    color: Optional[str] = Form(default=None),
-    icon: Optional[str] = Form(default=None),
-    default_priority: Optional[str] = Form(default=None),
-    response_hours: Optional[int] = Form(default=None),
-    resolution_hours: Optional[int] = Form(default=None),
+    category_name: str | None = Form(default=None),
+    description: str | None = Form(default=None),
+    color: str | None = Form(default=None),
+    icon: str | None = Form(default=None),
+    default_priority: str | None = Form(default=None),
+    response_hours: int | None = Form(default=None),
+    resolution_hours: int | None = Form(default=None),
     is_active: bool = Form(default=True),
     db: Session = Depends(get_db),
 ):
@@ -582,8 +579,8 @@ def create_team(
     auth: WebAuthContext = Depends(require_support_access),
     team_code: str = Form(...),
     team_name: str = Form(...),
-    description: Optional[str] = Form(default=None),
-    lead_id: Optional[str] = Form(default=None),
+    description: str | None = Form(default=None),
+    lead_id: str | None = Form(default=None),
     auto_assign: bool = Form(default=False),
     db: Session = Depends(get_db),
 ):
@@ -627,9 +624,9 @@ def update_team(
     request: Request,
     team_id: str,
     auth: WebAuthContext = Depends(require_support_access),
-    team_name: Optional[str] = Form(default=None),
-    description: Optional[str] = Form(default=None),
-    lead_id: Optional[str] = Form(default=None),
+    team_name: str | None = Form(default=None),
+    description: str | None = Form(default=None),
+    lead_id: str | None = Form(default=None),
     auto_assign: bool = Form(default=False),
     is_active: bool = Form(default=True),
     db: Session = Depends(get_db),
@@ -654,7 +651,7 @@ def add_team_member(
     team_id: str,
     auth: WebAuthContext = Depends(require_support_access),
     employee_id: str = Form(...),
-    role: Optional[str] = Form(default=None),
+    role: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Add a member to a team."""

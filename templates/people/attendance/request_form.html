@@ -31,7 +31,7 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-                <label class="form-label">Employee</label>
+                <label class="form-label">Employee <span class="text-rose-500">*</span></label>
                 <select name="employee_id" class="form-select" required>
                     <option value="">Select employee</option>
                     {% for emp in employees %}
@@ -42,13 +42,13 @@
                 </select>
             </div>
             <div>
-                <label class="form-label">From date</label>
+                <label class="form-label">From date <span class="text-rose-500">*</span></label>
                 <input type="date" name="from_date" required
                        value="{{ form_data.from_date | default('', true) }}"
                        class="form-input">
             </div>
             <div>
-                <label class="form-label">To date</label>
+                <label class="form-label">To date <span class="text-rose-500">*</span></label>
                 <input type="date" name="to_date" required
                        value="{{ form_data.to_date | default('', true) }}"
                        class="form-input">

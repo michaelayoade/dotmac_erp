@@ -68,7 +68,7 @@ class Organization(Base):
         nullable=False,
         unique=True,
     )
-    slug: Mapped[Optional[str]] = mapped_column(
+    slug: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         unique=True,
@@ -78,16 +78,14 @@ class Organization(Base):
 
     # Legal identity
     legal_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    trading_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    registration_number: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True
-    )
-    tax_identification_number: Mapped[Optional[str]] = mapped_column(
+    trading_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    registration_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    tax_identification_number: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
     )
-    incorporation_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    jurisdiction_country_code: Mapped[Optional[str]] = mapped_column(
+    incorporation_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    jurisdiction_country_code: Mapped[str | None] = mapped_column(
         String(2),
         nullable=True,
     )
@@ -101,16 +99,16 @@ class Organization(Base):
     fiscal_year_end_day: Mapped[int] = mapped_column(Integer, nullable=False)
 
     # Group structure
-    parent_organization_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    parent_organization_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.organization.organization_id"),
         nullable=True,
     )
-    consolidation_method: Mapped[Optional[ConsolidationMethod]] = mapped_column(
+    consolidation_method: Mapped[ConsolidationMethod | None] = mapped_column(
         Enum(ConsolidationMethod, name="consolidation_method"),
         nullable=True,
     )
-    ownership_percentage: Mapped[Optional[Decimal]] = mapped_column(
+    ownership_percentage: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
     )
@@ -149,66 +147,66 @@ class Organization(Base):
     )
 
     # Regional settings
-    timezone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    date_format: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    number_format: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    timezone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    date_format: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    number_format: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Contact information
-    contact_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    contact_phone: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    contact_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Address
-    address_line1: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    address_line2: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    state: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    postal_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    country: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    address_line1: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    address_line2: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    postal_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    country: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Branding
-    logo_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    website_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    logo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    website_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # HR Settings
-    hr_employee_id_format: Mapped[Optional[str]] = mapped_column(
+    hr_employee_id_format: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Employee ID format, e.g. EMP-{YYYY}-{SEQ}",
     )
-    hr_employee_id_prefix: Mapped[Optional[str]] = mapped_column(
+    hr_employee_id_prefix: Mapped[str | None] = mapped_column(
         String(10),
         nullable=True,
         comment="Employee ID prefix, e.g. EMP",
     )
-    hr_payroll_frequency: Mapped[Optional[str]] = mapped_column(
+    hr_payroll_frequency: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="Payroll frequency: MONTHLY, BIWEEKLY, WEEKLY",
     )
-    hr_leave_year_start_month: Mapped[Optional[int]] = mapped_column(
+    hr_leave_year_start_month: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Month when leave year starts (1-12)",
     )
-    hr_probation_days: Mapped[Optional[int]] = mapped_column(
+    hr_probation_days: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Default probation period in days",
     )
-    hr_attendance_mode: Mapped[Optional[str]] = mapped_column(
+    hr_attendance_mode: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="Attendance mode: MANUAL, BIOMETRIC, GEOFENCED",
     )
 
     # Payroll GL Account Settings
-    salaries_expense_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    salaries_expense_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,
         comment="Expense account for total gross salary (debit)",
     )
-    salary_payable_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    salary_payable_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,
@@ -220,7 +218,7 @@ class Organization(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -271,8 +269,10 @@ class Organization(Base):
 
 # Forward references
 from app.models.finance.core_org.business_unit import BusinessUnit  # noqa: E402
-from app.models.finance.core_org.organization_branding import OrganizationBranding  # noqa: E402
+from app.models.finance.core_org.organization_branding import (  # noqa: E402
+    OrganizationBranding,
+)
 from app.models.finance.gl.account import Account  # noqa: E402
-from app.models.support.ticket import Ticket  # noqa: E402
-from app.models.support.team import SupportTeam  # noqa: E402
 from app.models.support.category import TicketCategory  # noqa: E402
+from app.models.support.team import SupportTeam  # noqa: E402
+from app.models.support.ticket import Ticket  # noqa: E402

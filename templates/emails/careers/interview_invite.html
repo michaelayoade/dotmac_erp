@@ -1,0 +1,39 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Interview Invitation{% endblock %}
+{% block content %}
+<p style="margin: 0 0 16px 0;">Dear {{ applicant_name }},</p>
+
+<p style="margin: 0 0 16px 0;">We are pleased to invite you to an interview for the <strong>{{ job_title }}</strong> position at <strong>{{ org_name }}</strong>.</p>
+
+<p style="margin: 0 0 8px 0;">Please find the details of your interview below:</p>
+
+<table role="presentation" style="width: 100%; border-collapse: collapse; margin: 20px 0; background: #f8fafc; border-radius: 6px;">
+  <tr>
+    <td style="padding: 12px 16px; color: #64748b; width: 35%;">Date</td>
+    <td style="padding: 12px 16px; font-weight: 600;">{{ interview_date }}</td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 16px; color: #64748b; border-top: 1px solid #e2e8f0;">Time</td>
+    <td style="padding: 12px 16px; font-weight: 600; border-top: 1px solid #e2e8f0;">{{ interview_time }}</td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 16px; color: #64748b; border-top: 1px solid #e2e8f0;">Type</td>
+    <td style="padding: 12px 16px; font-weight: 600; border-top: 1px solid #e2e8f0;">{{ interview_type }}</td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 16px; color: #64748b; border-top: 1px solid #e2e8f0;">Location</td>
+    <td style="padding: 12px 16px; font-weight: 600; border-top: 1px solid #e2e8f0;">{{ location_or_link }}</td>
+  </tr>
+</table>
+
+{% if additional_notes %}
+<div style="background: #fef3c7; padding: 14px 16px; border-radius: 6px; border-left: 3px solid #f59e0b; margin: 16px 0;">
+  <strong style="color: #92400e;">Additional Notes</strong>
+  <p style="margin: 6px 0 0 0; color: #92400e;">{{ additional_notes }}</p>
+</div>
+{% endif %}
+
+<p style="margin: 0 0 16px 0;">Please confirm your attendance by responding to this invitation at your earliest convenience. If you need to reschedule, let us know as soon as possible.</p>
+
+<p style="margin: 0;">We look forward to speaking with you.</p>
+{% endblock %}

@@ -108,7 +108,7 @@
                     </select>
                 </div>
                 <div>
-                    <label for="bank_account_id" class="form-label">Payment Bank Account</label>
+                    <label for="bank_account_id" class="form-label">Payment Bank Account <span class="text-rose-500">*</span></label>
                     <select name="bank_account_id" id="bank_account_id" class="form-select w-full" {% if bank_accounts %}required{% endif %}>
                         <option value="">Select bank account</option>
                         {% for account in bank_accounts %}

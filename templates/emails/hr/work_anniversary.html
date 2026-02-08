@@ -1,0 +1,16 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Work Anniversary{% endblock %}
+{% block content %}
+<p style="margin: 0 0 16px 0;">Hi {{ manager_first }},</p>
+
+<p style="margin: 0 0 16px 0;">{{ employee_name }} will be celebrating <strong>{{ years_of_service }} year(s)</strong> with the organization this week!</p>
+
+{% if is_milestone %}
+<div style="background: #ecfdf5; padding: 14px 16px; border-radius: 6px; border-left: 3px solid #059669; margin: 16px 0;">
+  <strong style="color: #065f46;">Milestone Anniversary!</strong>
+  <p style="margin: 6px 0 0 0; color: #065f46;">Consider recognizing {{ employee_name }}'s dedication and contributions.</p>
+</div>
+{% endif %}
+
+<p style="margin: 0;">This is a great opportunity to acknowledge their contribution to the team.</p>
+{% endblock %}

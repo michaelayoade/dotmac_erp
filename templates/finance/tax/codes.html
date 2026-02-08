@@ -88,15 +88,11 @@
                                 {% elif code.tax_type == 'WITHHOLDING' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400
                                 {% elif code.tax_type == 'STAMP_DUTY' %}bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400
                                 {% else %}bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400{% endif %}">
-                                {{ code.tax_type | replace('_', ' ') | title }}
+                                {{ code.tax_type_label }}
                             </span>
                         </td>
                         <td class="text-right font-mono text-sm text-slate-600 dark:text-slate-400">
-                            {% if code.rate_type == 'FIXED' %}
-                            ₦{{ code.tax_rate }}
-                            {% else %}
-                            {{ code.tax_rate }}%
-                            {% endif %}
+                            {{ code.tax_rate_display }}
                         </td>
                         <td class="text-sm text-slate-600 dark:text-slate-400">
                             {% if code.applies_to_sales and code.applies_to_purchases %}
@@ -122,6 +118,7 @@
                                     </svg>
                                 </a>
                                 <form method="post" action="/finance/tax/codes/{{ code.tax_code_id }}/toggle" class="inline">
+                                    {{ request.state.csrf_form | safe }}
                                     <button type="submit"
                                             class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
                                             title="{{ 'Deactivate' if code.is_active else 'Activate' }}">

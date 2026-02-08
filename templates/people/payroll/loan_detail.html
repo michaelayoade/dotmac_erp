@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 
+{% from "components/macros.html" import status_badge, empty_state %}
 {% block page_title %}Loan {{ loan.loan_number }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -31,9 +32,7 @@
                     'CANCELLED': 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
                     'WRITTEN_OFF': 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400'
                 } %}
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium {{ status_colors.get(loan.status.value, 'bg-slate-100 text-slate-700') }}">
-                    {{ loan.status.value | replace('_', ' ') | title }}
-                </span>
+                {{ status_badge(loan.status.value) }}
             </div>
             <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">
                 {{ loan.loan_type.type_name if loan.loan_type else 'Loan' }} for {{ loan.employee.full_name if loan.employee else 'Unknown' }}
@@ -117,7 +116,7 @@
                 <div class="p-4 border-b border-slate-200 dark:border-slate-700">
                     <h2 class="text-lg font-medium text-slate-900 dark:text-white">Loan Details</h2>
                 </div>
-                <div class="p-4 grid grid-cols-2 gap-4 text-sm">
+                <div class="p-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                     <div>
                         <div class="text-slate-500 dark:text-slate-400">Employee</div>
                         <div class="text-slate-900 dark:text-white font-medium">{{ loan.employee.full_name if loan.employee else '-' }}</div>
@@ -157,7 +156,7 @@
                 <div class="p-4 border-b border-slate-200 dark:border-slate-700">
                     <h2 class="text-lg font-medium text-slate-900 dark:text-white">Repayment History</h2>
                 </div>
-                <div class="overflow-x-auto">
+                <div class="table-container">
                     <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                         <thead class="bg-slate-50 dark:bg-slate-800/50">
                             <tr>
@@ -176,6 +175,12 @@
                                 <td class="px-4 py-3 text-sm text-right font-mono text-slate-600 dark:text-slate-400">{{ "{:,.2f}".format(rep.interest_portion) }}</td>
                                 <td class="px-4 py-3 text-sm text-right font-mono font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(rep.amount) }}</td>
                                 <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ rep.repayment_type.value | replace('_', ' ') | title }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="99" class="p-0">
+                                    {{ empty_state("No loan found", "There are no loan to display.") }}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -251,7 +256,7 @@
         <form method="post" action="/people/payroll/loans/{{ loan.loan_id }}/reject" class="mt-4">
             {{ request.state.csrf_form | safe }}
             <div class="form-group">
-                <label for="rejection_reason" class="form-label">Reason for Rejection</label>
+                <label for="rejection_reason" class="form-label">Reason for Rejection <span class="text-rose-500">*</span></label>
                 <textarea name="rejection_reason" id="rejection_reason" rows="3" class="form-textarea w-full" required placeholder="Please provide a reason..."></textarea>
             </div>
             <div class="modal-action">

@@ -5,7 +5,6 @@ Asset Revaluation Model - FA Schema.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -68,12 +67,12 @@ class AssetRevaluation(Base):
 
     # Valuation details
     valuation_method: Mapped[str] = mapped_column(String(50), nullable=False)
-    valuer_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    valuer_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    valuation_basis: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    valuer_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    valuer_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    valuation_basis: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Accounting entries
-    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -103,11 +102,11 @@ class AssetRevaluation(Base):
         UUID(as_uuid=True),
         nullable=False,
     )
-    approved_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )

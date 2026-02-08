@@ -8,12 +8,14 @@ This migration adds the organization_branding table to the core_org schema,
 enabling multi-tenant branding with custom colors, logos, and typography.
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
+
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 from app.alembic_utils import ensure_enum
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "add_organization_branding"

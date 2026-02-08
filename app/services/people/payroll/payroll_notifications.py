@@ -5,7 +5,6 @@ Handles notifications for payroll events (payslip posted, paid, etc.).
 """
 
 import logging
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -153,7 +152,7 @@ class PayrollNotificationService:
         slip_count: int,
         total_net_pay: float,
         currency_code: str = "NGN",
-        recipient_id: Optional[UUID] = None,
+        recipient_id: UUID | None = None,
     ) -> None:
         """
         Notify HR/Finance that a payroll entry has been processed.
@@ -229,7 +228,7 @@ class PayrollNotificationService:
         run_number: str,
         approved_by_name: str,
         slip_count: int,
-        submitter_id: Optional[UUID],
+        submitter_id: UUID | None,
     ) -> int:
         """Notify submitter that a payroll run was approved."""
         if not submitter_id:
@@ -258,7 +257,7 @@ class PayrollNotificationService:
         org_id: UUID,
         run_number: str,
         cancelled_by_name: str,
-        reason: Optional[str],
+        reason: str | None,
         payroll_team_ids: list[UUID],
     ) -> int:
         """Notify payroll team that a payroll run was cancelled."""

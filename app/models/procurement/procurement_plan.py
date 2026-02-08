@@ -7,7 +7,7 @@ Annual procurement plan aligned with budget.
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     DateTime,
@@ -80,11 +80,11 @@ class ProcurementPlan(Base, ProcurementBaseMixin):
         nullable=False,
         default="NGN",
     )
-    approved_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -94,7 +94,7 @@ class ProcurementPlan(Base, ProcurementBaseMixin):
     )
 
     # Relationships
-    items: Mapped[List["ProcurementPlanItem"]] = relationship(
+    items: Mapped[list["ProcurementPlanItem"]] = relationship(
         "ProcurementPlanItem",
         back_populates="plan",
         cascade="all, delete-orphan",

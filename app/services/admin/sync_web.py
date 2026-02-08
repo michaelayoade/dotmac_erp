@@ -6,10 +6,9 @@ Provides data and operations for the sync management UI.
 
 import logging
 import uuid
-from typing import Optional
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlencode
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
@@ -40,10 +39,10 @@ class SyncWebService:
     def _base_context(
         self,
         request: Request,
-        auth: Optional[WebAuthContext],
+        auth: WebAuthContext | None,
         title: str,
         active_tab: str = "dashboard",
-        db: Optional[Session] = None,
+        db: Session | None = None,
     ) -> dict:
         """Build base context for templates."""
         org_branding = None
@@ -69,19 +68,26 @@ class SyncWebService:
     def _require_admin(
         self,
         request: Request,
-        auth: Optional[WebAuthContext],
-    ) -> Optional[HTMLResponse | RedirectResponse]:
+        auth: WebAuthContext | None,
+    ) -> HTMLResponse | RedirectResponse | None:
         """Check if user is admin, return error response if not."""
         if not auth or not auth.is_authenticated:
-            return RedirectResponse(url="/login?next=/admin/sync", status_code=302)
-        # Could add more granular permission check here
+            next_path = request.url.path
+            if request.url.query:
+                next_path = f"{next_path}?{request.url.query}"
+            return RedirectResponse(
+                url=f"/admin/login?{urlencode({'next': next_path})}",
+                status_code=302,
+            )
+        if not auth.is_admin:
+            raise HTTPException(status_code=403, detail="Admin access required")
         return None
 
     def dashboard_response(
         self,
         request: Request,
         db: Session,
-        auth: Optional[WebAuthContext],
+        auth: WebAuthContext | None,
     ) -> HTMLResponse | RedirectResponse:
         """Render sync dashboard page."""
         error_response = self._require_admin(request, auth)
@@ -129,7 +135,7 @@ class SyncWebService:
                         "failed": 0,
                         "skipped": 0,
                     }
-                count = int(getattr(row, "count"))
+                count = int(row._mapping["count"])
                 stats_by_doctype[doctype]["total"] += count
                 if row.sync_status == SyncStatus.SYNCED:
                     stats_by_doctype[doctype]["synced"] = count
@@ -210,7 +216,7 @@ class SyncWebService:
         self,
         request: Request,
         db: Session,
-        auth: Optional[WebAuthContext],
+        auth: WebAuthContext | None,
         page: int = 1,
         status: str = "",
     ) -> HTMLResponse | RedirectResponse:
@@ -265,7 +271,7 @@ class SyncWebService:
         self,
         request: Request,
         db: Session,
-        auth: Optional[WebAuthContext],
+        auth: WebAuthContext | None,
         history_id: str,
     ) -> HTMLResponse | RedirectResponse:
         """Render sync history detail page."""
@@ -317,9 +323,9 @@ class SyncWebService:
         self,
         request: Request,
         db: Session,
-        auth: Optional[WebAuthContext],
+        auth: WebAuthContext | None,
         sync_type: str,
-        entity_types: Optional[list[str]] = None,
+        entity_types: list[str] | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Trigger a sync operation."""
         error_response = self._require_admin(request, auth)
@@ -378,7 +384,7 @@ class SyncWebService:
         self,
         request: Request,
         db: Session,
-        auth: Optional[WebAuthContext],
+        auth: WebAuthContext | None,
     ) -> HTMLResponse | RedirectResponse:
         """Render integration configuration page."""
         error_response = self._require_admin(request, auth)
@@ -408,7 +414,7 @@ class SyncWebService:
         self,
         request: Request,
         db: Session,
-        auth: Optional[WebAuthContext],
+        auth: WebAuthContext | None,
         base_url: str,
         api_key: str,
         api_secret: str,
@@ -487,7 +493,7 @@ class SyncWebService:
         self,
         request: Request,
         db: Session,
-        auth: Optional[WebAuthContext],
+        auth: WebAuthContext | None,
         doctype: str = "",
         status: str = "",
         page: int = 1,
@@ -565,7 +571,7 @@ class SyncWebService:
         self,
         request: Request,
         db: Session,
-        auth: Optional[WebAuthContext],
+        auth: WebAuthContext | None,
     ) -> HTMLResponse | RedirectResponse:
         """Test ERPNext connection and redirect with result."""
         error_response = self._require_admin(request, auth)

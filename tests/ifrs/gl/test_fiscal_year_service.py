@@ -8,8 +8,8 @@ from uuid import uuid4
 import pytest
 
 from app.services.finance.gl.fiscal_year import (
-    FiscalYearService,
     FiscalYearInput,
+    FiscalYearService,
 )
 from tests.ifrs.gl.conftest import (
     MockFiscalYear,
@@ -40,7 +40,7 @@ class TestCreateYear:
         """Test successful fiscal year creation."""
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        result = service.create_year(mock_db, org_id, sample_year_input)
+        service.create_year(mock_db, org_id, sample_year_input)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -75,7 +75,7 @@ class TestCreateYear:
         )
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        result = service.create_year(mock_db, org_id, input_data)
+        service.create_year(mock_db, org_id, input_data)
 
         mock_db.add.assert_called_once()
 
@@ -91,7 +91,7 @@ class TestCreateYear:
         )
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        result = service.create_year(mock_db, org_id, input_data)
+        service.create_year(mock_db, org_id, input_data)
 
         mock_db.add.assert_called_once()
 

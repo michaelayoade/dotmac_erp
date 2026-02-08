@@ -8,7 +8,6 @@ Transforms inventory issues/sales into journal entries with:
 
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -38,8 +37,8 @@ def post_issue(
     transaction_id: UUID,
     posting_date: date,
     posted_by_user_id: UUID,
-    expense_account_id: Optional[UUID] = None,
-    idempotency_key: Optional[str] = None,
+    expense_account_id: UUID | None = None,
+    idempotency_key: str | None = None,
 ) -> INVPostingResult:
     """
     Post an inventory issue to the general ledger.

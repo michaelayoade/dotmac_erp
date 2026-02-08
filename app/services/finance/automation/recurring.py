@@ -4,11 +4,12 @@ Recurring Transaction Service.
 Handles recurring template management and transaction generation.
 """
 
+import builtins
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
 from dateutil.relativedelta import relativedelta
@@ -35,18 +36,18 @@ class RecurringTemplateInput:
 
     template_name: str
     entity_type: RecurringEntityType
-    template_data: Dict[str, Any]
+    template_data: dict[str, Any]
     frequency: RecurringFrequency
     start_date: date
-    end_date: Optional[date] = None
-    schedule_config: Optional[Dict[str, Any]] = None
-    occurrences_limit: Optional[int] = None
+    end_date: date | None = None
+    schedule_config: dict[str, Any] | None = None
+    occurrences_limit: int | None = None
     auto_post: bool = False
     auto_send: bool = False
     days_before_due: int = 30
     notify_on_generation: bool = True
-    notify_email: Optional[str] = None
-    description: Optional[str] = None
+    notify_email: str | None = None
+    description: str | None = None
 
 
 @dataclass
@@ -54,10 +55,10 @@ class GenerationResult:
     """Result of generating a recurring transaction."""
 
     success: bool
-    entity_type: Optional[str] = None
-    entity_id: Optional[UUID] = None
-    entity_number: Optional[str] = None
-    error_message: Optional[str] = None
+    entity_type: str | None = None
+    entity_id: UUID | None = None
+    entity_number: str | None = None
+    error_message: str | None = None
 
 
 class RecurringService:
@@ -67,7 +68,7 @@ class RecurringService:
         self,
         current_date: date,
         frequency: RecurringFrequency,
-        schedule_config: Optional[Dict[str, Any]] = None,
+        schedule_config: dict[str, Any] | None = None,
     ) -> date:
         """Calculate the next run date based on frequency."""
         config = schedule_config or {}
@@ -115,8 +116,8 @@ class RecurringService:
         organization_id: UUID,
         input_data: RecurringTemplateInput,
         created_by: UUID,
-        source_entity_type: Optional[str] = None,
-        source_entity_id: Optional[UUID] = None,
+        source_entity_type: str | None = None,
+        source_entity_id: UUID | None = None,
     ) -> RecurringTemplate:
         """Create a new recurring template."""
         # Check for duplicate name
@@ -349,16 +350,26 @@ class RecurringService:
             source_entity_id=expense_id,
         )
 
-    def get(self, db: Session, template_id: UUID) -> Optional[RecurringTemplate]:
+    def get(
+        self,
+        db: Session,
+        template_id: UUID,
+        organization_id: UUID | None = None,
+    ) -> RecurringTemplate | None:
         """Get a template by ID."""
-        return db.get(RecurringTemplate, template_id)
+        template = db.get(RecurringTemplate, template_id)
+        if not template:
+            return None
+        if organization_id is not None and template.organization_id != organization_id:
+            return None
+        return template
 
     def get_logs(
         self,
         db: Session,
         template_id: UUID,
         limit: int = 20,
-    ) -> List[RecurringLog]:
+    ) -> list[RecurringLog]:
         """Get recent logs for a recurring template."""
         query = (
             select(RecurringLog)
@@ -372,11 +383,11 @@ class RecurringService:
         self,
         db: Session,
         organization_id: UUID,
-        entity_type: Optional[RecurringEntityType] = None,
-        status: Optional[RecurringStatus] = None,
+        entity_type: RecurringEntityType | None = None,
+        status: RecurringStatus | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[RecurringTemplate]:
+    ) -> list[RecurringTemplate]:
         """List recurring templates."""
         query = select(RecurringTemplate).where(
             RecurringTemplate.organization_id == organization_id
@@ -393,8 +404,8 @@ class RecurringService:
         return list(db.execute(query).scalars().all())
 
     def get_due_templates(
-        self, db: Session, as_of_date: Optional[date] = None
-    ) -> List[RecurringTemplate]:
+        self, db: Session, as_of_date: date | None = None
+    ) -> builtins.list[RecurringTemplate]:
         """Get all templates due for generation."""
         check_date = as_of_date or date.today()
 
@@ -416,10 +427,16 @@ class RecurringService:
         from app.models.finance.ar import (
             Invoice,
             InvoiceLine,
+            InvoiceLineTax,
             InvoiceStatus,
             InvoiceType,
         )
         from app.services.finance.numbering import numbering_service
+        from app.services.finance.tax.tax_calculation import (
+            InvoiceLineTaxInput,
+            LineCalculationResult,
+            TaxCalculationService,
+        )
 
         try:
             data = template.template_data
@@ -436,11 +453,46 @@ class RecurringService:
             tax_amount = Decimal("0")
             lines_data = data.get("lines", [])
 
+            # Pre-calculate line taxes
+            line_tax_results: list[
+                tuple[Decimal, list[UUID], LineCalculationResult | None]
+            ] = []
+            tax_inputs: list[InvoiceLineTaxInput] = []
+
             for line_data in lines_data:
                 qty = Decimal(line_data.get("quantity", "1"))
                 price = Decimal(line_data.get("unit_price", "0"))
-                subtotal += qty * price
-                # TODO: Calculate tax from tax_code
+                discount_amount = Decimal(line_data.get("discount_amount", "0"))
+                line_amount = qty * price - discount_amount
+                subtotal += line_amount
+
+                tax_code_ids = [
+                    UUID(tc_id) for tc_id in line_data.get("tax_code_ids", []) if tc_id
+                ]
+                legacy_tax_code_id = line_data.get("tax_code_id")
+                if legacy_tax_code_id and legacy_tax_code_id not in tax_code_ids:
+                    tax_code_ids.append(UUID(legacy_tax_code_id))
+
+                tax_inputs.append(
+                    InvoiceLineTaxInput(
+                        line_id=None,
+                        line_amount=line_amount,
+                        tax_code_ids=tax_code_ids,
+                    )
+                )
+                line_tax_results.append((line_amount, tax_code_ids, None))
+
+            if tax_inputs:
+                invoice_tax = TaxCalculationService.calculate_invoice_taxes(
+                    db=db,
+                    organization_id=template.organization_id,
+                    lines=tax_inputs,
+                    transaction_date=invoice_date,
+                )
+                tax_amount = invoice_tax.total_tax
+                for idx, result in enumerate(invoice_tax.lines):
+                    line_amount, tax_code_ids, _ = line_tax_results[idx]
+                    line_tax_results[idx] = (line_amount, tax_code_ids, result)
 
             total_amount = subtotal + tax_amount
 
@@ -473,7 +525,11 @@ class RecurringService:
             for idx, line_data in enumerate(lines_data, 1):
                 qty = Decimal(line_data.get("quantity", "1"))
                 price = Decimal(line_data.get("unit_price", "0"))
-                line_amount = qty * price
+                discount_amount = Decimal(line_data.get("discount_amount", "0"))
+                line_amount = qty * price - discount_amount
+                line_amount, tax_code_ids, tax_result = line_tax_results[idx - 1]
+                line_tax_total = tax_result.total_tax if tax_result else Decimal("0")
+                primary_tax_code_id = tax_code_ids[0] if tax_code_ids else None
 
                 line = InvoiceLine(
                     invoice_id=invoice.invoice_id,
@@ -482,11 +538,43 @@ class RecurringService:
                     quantity=qty,
                     unit_price=price,
                     line_amount=line_amount,
-                    tax_amount=Decimal("0"),
-                    total_amount=line_amount,
-                    account_id=UUID(line_data["account_id"]),
+                    tax_code_id=primary_tax_code_id,
+                    tax_amount=line_tax_total,
+                    total_amount=line_amount + line_tax_total,
+                    revenue_account_id=UUID(
+                        line_data.get("revenue_account_id") or line_data["account_id"]
+                    ),
+                    item_id=UUID(line_data["item_id"])
+                    if line_data.get("item_id")
+                    else None,
+                    cost_center_id=UUID(line_data["cost_center_id"])
+                    if line_data.get("cost_center_id")
+                    else None,
+                    project_id=UUID(line_data["project_id"])
+                    if line_data.get("project_id")
+                    else None,
+                    segment_id=UUID(line_data["segment_id"])
+                    if line_data.get("segment_id")
+                    else None,
                 )
                 db.add(line)
+                db.flush()
+
+                if tax_result:
+                    for tax in tax_result.taxes:
+                        db.add(
+                            InvoiceLineTax(
+                                line_id=line.line_id,
+                                tax_code_id=tax.tax_code_id,
+                                base_amount=tax.base_amount,
+                                tax_rate=tax.tax_rate,
+                                tax_amount=tax.tax_amount,
+                                is_inclusive=tax.is_inclusive,
+                                sequence=tax.sequence,
+                                is_recoverable=tax.is_recoverable,
+                                recoverable_amount=tax.recoverable_amount,
+                            )
+                        )
 
             db.flush()
 
@@ -654,7 +742,7 @@ class RecurringService:
         db.flush()
         return log
 
-    def run_due_templates(self, db: Session) -> List[RecurringLog]:
+    def run_due_templates(self, db: Session) -> builtins.list[RecurringLog]:
         """Run all due templates and return logs."""
         templates = self.get_due_templates(db)
         logs = []

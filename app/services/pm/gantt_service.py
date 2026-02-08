@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import timedelta
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -41,7 +41,7 @@ class GanttService:
         self,
         db: Session,
         organization_id: uuid.UUID,
-        principal: Optional["Principal"] = None,
+        principal: Principal | None = None,
     ) -> None:
         self.db = db
         self.organization_id = organization_id
@@ -86,8 +86,8 @@ class GanttService:
         ).all()
 
         # Convert tasks to Gantt format
-        gantt_tasks: List[GanttTask] = []
-        gantt_links: List[GanttLink] = []
+        gantt_tasks: list[GanttTask] = []
+        gantt_links: list[GanttLink] = []
 
         for task in tasks:
             # Calculate duration
@@ -174,7 +174,7 @@ class GanttService:
         )
 
     def get_multi_project_gantt(
-        self, project_ids: List[uuid.UUID]
-    ) -> List[GanttChartData]:
+        self, project_ids: list[uuid.UUID]
+    ) -> list[GanttChartData]:
         """Generate Gantt chart data for multiple projects."""
         return [self.get_gantt_data(pid) for pid in project_ids]

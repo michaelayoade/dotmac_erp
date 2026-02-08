@@ -2,6 +2,18 @@
 
 {% block title %}Sign in - {{ brand.name }}{% endblock %}
 
+{% block head %}
+{% if brand.fonts_url %}
+<link href="{{ brand.fonts_url }}" rel="stylesheet">
+{% endif %}
+{% if brand.css %}
+<style>{{ brand.css | safe }}</style>
+{% endif %}
+{% if brand.favicon_url %}
+<link rel="icon" href="{{ brand.favicon_url }}" type="image/png">
+{% endif %}
+{% endblock %}
+
 {% block body %}
 <div class="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center px-4 py-12 login-bg">
     {% set brand_name = brand.name %}
@@ -32,7 +44,7 @@
         </div>
 
         <!-- Login Card -->
-        <div class="stagger-in login-card rounded-2xl p-8" x-data="loginForm()">
+        <div class="stagger-in login-card rounded-2xl p-8" x-data="loginForm()" x-init="init()">
             <div class="text-center mb-6">
                 <h1 class="text-2xl font-semibold text-slate-900 dark:text-white font-display">Sign in</h1>
                 <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">Access your {{ brand_name }} workspace.</p>
@@ -97,7 +109,7 @@
                 </div>
             </div>
 
-            <form @submit.prevent="handleSubmit" class="space-y-5">
+            <form @submit.prevent="handleSubmit" class="space-y-6">
                 <!-- Username/Email Field -->
                 <div x-show="!mfaRequired">
                     <label for="username" class="form-label form-label-required">Work email or username</label>
@@ -245,6 +257,11 @@ function loginForm() {
         loading: false,
         error: null,
 
+        init() {
+            // Ensure cached/back-forward pages don't retain MFA state.
+            this.resetMfa();
+        },
+
         async handleSubmit() {
             this.error = null;
             this.loading = true;
@@ -295,8 +312,7 @@ function loginForm() {
 
             // Store access token in cookie
             if (data.access_token) {
-                const secure = window.location.protocol === 'https:' ? '; Secure' : '';
-                document.cookie = `access_token=${data.access_token}; path=/; max-age=${this.rememberMe ? 86400 * 30 : 86400}; SameSite=Lax${secure}`;
+                // Access token cookie is set server-side (HttpOnly).
             }
 
             // Redirect to intended destination or dashboard
@@ -325,8 +341,7 @@ function loginForm() {
 
             // Store access token in cookie
             if (data.access_token) {
-                const secure = window.location.protocol === 'https:' ? '; Secure' : '';
-                document.cookie = `access_token=${data.access_token}; path=/; max-age=${this.rememberMe ? 86400 * 30 : 86400}; SameSite=Lax${secure}`;
+                // Access token cookie is set server-side (HttpOnly).
             }
 
             // Redirect to intended destination or dashboard

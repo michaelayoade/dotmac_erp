@@ -16,8 +16,8 @@ from app.models.finance.payments.payment_webhook import (
 from app.models.finance.payments.transfer_batch import (
     TransferBatch,
     TransferBatchItem,
-    TransferBatchStatus,
     TransferBatchItemStatus,
+    TransferBatchStatus,
 )
 
 __all__ = [

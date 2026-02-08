@@ -1,3 +1,4 @@
+from datetime import UTC
 from typing import Any
 
 from fastapi import HTTPException
@@ -377,14 +378,14 @@ def export_settings(
             }
         }
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     if domains is None:
         domains = list(SettingDomain)
 
     result: dict[str, Any] = {
         "version": "1.0",
-        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "exported_at": datetime.now(UTC).isoformat(),
         "settings": {},
     }
 

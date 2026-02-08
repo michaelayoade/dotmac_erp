@@ -6,7 +6,6 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -63,7 +62,7 @@ class TaxCode(Base):
 
     tax_code: Mapped[str] = mapped_column(String(30), nullable=False)
     tax_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     tax_type: Mapped[TaxType] = mapped_column(
         Enum(TaxType, name="tax_type"),
@@ -78,7 +77,7 @@ class TaxCode(Base):
     # Rate
     tax_rate: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False)
     effective_from: Mapped[date] = mapped_column(Date, nullable=False)
-    effective_to: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Tax calculation
     is_compound: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -97,19 +96,19 @@ class TaxCode(Base):
     )
 
     # Reporting
-    tax_return_box: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
-    reporting_code: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    tax_return_box: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    reporting_code: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
     # Accounts
-    tax_collected_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    tax_collected_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    tax_paid_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    tax_paid_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    tax_expense_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    tax_expense_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -121,7 +120,7 @@ class TaxCode(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

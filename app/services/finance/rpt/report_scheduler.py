@@ -6,10 +6,10 @@ Manages report schedules and automated report generation.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import List, Optional
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -31,16 +31,16 @@ class ScheduleInput:
     schedule_name: str
     frequency: ScheduleFrequency
     output_format: str = "PDF"
-    description: Optional[str] = None
-    cron_expression: Optional[str] = None
-    day_of_week: Optional[int] = None
-    day_of_month: Optional[int] = None
-    time_of_day: Optional[str] = None
+    description: str | None = None
+    cron_expression: str | None = None
+    day_of_week: int | None = None
+    day_of_month: int | None = None
+    time_of_day: str | None = None
     timezone: str = "UTC"
-    report_parameters: Optional[dict] = None
-    email_recipients: Optional[list] = None
-    storage_path: Optional[str] = None
-    retention_days: Optional[int] = None
+    report_parameters: dict | None = None
+    email_recipients: list | None = None
+    storage_path: str | None = None
+    retention_days: int | None = None
 
 
 @dataclass
@@ -50,8 +50,8 @@ class ScheduleExecution:
     schedule_id: UUID
     schedule_name: str
     report_code: str
-    last_run: Optional[datetime]
-    next_run: Optional[datetime]
+    last_run: datetime | None
+    next_run: datetime | None
     is_active: bool
 
 
@@ -151,12 +151,12 @@ class ReportSchedulerService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         schedule_id: UUID,
-        schedule_name: Optional[str] = None,
-        description: Optional[str] = None,
-        output_format: Optional[str] = None,
-        email_recipients: Optional[list] = None,
-        storage_path: Optional[str] = None,
-        retention_days: Optional[int] = None,
+        schedule_name: str | None = None,
+        description: str | None = None,
+        output_format: str | None = None,
+        email_recipients: list | None = None,
+        storage_path: str | None = None,
+        retention_days: int | None = None,
     ) -> ReportSchedule:
         """
         Update a report schedule.
@@ -206,10 +206,10 @@ class ReportSchedulerService(ListResponseMixin):
         organization_id: UUID,
         schedule_id: UUID,
         frequency: ScheduleFrequency,
-        cron_expression: Optional[str] = None,
-        day_of_week: Optional[int] = None,
-        day_of_month: Optional[int] = None,
-        time_of_day: Optional[str] = None,
+        cron_expression: str | None = None,
+        day_of_week: int | None = None,
+        day_of_month: int | None = None,
+        time_of_day: str | None = None,
         tz: str = "UTC",
     ) -> ReportSchedule:
         """
@@ -332,7 +332,7 @@ class ReportSchedulerService(ListResponseMixin):
         if not schedule:
             raise HTTPException(status_code=404, detail="Schedule not found")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         schedule.last_run_at = now
 
         if schedule.is_active:
@@ -354,8 +354,8 @@ class ReportSchedulerService(ListResponseMixin):
     @staticmethod
     def get_due_schedules(
         db: Session,
-        organization_id: Optional[str] = None,
-    ) -> List[ReportSchedule]:
+        organization_id: str | None = None,
+    ) -> builtins.list[ReportSchedule]:
         """
         Get schedules due for execution.
 
@@ -366,7 +366,7 @@ class ReportSchedulerService(ListResponseMixin):
         Returns:
             List of due schedules
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         query = db.query(ReportSchedule).filter(
             ReportSchedule.is_active == True,
@@ -398,7 +398,7 @@ class ReportSchedulerService(ListResponseMixin):
             List of upcoming schedule executions
         """
         org_id = coerce_uuid(organization_id)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cutoff = now + timedelta(hours=hours_ahead)
 
         schedules = (
@@ -431,18 +431,18 @@ class ReportSchedulerService(ListResponseMixin):
     @staticmethod
     def _calculate_next_run(
         frequency: ScheduleFrequency,
-        cron_expression: Optional[str],
-        day_of_week: Optional[int],
-        day_of_month: Optional[int],
-        time_of_day: Optional[str],
+        cron_expression: str | None,
+        day_of_week: int | None,
+        day_of_month: int | None,
+        time_of_day: str | None,
         tz: str,
-        from_time: Optional[datetime] = None,
-    ) -> Optional[datetime]:
+        from_time: datetime | None = None,
+    ) -> datetime | None:
         """Calculate next run time based on schedule configuration."""
         if frequency == ScheduleFrequency.ON_DEMAND:
             return None
 
-        now = from_time or datetime.now(timezone.utc)
+        now = from_time or datetime.now(UTC)
 
         # Parse time of day
         run_hour, run_minute = 0, 0
@@ -562,23 +562,28 @@ class ReportSchedulerService(ListResponseMixin):
     def get(
         db: Session,
         schedule_id: str,
+        organization_id: UUID | None = None,
     ) -> ReportSchedule:
         """Get a schedule by ID."""
         schedule = db.get(ReportSchedule, coerce_uuid(schedule_id))
         if not schedule:
+            raise HTTPException(status_code=404, detail="Schedule not found")
+        if organization_id is not None and schedule.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Schedule not found")
         return schedule
 
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        report_def_id: Optional[str] = None,
-        frequency: Optional[ScheduleFrequency] = None,
-        is_active: Optional[bool] = None,
+        organization_id: str | None = None,
+        report_def_id: str | None = None,
+        frequency: ScheduleFrequency | None = None,
+        is_active: bool | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[ReportSchedule]:
+    ) -> builtins.list[ReportSchedule]:
         """List schedules with optional filters."""
         query = db.query(ReportSchedule)
 

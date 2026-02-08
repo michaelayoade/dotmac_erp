@@ -29,10 +29,10 @@ from app.db import Base
 from app.models.people.base import AuditMixin, ERPNextSyncMixin, StatusTrackingMixin
 
 if TYPE_CHECKING:
+    from app.models.people.hr.department import Department
+    from app.models.people.hr.designation import Designation
     from app.models.people.recruit.job_applicant import JobApplicant
     from app.models.people.recruit.job_opening import JobOpening
-    from app.models.people.hr.designation import Designation
-    from app.models.people.hr.department import Department
 
 
 class OfferStatus(str, enum.Enum):
@@ -101,7 +101,7 @@ class JobOffer(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         ForeignKey("hr.designation.designation_id"),
         nullable=False,
     )
-    department_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    department_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.department.department_id"),
         nullable=True,
@@ -137,15 +137,15 @@ class JobOffer(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
     )
 
     # Additional compensation
-    signing_bonus: Mapped[Optional[Decimal]] = mapped_column(
+    signing_bonus: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
     )
-    relocation_allowance: Mapped[Optional[Decimal]] = mapped_column(
+    relocation_allowance: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
     )
-    other_benefits: Mapped[Optional[str]] = mapped_column(
+    other_benefits: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -169,35 +169,35 @@ class JobOffer(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
     )
 
     # Response tracking
-    extended_on: Mapped[Optional[date]] = mapped_column(
+    extended_on: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="Date offer was sent to candidate",
     )
-    responded_on: Mapped[Optional[date]] = mapped_column(
+    responded_on: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    decline_reason: Mapped[Optional[str]] = mapped_column(
+    decline_reason: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Candidate portal access
-    candidate_access_token: Mapped[Optional[str]] = mapped_column(
+    candidate_access_token: Mapped[str | None] = mapped_column(
         String(120),
         nullable=True,
         index=True,
         comment="Token for candidate offer portal access",
     )
-    candidate_access_expires: Mapped[Optional[datetime]] = mapped_column(
+    candidate_access_expires: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="Expiration time for candidate portal access token",
     )
 
     # Conversion tracking
-    converted_to_employee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    converted_to_employee_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
@@ -205,11 +205,11 @@ class JobOffer(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
     )
 
     # Notes
-    terms_and_conditions: Mapped[Optional[str]] = mapped_column(
+    terms_and_conditions: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -219,7 +219,7 @@ class JobOffer(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

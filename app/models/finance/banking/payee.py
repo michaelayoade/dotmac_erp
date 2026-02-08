@@ -6,7 +6,6 @@ Stores recognized payees/payers for auto-categorization of bank transactions.
 
 import enum
 from datetime import datetime
-from typing import Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -76,32 +75,32 @@ class Payee(Base):
     )
 
     # Matching patterns (for fuzzy matching)
-    name_patterns: Mapped[Optional[str]] = mapped_column(
+    name_patterns: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Pipe-separated patterns for matching, e.g., 'AMAZON|AMZN|AWS'",
     )
 
     # Default categorization
-    default_account_id: Mapped[Optional[UUID]] = mapped_column(
+    default_account_id: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,
         comment="Default GL account for transactions with this payee",
     )
-    default_tax_code_id: Mapped[Optional[UUID]] = mapped_column(
+    default_tax_code_id: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True),
         nullable=True,
         comment="Default tax code for transactions with this payee",
     )
 
     # Linked entities (optional)
-    supplier_id: Mapped[Optional[UUID]] = mapped_column(
+    supplier_id: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True),
         ForeignKey("ap.supplier.supplier_id"),
         nullable=True,
     )
-    customer_id: Mapped[Optional[UUID]] = mapped_column(
+    customer_id: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True),
         ForeignKey("ar.customer.customer_id"),
         nullable=True,
@@ -109,7 +108,7 @@ class Payee(Base):
 
     # Usage statistics
     match_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    last_matched_at: Mapped[Optional[datetime]] = mapped_column(
+    last_matched_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -123,18 +122,18 @@ class Payee(Base):
         nullable=False,
         server_default=func.now(),
     )
-    created_by: Mapped[Optional[UUID]] = mapped_column(
+    created_by: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True),
         nullable=True,
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
     )
 
     # Notes
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     def matches_name(self, transaction_description: str) -> bool:
         """Check if a transaction description matches this payee."""

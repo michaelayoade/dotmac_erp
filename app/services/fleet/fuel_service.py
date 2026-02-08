@@ -7,7 +7,6 @@ Handles fuel log entries and consumption analysis.
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -34,7 +33,7 @@ class FuelService:
         self.db = db
         self.organization_id = organization_id
 
-    def get_by_id(self, fuel_log_id: UUID) -> Optional[FuelLogEntry]:
+    def get_by_id(self, fuel_log_id: UUID) -> FuelLogEntry | None:
         """Get fuel log by ID."""
         return self.db.get(FuelLogEntry, fuel_log_id)
 
@@ -48,11 +47,11 @@ class FuelService:
     def list_logs(
         self,
         *,
-        vehicle_id: Optional[UUID] = None,
-        employee_id: Optional[UUID] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
-        params: Optional[PaginationParams] = None,
+        vehicle_id: UUID | None = None,
+        employee_id: UUID | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        params: PaginationParams | None = None,
     ) -> PaginatedResult[FuelLogEntry]:
         """List fuel logs with filtering."""
         stmt = (
@@ -132,9 +131,9 @@ class FuelService:
     def calculate_efficiency(
         self,
         vehicle_id: UUID,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
-    ) -> Optional[FuelEfficiencyReport]:
+        from_date: date | None = None,
+        to_date: date | None = None,
+    ) -> FuelEfficiencyReport | None:
         """Calculate fuel efficiency for a vehicle over a period."""
         # Get fuel logs for the period with full tank fills only
         stmt = (
@@ -184,10 +183,10 @@ class FuelService:
 
     def get_monthly_summary(
         self,
-        vehicle_id: Optional[UUID] = None,
-        year: Optional[int] = None,
-        month: Optional[int] = None,
-    ) -> List[dict]:
+        vehicle_id: UUID | None = None,
+        year: int | None = None,
+        month: int | None = None,
+    ) -> list[dict]:
         """Get monthly fuel consumption summary."""
         month_expr = func.date_trunc("month", FuelLogEntry.log_date).label("month")
         stmt = select(

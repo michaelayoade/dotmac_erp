@@ -1,0 +1,10 @@
+{% extends "emails/base_email.txt" %}
+{% block content %}Hi {{ employee_first }},
+
+This is a reminder that your self-assessment for the {{ cycle_name }} cycle is {{ urgency }}.
+
+Deadline: {{ deadline }}
+
+Please complete your self-assessment to ensure a timely review process.
+
+Complete Self-Assessment: {{ appraisal_url }}{% endblock %}

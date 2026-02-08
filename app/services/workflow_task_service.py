@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -32,10 +31,10 @@ class WorkflowTaskService:
         self,
         org_id: UUID,
         *,
-        assignee_employee_id: Optional[UUID] = None,
-        status: Optional[WorkflowTaskStatus] = None,
-        priority: Optional[WorkflowTaskPriority] = None,
-        pagination: Optional[PaginationParams] = None,
+        assignee_employee_id: UUID | None = None,
+        status: WorkflowTaskStatus | None = None,
+        priority: WorkflowTaskPriority | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[WorkflowTask]:
         query = select(WorkflowTask).where(WorkflowTask.organization_id == org_id)
 
@@ -108,7 +107,7 @@ class WorkflowTaskService:
         self,
         org_id: UUID,
         *,
-        assignee_employee_id: Optional[UUID] = None,
+        assignee_employee_id: UUID | None = None,
     ) -> dict:
         query = select(WorkflowTask.status, func.count(WorkflowTask.task_id)).where(
             WorkflowTask.organization_id == org_id

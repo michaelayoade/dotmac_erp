@@ -6,7 +6,6 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -69,17 +68,15 @@ class LeaseContract(Base):
 
     lease_number: Mapped[str] = mapped_column(String(30), nullable=False)
     lease_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Lessor details
-    lessor_supplier_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    lessor_supplier_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
     lessor_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    external_reference: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True
-    )
+    external_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Classification
     classification: Mapped[LeaseClassification] = mapped_column(
@@ -97,7 +94,7 @@ class LeaseContract(Base):
     has_renewal_option: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
-    renewal_option_term_months: Mapped[Optional[int]] = mapped_column(
+    renewal_option_term_months: Mapped[int | None] = mapped_column(
         Numeric(10, 0), nullable=True
     )
     renewal_reasonably_certain: Mapped[bool] = mapped_column(
@@ -106,7 +103,7 @@ class LeaseContract(Base):
     has_purchase_option: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
-    purchase_option_price: Mapped[Optional[Decimal]] = mapped_column(
+    purchase_option_price: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6), nullable=True
     )
     purchase_reasonably_certain: Mapped[bool] = mapped_column(
@@ -115,7 +112,7 @@ class LeaseContract(Base):
     has_termination_option: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
-    termination_penalty: Mapped[Optional[Decimal]] = mapped_column(
+    termination_penalty: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6), nullable=True
     )
 
@@ -131,7 +128,7 @@ class LeaseContract(Base):
     has_variable_payments: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
-    variable_payment_basis: Mapped[Optional[str]] = mapped_column(
+    variable_payment_basis: Mapped[str | None] = mapped_column(
         String(100), nullable=True
     )
 
@@ -139,13 +136,11 @@ class LeaseContract(Base):
     is_index_linked: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
-    index_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    index_base_value: Mapped[Optional[Decimal]] = mapped_column(
+    index_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    index_base_value: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6), nullable=True
     )
-    last_index_adjustment_date: Mapped[Optional[date]] = mapped_column(
-        Date, nullable=True
-    )
+    last_index_adjustment_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Residual value
     residual_value_guarantee: Mapped[Decimal] = mapped_column(
@@ -162,9 +157,7 @@ class LeaseContract(Base):
     implicit_rate_known: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
-    implicit_rate: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(10, 6), nullable=True
-    )
+    implicit_rate: Mapped[Decimal | None] = mapped_column(Numeric(10, 6), nullable=True)
     discount_rate_used: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False)
 
     # Initial measurement
@@ -186,11 +179,11 @@ class LeaseContract(Base):
 
     # Underlying asset info
     asset_description: Mapped[str] = mapped_column(Text, nullable=False)
-    asset_category_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    asset_category_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    location_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -203,11 +196,11 @@ class LeaseContract(Base):
     )
 
     # Accounting dimensions
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
 
@@ -216,11 +209,11 @@ class LeaseContract(Base):
         UUID(as_uuid=True),
         nullable=False,
     )
-    approved_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -230,7 +223,7 @@ class LeaseContract(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

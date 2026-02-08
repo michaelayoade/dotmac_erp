@@ -20,6 +20,7 @@
 {% block content %}
 <div class="max-w-4xl mx-auto" x-data="priceListForm()">
     <form method="post" action="{{ '/inventory/price-lists/' ~ price_list.price_list_id ~ '/edit' if price_list else '/inventory/price-lists/new' }}" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
         {% if error %}
         <div class="rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 p-4">
             <p class="text-sm text-rose-700 dark:text-rose-300">{{ error }}</p>
@@ -134,6 +135,12 @@
                                         <option value="">Select Item</option>
                                         {% for itm in inventory_items | default([]) %}
                                         <option value="{{ itm.item_id }}">{{ itm.item_code }} - {{ itm.item_name }}</option>
+                                        {% else %}
+                                        <tr>
+                                            <td colspan="99" class="p-0">
+                                                {{ empty_state("No inventory_items found", "There are no inventory_items to display.") }}
+                                            </td>
+                                        </tr>
                                         {% endfor %}
                                     </select>
                                 </td>
@@ -169,7 +176,7 @@
             <input type="hidden" name="items_json" :value="JSON.stringify(items)">
         </div>
 
-        <div class="flex items-center justify-end gap-3">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/inventory/price-lists" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 {{ 'Update Price List' if price_list else 'Create Price List' }}

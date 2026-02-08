@@ -4,8 +4,8 @@ Module Settings Web Routes.
 Configuration pages for inventory, support, projects, fleet, and procurement.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -16,8 +16,7 @@ from app.services.module_settings_web import (
     module_settings_web_service,
 )
 from app.templates import templates
-from app.web.deps import base_context, get_db, require_settings_access, WebAuthContext
-
+from app.web.deps import WebAuthContext, base_context, get_db, require_settings_access
 
 router = APIRouter(prefix="/settings", tags=["settings-web"])
 

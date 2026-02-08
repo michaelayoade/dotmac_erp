@@ -1,0 +1,18 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Your Offer Is Ready{% endblock %}
+{% block content %}
+<p style="margin: 0 0 16px 0;">Dear {{ applicant_name }},</p>
+
+<p style="margin: 0 0 16px 0;">Your offer for the <strong>{{ job_title }}</strong> position at <strong>{{ org_name }}</strong> is ready for your review.</p>
+
+<p style="margin: 0 0 16px 0;">Please use the link below to view the full details of your offer, including terms and conditions. You will be able to review and accept the offer directly through the portal.</p>
+
+<p style="margin: 0 0 20px 0;">
+  <a href="{{ portal_url }}" style="display: inline-block; padding: 12px 24px; background-color: {{ primary_color | default('#0d9488') }}; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600;">View Offer</a>
+</p>
+
+<p style="margin: 0 0 16px 0; font-size: 13px; color: #64748b;">If the button above does not work, copy and paste this link into your browser:<br>
+<a href="{{ portal_url }}" style="color: {{ primary_color | default('#0d9488') }}; text-decoration: none; word-break: break-all;">{{ portal_url }}</a></p>
+
+<p style="margin: 0;">If you have any questions about the offer, please do not hesitate to reach out to our HR team.</p>
+{% endblock %}

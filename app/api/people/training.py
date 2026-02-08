@@ -5,7 +5,6 @@ Thin API wrapper for Training Management endpoints. All business logic is in ser
 """
 
 from datetime import date, datetime
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -19,29 +18,29 @@ from app.models.people.training import (
     TrainingProgramStatus,
 )
 from app.schemas.people.training import (
-    # Training Program
-    TrainingProgramCreate,
-    TrainingProgramUpdate,
-    TrainingProgramRead,
-    TrainingProgramListResponse,
-    # Training Event
-    TrainingEventCreate,
-    TrainingEventUpdate,
-    TrainingEventRead,
-    TrainingEventListResponse,
-    # Attendee
-    TrainingAttendeeCreate,
-    TrainingAttendeeRead,
-    TrainingAttendeeListResponse,
     AttendeeFeedbackRequest,
     BulkInviteRequest,
     BulkInviteResponse,
-    IssueCertificateRequest,
-    TrainingStats,
     CompleteEventRequest,
+    IssueCertificateRequest,
+    # Attendee
+    TrainingAttendeeCreate,
+    TrainingAttendeeListResponse,
+    TrainingAttendeeRead,
+    # Training Event
+    TrainingEventCreate,
+    TrainingEventListResponse,
+    TrainingEventRead,
+    TrainingEventUpdate,
+    # Training Program
+    TrainingProgramCreate,
+    TrainingProgramListResponse,
+    TrainingProgramRead,
+    TrainingProgramUpdate,
+    TrainingStats,
 )
-from app.services.people.training import TrainingService
 from app.services.common import PaginationParams
+from app.services.people.training import TrainingService
 
 router = APIRouter(
     prefix="/training",
@@ -58,7 +57,7 @@ def get_db():
         db.close()
 
 
-def parse_enum(value: Optional[str], enum_type, field_name: str):
+def parse_enum(value: str | None, enum_type, field_name: str):
     if value is None:
         return None
     try:
@@ -77,10 +76,10 @@ def parse_enum(value: Optional[str], enum_type, field_name: str):
 @router.get("/programs", response_model=TrainingProgramListResponse)
 def list_training_programs(
     organization_id: UUID = Depends(require_organization_id),
-    search: Optional[str] = None,
-    category: Optional[str] = None,
-    status: Optional[str] = None,
-    is_active: Optional[bool] = None,
+    search: str | None = None,
+    category: str | None = None,
+    status: str | None = None,
+    is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -185,11 +184,11 @@ def delete_training_program(
 @router.get("/events", response_model=TrainingEventListResponse)
 def list_training_events(
     organization_id: UUID = Depends(require_organization_id),
-    program_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    trainer_id: Optional[UUID] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    program_id: UUID | None = None,
+    status: str | None = None,
+    trainer_id: UUID | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -327,7 +326,7 @@ def complete_event(
 def cancel_event(
     event_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    reason: Optional[str] = None,
+    reason: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Cancel a training event."""
@@ -340,7 +339,7 @@ def cancel_event(
 @router.get("/events/summary")
 def training_event_summary(
     organization_id: UUID = Depends(require_organization_id),
-    program_id: Optional[UUID] = None,
+    program_id: UUID | None = None,
     db: Session = Depends(get_db),
 ):
     """Get training event summary by status."""
@@ -357,7 +356,7 @@ def training_event_summary(
 def list_attendees(
     event_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    status: Optional[str] = None,
+    status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -468,7 +467,7 @@ def mark_attended(
     event_id: UUID,
     attendee_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    attendance_percentage: Optional[float] = None,
+    attendance_percentage: float | None = None,
     db: Session = Depends(get_db),
 ):
     """Mark attendee as having attended."""

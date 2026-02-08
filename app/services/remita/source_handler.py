@@ -6,8 +6,7 @@ This is a dispatcher that routes updates to the appropriate module service.
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
@@ -31,7 +30,7 @@ class RemitaSourceHandler:
     def __init__(self, db: Session):
         self.db = db
 
-    def handle_rrr_paid(self, rrr: RemitaRRR) -> Optional[dict]:
+    def handle_rrr_paid(self, rrr: RemitaRRR) -> dict | None:
         """
         Handle RRR payment confirmation.
 
@@ -171,7 +170,7 @@ class RemitaSourceHandler:
 
         field_name = biller_field_map.get(rrr.biller_id)
         if field_name and hasattr(payroll_run, field_name):
-            setattr(payroll_run, field_name, rrr.paid_at or datetime.now(timezone.utc))
+            setattr(payroll_run, field_name, rrr.paid_at or datetime.now(UTC))
             logger.info(
                 f"Payroll Run {rrr.source_id} {rrr.biller_id} marked as remitted"
             )

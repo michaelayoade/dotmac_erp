@@ -2,7 +2,6 @@
 Contract API Endpoints.
 """
 
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -29,10 +28,10 @@ def get_db():
         db.close()
 
 
-@router.get("", response_model=List[ContractResponse])
+@router.get("", response_model=list[ContractResponse])
 def list_contracts(
     organization_id: UUID = Depends(require_organization_id),
-    status_filter: Optional[str] = Query(None, alias="status"),
+    status_filter: str | None = Query(None, alias="status"),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -105,15 +104,13 @@ def update_contract(
 @router.post("/{contract_id}/activate", response_model=ContractResponse)
 def activate_contract(
     contract_id: UUID,
-    fund_id: Optional[UUID] = Query(None, description="IPSAS fund for commitment"),
-    account_id: Optional[UUID] = Query(None, description="GL account for commitment"),
-    fiscal_year_id: Optional[UUID] = Query(
-        None, description="Fiscal year for commitment"
-    ),
-    fiscal_period_id: Optional[UUID] = Query(
+    fund_id: UUID | None = Query(None, description="IPSAS fund for commitment"),
+    account_id: UUID | None = Query(None, description="GL account for commitment"),
+    fiscal_year_id: UUID | None = Query(None, description="Fiscal year for commitment"),
+    fiscal_period_id: UUID | None = Query(
         None, description="Fiscal period for commitment"
     ),
-    appropriation_id: Optional[UUID] = Query(
+    appropriation_id: UUID | None = Query(
         None, description="Appropriation for commitment"
     ),
     organization_id: UUID = Depends(require_organization_id),

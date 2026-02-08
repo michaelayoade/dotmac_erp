@@ -1,14 +1,11 @@
 """Locations (Branches) routes."""
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.people.hr.web.location_web import location_web_service
-from app.web.deps import get_db, require_hr_access, WebAuthContext
-
+from app.web.deps import WebAuthContext, get_db, require_hr_access
 
 router = APIRouter()
 
@@ -21,7 +18,7 @@ router = APIRouter()
 @router.get("/locations", response_class=HTMLResponse)
 def list_locations(
     request: Request,
-    search: Optional[str] = None,
+    search: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),

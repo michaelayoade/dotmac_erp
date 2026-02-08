@@ -1,0 +1,9 @@
+{% extends "emails/base_email.txt" %}
+{% block content %}Hi {{ employee_first }},
+
+Your certification "{{ cert_name }}" is expiring in {{ days_remaining }} days.
+
+Expiry Date: {{ expiry_date }}
+Issuing Organization: {{ issuing_org }}
+
+Please take necessary steps to renew your certification before it expires.{% endblock %}

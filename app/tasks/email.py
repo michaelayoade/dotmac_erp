@@ -11,11 +11,12 @@ import base64
 import logging
 import smtplib
 import socket
-from typing import Any, Optional
+from typing import Any
 
 from celery import shared_task
 
 from app.db import SessionLocal
+from app.services.common import coerce_uuid
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +87,7 @@ def classify_email_error(exc: Exception) -> type[Exception]:
     # Recipient refused - check the error codes
     if isinstance(exc, smtplib.SMTPRecipientsRefused):
         # All recipients permanently rejected
-        for addr, (code, msg) in exc.recipients.items():
+        for _addr, (code, _msg) in exc.recipients.items():
             if code in PERMANENT_SMTP_CODES:
                 return PermanentEmailError
         return TransientEmailError
@@ -127,10 +128,10 @@ def send_email_async(
     to_email: str,
     subject: str,
     body_html: str,
-    body_text: Optional[str] = None,
-    attachments_b64: Optional[list[dict[str, str]]] = None,
-    module: Optional[str] = None,
-    organization_id: Optional[str] = None,
+    body_text: str | None = None,
+    attachments_b64: list[dict[str, str]] | None = None,
+    module: str | None = None,
+    organization_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Asynchronously send an email.
@@ -196,7 +197,9 @@ def send_email_async(
                 attachments=attachments,
                 raise_on_error=True,
                 module=module_enum,
-                organization_id=organization_id,
+                organization_id=coerce_uuid(organization_id)
+                if organization_id
+                else None,
             )
 
         result["success"] = True
@@ -231,10 +234,10 @@ def queue_email(
     to_email: str,
     subject: str,
     body_html: str,
-    body_text: Optional[str] = None,
-    attachments: Optional[list[tuple[str, bytes, str]]] = None,
-    module: Optional[str] = None,
-    organization_id: Optional[str] = None,
+    body_text: str | None = None,
+    attachments: list[tuple[str, bytes, str]] | None = None,
+    module: str | None = None,
+    organization_id: str | None = None,
 ) -> None:
     """
     Queue an email for async delivery via Celery.

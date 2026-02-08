@@ -106,7 +106,7 @@ class TestProcureToPay:
             expect(content.first).to_be_visible()
 
         # Check for invoice matching option
-        match_btn = authenticated_page.locator(
+        authenticated_page.locator(
             "button:has-text('Match'), a:has-text('Match to Invoice')"
         )
         # Just verify the page loaded properly
@@ -159,11 +159,9 @@ class TestOrderToCash:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Check for quotes list
-        table = authenticated_page.locator("table, [role='table']")
-        empty_state = authenticated_page.locator("text=No quotes")
-        new_btn = authenticated_page.locator(
-            "a[href*='/quotes/new'], button:has-text('New')"
-        )
+        authenticated_page.locator("table, [role='table']")
+        authenticated_page.locator("text=No quotes")
+        authenticated_page.locator("a[href*='/quotes/new'], button:has-text('New')")
 
         # Page should have either data or new button
         expect(authenticated_page.locator("main")).to_be_visible()
@@ -248,9 +246,7 @@ class TestPeriodClose:
         authenticated_page.wait_for_load_state("networkidle")
 
         # Look for warnings about open items
-        warnings = authenticated_page.locator(
-            ".alert, .warning, text=open items, text=unposted"
-        )
+        authenticated_page.locator(".alert, .warning, text=open items, text=unposted")
         # Just verify page loaded, warnings may or may not exist
         expect(authenticated_page.locator("main")).to_be_visible()
 
@@ -267,7 +263,7 @@ class TestPeriodClose:
             expect(year_end.first).to_be_visible()
 
         # Check for retained earnings option
-        retained = authenticated_page.locator(
+        authenticated_page.locator(
             "text=Retained Earnings, select[name='retained_earnings_account']"
         )
         # Just verify page loaded
@@ -385,7 +381,7 @@ class TestCrossModuleIntegration:
             expect(status_column.first).to_be_visible()
 
         # Check for paid/partial status indicators
-        paid_status = authenticated_page.locator(
+        authenticated_page.locator(
             "text=Paid, text=Partial, .badge-success, .badge-warning"
         )
         # Just verify page loaded

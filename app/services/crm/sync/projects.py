@@ -7,9 +7,10 @@ Handles create/update detection and field mapping.
 
 import logging
 import uuid
+from collections.abc import Generator
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Generator, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -121,14 +122,14 @@ class ProjectSyncService(BaseCRMSyncService[Project]):
         self,
         db: Session,
         organization_id: uuid.UUID,
-        user_id: Optional[uuid.UUID] = None,
+        user_id: uuid.UUID | None = None,
     ):
         super().__init__(db, organization_id, user_id)
 
     def fetch_records(
         self,
         client: CRMClient,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
     ) -> Generator[dict[str, Any], None, None]:
         """Fetch projects from CRM API."""
         yield from client.get_projects(since=since)
@@ -219,7 +220,7 @@ class ProjectSyncService(BaseCRMSyncService[Project]):
         """Get primary key from Project."""
         return entity.project_id
 
-    def get_existing_entity(self, sync_entity) -> Optional[Project]:
+    def get_existing_entity(self, sync_entity) -> Project | None:
         """Look up existing project by sync entity's target_id."""
         if not sync_entity.target_id:
             return None
@@ -229,25 +230,25 @@ class ProjectSyncService(BaseCRMSyncService[Project]):
     # Helper Methods
     # =========================================================================
 
-    def _map_status(self, status: Optional[str]) -> ProjectStatus:
+    def _map_status(self, status: str | None) -> ProjectStatus:
         """Map CRM status to ERP status."""
         if not status:
             return ProjectStatus.ACTIVE
         return CRM_PROJECT_STATUS_MAP.get(status, ProjectStatus.ACTIVE)
 
-    def _map_priority(self, priority: Optional[str]) -> ProjectPriority:
+    def _map_priority(self, priority: str | None) -> ProjectPriority:
         """Map CRM priority to ERP priority."""
         if not priority:
             return ProjectPriority.MEDIUM
         return CRM_PROJECT_PRIORITY_MAP.get(priority, ProjectPriority.MEDIUM)
 
-    def _map_type(self, project_type: Optional[str]) -> ProjectType:
+    def _map_type(self, project_type: str | None) -> ProjectType:
         """Map CRM project type to ERP type."""
         if not project_type:
             return ProjectType.CLIENT
         return CRM_PROJECT_TYPE_MAP.get(project_type, ProjectType.CLIENT)
 
-    def _parse_date(self, value: Any) -> Optional[date]:
+    def _parse_date(self, value: Any) -> date | None:
         """Parse date from CRM value."""
         if not value:
             return None
@@ -270,7 +271,7 @@ class ProjectSyncService(BaseCRMSyncService[Project]):
         except Exception:
             return Decimal("0")
 
-    def _lookup_customer_by_subscriber(self, subscriber_id: str) -> Optional[Any]:
+    def _lookup_customer_by_subscriber(self, subscriber_id: str) -> Any | None:
         """Look up customer by CRM subscriber ID."""
         from app.models.finance.ar.customer import Customer
 
@@ -284,7 +285,7 @@ class ProjectSyncService(BaseCRMSyncService[Project]):
     # Project-Specific Operations
     # =========================================================================
 
-    def get_by_crm_id(self, crm_project_id: str) -> Optional[Project]:
+    def get_by_crm_id(self, crm_project_id: str) -> Project | None:
         """
         Get ERP project by CRM project ID.
 

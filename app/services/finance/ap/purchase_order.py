@@ -6,11 +6,12 @@ Manages PO creation, approval, and status tracking.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any, List, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -35,15 +36,15 @@ class POLineInput:
     description: str
     quantity_ordered: Decimal
     unit_price: Decimal
-    item_id: Optional[UUID] = None
-    tax_code_id: Optional[UUID] = None
+    item_id: UUID | None = None
+    tax_code_id: UUID | None = None
     tax_amount: Decimal = Decimal("0")
-    expense_account_id: Optional[UUID] = None
-    asset_account_id: Optional[UUID] = None
-    cost_center_id: Optional[UUID] = None
-    project_id: Optional[UUID] = None
-    segment_id: Optional[UUID] = None
-    delivery_date: Optional[date] = None
+    expense_account_id: UUID | None = None
+    asset_account_id: UUID | None = None
+    cost_center_id: UUID | None = None
+    project_id: UUID | None = None
+    segment_id: UUID | None = None
+    delivery_date: date | None = None
 
 
 @dataclass
@@ -54,12 +55,12 @@ class PurchaseOrderInput:
     po_date: date
     currency_code: str
     lines: list[POLineInput] = field(default_factory=list)
-    expected_delivery_date: Optional[date] = None
-    exchange_rate: Optional[Decimal] = None
-    shipping_address: Optional[dict[str, Any]] = None
-    terms_and_conditions: Optional[str] = None
-    budget_id: Optional[UUID] = None
-    correlation_id: Optional[str] = None
+    expected_delivery_date: date | None = None
+    exchange_rate: Decimal | None = None
+    shipping_address: dict[str, Any] | None = None
+    terms_and_conditions: str | None = None
+    budget_id: UUID | None = None
+    correlation_id: str | None = None
 
 
 class PurchaseOrderService(ListResponseMixin):
@@ -290,7 +291,7 @@ class PurchaseOrderService(ListResponseMixin):
 
         po.status = POStatus.APPROVED
         po.approved_by_user_id = approved_by_user_id
-        po.approved_at = datetime.now(timezone.utc)
+        po.approved_at = datetime.now(UTC)
 
         try:
             from app.services.finance.automation.event_dispatcher import (
@@ -427,7 +428,7 @@ class PurchaseOrderService(ListResponseMixin):
         db: Session,
         po_id: UUID,
         amount_received: Decimal,
-        organization_id: Optional[UUID] = None,
+        organization_id: UUID | None = None,
     ) -> PurchaseOrder:
         """
         Update the received amount on a PO (called by GoodsReceiptService).
@@ -470,8 +471,8 @@ class PurchaseOrderService(ListResponseMixin):
     def get(
         db: Session,
         po_id: str,
-        organization_id: Optional[UUID] = None,
-    ) -> Optional[PurchaseOrder]:
+        organization_id: UUID | None = None,
+    ) -> PurchaseOrder | None:
         """Get a purchase order by ID with optional org_id isolation."""
         po = db.get(PurchaseOrder, coerce_uuid(po_id))
         if po is None:
@@ -485,7 +486,7 @@ class PurchaseOrderService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         po_number: str,
-    ) -> Optional[PurchaseOrder]:
+    ) -> PurchaseOrder | None:
         """Get a purchase order by number."""
         return db.scalars(
             select(PurchaseOrder).where(
@@ -495,7 +496,7 @@ class PurchaseOrderService(ListResponseMixin):
         ).first()
 
     @staticmethod
-    def get_po_lines(db: Session, po_id: str) -> List[PurchaseOrderLine]:
+    def get_po_lines(db: Session, po_id: str) -> builtins.list[PurchaseOrderLine]:
         """Get all lines for a purchase order."""
         return list(
             db.scalars(
@@ -508,14 +509,14 @@ class PurchaseOrderService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        supplier_id: Optional[str] = None,
-        status: Optional[POStatus] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
+        organization_id: str | None = None,
+        supplier_id: str | None = None,
+        status: POStatus | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[PurchaseOrder]:
+    ) -> builtins.list[PurchaseOrder]:
         """
         List purchase orders with filters.
 

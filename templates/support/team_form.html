@@ -34,8 +34,9 @@
     {% endif %}
 
     <form method="post" action="/support/teams{{ '/' + team.team_id if team else '' }}" class="card">
+        {{ request.state.csrf_form | safe }}
         <div class="p-6 space-y-6">
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <label for="team_code" class="form-label">Team Code <span class="text-rose-500">*</span></label>
                     <input type="text" name="team_code" id="team_code"
@@ -86,7 +87,7 @@
             </div>
         </div>
 
-        <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <div class="px-6 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-3 pt-6">
             <a href="/support/teams" class="btn btn-secondary">
                 Cancel
             </a>

@@ -41,7 +41,7 @@
 
     <!-- Trial Balance Table -->
     <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="w-full">
                 <thead>
                     <tr class="border-b border-slate-200 dark:border-slate-700">
@@ -60,7 +60,7 @@
                         <td class="px-6 py-4">
                             <p class="text-sm text-slate-900 dark:text-white">{{ balance.account_name | default("Unknown Account") }}</p>
                             {% if balance.category %}
-                            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ balance.category }}</p>
+                            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ balance.category | replace('_', ' ') | title }}</p>
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-slate-900 dark:text-white">

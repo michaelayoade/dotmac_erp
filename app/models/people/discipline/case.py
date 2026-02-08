@@ -27,12 +27,12 @@ from app.db import Base
 from app.models.people.base import AuditMixin, SoftDeleteMixin, StatusTrackingMixin
 
 if TYPE_CHECKING:
-    from app.models.people.hr.employee import Employee
     from app.models.finance.core_org.organization import Organization
-    from app.models.people.discipline.case_witness import CaseWitness
     from app.models.people.discipline.case_action import CaseAction
     from app.models.people.discipline.case_document import CaseDocument
     from app.models.people.discipline.case_response import CaseResponse
+    from app.models.people.discipline.case_witness import CaseWitness
+    from app.models.people.hr.employee import Employee
 
 
 class ViolationType(str, enum.Enum):
@@ -136,14 +136,14 @@ class DisciplinaryCase(Base, AuditMixin, SoftDeleteMixin, StatusTrackingMixin):
         nullable=False,
         comment="Brief description of the violation",
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Detailed description of the incident",
     )
 
     # Key dates
-    incident_date: Mapped[Optional[date]] = mapped_column(
+    incident_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="Date the incident occurred",
@@ -154,32 +154,32 @@ class DisciplinaryCase(Base, AuditMixin, SoftDeleteMixin, StatusTrackingMixin):
         default=date.today,
         comment="Date the incident was reported",
     )
-    query_issued_date: Mapped[Optional[date]] = mapped_column(
+    query_issued_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="Date query was issued to employee",
     )
-    response_due_date: Mapped[Optional[date]] = mapped_column(
+    response_due_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="Deadline for employee response",
     )
-    hearing_date: Mapped[Optional[datetime]] = mapped_column(
+    hearing_date: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="Scheduled hearing date and time",
     )
-    decision_date: Mapped[Optional[date]] = mapped_column(
+    decision_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="Date decision was made",
     )
-    appeal_deadline: Mapped[Optional[date]] = mapped_column(
+    appeal_deadline: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="Deadline to file appeal",
     )
-    closed_date: Mapped[Optional[date]] = mapped_column(
+    closed_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="Date case was closed",
@@ -193,45 +193,45 @@ class DisciplinaryCase(Base, AuditMixin, SoftDeleteMixin, StatusTrackingMixin):
     )
 
     # Query details
-    query_text: Mapped[Optional[str]] = mapped_column(
+    query_text: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Formal query text sent to employee",
     )
 
     # Hearing details
-    hearing_location: Mapped[Optional[str]] = mapped_column(
+    hearing_location: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
         comment="Location/room for hearing",
     )
-    hearing_notes: Mapped[Optional[str]] = mapped_column(
+    hearing_notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Notes from the hearing",
     )
 
     # Decision details
-    decision_summary: Mapped[Optional[str]] = mapped_column(
+    decision_summary: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Summary of the decision",
     )
 
     # Appeal details
-    appeal_reason: Mapped[Optional[str]] = mapped_column(
+    appeal_reason: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Reason for appeal if filed",
     )
-    appeal_decision: Mapped[Optional[str]] = mapped_column(
+    appeal_decision: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Outcome of appeal",
     )
 
     # Reporting officer
-    reported_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    reported_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
@@ -239,7 +239,7 @@ class DisciplinaryCase(Base, AuditMixin, SoftDeleteMixin, StatusTrackingMixin):
     )
 
     # Investigating officer
-    investigating_officer_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    investigating_officer_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
@@ -247,7 +247,7 @@ class DisciplinaryCase(Base, AuditMixin, SoftDeleteMixin, StatusTrackingMixin):
     )
 
     # Hearing panel chair
-    panel_chair_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    panel_chair_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
@@ -260,7 +260,7 @@ class DisciplinaryCase(Base, AuditMixin, SoftDeleteMixin, StatusTrackingMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

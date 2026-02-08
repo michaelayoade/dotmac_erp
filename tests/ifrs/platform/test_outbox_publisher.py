@@ -21,19 +21,21 @@ def patch_outbox_publisher():
         mock_outbox.next_retry_at = MockColumn()
         mock_outbox.retry_count = MockColumn()
         mock_outbox.producer_module = MockColumn()
-        with patch(
-            "app.services.finance.platform.outbox_publisher.and_",
-            return_value=MagicMock(),
-        ):
-            with patch(
+        with (
+            patch(
+                "app.services.finance.platform.outbox_publisher.and_",
+                return_value=MagicMock(),
+            ),
+            patch(
                 "app.services.finance.platform.outbox_publisher.or_",
                 return_value=MagicMock(),
-            ):
-                with patch(
-                    "app.services.finance.platform.outbox_publisher.coerce_uuid",
-                    side_effect=lambda x: x,
-                ):
-                    yield mock_outbox
+            ),
+            patch(
+                "app.services.finance.platform.outbox_publisher.coerce_uuid",
+                side_effect=lambda x: x,
+            ),
+        ):
+            yield mock_outbox
 
 
 class TestOutboxPublisher:
@@ -77,7 +79,7 @@ class TestOutboxPublisher:
                     "app.services.finance.platform.outbox_publisher.coerce_uuid",
                     side_effect=lambda x: x,
                 ):
-                    result = service.publish_event(
+                    service.publish_event(
                         mock_db_session,
                         event_name="journal.posted",
                         aggregate_type="JournalEntry",
@@ -128,7 +130,7 @@ class TestOutboxPublisher:
                     "app.services.finance.platform.outbox_publisher.coerce_uuid",
                     side_effect=lambda x: x,
                 ):
-                    result = service.mark_published(
+                    service.mark_published(
                         mock_db_session,
                         event_id=event_id,
                     )
@@ -171,7 +173,7 @@ class TestOutboxPublisher:
                     "app.services.finance.platform.outbox_publisher.coerce_uuid",
                     side_effect=lambda x: x,
                 ):
-                    result = service.handle_retry(
+                    service.handle_retry(
                         mock_db_session,
                         event_id=event_id,
                         error_message="Connection timeout",
@@ -202,7 +204,7 @@ class TestOutboxPublisher:
                     "app.services.finance.platform.outbox_publisher.coerce_uuid",
                     side_effect=lambda x: x,
                 ):
-                    result = service.handle_retry(
+                    service.handle_retry(
                         mock_db_session,
                         event_id=event_id,
                         error_message="Max retries exceeded",
@@ -227,7 +229,7 @@ class TestOutboxPublisher:
                     "app.services.finance.platform.outbox_publisher.coerce_uuid",
                     side_effect=lambda x: x,
                 ):
-                    result = service.handle_retry(
+                    service.handle_retry(
                         mock_db_session,
                         event_id=event_id,
                         error_message="Temporary error",
@@ -253,7 +255,7 @@ class TestOutboxPublisher:
                     "app.services.finance.platform.outbox_publisher.coerce_uuid",
                     side_effect=lambda x: x,
                 ):
-                    result = service.mark_dead(
+                    service.mark_dead(
                         mock_db_session,
                         event_id=event_id,
                         error_message="Unrecoverable error",
@@ -303,7 +305,7 @@ class TestOutboxPublisher:
                     "app.services.finance.platform.outbox_publisher.coerce_uuid",
                     side_effect=lambda x: x,
                 ):
-                    result = service.retry_dead_event(
+                    service.retry_dead_event(
                         mock_db_session,
                         event_id=event_id,
                     )

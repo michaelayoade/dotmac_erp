@@ -16,7 +16,6 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
 
-
 from app.models.finance.ar.customer_payment import PaymentMethod
 from app.models.finance.ar.external_sync import EntityType
 from app.models.finance.ar.invoice import InvoiceStatus
@@ -29,7 +28,6 @@ from app.services.splynx.client import (
     SplynxPaymentMethod,
 )
 from app.services.splynx.sync import SYSTEM_USER_ID, SplynxSyncService, SyncResult
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -700,7 +698,7 @@ class TestSystemUserId:
     """Verify SYSTEM_USER_ID is the nil UUID (all zeros)."""
 
     def test_value(self) -> None:
-        assert SYSTEM_USER_ID == uuid.UUID("00000000-0000-0000-0000-000000000000")
+        assert uuid.UUID("00000000-0000-0000-0000-000000000000") == SYSTEM_USER_ID
         assert SYSTEM_USER_ID.int == 0
 
 

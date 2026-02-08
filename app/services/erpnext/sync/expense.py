@@ -10,7 +10,7 @@ import logging
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -48,7 +48,7 @@ class ExpenseCategorySyncService(BaseSyncService[ExpenseCategory]):
         self._mapping = ExpenseCategoryMapping()
         self._category_cache: dict[str, ExpenseCategory] = {}
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         if since:
             yield from client.get_modified_since(
                 doctype="Expense Claim Type",
@@ -91,7 +91,7 @@ class ExpenseCategorySyncService(BaseSyncService[ExpenseCategory]):
     def get_entity_id(self, entity: ExpenseCategory) -> uuid.UUID:
         return entity.category_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[ExpenseCategory]:
+    def find_existing_entity(self, source_name: str) -> ExpenseCategory | None:
         if source_name in self._category_cache:
             return self._category_cache[source_name]
 
@@ -122,7 +122,7 @@ class ExpenseClaimSyncService(BaseSyncService[ExpenseClaim]):
         self._item_mapping = ExpenseClaimItemMapping()
         self._claim_cache: dict[str, ExpenseClaim] = {}
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         """Fetch expense claims with their items."""
         if since:
             for claim in client.get_modified_since(
@@ -148,8 +148,8 @@ class ExpenseClaimSyncService(BaseSyncService[ExpenseClaim]):
         return result
 
     def _resolve_entity_id(
-        self, source_name: Optional[str], source_doctype: str
-    ) -> Optional[uuid.UUID]:
+        self, source_name: str | None, source_doctype: str
+    ) -> uuid.UUID | None:
         if not source_name:
             return None
 
@@ -285,7 +285,7 @@ class ExpenseClaimSyncService(BaseSyncService[ExpenseClaim]):
     def get_entity_id(self, entity: ExpenseClaim) -> uuid.UUID:
         return entity.claim_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[ExpenseClaim]:
+    def find_existing_entity(self, source_name: str) -> ExpenseClaim | None:
         if source_name in self._claim_cache:
             return self._claim_cache[source_name]
 

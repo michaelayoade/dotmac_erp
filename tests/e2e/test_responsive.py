@@ -10,7 +10,6 @@ Tests for responsive behavior across different viewport sizes:
 import pytest
 from playwright.sync_api import expect
 
-
 # Viewport sizes
 MOBILE_VIEWPORT = {"width": 375, "height": 667}
 TABLET_VIEWPORT = {"width": 768, "height": 1024}
@@ -92,7 +91,7 @@ class TestMobileViewport:
         if sidebar.count() > 0:
             # Check if sidebar is hidden or has mobile class
             is_hidden = not sidebar.first.is_visible()
-            has_mobile_class = (
+            has_mobile_styles = (
                 page.locator(
                     ".sidebar-collapsed, .sidebar-hidden, [class*='mobile']"
                 ).count()
@@ -100,6 +99,7 @@ class TestMobileViewport:
             )
 
             # Either hidden or has mobile-specific styling
+            assert is_hidden or has_mobile_styles
             # Just verify page works on mobile
             expect(page.locator("main")).to_be_visible()
 
@@ -134,9 +134,7 @@ class TestMobileViewport:
             expect(table.first).to_be_visible()
 
             # Check for overflow container
-            table_container = page.locator(
-                ".table-responsive, .overflow-x-auto, [class*='overflow']"
-            )
+            page.locator(".table-responsive, .overflow-x-auto, [class*='overflow']")
             # Just verify table is accessible
             expect(page.locator("main")).to_be_visible()
 

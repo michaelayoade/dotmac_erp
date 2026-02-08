@@ -68,20 +68,20 @@ class BusinessUnit(Base):
     )
 
     # Hierarchy
-    parent_unit_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    parent_unit_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.business_unit.business_unit_id"),
         nullable=True,
     )
     hierarchy_level: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    hierarchy_path: Mapped[Optional[str]] = mapped_column(
+    hierarchy_path: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Materialized path: /root/parent/child/",
     )
 
     # Management
-    manager_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    manager_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -93,14 +93,14 @@ class BusinessUnit(Base):
         nullable=False,
         server_default=func.current_date(),
     )
-    effective_to: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

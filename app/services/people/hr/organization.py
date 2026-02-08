@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
-from typing import TYPE_CHECKING, List, Optional
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
@@ -84,7 +84,7 @@ class OrganizationService:
         self,
         db: Session,
         organization_id: uuid.UUID,
-        principal: Optional["Principal"] = None,
+        principal: Principal | None = None,
     ) -> None:
         self.db = db
         self.organization_id = organization_id
@@ -98,7 +98,7 @@ class OrganizationService:
         self,
         department_id: uuid.UUID,
         parent_id: uuid.UUID,
-        visited: Optional[set] = None,
+        visited: set | None = None,
     ) -> bool:
         """Check if setting parent_id would create a circular reference.
 
@@ -153,7 +153,7 @@ class OrganizationService:
     def _validate_org_reference(
         self,
         model: type,
-        entity_id: Optional[uuid.UUID],
+        entity_id: uuid.UUID | None,
         label: str,
     ) -> None:
         """Ensure a referenced entity exists within the organization."""
@@ -174,8 +174,8 @@ class OrganizationService:
 
     def list_employees(
         self,
-        filters: Optional[EmployeeFilters] = None,
-        pagination: Optional[PaginationParams] = None,
+        filters: EmployeeFilters | None = None,
+        pagination: PaginationParams | None = None,
         *,
         eager_load: bool = False,
     ) -> PaginatedResult[Employee]:
@@ -193,8 +193,8 @@ class OrganizationService:
 
     def list_departments(
         self,
-        filters: Optional[DepartmentFilters] = None,
-        pagination: Optional[PaginationParams] = None,
+        filters: DepartmentFilters | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[Department]:
         """List departments with filters and pagination.
 
@@ -272,7 +272,7 @@ class OrganizationService:
 
         return department
 
-    def get_department_by_code(self, code: str) -> Optional[Department]:
+    def get_department_by_code(self, code: str) -> Department | None:
         """Get a department by code.
 
         Args:
@@ -387,7 +387,7 @@ class OrganizationService:
         if data.is_active is not None:
             department.is_active = data.is_active
 
-        department.updated_at = datetime.now(timezone.utc)
+        department.updated_at = datetime.now(UTC)
         department.updated_by_id = self.principal.id if self.principal else None
 
         return department
@@ -429,10 +429,10 @@ class OrganizationService:
             )
 
         department.is_deleted = True
-        department.deleted_at = datetime.now(timezone.utc)
+        department.deleted_at = datetime.now(UTC)
         department.deleted_by_id = self.principal.id if self.principal else None
 
-    def get_department_tree(self) -> List[DepartmentNode]:
+    def get_department_tree(self) -> list[DepartmentNode]:
         """Get the department hierarchy as a tree.
 
         Returns:
@@ -452,7 +452,7 @@ class OrganizationService:
         departments = self.db.scalars(stmt).unique().all()
 
         # Build lookup dict by ID
-        dept_dict = {d.department_id: d for d in departments}
+        {d.department_id: d for d in departments}
         nodes: dict[uuid.UUID, DepartmentNode] = {}
 
         # Create nodes
@@ -474,7 +474,7 @@ class OrganizationService:
             )
 
         # Build tree
-        roots: List[DepartmentNode] = []
+        roots: list[DepartmentNode] = []
         for node in nodes.values():
             if node.parent_department_id and node.parent_department_id in nodes:
                 nodes[node.parent_department_id].children.append(node)
@@ -521,7 +521,7 @@ class OrganizationService:
         )
 
     def get_department_headcounts_bulk(
-        self, department_ids: List[uuid.UUID]
+        self, department_ids: list[uuid.UUID]
     ) -> dict[uuid.UUID, int]:
         """Get employee headcounts for multiple departments in a single query.
 
@@ -554,8 +554,8 @@ class OrganizationService:
 
     def list_designations(
         self,
-        filters: Optional[DesignationFilters] = None,
-        pagination: Optional[PaginationParams] = None,
+        filters: DesignationFilters | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[Designation]:
         """List designations with filters and pagination.
 
@@ -618,7 +618,7 @@ class OrganizationService:
 
         return designation
 
-    def get_designation_by_code(self, code: str) -> Optional[Designation]:
+    def get_designation_by_code(self, code: str) -> Designation | None:
         """Get a designation by code.
 
         Args:
@@ -702,7 +702,7 @@ class OrganizationService:
         if data.is_active is not None:
             designation.is_active = data.is_active
 
-        designation.updated_at = datetime.now(timezone.utc)
+        designation.updated_at = datetime.now(UTC)
         designation.updated_by_id = self.principal.id if self.principal else None
 
         return designation
@@ -731,7 +731,7 @@ class OrganizationService:
             )
 
         designation.is_deleted = True
-        designation.deleted_at = datetime.now(timezone.utc)
+        designation.deleted_at = datetime.now(UTC)
         designation.deleted_by_id = self.principal.id if self.principal else None
 
     def get_designation_headcount(
@@ -778,8 +778,8 @@ class OrganizationService:
 
     def list_employment_types(
         self,
-        filters: Optional[EmploymentTypeFilters] = None,
-        pagination: Optional[PaginationParams] = None,
+        filters: EmploymentTypeFilters | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[EmploymentType]:
         """List employment types with filters and pagination."""
         if filters is None:
@@ -820,7 +820,7 @@ class OrganizationService:
 
         return employment_type
 
-    def get_employment_type_by_code(self, code: str) -> Optional[EmploymentType]:
+    def get_employment_type_by_code(self, code: str) -> EmploymentType | None:
         """Get an employment type by code."""
         return self.db.scalar(
             select(EmploymentType).where(
@@ -874,7 +874,7 @@ class OrganizationService:
         if data.is_active is not None:
             employment_type.is_active = data.is_active
 
-        employment_type.updated_at = datetime.now(timezone.utc)
+        employment_type.updated_at = datetime.now(UTC)
         employment_type.updated_by_id = self.principal.id if self.principal else None
 
         return employment_type
@@ -902,8 +902,8 @@ class OrganizationService:
 
     def list_employee_grades(
         self,
-        filters: Optional[EmployeeGradeFilters] = None,
-        pagination: Optional[PaginationParams] = None,
+        filters: EmployeeGradeFilters | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[EmployeeGrade]:
         """List employee grades with filters and pagination."""
         if filters is None:
@@ -944,7 +944,7 @@ class OrganizationService:
 
         return grade
 
-    def get_employee_grade_by_code(self, code: str) -> Optional[EmployeeGrade]:
+    def get_employee_grade_by_code(self, code: str) -> EmployeeGrade | None:
         """Get an employee grade by code."""
         return self.db.scalar(
             select(EmployeeGrade).where(
@@ -1010,7 +1010,7 @@ class OrganizationService:
         if data.is_active is not None:
             grade.is_active = data.is_active
 
-        grade.updated_at = datetime.now(timezone.utc)
+        grade.updated_at = datetime.now(UTC)
         grade.updated_by_id = self.principal.id if self.principal else None
 
         return grade
@@ -1039,9 +1039,9 @@ class OrganizationService:
     def list_locations(
         self,
         *,
-        search: Optional[str] = None,
-        is_active: Optional[bool] = None,
-        pagination: Optional[PaginationParams] = None,
+        search: str | None = None,
+        is_active: bool | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[Location]:
         if pagination is None:
             pagination = PaginationParams()
@@ -1080,19 +1080,19 @@ class OrganizationService:
         *,
         location_code: str,
         location_name: str,
-        location_type: Optional[LocationType],
-        address_line_1: Optional[str] = None,
-        address_line_2: Optional[str] = None,
-        city: Optional[str] = None,
-        state_province: Optional[str] = None,
-        postal_code: Optional[str] = None,
-        country_code: Optional[str] = None,
-        latitude: Optional[float] = None,
-        longitude: Optional[float] = None,
-        geofence_radius_m: Optional[float] = None,
-        geofence_enabled: Optional[bool] = None,
-        geofence_polygon: Optional[str] = None,
-        is_active: Optional[bool] = None,
+        location_type: LocationType | None,
+        address_line_1: str | None = None,
+        address_line_2: str | None = None,
+        city: str | None = None,
+        state_province: str | None = None,
+        postal_code: str | None = None,
+        country_code: str | None = None,
+        latitude: float | None = None,
+        longitude: float | None = None,
+        geofence_radius_m: float | None = None,
+        geofence_enabled: bool | None = None,
+        geofence_polygon: str | None = None,
+        is_active: bool | None = None,
     ) -> Location:
         location = Location(
             organization_id=self.organization_id,
@@ -1127,7 +1127,7 @@ class OrganizationService:
             if hasattr(location, key):
                 setattr(location, key, value)
         if hasattr(location, "updated_at"):
-            location.updated_at = datetime.now(timezone.utc)
+            location.updated_at = datetime.now(UTC)
         if hasattr(location, "updated_by_id"):
             location.updated_by_id = self.principal.id if self.principal else None
         return location

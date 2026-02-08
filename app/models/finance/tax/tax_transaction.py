@@ -6,7 +6,6 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Date,
@@ -84,23 +83,21 @@ class TaxTransaction(Base):
     source_document_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), nullable=False
     )
-    source_document_line_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    source_document_line_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    source_document_reference: Mapped[Optional[str]] = mapped_column(
+    source_document_reference: Mapped[str | None] = mapped_column(
         String(100), nullable=True
     )
 
     # Counterparty
-    counterparty_type: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
-    counterparty_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    counterparty_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    counterparty_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    counterparty_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    counterparty_tax_id: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True
-    )
+    counterparty_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    counterparty_tax_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Amounts
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
@@ -109,7 +106,7 @@ class TaxTransaction(Base):
     tax_amount: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
 
     # Functional currency
-    exchange_rate: Mapped[Optional[Decimal]] = mapped_column(
+    exchange_rate: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 10), nullable=True
     )
     functional_base_amount: Mapped[Decimal] = mapped_column(
@@ -130,12 +127,12 @@ class TaxTransaction(Base):
     )
 
     # Tax return reference
-    tax_return_period: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    tax_return_box: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    tax_return_period: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    tax_return_box: Mapped[str | None] = mapped_column(String(30), nullable=True)
     is_included_in_return: Mapped[bool] = mapped_column(default=False)
 
     # Journal entry
-    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
 

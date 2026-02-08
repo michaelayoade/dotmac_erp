@@ -1,5 +1,6 @@
 {% extends "procurement/base_procurement.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}Requisition {{ requisition.requisition_number }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -15,6 +16,7 @@
 {% block header_actions %}
 {% if requisition.status.value == 'DRAFT' %}
 <form method="post" action="/procurement/requisitions/{{ requisition.requisition_id }}/submit" class="inline">
+    {{ request.state.csrf_form | safe }}
     <button type="submit" class="btn btn-primary">
         <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
         Submit for Approval
@@ -35,11 +37,11 @@
             {% set label, classes = status_labels.get(requisition.status, ("Unknown", "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400")) %}
             <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium {{ classes }}">{{ label }}</span>
         </div>
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+        <div class="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
             <div>
                 <span class="text-slate-500 dark:text-slate-400">Urgency:</span>
                 <p class="font-semibold text-slate-900 dark:text-white">
-                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {% if requisition.urgency.value == 'EMERGENCY' %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400{% elif requisition.urgency.value == 'URGENT' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400{% else %}bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400{% endif %}">{{ requisition.urgency.value }}</span>
+                    {{ status_badge(requisition.urgency.value, size="sm") }}
                 </p>
             </div>
             <div>
@@ -68,16 +70,16 @@
         <div class="p-4 border-b border-slate-200 dark:border-slate-700">
             <h3 class="font-semibold text-slate-900 dark:text-white">Requisition Lines</h3>
         </div>
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 dark:bg-slate-800/50">
                     <tr>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">#</th>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Description</th>
-                        <th scope="col" class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Qty</th>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">UOM</th>
-                        <th scope="col" class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Unit Price</th>
-                        <th scope="col" class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Total</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">#</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Description</th>
+                        <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Qty</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">UOM</th>
+                        <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Unit Price</th>
+                        <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">

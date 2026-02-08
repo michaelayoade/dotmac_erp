@@ -13,7 +13,6 @@ import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import func
@@ -44,13 +43,13 @@ logger = logging.getLogger(__name__)
 # ==============================================================================
 
 
-def parse_customer_type(value: Optional[str]) -> CustomerType:
+def parse_customer_type(value: str | None) -> CustomerType:
     """Parse customer type from string value."""
     parsed = parse_enum_safe(CustomerType, value, CustomerType.COMPANY)
     return parsed or CustomerType.COMPANY
 
 
-def parse_invoice_status(value: Optional[str]) -> Optional[InvoiceStatus]:
+def parse_invoice_status(value: str | None) -> InvoiceStatus | None:
     """Parse invoice status from string value."""
     if not value:
         return None
@@ -62,7 +61,7 @@ def parse_invoice_status(value: Optional[str]) -> Optional[InvoiceStatus]:
         return None
 
 
-def parse_receipt_status(value: Optional[str]) -> Optional[PaymentStatus]:
+def parse_receipt_status(value: str | None) -> PaymentStatus | None:
     """Parse receipt/payment status from string value."""
     if not value:
         return None
@@ -204,13 +203,20 @@ def customer_detail_view(customer: Customer, balance: Decimal) -> dict:
 # ==============================================================================
 
 
+def _format_quantity(qty: Decimal) -> str:
+    """Format quantity, stripping unnecessary trailing zeros."""
+    normalized = qty.normalize()
+    # Avoid scientific notation for very large/small values
+    return f"{normalized:f}"
+
+
 def invoice_line_view(line: InvoiceLine, currency_code: str) -> dict:
     """Transform invoice line to view."""
     return {
         "line_id": line.line_id,
         "line_number": line.line_number,
         "description": line.description,
-        "quantity": line.quantity,
+        "quantity": _format_quantity(line.quantity),
         "unit_price": format_currency(line.unit_price, currency_code),
         "discount_amount": format_currency(line.discount_amount, currency_code),
         "tax_amount": format_currency(line.tax_amount, currency_code),
@@ -222,10 +228,11 @@ def invoice_line_view(line: InvoiceLine, currency_code: str) -> dict:
     }
 
 
-def invoice_detail_view(invoice: Invoice, customer: Optional[Customer]) -> dict:
+def invoice_detail_view(invoice: Invoice, customer: Customer | None) -> dict:
     """Transform invoice to detail view."""
     balance = invoice.total_amount - invoice.amount_paid
     today = date.today()
+    discount_amount = getattr(invoice, "discount_amount", None)
     return {
         "invoice_id": invoice.invoice_id,
         "invoice_number": invoice.invoice_number,
@@ -235,11 +242,18 @@ def invoice_detail_view(invoice: Invoice, customer: Optional[Customer]) -> dict:
         "invoice_date": format_date(invoice.invoice_date),
         "due_date": format_date(invoice.due_date),
         "currency_code": invoice.currency_code,
+        "currency": invoice.currency_code,
+        "payment_terms": None,  # Set by invoice_detail_context if available
+        "billing_address": getattr(invoice, "billing_address", None),
         "subtotal": format_currency(invoice.subtotal, invoice.currency_code),
+        "discount_amount": format_currency(discount_amount, invoice.currency_code)
+        if discount_amount is not None
+        else None,
         "tax_amount": format_currency(invoice.tax_amount, invoice.currency_code),
         "total_amount": format_currency(invoice.total_amount, invoice.currency_code),
         "amount_paid": format_currency(invoice.amount_paid, invoice.currency_code),
         "balance": format_currency(balance, invoice.currency_code),
+        "balance_due": balance,
         "status": invoice_status_label(invoice.status),
         "is_overdue": (
             invoice.due_date < today
@@ -247,6 +261,18 @@ def invoice_detail_view(invoice: Invoice, customer: Optional[Customer]) -> dict:
         ),
         "notes": invoice.notes,
         "internal_notes": invoice.internal_notes,
+        # Audit trail timestamps
+        "created_at": format_date(invoice.created_at) if invoice.created_at else None,
+        "updated_at": format_date(invoice.updated_at) if invoice.updated_at else None,
+        "submitted_at": format_date(invoice.submitted_at)
+        if getattr(invoice, "submitted_at", None)
+        else None,
+        "approved_at": format_date(invoice.approved_at)
+        if getattr(invoice, "approved_at", None)
+        else None,
+        "posted_at": format_date(invoice.posted_at)
+        if getattr(invoice, "posted_at", None)
+        else None,
     }
 
 
@@ -255,7 +281,7 @@ def invoice_detail_view(invoice: Invoice, customer: Optional[Customer]) -> dict:
 # ==============================================================================
 
 
-def receipt_detail_view(payment: CustomerPayment, customer: Optional[Customer]) -> dict:
+def receipt_detail_view(payment: CustomerPayment, customer: Customer | None) -> dict:
     """Transform receipt/payment to detail view."""
     return {
         "receipt_id": payment.payment_id,
@@ -282,7 +308,7 @@ def receipt_detail_view(payment: CustomerPayment, customer: Optional[Customer]) 
 
 def allocation_view(
     allocation: PaymentAllocation,
-    invoice: Optional[Invoice],
+    invoice: Invoice | None,
     currency_code: str,
 ) -> dict:
     """Transform payment allocation to view."""
@@ -310,8 +336,8 @@ def get_accounts(
     db: Session,
     organization_id: UUID,
     ifrs_category: IFRSCategory,
-    subledger_type: Optional[str] = None,
-) -> List[Account]:
+    subledger_type: str | None = None,
+) -> list[Account]:
     """Get accounts filtered by IFRS category and optional subledger type."""
     query = (
         db.query(Account)
@@ -327,7 +353,7 @@ def get_accounts(
     return query.order_by(Account.account_code).all()
 
 
-def get_cost_centers(db: Session, organization_id: UUID) -> List[CostCenter]:
+def get_cost_centers(db: Session, organization_id: UUID) -> list[CostCenter]:
     """Get active cost centers for organization."""
     return (
         db.query(CostCenter)
@@ -340,7 +366,7 @@ def get_cost_centers(db: Session, organization_id: UUID) -> List[CostCenter]:
     )
 
 
-def get_projects(db: Session, organization_id: UUID) -> List[Project]:
+def get_projects(db: Session, organization_id: UUID) -> list[Project]:
     """Get projects for organization."""
     return (
         db.query(Project)

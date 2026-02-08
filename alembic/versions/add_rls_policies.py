@@ -17,9 +17,9 @@ Usage:
     SET app.bypass_rls = 'true';
 """
 
-from alembic import op
 from sqlalchemy import text
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "add_rls_policies"

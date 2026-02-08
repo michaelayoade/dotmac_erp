@@ -6,7 +6,6 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -82,10 +81,8 @@ class APPaymentBatch(Base):
     bank_file_generated: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
-    bank_file_reference: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True
-    )
-    bank_file_generated_at: Mapped[Optional[datetime]] = mapped_column(
+    bank_file_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    bank_file_generated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -94,11 +91,11 @@ class APPaymentBatch(Base):
         UUID(as_uuid=True),
         nullable=False,
     )
-    approved_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )

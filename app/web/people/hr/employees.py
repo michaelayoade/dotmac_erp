@@ -1,6 +1,5 @@
 """Employee CRUD and management routes."""
 
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -8,8 +7,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.people.hr.web import hr_web_service
-from app.web.deps import get_db, require_hr_access, WebAuthContext
-
+from app.web.deps import WebAuthContext, get_db, require_hr_access
 
 router = APIRouter(tags=["employees"])
 
@@ -17,17 +15,17 @@ router = APIRouter(tags=["employees"])
 @router.get("/employees", response_class=HTMLResponse)
 def list_employees(
     request: Request,
-    search: Optional[str] = None,
-    status: Optional[str] = None,
-    department_id: Optional[str] = None,
-    designation_id: Optional[str] = None,
-    date_of_joining_from: Optional[str] = None,
-    date_of_joining_to: Optional[str] = None,
-    date_of_leaving_from: Optional[str] = None,
-    date_of_leaving_to: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
+    department_id: str | None = None,
+    designation_id: str | None = None,
+    date_of_joining_from: str | None = None,
+    date_of_joining_to: str | None = None,
+    date_of_leaving_from: str | None = None,
+    date_of_leaving_to: str | None = None,
     page: int = Query(default=1, ge=1),
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -97,7 +95,7 @@ async def create_employee(
 def view_employee(
     request: Request,
     employee_id: UUID,
-    saved: Optional[str] = None,
+    saved: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):

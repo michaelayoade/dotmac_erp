@@ -6,9 +6,8 @@ Handles bulk expense reimbursement transfers via Paystack.
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Optional
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
@@ -42,7 +41,7 @@ class BatchTransferResult:
     """Result of batch transfer operation."""
 
     success: bool
-    batch_id: Optional[UUID] = None
+    batch_id: UUID | None = None
     message: str = ""
     initiated_count: int = 0
     failed_count: int = 0
@@ -64,7 +63,7 @@ class BatchTransferService:
         expense_claim_ids: list[UUID],
         batch_date: date,
         created_by_user_id: UUID,
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> TransferBatch:
         """
         Create a new transfer batch from expense claims.
@@ -222,7 +221,7 @@ class BatchTransferService:
 
         batch.status = TransferBatchStatus.APPROVED
         batch.approved_by_user_id = user_id
-        batch.approved_at = datetime.now(timezone.utc)
+        batch.approved_at = datetime.now(UTC)
         self.db.flush()
 
         logger.info(f"Approved transfer batch {batch.batch_number}")
@@ -257,7 +256,7 @@ class BatchTransferService:
             )
 
         batch.status = TransferBatchStatus.PROCESSING
-        batch.processed_at = datetime.now(timezone.utc)
+        batch.processed_at = datetime.now(UTC)
         self.db.flush()
 
         initiated_count = 0
@@ -411,7 +410,7 @@ class BatchTransferService:
         # Update item and intent
         item.transfer_code = result.transfer_code
         item.status = TransferBatchItemStatus.PROCESSING
-        item.processed_at = datetime.now(timezone.utc)
+        item.processed_at = datetime.now(UTC)
 
         intent.transfer_code = result.transfer_code
         intent.status = PaymentIntentStatus.PROCESSING
@@ -422,7 +421,7 @@ class BatchTransferService:
 
     def list_batches(
         self,
-        status: Optional[TransferBatchStatus] = None,
+        status: TransferBatchStatus | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[TransferBatch]:

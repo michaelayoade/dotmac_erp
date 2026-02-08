@@ -1,6 +1,5 @@
 import uuid
 
-
 from app.models.audit import AuditActorType, AuditEvent
 
 

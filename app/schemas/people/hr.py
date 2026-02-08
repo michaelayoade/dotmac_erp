@@ -11,7 +11,6 @@ Pydantic schemas for HR Core APIs including:
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -19,7 +18,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.auth import AuthProvider
 from app.models.people.hr import EmployeeStatus
 from app.models.people.hr.employee import SalaryMode
-
 
 # =============================================================================
 # Department Schemas
@@ -31,9 +29,9 @@ class DepartmentBase(BaseModel):
 
     department_code: str = Field(max_length=20)
     department_name: str = Field(max_length=100)
-    description: Optional[str] = None
-    parent_department_id: Optional[UUID] = None
-    cost_center_id: Optional[UUID] = None
+    description: str | None = None
+    parent_department_id: UUID | None = None
+    cost_center_id: UUID | None = None
     is_active: bool = True
 
 
@@ -46,12 +44,12 @@ class DepartmentCreate(DepartmentBase):
 class DepartmentUpdate(BaseModel):
     """Update department request."""
 
-    department_code: Optional[str] = Field(default=None, max_length=20)
-    department_name: Optional[str] = Field(default=None, max_length=100)
-    description: Optional[str] = None
-    parent_department_id: Optional[UUID] = None
-    cost_center_id: Optional[UUID] = None
-    is_active: Optional[bool] = None
+    department_code: str | None = Field(default=None, max_length=20)
+    department_name: str | None = Field(default=None, max_length=100)
+    description: str | None = None
+    parent_department_id: UUID | None = None
+    cost_center_id: UUID | None = None
+    is_active: bool | None = None
 
 
 class DepartmentRead(DepartmentBase):
@@ -62,13 +60,13 @@ class DepartmentRead(DepartmentBase):
     department_id: UUID
     organization_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class DepartmentListResponse(BaseModel):
     """Paginated department list response."""
 
-    items: List[DepartmentRead]
+    items: list[DepartmentRead]
     total: int
     offset: int
     limit: int
@@ -84,7 +82,7 @@ class DesignationBase(BaseModel):
 
     designation_code: str = Field(max_length=20)
     designation_name: str = Field(max_length=100)
-    description: Optional[str] = None
+    description: str | None = None
     is_active: bool = True
 
 
@@ -97,10 +95,10 @@ class DesignationCreate(DesignationBase):
 class DesignationUpdate(BaseModel):
     """Update designation request."""
 
-    designation_code: Optional[str] = Field(default=None, max_length=20)
-    designation_name: Optional[str] = Field(default=None, max_length=100)
-    description: Optional[str] = None
-    is_active: Optional[bool] = None
+    designation_code: str | None = Field(default=None, max_length=20)
+    designation_name: str | None = Field(default=None, max_length=100)
+    description: str | None = None
+    is_active: bool | None = None
 
 
 class DesignationRead(DesignationBase):
@@ -111,7 +109,7 @@ class DesignationRead(DesignationBase):
     designation_id: UUID
     organization_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 # =============================================================================
@@ -124,7 +122,7 @@ class EmploymentTypeBase(BaseModel):
 
     type_code: str = Field(max_length=20)
     type_name: str = Field(max_length=100)
-    description: Optional[str] = None
+    description: str | None = None
     is_active: bool = True
 
 
@@ -137,10 +135,10 @@ class EmploymentTypeCreate(EmploymentTypeBase):
 class EmploymentTypeUpdate(BaseModel):
     """Update employment type request."""
 
-    type_code: Optional[str] = Field(default=None, max_length=20)
-    type_name: Optional[str] = Field(default=None, max_length=100)
-    description: Optional[str] = None
-    is_active: Optional[bool] = None
+    type_code: str | None = Field(default=None, max_length=20)
+    type_name: str | None = Field(default=None, max_length=100)
+    description: str | None = None
+    is_active: bool | None = None
 
 
 class EmploymentTypeRead(EmploymentTypeBase):
@@ -151,7 +149,7 @@ class EmploymentTypeRead(EmploymentTypeBase):
     employment_type_id: UUID
     organization_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 # =============================================================================
@@ -164,10 +162,10 @@ class EmployeeGradeBase(BaseModel):
 
     grade_code: str = Field(max_length=20)
     grade_name: str = Field(max_length=100)
-    description: Optional[str] = None
+    description: str | None = None
     rank: int = 0
-    min_salary: Optional[Decimal] = None
-    max_salary: Optional[Decimal] = None
+    min_salary: Decimal | None = None
+    max_salary: Decimal | None = None
     is_active: bool = True
 
 
@@ -180,13 +178,13 @@ class EmployeeGradeCreate(EmployeeGradeBase):
 class EmployeeGradeUpdate(BaseModel):
     """Update employee grade request."""
 
-    grade_code: Optional[str] = Field(default=None, max_length=20)
-    grade_name: Optional[str] = Field(default=None, max_length=100)
-    description: Optional[str] = None
-    rank: Optional[int] = None
-    min_salary: Optional[Decimal] = None
-    max_salary: Optional[Decimal] = None
-    is_active: Optional[bool] = None
+    grade_code: str | None = Field(default=None, max_length=20)
+    grade_name: str | None = Field(default=None, max_length=100)
+    description: str | None = None
+    rank: int | None = None
+    min_salary: Decimal | None = None
+    max_salary: Decimal | None = None
+    is_active: bool | None = None
 
 
 class EmployeeGradeRead(EmployeeGradeBase):
@@ -197,7 +195,7 @@ class EmployeeGradeRead(EmployeeGradeBase):
     grade_id: UUID
     organization_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 # =============================================================================
@@ -208,26 +206,27 @@ class EmployeeGradeRead(EmployeeGradeBase):
 class EmployeeBase(BaseModel):
     """Base employee schema."""
 
-    employee_code: Optional[str] = Field(default=None, max_length=30)
-    department_id: Optional[UUID] = None
-    designation_id: Optional[UUID] = None
-    employment_type_id: Optional[UUID] = None
-    grade_id: Optional[UUID] = None
-    reports_to_id: Optional[UUID] = None
-    assigned_location_id: Optional[UUID] = None
-    default_shift_type_id: Optional[UUID] = None
+    employee_code: str | None = Field(default=None, max_length=30)
+    department_id: UUID | None = None
+    designation_id: UUID | None = None
+    employment_type_id: UUID | None = None
+    grade_id: UUID | None = None
+    reports_to_id: UUID | None = None
+    expense_approver_id: UUID | None = None
+    assigned_location_id: UUID | None = None
+    default_shift_type_id: UUID | None = None
     date_of_joining: date
-    probation_end_date: Optional[date] = None
-    confirmation_date: Optional[date] = None
+    probation_end_date: date | None = None
+    confirmation_date: date | None = None
     status: EmployeeStatus = EmployeeStatus.DRAFT
-    cost_center_id: Optional[UUID] = None
-    ctc: Optional[Decimal] = None
-    salary_mode: Optional[SalaryMode] = None
-    bank_name: Optional[str] = Field(default=None, max_length=100)
-    bank_account_number: Optional[str] = Field(default=None, max_length=30)
-    bank_account_name: Optional[str] = Field(default=None, max_length=100)
-    bank_branch_code: Optional[str] = Field(default=None, max_length=20)
-    notes: Optional[str] = None
+    cost_center_id: UUID | None = None
+    ctc: Decimal | None = None
+    salary_mode: SalaryMode | None = None
+    bank_name: str | None = Field(default=None, max_length=100)
+    bank_account_number: str | None = Field(default=None, max_length=30)
+    bank_account_name: str | None = Field(default=None, max_length=100)
+    bank_branch_code: str | None = Field(default=None, max_length=20)
+    notes: str | None = None
 
 
 class EmployeeCreate(EmployeeBase):
@@ -242,27 +241,28 @@ class EmployeeCreate(EmployeeBase):
 class EmployeeUpdate(BaseModel):
     """Update employee request."""
 
-    employee_code: Optional[str] = Field(default=None, max_length=30)
-    department_id: Optional[UUID] = None
-    designation_id: Optional[UUID] = None
-    employment_type_id: Optional[UUID] = None
-    grade_id: Optional[UUID] = None
-    reports_to_id: Optional[UUID] = None
-    assigned_location_id: Optional[UUID] = None
-    default_shift_type_id: Optional[UUID] = None
-    date_of_joining: Optional[date] = None
-    date_of_leaving: Optional[date] = None
-    probation_end_date: Optional[date] = None
-    confirmation_date: Optional[date] = None
-    status: Optional[EmployeeStatus] = None
-    cost_center_id: Optional[UUID] = None
-    ctc: Optional[Decimal] = None
-    salary_mode: Optional[SalaryMode] = None
-    bank_name: Optional[str] = Field(default=None, max_length=100)
-    bank_account_number: Optional[str] = Field(default=None, max_length=30)
-    bank_account_name: Optional[str] = Field(default=None, max_length=100)
-    bank_branch_code: Optional[str] = Field(default=None, max_length=20)
-    notes: Optional[str] = None
+    employee_code: str | None = Field(default=None, max_length=30)
+    department_id: UUID | None = None
+    designation_id: UUID | None = None
+    employment_type_id: UUID | None = None
+    grade_id: UUID | None = None
+    reports_to_id: UUID | None = None
+    expense_approver_id: UUID | None = None
+    assigned_location_id: UUID | None = None
+    default_shift_type_id: UUID | None = None
+    date_of_joining: date | None = None
+    date_of_leaving: date | None = None
+    probation_end_date: date | None = None
+    confirmation_date: date | None = None
+    status: EmployeeStatus | None = None
+    cost_center_id: UUID | None = None
+    ctc: Decimal | None = None
+    salary_mode: SalaryMode | None = None
+    bank_name: str | None = Field(default=None, max_length=100)
+    bank_account_number: str | None = Field(default=None, max_length=30)
+    bank_account_name: str | None = Field(default=None, max_length=100)
+    bank_branch_code: str | None = Field(default=None, max_length=20)
+    notes: str | None = None
 
 
 class PersonBrief(BaseModel):
@@ -271,9 +271,9 @@ class PersonBrief(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    first_name: Optional[str]
-    last_name: Optional[str]
-    email: Optional[str]
+    first_name: str | None
+    last_name: str | None
+    email: str | None
 
 
 class DepartmentBrief(BaseModel):
@@ -305,34 +305,35 @@ class EmployeeRead(BaseModel):
     organization_id: UUID
     person_id: UUID
     employee_code: str
-    department_id: Optional[UUID] = None
-    designation_id: Optional[UUID] = None
-    employment_type_id: Optional[UUID] = None
-    grade_id: Optional[UUID] = None
-    reports_to_id: Optional[UUID] = None
-    assigned_location_id: Optional[UUID] = None
-    default_shift_type_id: Optional[UUID] = None
+    department_id: UUID | None = None
+    designation_id: UUID | None = None
+    employment_type_id: UUID | None = None
+    grade_id: UUID | None = None
+    reports_to_id: UUID | None = None
+    expense_approver_id: UUID | None = None
+    assigned_location_id: UUID | None = None
+    default_shift_type_id: UUID | None = None
     date_of_joining: date
-    date_of_leaving: Optional[date] = None
-    probation_end_date: Optional[date] = None
-    confirmation_date: Optional[date] = None
+    date_of_leaving: date | None = None
+    probation_end_date: date | None = None
+    confirmation_date: date | None = None
     status: EmployeeStatus
-    cost_center_id: Optional[UUID] = None
-    ctc: Optional[Decimal] = None
-    salary_mode: Optional[SalaryMode] = None
-    bank_name: Optional[str] = None
-    bank_account_number: Optional[str] = None
-    bank_account_name: Optional[str] = None
-    bank_branch_code: Optional[str] = None
-    notes: Optional[str] = None
+    cost_center_id: UUID | None = None
+    ctc: Decimal | None = None
+    salary_mode: SalaryMode | None = None
+    bank_name: str | None = None
+    bank_account_number: str | None = None
+    bank_account_name: str | None = None
+    bank_branch_code: str | None = None
+    notes: str | None = None
     version: int
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
     # Nested relationships (populated when eager loaded)
-    person: Optional[PersonBrief] = None
-    department: Optional[DepartmentBrief] = None
-    designation: Optional[DesignationBrief] = None
+    person: PersonBrief | None = None
+    department: DepartmentBrief | None = None
+    designation: DesignationBrief | None = None
 
 
 class EmployeeSummaryRead(BaseModel):
@@ -341,16 +342,16 @@ class EmployeeSummaryRead(BaseModel):
     employee_id: UUID
     employee_code: str
     person_name: str
-    email: Optional[str] = None
-    department_name: Optional[str] = None
-    designation_name: Optional[str] = None
+    email: str | None = None
+    department_name: str | None = None
+    designation_name: str | None = None
     status: EmployeeStatus
 
 
 class EmployeeListResponse(BaseModel):
     """Paginated employee list response."""
 
-    items: List[EmployeeRead]
+    items: list[EmployeeRead]
     total: int
     offset: int
     limit: int
@@ -369,8 +370,8 @@ class EmployeeUserCredentialCreate(BaseModel):
     """Create user credentials for an employee."""
 
     provider: AuthProvider = AuthProvider.local
-    username: Optional[str] = Field(default=None, max_length=150)
-    password: Optional[str] = Field(default=None, max_length=255)
+    username: str | None = Field(default=None, max_length=150)
+    password: str | None = Field(default=None, max_length=255)
     must_change_password: bool = True
 
 
@@ -390,18 +391,18 @@ class LocationBase(BaseModel):
 
     location_code: str = Field(max_length=20)
     location_name: str = Field(max_length=100)
-    location_type: Optional[str] = None
-    address_line_1: Optional[str] = None
-    address_line_2: Optional[str] = None
-    city: Optional[str] = None
-    state_province: Optional[str] = None
-    postal_code: Optional[str] = None
-    country_code: Optional[str] = None
-    latitude: Optional[Decimal] = None
-    longitude: Optional[Decimal] = None
+    location_type: str | None = None
+    address_line_1: str | None = None
+    address_line_2: str | None = None
+    city: str | None = None
+    state_province: str | None = None
+    postal_code: str | None = None
+    country_code: str | None = None
+    latitude: Decimal | None = None
+    longitude: Decimal | None = None
     geofence_radius_m: int = 500
     geofence_enabled: bool = True
-    geofence_polygon: Optional[dict] = (
+    geofence_polygon: dict | None = (
         None  # GeoJSON Polygon/MultiPolygon (if set, overrides circle)
     )
     is_active: bool = True
@@ -416,23 +417,23 @@ class LocationCreate(LocationBase):
 class LocationUpdate(BaseModel):
     """Update location request."""
 
-    location_code: Optional[str] = Field(default=None, max_length=20)
-    location_name: Optional[str] = Field(default=None, max_length=100)
-    location_type: Optional[str] = None
-    address_line_1: Optional[str] = None
-    address_line_2: Optional[str] = None
-    city: Optional[str] = None
-    state_province: Optional[str] = None
-    postal_code: Optional[str] = None
-    country_code: Optional[str] = None
-    latitude: Optional[Decimal] = None
-    longitude: Optional[Decimal] = None
-    geofence_radius_m: Optional[int] = None
-    geofence_enabled: Optional[bool] = None
-    geofence_polygon: Optional[dict] = (
+    location_code: str | None = Field(default=None, max_length=20)
+    location_name: str | None = Field(default=None, max_length=100)
+    location_type: str | None = None
+    address_line_1: str | None = None
+    address_line_2: str | None = None
+    city: str | None = None
+    state_province: str | None = None
+    postal_code: str | None = None
+    country_code: str | None = None
+    latitude: Decimal | None = None
+    longitude: Decimal | None = None
+    geofence_radius_m: int | None = None
+    geofence_enabled: bool | None = None
+    geofence_polygon: dict | None = (
         None  # GeoJSON Polygon/MultiPolygon (if set, overrides circle)
     )
-    is_active: Optional[bool] = None
+    is_active: bool | None = None
 
 
 class LocationRead(LocationBase):
@@ -443,13 +444,13 @@ class LocationRead(LocationBase):
     location_id: UUID
     organization_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class LocationListResponse(BaseModel):
     """Paginated location list response."""
 
-    items: List[LocationRead]
+    items: list[LocationRead]
     total: int
     offset: int
     limit: int
@@ -459,8 +460,8 @@ class TerminationRequest(BaseModel):
     """Employee termination request."""
 
     date_of_leaving: date
-    reason: Optional[str] = None
-    exit_interview_notes: Optional[str] = None
+    reason: str | None = None
+    exit_interview_notes: str | None = None
 
 
 class ResignationRequest(BaseModel):
@@ -472,17 +473,17 @@ class ResignationRequest(BaseModel):
 class BulkUpdateRequest(BaseModel):
     """Bulk employee update request."""
 
-    ids: List[UUID]
-    department_id: Optional[UUID] = None
-    designation_id: Optional[UUID] = None
-    status: Optional[EmployeeStatus] = None
-    reports_to_id: Optional[UUID] = None
+    ids: list[UUID]
+    department_id: UUID | None = None
+    designation_id: UUID | None = None
+    status: EmployeeStatus | None = None
+    reports_to_id: UUID | None = None
 
 
 class BulkDeleteRequest(BaseModel):
     """Bulk employee delete request."""
 
-    ids: List[UUID]
+    ids: list[UUID]
 
 
 class BulkOperationResponse(BaseModel):
@@ -490,5 +491,5 @@ class BulkOperationResponse(BaseModel):
 
     updated_count: int = 0
     deleted_count: int = 0
-    failed_ids: List[UUID] = []
-    errors: List[str] = []
+    failed_ids: list[UUID] = []
+    errors: list[str] = []

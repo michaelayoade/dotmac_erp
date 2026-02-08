@@ -119,18 +119,18 @@
     <!-- Lots Table -->
     <div class="card overflow-hidden">
         {% if lots | default([]) | length > 0 %}
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="table-ledger">
                 <thead>
                     <tr>
                         <th scope="col">Lot Number</th>
                         <th scope="col">Item</th>
                         <th scope="col">Warehouse</th>
-                        <th scope="col" class="text-right">Initial Qty</th>
-                        <th scope="col" class="text-right">Remaining</th>
+                        <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider">Initial Qty</th>
+                        <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider">Remaining</th>
                         <th scope="col">Expiry Date</th>
                         <th scope="col">Status</th>
-                        <th scope="col" class="w-12"></th>
+                        <th scope="col" class="w-12 text-xs font-semibold uppercase tracking-wider"></th>
                     </tr>
                 </thead>
                 <tbody>

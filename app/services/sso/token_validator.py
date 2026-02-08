@@ -4,8 +4,8 @@ Validates JWT tokens against the shared auth database for SSO clients.
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy.orm import Session
 
@@ -32,7 +32,7 @@ class SSOTokenValidator:
         """
         self.auth_db = auth_db
 
-    def validate_token(self, token: str) -> Optional[dict[str, Any]]:
+    def validate_token(self, token: str) -> dict[str, Any] | None:
         """Validate access token and return payload if valid.
 
         Args:
@@ -124,10 +124,10 @@ class SSOTokenValidator:
                 logger.debug("Session revoked: %s", session_id)
                 return False
 
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             expires_at = session.expires_at
             if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
+                expires_at = expires_at.replace(tzinfo=UTC)
 
             if expires_at < now:
                 logger.debug("Session expired: %s", session_id)
@@ -152,7 +152,7 @@ class SSOTokenValidator:
             session_uuid = coerce_uuid(session_id)
             session = self.auth_db.get(AuthSession, session_uuid)
             if session:
-                session.last_seen_at = datetime.now(timezone.utc)
+                session.last_seen_at = datetime.now(UTC)
                 self.auth_db.commit()
         except Exception as e:
             logger.warning("Failed to update session activity: %s", e)
@@ -164,7 +164,7 @@ def _decode_jwt_with_secret(
     secret: str,
     algorithm: str,
     expected_type: str,
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Decode and validate a JWT token with explicit secret.
 
     Args:

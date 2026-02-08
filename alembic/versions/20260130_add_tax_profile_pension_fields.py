@@ -10,9 +10,9 @@ Adds fields for statutory exports:
 - nhf_number: NHF registration number
 """
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 revision = "20260130_add_tax_profile_pension"
 down_revision = "20260130_add_pfa_directory"

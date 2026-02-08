@@ -10,7 +10,6 @@ from __future__ import annotations
 import colorsys
 import logging
 import re
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -165,7 +164,7 @@ class CSSGenerator:
         "pill": "16px",
     }
 
-    def __init__(self, branding: Optional[OrganizationBranding] = None):
+    def __init__(self, branding: OrganizationBranding | None = None):
         self.branding = branding
 
     def generate(self) -> str:
@@ -320,7 +319,7 @@ class CSSGenerator:
 
         return lines
 
-    def get_google_fonts_url(self) -> Optional[str]:
+    def get_google_fonts_url(self) -> str | None:
         """Generate Google Fonts import URL for custom fonts."""
         fonts = []
 
@@ -343,7 +342,7 @@ class CSSGenerator:
         return f"https://fonts.googleapis.com/css2?family={'&family='.join(fonts)}&display=swap"
 
 
-def generate_branding_css(branding: Optional[OrganizationBranding]) -> str:
+def generate_branding_css(branding: OrganizationBranding | None) -> str:
     """Convenience function to generate CSS from branding."""
     return CSSGenerator(branding).generate()
 
@@ -363,11 +362,11 @@ class BrandingService:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_by_id(self, branding_id: UUID) -> Optional[OrganizationBranding]:
+    def get_by_id(self, branding_id: UUID) -> OrganizationBranding | None:
         """Get branding by ID."""
         return self.db.get(OrganizationBranding, branding_id)
 
-    def get_by_org_id(self, org_id: UUID) -> Optional[OrganizationBranding]:
+    def get_by_org_id(self, org_id: UUID) -> OrganizationBranding | None:
         """Get branding for an organization."""
         stmt = select(OrganizationBranding).where(
             OrganizationBranding.organization_id == org_id
@@ -375,7 +374,7 @@ class BrandingService:
         return self.db.execute(stmt).scalar_one_or_none()
 
     def get_or_create(
-        self, org_id: UUID, user_id: Optional[UUID] = None
+        self, org_id: UUID, user_id: UUID | None = None
     ) -> OrganizationBranding:
         """Get existing branding or create a new one with defaults."""
         branding = self.get_by_org_id(org_id)
@@ -398,7 +397,7 @@ class BrandingService:
         return branding
 
     def create(
-        self, data: BrandingCreate, user_id: Optional[UUID] = None
+        self, data: BrandingCreate, user_id: UUID | None = None
     ) -> OrganizationBranding:
         """Create new branding configuration."""
         # Check if branding already exists
@@ -456,13 +455,14 @@ class BrandingService:
         )
         self.db.add(branding)
         self.db.flush()
+        self._invalidate_branding_cache(branding.organization_id)
         return branding
 
     def update(
         self,
         branding_id: UUID,
         data: BrandingUpdate,
-    ) -> Optional[OrganizationBranding]:
+    ) -> OrganizationBranding | None:
         """Update branding configuration."""
         branding = self.get_by_id(branding_id)
         if not branding:
@@ -498,6 +498,7 @@ class BrandingService:
             setattr(branding, field, value)
 
         self.db.flush()
+        self._invalidate_branding_cache(branding.organization_id)
         return branding
 
     def delete(self, branding_id: UUID) -> bool:
@@ -506,16 +507,28 @@ class BrandingService:
         if not branding:
             return False
 
+        org_id = branding.organization_id
         self.db.delete(branding)
         self.db.flush()
+        self._invalidate_branding_cache(org_id)
         return True
+
+    @staticmethod
+    def _invalidate_branding_cache(org_id: UUID) -> None:
+        """Invalidate cached branding CSS for an organization."""
+        try:
+            from app.services.cache import CacheKeys, cache_service
+
+            cache_service.delete(CacheKeys.org_branding_css(org_id))
+        except Exception:
+            pass  # Cache invalidation is best-effort
 
     def generate_css(self, org_id: UUID) -> str:
         """Generate CSS for an organization's branding."""
         branding = self.get_by_org_id(org_id)
         return generate_branding_css(branding)
 
-    def get_fonts_url(self, org_id: UUID) -> Optional[str]:
+    def get_fonts_url(self, org_id: UUID) -> str | None:
         """Get Google Fonts URL for an organization's custom fonts."""
         branding = self.get_by_org_id(org_id)
         if not branding:
@@ -528,7 +541,7 @@ class BrandingService:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def get_branding_for_org(db: Session, org_id: UUID) -> Optional[OrganizationBranding]:
+def get_branding_for_org(db: Session, org_id: UUID) -> OrganizationBranding | None:
     """Get branding for an organization."""
     return BrandingService(db).get_by_org_id(org_id)
 
@@ -536,7 +549,7 @@ def get_branding_for_org(db: Session, org_id: UUID) -> Optional[OrganizationBran
 def get_or_create_branding(
     db: Session,
     org_id: UUID,
-    user_id: Optional[UUID] = None,
+    user_id: UUID | None = None,
 ) -> OrganizationBranding:
     """Get existing branding or create with defaults."""
     return BrandingService(db).get_or_create(org_id, user_id)

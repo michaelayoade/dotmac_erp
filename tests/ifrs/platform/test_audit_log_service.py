@@ -4,7 +4,7 @@ Tests for AuditLogService.
 
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -22,14 +22,16 @@ def patch_audit_log_service():
         mock_log.record_id = MockColumn()
         mock_log.occurred_at = MockColumn()
         mock_log.user_id = MockColumn()
-        with patch(
-            "app.services.finance.platform.audit_log.and_", return_value=MagicMock()
-        ):
-            with patch(
+        with (
+            patch(
+                "app.services.finance.platform.audit_log.and_", return_value=MagicMock()
+            ),
+            patch(
                 "app.services.finance.platform.audit_log.coerce_uuid",
                 side_effect=lambda x: x,
-            ):
-                yield mock_log
+            ),
+        ):
+            yield mock_log
 
 
 class MockAuditLog:
@@ -60,7 +62,7 @@ class MockAuditLog:
         self.new_values = new_values
         self.changed_fields = changed_fields or []
         self.user_id = user_id
-        self.occurred_at = occurred_at or datetime.now(timezone.utc)
+        self.occurred_at = occurred_at or datetime.now(UTC)
         self.hash_chain = hash_chain
 
 
@@ -208,15 +210,17 @@ class TestAuditLogService:
         mock_logs = [MockAuditLog(organization_id=organization_id)]
         mock_db_session.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_logs
 
-        with patch("app.services.finance.platform.audit_log.AuditLog"):
-            with patch(
+        with (
+            patch("app.services.finance.platform.audit_log.AuditLog"),
+            patch(
                 "app.services.finance.platform.audit_log.coerce_uuid",
                 side_effect=lambda x: x,
-            ):
-                result = service.get_audit_trail(
-                    mock_db_session,
-                    organization_id=organization_id,
-                )
+            ),
+        ):
+            result = service.get_audit_trail(
+                mock_db_session,
+                organization_id=organization_id,
+            )
 
         assert len(result) == 1
 
@@ -230,18 +234,20 @@ class TestAuditLogService:
         ]
         mock_db_session.query.return_value.filter.return_value.order_by.return_value.all.return_value = mock_logs
 
-        with patch("app.services.finance.platform.audit_log.AuditLog"):
-            with patch(
+        with (
+            patch("app.services.finance.platform.audit_log.AuditLog"),
+            patch(
                 "app.services.finance.platform.audit_log.coerce_uuid",
                 side_effect=lambda x: x,
-            ):
-                result = service.get_record_history(
-                    mock_db_session,
-                    organization_id=organization_id,
-                    table_schema="gl",
-                    table_name="journal_entry",
-                    record_id="123",
-                )
+            ),
+        ):
+            result = service.get_record_history(
+                mock_db_session,
+                organization_id=organization_id,
+                table_schema="gl",
+                table_name="journal_entry",
+                record_id="123",
+            )
 
         assert len(result) == 2
 
@@ -267,8 +273,8 @@ class TestAuditLogService:
             result = service.build_hash_chain(
                 mock_db_session,
                 organization_id=organization_id,
-                from_date=datetime.now(timezone.utc),
-                to_date=datetime.now(timezone.utc),
+                from_date=datetime.now(UTC),
+                to_date=datetime.now(UTC),
             )
 
         assert result is not None
@@ -284,8 +290,8 @@ class TestAuditLogService:
             result = service.build_hash_chain(
                 mock_db_session,
                 organization_id=organization_id,
-                from_date=datetime.now(timezone.utc),
-                to_date=datetime.now(timezone.utc),
+                from_date=datetime.now(UTC),
+                to_date=datetime.now(UTC),
             )
 
         assert result == ""
@@ -301,8 +307,8 @@ class TestAuditLogService:
             result = service.verify_hash_chain(
                 mock_db_session,
                 organization_id=organization_id,
-                from_date=datetime.now(timezone.utc),
-                to_date=datetime.now(timezone.utc),
+                from_date=datetime.now(UTC),
+                to_date=datetime.now(UTC),
             )
 
         assert result == (True, None)
@@ -348,8 +354,8 @@ class TestAuditLogService:
             result = service.verify_hash_chain(
                 mock_db_session,
                 organization_id=organization_id,
-                from_date=datetime.now(timezone.utc),
-                to_date=datetime.now(timezone.utc),
+                from_date=datetime.now(UTC),
+                to_date=datetime.now(UTC),
             )
 
         assert result == (False, str(records[1].audit_id))
@@ -399,17 +405,19 @@ class TestAuditLogService:
         ]
         mock_db_session.query.return_value.filter.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_logs
 
-        with patch("app.services.finance.platform.audit_log.AuditLog"):
-            with patch(
+        with (
+            patch("app.services.finance.platform.audit_log.AuditLog"),
+            patch(
                 "app.services.finance.platform.audit_log.coerce_uuid",
                 side_effect=lambda x: x,
-            ):
-                result = service.list(
-                    mock_db_session,
-                    organization_id=str(organization_id),
-                    table_schema="gl",
-                    limit=50,
-                    offset=0,
-                )
+            ),
+        ):
+            result = service.list(
+                mock_db_session,
+                organization_id=str(organization_id),
+                table_schema="gl",
+                limit=50,
+                offset=0,
+            )
 
         assert len(result) == 2

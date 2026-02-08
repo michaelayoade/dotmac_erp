@@ -7,9 +7,9 @@ Each SLE represents a single stock movement at a specific warehouse.
 
 import logging
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -53,7 +53,7 @@ class StockLedgerSyncService(BaseSyncService[InventoryTransaction]):
         self._warehouse_cache: dict[str, uuid.UUID] = {}
         self._period_cache: dict[str, uuid.UUID] = {}  # "YYYY-MM" → period_id
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         """Fetch Stock Ledger Entries from ERPNext."""
         if since:
             yield from client.get_modified_since(
@@ -68,8 +68,8 @@ class StockLedgerSyncService(BaseSyncService[InventoryTransaction]):
         return self._mapping.transform_record(record)
 
     def _resolve_entity_id(
-        self, source_name: Optional[str], source_doctype: str
-    ) -> Optional[uuid.UUID]:
+        self, source_name: str | None, source_doctype: str
+    ) -> uuid.UUID | None:
         """Resolve DotMac entity ID from ERPNext source name via SyncEntity."""
         if not source_name:
             return None
@@ -87,7 +87,7 @@ class StockLedgerSyncService(BaseSyncService[InventoryTransaction]):
             return sync_entity.target_id
         return None
 
-    def _resolve_item_id(self, item_code: Optional[str]) -> Optional[uuid.UUID]:
+    def _resolve_item_id(self, item_code: str | None) -> uuid.UUID | None:
         """Resolve DotMac item_id from ERPNext item_code."""
         if not item_code:
             return None
@@ -99,7 +99,7 @@ class StockLedgerSyncService(BaseSyncService[InventoryTransaction]):
             self._item_cache[item_code] = result
         return result
 
-    def _resolve_warehouse_id(self, warehouse: Optional[str]) -> Optional[uuid.UUID]:
+    def _resolve_warehouse_id(self, warehouse: str | None) -> uuid.UUID | None:
         """Resolve DotMac warehouse_id from ERPNext warehouse name."""
         if not warehouse:
             return None
@@ -111,7 +111,7 @@ class StockLedgerSyncService(BaseSyncService[InventoryTransaction]):
             self._warehouse_cache[warehouse] = result
         return result
 
-    def _resolve_fiscal_period_id(self, posting_date: date) -> Optional[uuid.UUID]:
+    def _resolve_fiscal_period_id(self, posting_date: date) -> uuid.UUID | None:
         """
         Resolve fiscal_period_id for a posting date, auto-creating if needed.
 
@@ -136,11 +136,11 @@ class StockLedgerSyncService(BaseSyncService[InventoryTransaction]):
 
     @staticmethod
     def _parse_posting_datetime(
-        posting_date: Optional[str], posting_time: Optional[str]
+        posting_date: str | None, posting_time: str | None
     ) -> datetime:
         """Build timezone-aware datetime from ERPNext posting_date + posting_time."""
         if not posting_date:
-            return datetime.now(timezone.utc)
+            return datetime.now(UTC)
 
         date_str = str(posting_date).strip()[:10]  # "YYYY-MM-DD"
 
@@ -156,10 +156,10 @@ class StockLedgerSyncService(BaseSyncService[InventoryTransaction]):
             except ValueError:
                 dt = datetime.now()
 
-        return dt.replace(tzinfo=timezone.utc)
+        return dt.replace(tzinfo=UTC)
 
     @staticmethod
-    def _parse_date(posting_date: Optional[str]) -> date:
+    def _parse_date(posting_date: str | None) -> date:
         """Parse posting_date string to date object."""
         if not posting_date:
             return date.today()
@@ -291,7 +291,7 @@ class StockLedgerSyncService(BaseSyncService[InventoryTransaction]):
         """Get the transaction ID."""
         return entity.transaction_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[InventoryTransaction]:
+    def find_existing_entity(self, source_name: str) -> InventoryTransaction | None:
         """Find existing transaction by sync record."""
         sync_entity = self.get_sync_entity(source_name)
         if sync_entity and sync_entity.target_id:

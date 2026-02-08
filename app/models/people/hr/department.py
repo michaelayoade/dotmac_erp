@@ -16,9 +16,9 @@ from app.db import Base
 from app.models.people.base import AuditMixin, ERPNextSyncMixin, SoftDeleteMixin
 
 if TYPE_CHECKING:
-    from app.models.people.hr.employee import Employee
-    from app.models.finance.core_org.organization import Organization
     from app.models.finance.core_org.cost_center import CostCenter
+    from app.models.finance.core_org.organization import Organization
+    from app.models.people.hr.employee import Employee
 
 
 class Department(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
@@ -55,20 +55,20 @@ class Department(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
         String(100),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Hierarchy
-    parent_department_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    parent_department_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.department.department_id"),
         nullable=True,
     )
 
     # Department Head
-    head_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    head_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
@@ -76,7 +76,7 @@ class Department(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
     )
 
     # GL Integration
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.cost_center.cost_center_id"),
         nullable=True,
@@ -94,7 +94,7 @@ class Department(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

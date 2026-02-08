@@ -220,9 +220,9 @@
                     {% if all_competencies %}
                     <form method="post" action="/people/hr/job-descriptions/{{ jd.job_description_id }}/competencies" class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                        <div class="space-y-3">
+                        <div class="space-y-4">
                             <div>
-                                <label for="competency_id" class="form-label text-sm">Add Competency</label>
+                                <label for="competency_id" class="form-label text-sm">Add Competency <span class="text-rose-500">*</span></label>
                                 <select name="competency_id" id="competency_id" required class="form-select w-full text-sm">
                                     <option value="">Select...</option>
                                     {% for comp in all_competencies %}
@@ -230,7 +230,7 @@
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="grid grid-cols-2 gap-2">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                 <div>
                                     <label for="required_level" class="form-label text-sm">Level</label>
                                     <select name="required_level" id="required_level" class="form-select w-full text-sm">

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-from typing import Dict, Iterable, Tuple
+from collections.abc import Iterable
 
 from sqlalchemy import create_engine, text
 
@@ -26,7 +26,7 @@ def _normalize(value: str) -> str:
     return " ".join(cleaned.strip().lower().split())
 
 
-def _load_mapping(csv_path: str) -> Dict[str, str]:
+def _load_mapping(csv_path: str) -> dict[str, str]:
     with open(csv_path, newline="") as f:
         reader = csv.DictReader(f)
         if not reader.fieldnames:
@@ -38,7 +38,7 @@ def _load_mapping(csv_path: str) -> Dict[str, str]:
         if not name_key or not branch_key:
             raise SystemExit("CSV must include headers: 'Full Name' and 'Branch'.")
 
-        mapping: Dict[str, str] = {}
+        mapping: dict[str, str] = {}
         for row in reader:
             raw_name = (row.get(name_key) or "").strip()
             raw_branch = (row.get(branch_key) or "").strip()
@@ -59,7 +59,7 @@ def _load_mapping(csv_path: str) -> Dict[str, str]:
         return mapping
 
 
-def _insert_mapping(conn, rows: Iterable[Tuple[str, str]]) -> None:
+def _insert_mapping(conn, rows: Iterable[tuple[str, str]]) -> None:
     conn.execute(
         text("CREATE TEMP TABLE tmp_employee_branches (full_name text, branch text)")
     )

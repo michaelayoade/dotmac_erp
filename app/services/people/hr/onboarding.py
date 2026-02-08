@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import secrets
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select
@@ -206,9 +206,9 @@ class OnboardingService:
         if generate_self_service_token:
             raw_token = secrets.token_urlsafe(32)
             onboarding.self_service_token = self._hash_token(raw_token)
-            onboarding.self_service_token_expires = datetime.now(
-                timezone.utc
-            ) + timedelta(days=self.TOKEN_VALIDITY_DAYS)
+            onboarding.self_service_token_expires = datetime.now(UTC) + timedelta(
+                days=self.TOKEN_VALIDITY_DAYS
+            )
             # Store raw token temporarily (not persisted) for welcome email
             onboarding._raw_self_service_token = raw_token  # type: ignore[attr-defined]
 
@@ -217,7 +217,7 @@ class OnboardingService:
 
         # Create activities from template items
         if template and template.items:
-            for idx, item in enumerate(
+            for _idx, item in enumerate(
                 sorted(template.items, key=lambda x: x.sequence)
             ):
                 due_date = date_of_joining + timedelta(days=item.days_from_start)
@@ -285,12 +285,10 @@ class OnboardingService:
         if onboarding.self_service_token_expires:
             # Handle both naive and aware datetime comparisons
             expires = onboarding.self_service_token_expires
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             # If expires is naive, treat it as UTC
             if expires.tzinfo is None:
-                from datetime import timezone as tz
-
-                expires = expires.replace(tzinfo=tz.utc)
+                expires = expires.replace(tzinfo=UTC)
             if expires < now:
                 logger.warning(
                     "Expired self-service token for onboarding %s",
@@ -333,7 +331,7 @@ class OnboardingService:
         # Generate raw token and store its hash
         raw_token = secrets.token_urlsafe(32)
         onboarding.self_service_token = self._hash_token(raw_token)
-        onboarding.self_service_token_expires = datetime.now(timezone.utc) + timedelta(
+        onboarding.self_service_token_expires = datetime.now(UTC) + timedelta(
             days=self.TOKEN_VALIDITY_DAYS
         )
         self.db.flush()
@@ -687,7 +685,7 @@ class OnboardingService:
         """Mark that a reminder was sent for an activity."""
         activity = self.db.get(EmployeeOnboardingActivity, activity_id)
         if activity:
-            activity.reminder_sent_at = datetime.now(timezone.utc)
+            activity.reminder_sent_at = datetime.now(UTC)
             self.db.flush()
 
     def get_activities_needing_reminder(
@@ -708,9 +706,7 @@ class OnboardingService:
         """
         today = date.today()
         due_cutoff = today + timedelta(days=days_before_due)
-        reminder_cutoff = datetime.now(timezone.utc) - timedelta(
-            hours=hours_since_last_reminder
-        )
+        reminder_cutoff = datetime.now(UTC) - timedelta(hours=hours_since_last_reminder)
 
         conditions = [
             EmployeeOnboarding.organization_id == org_id,

@@ -9,12 +9,12 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any, Optional, TypedDict
+from typing import Any, TypedDict
 from uuid import UUID
 
-from sqlalchemy import select, func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer, CustomerType
@@ -139,7 +139,7 @@ class SplynxSyncService:
 
     # Default mapping from Splynx payment method name fragments to ERP
     # bank account name fragments.  Override via constructor parameter.
-    DEFAULT_BANK_NAME_MAPPING: dict[str, Optional[str]] = {
+    DEFAULT_BANK_NAME_MAPPING: dict[str, str | None] = {
         "zenith 461": "zenith 461",
         "zenith 523": "zenith 523",
         "paystack": "paystack",
@@ -154,9 +154,9 @@ class SplynxSyncService:
         db: Session,
         organization_id: UUID,
         ar_control_account_id: UUID,
-        default_revenue_account_id: Optional[UUID] = None,
-        config: Optional[SplynxConfig] = None,
-        bank_name_mapping: Optional[dict[str, Optional[str]]] = None,
+        default_revenue_account_id: UUID | None = None,
+        config: SplynxConfig | None = None,
+        bank_name_mapping: dict[str, str | None] | None = None,
     ):
         """
         Initialize sync service.
@@ -177,7 +177,7 @@ class SplynxSyncService:
         self.ar_control_account_id = ar_control_account_id
         self.default_revenue_account_id = default_revenue_account_id
         self.config = config or SplynxConfig.from_settings()
-        self._client: Optional[SplynxClient] = None
+        self._client: SplynxClient | None = None
         self._bank_name_mapping = bank_name_mapping or self.DEFAULT_BANK_NAME_MAPPING
 
         # Cache for customer ID mapping (splynx_id -> erp_customer_id)
@@ -253,7 +253,7 @@ class SplynxSyncService:
             len(self._payment_method_cache),
         )
 
-    def _get_bank_account_for_payment(self, payment_type: int) -> Optional[UUID]:
+    def _get_bank_account_for_payment(self, payment_type: int) -> UUID | None:
         """Get ERP bank account ID for a Splynx payment type."""
         self._load_payment_methods()
         return self._bank_account_mapping.get(payment_type)
@@ -290,7 +290,7 @@ class SplynxSyncService:
         # Use ID instead of full number to stay under 30 char limit
         return f"SPL-INV-{splynx_id}"
 
-    def _parse_date(self, date_str: Optional[str]) -> Optional[date]:
+    def _parse_date(self, date_str: str | None) -> date | None:
         """Parse date string from Splynx."""
         if not date_str:
             return None
@@ -306,7 +306,7 @@ class SplynxSyncService:
                 logger.warning("Could not parse date: %s", date_str)
                 return None
 
-    def _get_existing_customer(self, customer_code: str) -> Optional[Customer]:
+    def _get_existing_customer(self, customer_code: str) -> Customer | None:
         """Get existing customer by code."""
         stmt = select(Customer).where(
             Customer.organization_id == self.organization_id,
@@ -316,30 +316,46 @@ class SplynxSyncService:
 
     def _find_existing_customer(
         self, splynx_customer: SplynxCustomer
-    ) -> Optional[Customer]:
+    ) -> Customer | None:
         """Try to match a Splynx customer to an existing ERP customer."""
         name = (splynx_customer.name or splynx_customer.login or "").strip()
         email = (splynx_customer.email or "").strip().lower()
         phone = (splynx_customer.phone or "").strip().lower()
 
         if splynx_customer.id:
-            stmt = select(Customer).where(
-                Customer.organization_id == self.organization_id,
-                Customer.primary_contact["splynx_id"].astext == str(splynx_customer.id),
-            )
-            customer = self.db.scalar(stmt)
-            if customer:
-                return customer
+            try:
+                stmt = select(Customer).where(
+                    Customer.organization_id == self.organization_id,
+                    Customer.primary_contact["splynx_id"].astext
+                    == str(splynx_customer.id),
+                )
+                customer = self.db.scalar(stmt)
+                if customer:
+                    return customer
+            except NotImplementedError:
+                logger.debug(
+                    "primary_contact JSON lookup not supported; skipping splynx_id match"
+                )
 
         contact_filters = []
         if email:
-            contact_filters.append(
-                func.lower(Customer.primary_contact["email"].astext) == email
-            )
+            try:
+                contact_filters.append(
+                    func.lower(Customer.primary_contact["email"].astext) == email
+                )
+            except NotImplementedError:
+                logger.debug(
+                    "primary_contact JSON lookup not supported; skipping email match"
+                )
         if phone:
-            contact_filters.append(
-                func.lower(Customer.primary_contact["phone"].astext) == phone
-            )
+            try:
+                contact_filters.append(
+                    func.lower(Customer.primary_contact["phone"].astext) == phone
+                )
+            except NotImplementedError:
+                logger.debug(
+                    "primary_contact JSON lookup not supported; skipping phone match"
+                )
         if contact_filters:
             stmt = select(Customer).where(
                 Customer.organization_id == self.organization_id,
@@ -363,7 +379,7 @@ class SplynxSyncService:
 
         return None
 
-    def _get_existing_invoice(self, invoice_number: str) -> Optional[Invoice]:
+    def _get_existing_invoice(self, invoice_number: str) -> Invoice | None:
         """Get existing invoice by number."""
         stmt = select(Invoice).where(
             Invoice.organization_id == self.organization_id,
@@ -388,7 +404,7 @@ class SplynxSyncService:
             except ValueError:
                 pass
 
-    def _get_or_create_customer_id(self, splynx_customer_id: int) -> Optional[UUID]:
+    def _get_or_create_customer_id(self, splynx_customer_id: int) -> UUID | None:
         """Get ERP customer ID for Splynx customer, or None if not synced."""
         if splynx_customer_id in self._customer_cache:
             return self._customer_cache[splynx_customer_id]
@@ -406,6 +422,38 @@ class SplynxSyncService:
             self._customer_cache[splynx_customer_id] = customer.customer_id
             return customer.customer_id
 
+        # Fallback: fetch customer from Splynx and match by contact info/name
+        try:
+            splynx_customer = self.client.get_customer(splynx_customer_id)
+            existing = self._find_existing_customer(splynx_customer)
+            if existing:
+                self._customer_cache[splynx_customer_id] = existing.customer_id
+                # Record sync mapping for future lookups
+                data_hash = self._compute_hash(
+                    {
+                        "name": splynx_customer.name,
+                        "login": splynx_customer.login,
+                        "email": splynx_customer.email,
+                        "phone": splynx_customer.phone,
+                        "status": splynx_customer.status,
+                        "company": splynx_customer.company,
+                        "street_1": splynx_customer.street_1,
+                        "street_2": splynx_customer.street_2,
+                        "city": splynx_customer.city,
+                        "zip_code": splynx_customer.zip_code,
+                    }
+                )
+                self._record_sync(
+                    EntityType.CUSTOMER,
+                    str(splynx_customer_id),
+                    existing.customer_id,
+                    data_hash,
+                )
+                return existing.customer_id
+        except SplynxError:
+            # Ignore lookup failures and fall through to None
+            pass
+
         return None
 
     # =========================================================================
@@ -416,7 +464,7 @@ class SplynxSyncService:
         self,
         entity_type: EntityType,
         external_id: str,
-    ) -> Optional[UUID]:
+    ) -> UUID | None:
         """Get local entity ID for a synced external entity."""
         stmt = select(ExternalSync.local_entity_id).where(
             ExternalSync.organization_id == self.organization_id,
@@ -431,8 +479,8 @@ class SplynxSyncService:
         entity_type: EntityType,
         external_id: str,
         local_entity_id: UUID,
-        data_hash: Optional[str] = None,
-        external_updated_at: Optional[datetime] = None,
+        data_hash: str | None = None,
+        external_updated_at: datetime | None = None,
     ) -> None:
         """Record a sync mapping."""
         # Check if already exists
@@ -447,7 +495,7 @@ class SplynxSyncService:
             )
             sync_record = self.db.scalar(stmt)
             if sync_record:
-                sync_record.synced_at = datetime.now(tz=timezone.utc)
+                sync_record.synced_at = datetime.now(tz=UTC)
                 sync_record.sync_hash = data_hash
                 if external_updated_at:
                     sync_record.external_updated_at = external_updated_at
@@ -491,10 +539,10 @@ class SplynxSyncService:
 
     def sync_customers(
         self,
-        date_from: Optional[date] = None,
-        date_to: Optional[date] = None,
-        created_by_user_id: Optional[UUID] = None,
-        batch_size: Optional[int] = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        created_by_user_id: UUID | None = None,
+        batch_size: int | None = None,
         skip_unchanged: bool = True,
     ) -> SyncResult:
         """
@@ -554,7 +602,7 @@ class SplynxSyncService:
     def _sync_single_customer(
         self,
         splynx_customer: SplynxCustomer,
-        created_by_user_id: Optional[UUID],
+        created_by_user_id: UUID | None,
         result: SyncResult,
         skip_unchanged: bool = True,
     ) -> None:
@@ -565,12 +613,15 @@ class SplynxSyncService:
         data_hash = self._compute_hash(
             {
                 "name": splynx_customer.name,
+                "login": splynx_customer.login,
                 "email": splynx_customer.email,
                 "phone": splynx_customer.phone,
                 "status": splynx_customer.status,
                 "company": splynx_customer.company,
                 "street_1": splynx_customer.street_1,
+                "street_2": splynx_customer.street_2,
                 "city": splynx_customer.city,
+                "zip_code": splynx_customer.zip_code,
             }
         )
 
@@ -658,10 +709,10 @@ class SplynxSyncService:
 
     def sync_invoices(
         self,
-        date_from: Optional[date] = None,
-        date_to: Optional[date] = None,
-        created_by_user_id: Optional[UUID] = None,
-        batch_size: Optional[int] = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        created_by_user_id: UUID | None = None,
+        batch_size: int | None = None,
         skip_unchanged: bool = True,
     ) -> SyncResult:
         """
@@ -725,7 +776,7 @@ class SplynxSyncService:
     def _sync_single_invoice(
         self,
         splynx_invoice: SplynxInvoice,
-        created_by_user_id: Optional[UUID],
+        created_by_user_id: UUID | None,
         result: SyncResult,
         skip_unchanged: bool = True,
     ) -> None:
@@ -786,6 +837,7 @@ class SplynxSyncService:
         if existing:
             # Update existing invoice — apply ALL mutable fields
             existing.customer_id = customer_id
+            existing.invoice_date = invoice_date
             existing.due_date = due_date
             existing.currency_code = currency_code
             existing.subtotal = splynx_invoice.total
@@ -794,6 +846,34 @@ class SplynxSyncService:
             existing.amount_paid = amount_paid
             existing.status = status
             existing.notes = splynx_invoice.note
+            # Ensure invoice line reflects updated total
+            line = None
+            if hasattr(existing, "lines"):
+                try:
+                    existing_lines = list(existing.lines or [])
+                except Exception:
+                    existing_lines = []
+                if existing_lines:
+                    line = existing_lines[0]
+            if line:
+                line.description = f"Splynx Invoice {splynx_invoice.number}"
+                line.unit_price = splynx_invoice.total
+                line.line_amount = splynx_invoice.total
+                line.tax_amount = Decimal("0")
+            elif self.default_revenue_account_id:
+                line = InvoiceLine(
+                    invoice_id=existing.invoice_id,
+                    line_number=1,
+                    description=f"Splynx Invoice {splynx_invoice.number}",
+                    quantity=Decimal("1"),
+                    unit_price=splynx_invoice.total,
+                    discount_percentage=Decimal("0"),
+                    discount_amount=Decimal("0"),
+                    line_amount=splynx_invoice.total,
+                    tax_amount=Decimal("0"),
+                    revenue_account_id=self.default_revenue_account_id,
+                )
+                self.db.add(line)
             result.updated += 1
             # Record sync
             self._record_sync(
@@ -867,10 +947,10 @@ class SplynxSyncService:
 
     def sync_payments(
         self,
-        date_from: Optional[date] = None,
-        date_to: Optional[date] = None,
-        created_by_user_id: Optional[UUID] = None,
-        batch_size: Optional[int] = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        created_by_user_id: UUID | None = None,
+        batch_size: int | None = None,
         skip_unchanged: bool = True,
     ) -> SyncResult:
         """
@@ -940,7 +1020,7 @@ class SplynxSyncService:
         self,
         splynx_payment: SplynxPayment,
         result: SyncResult,
-        created_by_user_id: Optional[UUID] = None,
+        created_by_user_id: UUID | None = None,
         skip_unchanged: bool = True,
     ) -> None:
         """
@@ -969,20 +1049,15 @@ class SplynxSyncService:
             result.skipped += 1
             return
 
-        # Check if already synced (update path)
-        local_id = self._get_synced_entity(EntityType.PAYMENT, external_id)
-        if local_id:
-            # Payment already exists — update sync hash only
-            self._record_sync(EntityType.PAYMENT, external_id, local_id, data_hash)
-            result.skipped += 1
-            return
-
         if not splynx_payment.invoice_id:
             result.skipped += 1
             result.errors.append(
                 f"Payment {splynx_payment.id}: No invoice_id, skipping"
             )
             return
+
+        # Check if already synced (update path)
+        local_id = self._get_synced_entity(EntityType.PAYMENT, external_id)
 
         # Find the invoice by correlation_id
         correlation_id = f"splynx-inv-{splynx_payment.invoice_id}"
@@ -1014,6 +1089,99 @@ class SplynxSyncService:
 
         # Use the invoice's currency so multi-currency is correct
         currency_code = invoice.currency_code or "NGN"
+
+        if local_id:
+            payment = self.db.get(CustomerPayment, local_id)
+            if not payment:
+                # Stale sync record; fall through to create path
+                local_id = None
+            else:
+                # Update existing payment and allocation
+                alloc_stmt = select(PaymentAllocation).where(
+                    PaymentAllocation.payment_id == payment.payment_id
+                )
+                allocation = self.db.scalar(alloc_stmt)
+                old_allocated_amount = (
+                    allocation.allocated_amount if allocation else Decimal("0")
+                )
+                old_invoice_id = allocation.invoice_id if allocation else None
+
+                # Adjust old invoice if allocation exists
+                if allocation:
+                    old_invoice = self.db.get(Invoice, allocation.invoice_id)
+                else:
+                    old_invoice = None
+
+                # Update payment fields
+                payment.customer_id = invoice.customer_id
+                payment.payment_date = payment_date
+                payment.payment_method = payment_method
+                payment.currency_code = currency_code
+                payment.gross_amount = splynx_payment.amount
+                payment.amount = splynx_payment.amount
+                payment.functional_currency_amount = splynx_payment.amount
+                payment.bank_account_id = bank_account_id
+                payment.reference = (
+                    splynx_payment.reference or splynx_payment.receipt_number
+                )
+                payment.description = (
+                    f"Splynx payment via {method_name}. {splynx_payment.comment or ''}"
+                ).strip()
+
+                if allocation:
+                    if allocation.invoice_id != invoice.invoice_id and old_invoice:
+                        # Remove from old invoice
+                        old_invoice.amount_paid = max(
+                            Decimal("0"),
+                            old_invoice.amount_paid - allocation.allocated_amount,
+                        )
+                        if old_invoice.amount_paid >= old_invoice.total_amount:
+                            old_invoice.status = InvoiceStatus.PAID
+                        elif old_invoice.amount_paid > Decimal("0"):
+                            old_invoice.status = InvoiceStatus.PARTIALLY_PAID
+                        else:
+                            old_invoice.status = InvoiceStatus.POSTED
+
+                    # Update allocation to new invoice/amount/date
+                    allocation.invoice_id = invoice.invoice_id
+                    allocation.allocated_amount = splynx_payment.amount
+                    allocation.allocation_date = payment_date
+                else:
+                    allocation = PaymentAllocation(
+                        payment_id=payment.payment_id,
+                        invoice_id=invoice.invoice_id,
+                        allocated_amount=splynx_payment.amount,
+                        allocation_date=payment_date,
+                    )
+                    self.db.add(allocation)
+
+                # Update invoice amount_paid
+                if old_invoice_id == invoice.invoice_id:
+                    # If allocation existed on same invoice, compute delta
+                    delta = splynx_payment.amount - old_allocated_amount
+                    invoice.amount_paid = min(
+                        max(Decimal("0"), invoice.amount_paid + delta),
+                        invoice.total_amount,
+                    )
+                else:
+                    invoice.amount_paid = min(
+                        invoice.amount_paid + splynx_payment.amount,
+                        invoice.total_amount,
+                    )
+
+                if invoice.amount_paid >= invoice.total_amount:
+                    invoice.status = InvoiceStatus.PAID
+                elif invoice.amount_paid > Decimal("0"):
+                    invoice.status = InvoiceStatus.PARTIALLY_PAID
+                else:
+                    invoice.status = InvoiceStatus.POSTED
+
+                # Record sync tracking
+                self._record_sync(
+                    EntityType.PAYMENT, external_id, payment.payment_id, data_hash
+                )
+                result.updated += 1
+                return
 
         # Create CustomerPayment record
         payment = CustomerPayment(
@@ -1070,9 +1238,9 @@ class SplynxSyncService:
 
     def sync_credit_notes(
         self,
-        date_from: Optional[date] = None,
-        date_to: Optional[date] = None,
-        created_by_user_id: Optional[UUID] = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        created_by_user_id: UUID | None = None,
     ) -> SyncResult:
         """
         Sync credit notes from Splynx.
@@ -1114,7 +1282,7 @@ class SplynxSyncService:
     def _sync_single_credit_note(
         self,
         splynx_cn: SplynxCreditNote,
-        created_by_user_id: Optional[UUID],
+        created_by_user_id: UUID | None,
         result: SyncResult,
     ) -> None:
         """Sync a single credit note."""
@@ -1128,6 +1296,7 @@ class SplynxSyncService:
                 "total": str(splynx_cn.total),
                 "status": splynx_cn.status,
                 "date_created": splynx_cn.date_created,
+                "note": splynx_cn.note,
             }
         )
 
@@ -1154,10 +1323,40 @@ class SplynxSyncService:
         if existing:
             # Update existing credit note
             existing.customer_id = customer_id
+            existing.invoice_date = cn_date
+            existing.due_date = cn_date
             existing.subtotal = splynx_cn.total
             existing.total_amount = splynx_cn.total
             existing.functional_currency_amount = splynx_cn.total
             existing.notes = splynx_cn.note
+            # Ensure credit note line reflects updated total
+            line = None
+            if hasattr(existing, "lines"):
+                try:
+                    existing_lines = list(existing.lines or [])
+                except Exception:
+                    existing_lines = []
+                if existing_lines:
+                    line = existing_lines[0]
+            if line:
+                line.description = f"Splynx Credit Note {splynx_cn.number}"
+                line.unit_price = splynx_cn.total
+                line.line_amount = splynx_cn.total
+                line.tax_amount = Decimal("0")
+            elif self.default_revenue_account_id:
+                line = InvoiceLine(
+                    invoice_id=existing.invoice_id,
+                    line_number=1,
+                    description=f"Splynx Credit Note {splynx_cn.number}",
+                    quantity=Decimal("1"),
+                    unit_price=splynx_cn.total,
+                    discount_percentage=Decimal("0"),
+                    discount_amount=Decimal("0"),
+                    line_amount=splynx_cn.total,
+                    tax_amount=Decimal("0"),
+                    revenue_account_id=self.default_revenue_account_id,
+                )
+                self.db.add(line)
             result.updated += 1
             # Record sync tracking
             self._record_sync(
@@ -1225,9 +1424,9 @@ class SplynxSyncService:
 
     def sync_all(
         self,
-        date_from: Optional[date] = None,
-        date_to: Optional[date] = None,
-        created_by_user_id: Optional[UUID] = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        created_by_user_id: UUID | None = None,
     ) -> FullSyncResult:
         """
         Sync all entity types from Splynx.
@@ -1410,7 +1609,7 @@ class SplynxSyncService:
                             """),
                             {
                                 "line_id": line.line_id,
-                                "now": datetime.now(tz=timezone.utc),
+                                "now": datetime.now(tz=UTC),
                                 "note": f" [Matched to Splynx payment {payment.payment_id}]",
                             },
                         )
@@ -1508,7 +1707,7 @@ class SplynxSyncService:
                             """),
                             {
                                 "line_id": line_id,
-                                "now": datetime.now(tz=timezone.utc),
+                                "now": datetime.now(tz=UTC),
                                 "note": f" [Matched to Splynx payment {payment.payment_id} by date+amount]",
                             },
                         )
@@ -1536,7 +1735,7 @@ class SplynxSyncService:
 
         # For each customer with unique payment on date+amount, try to match
         for (
-            customer_id,
+            _customer_id,
             pay_date,
             amount_cents,
         ), payments in customer_payment_groups.items():
@@ -1575,7 +1774,7 @@ class SplynxSyncService:
                             """),
                             {
                                 "line_id": line_id,
-                                "now": datetime.now(tz=timezone.utc),
+                                "now": datetime.now(tz=UTC),
                                 "note": f" [Matched to Splynx payment {payment.payment_id} by customer+date+amount]",
                             },
                         )
@@ -1737,7 +1936,7 @@ class SplynxSyncService:
                             """),
                             {
                                 "line_id": line_id,
-                                "now": datetime.now(tz=timezone.utc),
+                                "now": datetime.now(tz=UTC),
                                 "note": f" [Matched to Splynx payment {payment.payment_id} by date+amount]",
                             },
                         )
@@ -1763,7 +1962,7 @@ class SplynxSyncService:
             customer_payment_groups[customer_key].append(payment)
 
         for (
-            customer_id,
+            _customer_id,
             pay_date,
             amount_cents,
         ), group_payments in customer_payment_groups.items():
@@ -1799,7 +1998,7 @@ class SplynxSyncService:
                             """),
                             {
                                 "line_id": line_id,
-                                "now": datetime.now(tz=timezone.utc),
+                                "now": datetime.now(tz=UTC),
                                 "note": f" [Matched to Splynx payment {payment.payment_id} by customer+date+amount]",
                             },
                         )
@@ -1943,7 +2142,7 @@ class SplynxSyncService:
                     """),
                     {
                         "line_id": match.line_id,
-                        "now": datetime.now(tz=timezone.utc),
+                        "now": datetime.now(tz=UTC),
                         "note": f" [Bulk match: {match.payment_count} Splynx payments sum to this amount]",
                     },
                 )

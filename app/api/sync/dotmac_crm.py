@@ -3,16 +3,17 @@ DotMac CRM Sync API - Endpoints for CRM entity synchronization.
 
 Handles:
 - Bulk sync from CRM (projects, tickets, work orders)
+- Webhook for real-time entity updates
 - Entity lookup for expense claim dropdowns
 - Expense totals for CRM entities
+- Inventory data for CRM field service
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -23,10 +24,12 @@ from app.rls import set_current_organization_sync
 from app.schemas.sync.dotmac_crm import (
     BulkSyncRequest,
     BulkSyncResponse,
+    CRMProjectPayload,
     CRMProjectRead,
+    CRMTicketPayload,
     CRMTicketRead,
+    CRMWorkOrderPayload,
     CRMWorkOrderRead,
-    ExpenseTotals,
     ExpenseTotalsRequest,
     ExpenseTotalsResponse,
     InventoryItemDetail,
@@ -41,6 +44,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/sync/crm", tags=["crm-sync"])
 
+# Maximum error detail length to avoid leaking internals
+_MAX_ERROR_LEN = 200
+
 
 def _get_db():
     """Database session dependency."""
@@ -49,6 +55,14 @@ def _get_db():
         yield db
     finally:
         db.close()
+
+
+def _sanitize_error(e: Exception) -> str:
+    """Truncate error message to avoid leaking internal details."""
+    msg = str(e)
+    if len(msg) > _MAX_ERROR_LEN:
+        return msg[:_MAX_ERROR_LEN] + "..."
+    return msg
 
 
 # ============ Service Account Authentication ============
@@ -66,7 +80,7 @@ def require_service_auth(
     Returns:
         dict with organization_id and service info
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Find API key by hash
     stmt = select(ApiKey).where(
@@ -87,7 +101,7 @@ def require_service_auth(
     if not api_key.person_id:
         raise HTTPException(
             status_code=403,
-            detail="API key not associated with a user. Service accounts require a user with organization access.",
+            detail="API key not associated with a user",
         )
 
     person = db.get(Person, api_key.person_id)
@@ -129,7 +143,8 @@ def bulk_sync(
     Bulk sync projects, tickets, and work orders from DotMac CRM.
 
     Idempotent - safe to retry. Uses CRM entity IDs for deduplication.
-    Processes in order: projects → tickets → work orders (respects dependencies).
+    Processes in order: projects -> tickets -> work orders (respects dependencies).
+    Payload lists are capped at 500 items each.
     """
     org_id = auth["organization_id"]
     service = DotMacCRMSyncService(db)
@@ -147,7 +162,11 @@ def bulk_sync(
             savepoint.rollback()
             logger.exception("Failed to sync project %s", proj.crm_id)
             errors.append(
-                SyncError(entity_type="project", crm_id=proj.crm_id, error=str(e))
+                SyncError(
+                    entity_type="project",
+                    crm_id=proj.crm_id,
+                    error=_sanitize_error(e),
+                )
             )
 
     # Sync tickets
@@ -162,7 +181,11 @@ def bulk_sync(
             savepoint.rollback()
             logger.exception("Failed to sync ticket %s", ticket.crm_id)
             errors.append(
-                SyncError(entity_type="ticket", crm_id=ticket.crm_id, error=str(e))
+                SyncError(
+                    entity_type="ticket",
+                    crm_id=ticket.crm_id,
+                    error=_sanitize_error(e),
+                )
             )
 
     # Sync work orders last (references projects/tickets)
@@ -177,7 +200,11 @@ def bulk_sync(
             savepoint.rollback()
             logger.exception("Failed to sync work order %s", wo.crm_id)
             errors.append(
-                SyncError(entity_type="work_order", crm_id=wo.crm_id, error=str(e))
+                SyncError(
+                    entity_type="work_order",
+                    crm_id=wo.crm_id,
+                    error=_sanitize_error(e),
+                )
             )
 
     db.commit()
@@ -198,6 +225,50 @@ def bulk_sync(
     )
 
 
+# ============ Webhook Endpoint (CRM → ERP real-time) ============
+
+
+@router.post("/webhook/{entity_type}", status_code=200)
+def handle_webhook(
+    entity_type: str,
+    payload: CRMProjectPayload | CRMTicketPayload | CRMWorkOrderPayload,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(_get_db),
+) -> dict:
+    """
+    Handle real-time entity updates from CRM webhook.
+
+    Accepts a single entity payload and syncs it immediately.
+    Supported entity_type values: project, ticket, work_order.
+    """
+    org_id = auth["organization_id"]
+    service = DotMacCRMSyncService(db)
+
+    try:
+        if entity_type == "project" and isinstance(payload, CRMProjectPayload):
+            service.sync_project(org_id, payload)
+        elif entity_type == "ticket" and isinstance(payload, CRMTicketPayload):
+            service.sync_ticket(org_id, payload)
+        elif entity_type == "work_order" and isinstance(payload, CRMWorkOrderPayload):
+            service.sync_work_order(org_id, payload)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown entity type: {entity_type}",
+            )
+        db.commit()
+        return {"status": "ok", "entity_type": entity_type, "crm_id": payload.crm_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception("Webhook sync failed for %s %s", entity_type, payload.crm_id)
+        raise HTTPException(
+            status_code=500,
+            detail=_sanitize_error(e),
+        ) from e
+
+
 # ============ List Endpoints (for ERP UI dropdowns) ============
 
 
@@ -205,8 +276,8 @@ def bulk_sync(
 def list_crm_projects(
     auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(_get_db),
-    search: Optional[str] = None,
-    status: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
     limit: int = 50,
 ) -> list[CRMProjectRead]:
     """
@@ -225,7 +296,7 @@ def list_crm_projects(
 def list_crm_tickets(
     auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(_get_db),
-    search: Optional[str] = None,
+    search: str | None = None,
     limit: int = 50,
 ) -> list[CRMTicketRead]:
     """
@@ -242,8 +313,8 @@ def list_crm_tickets(
 def list_crm_work_orders(
     auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(_get_db),
-    search: Optional[str] = None,
-    employee_id: Optional[UUID] = None,
+    search: str | None = None,
+    employee_id: UUID | None = None,
     limit: int = 50,
 ) -> list[CRMWorkOrderRead]:
     """
@@ -269,122 +340,26 @@ def get_expense_totals(
     db: Session = Depends(_get_db),
 ) -> ExpenseTotalsResponse:
     """
-    Get expense totals for CRM entities.
+    Get expense totals for CRM entities (batch).
 
     Called by DotMac CRM to display expense summaries on project/ticket detail pages.
-
-    Request body should contain lists of CRM IDs to query:
-    - project_crm_ids: List of CRM project UUIDs
-    - ticket_crm_ids: List of CRM ticket UUIDs
-    - work_order_crm_ids: List of CRM work order UUIDs
-
-    Returns totals keyed by CRM ID with amounts by status (draft, submitted, approved, paid).
+    Uses batched queries instead of per-entity lookups for efficiency.
+    List sizes capped at 200 per entity type.
     """
     org_id = auth["organization_id"]
     service = DotMacCRMSyncService(db)
-    result: dict[str, ExpenseTotals] = {}
 
-    # Get project totals
-    for crm_id in payload.project_crm_ids:
-        totals = service.get_expense_totals_for_project(org_id, crm_id)
-        if totals:
-            result[crm_id] = totals
-
-    # Get ticket totals
-    for crm_id in payload.ticket_crm_ids:
-        totals = service.get_expense_totals_for_ticket(org_id, crm_id)
-        if totals:
-            result[crm_id] = totals
-
-    # Get work order totals
-    for crm_id in payload.work_order_crm_ids:
-        totals = service.get_expense_totals_for_work_order(org_id, crm_id)
-        if totals:
-            result[crm_id] = totals
-
-    db.commit()
+    result = service.get_batch_expense_totals(
+        org_id,
+        project_crm_ids=payload.project_crm_ids,
+        ticket_crm_ids=payload.ticket_crm_ids,
+        work_order_crm_ids=payload.work_order_crm_ids,
+    )
 
     return ExpenseTotalsResponse(totals=result)
 
 
 # ============ Inventory Sync Endpoints (ERP → CRM) ============
-
-
-@router.get("/inventory", response_model=InventoryListResponse)
-def list_inventory(
-    auth: dict = Depends(require_service_auth),
-    db: Session = Depends(_get_db),
-    search: Optional[str] = None,
-    category_code: Optional[str] = None,
-    warehouse_id: Optional[UUID] = None,
-    include_zero_stock: bool = False,
-    only_below_reorder: bool = False,
-    limit: int = 100,
-    offset: int = 0,
-) -> InventoryListResponse:
-    """
-    List inventory items with current stock levels for CRM.
-
-    Called by DotMac CRM to retrieve available inventory for installation assignments.
-    Returns items with stock quantities (on-hand, reserved, available).
-
-    Query parameters:
-    - search: Search term for item code, name, or barcode
-    - category_code: Filter by item category code
-    - warehouse_id: Filter by specific warehouse
-    - include_zero_stock: Include items with zero available stock (default: false)
-    - only_below_reorder: Only return items below reorder point (default: false)
-    - limit: Max items per page (default: 100, max: 500)
-    - offset: Pagination offset
-
-    Returns:
-    - items: List of InventoryItemStock objects
-    - total_count: Total matching items (before pagination)
-    - has_more: Whether there are more items beyond this page
-    """
-    org_id = auth["organization_id"]
-    service = DotMacCRMSyncService(db)
-
-    result = service.list_inventory_items(
-        org_id,
-        search=search,
-        category_code=category_code,
-        warehouse_id=warehouse_id,
-        include_zero_stock=include_zero_stock,
-        only_below_reorder=only_below_reorder,
-        limit=min(limit, 500),
-        offset=offset,
-    )
-    db.commit()
-    return result
-
-
-@router.get("/inventory/{item_id}", response_model=InventoryItemDetail)
-def get_inventory_item(
-    item_id: UUID,
-    auth: dict = Depends(require_service_auth),
-    db: Session = Depends(_get_db),
-) -> InventoryItemDetail:
-    """
-    Get detailed inventory item with warehouse-level stock breakdown.
-
-    Called by DotMac CRM to get full item details including stock per warehouse.
-
-    Returns:
-    - Item details (code, name, description, category, UOM)
-    - Total stock levels (on-hand, reserved, available)
-    - Per-warehouse stock breakdown
-    """
-    org_id = auth["organization_id"]
-    service = DotMacCRMSyncService(db)
-
-    item_detail = service.get_inventory_item_detail(org_id, item_id)
-    if not item_detail:
-        raise HTTPException(status_code=404, detail="Item not found")
-
-    db.commit()
-
-    return item_detail
 
 
 @router.get("/inventory/meta/categories")
@@ -399,9 +374,7 @@ def list_inventory_categories(
     """
     org_id = auth["organization_id"]
     service = DotMacCRMSyncService(db)
-    result = service.get_categories(org_id)
-    db.commit()
-    return result
+    return service.get_categories(org_id)
 
 
 @router.get("/inventory/meta/warehouses")
@@ -416,6 +389,58 @@ def list_warehouses(
     """
     org_id = auth["organization_id"]
     service = DotMacCRMSyncService(db)
-    result = service.get_warehouses(org_id)
-    db.commit()
-    return result
+    return service.get_warehouses(org_id)
+
+
+@router.get("/inventory/{item_id}", response_model=InventoryItemDetail)
+def get_inventory_item(
+    item_id: UUID,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(_get_db),
+) -> InventoryItemDetail:
+    """
+    Get detailed inventory item with warehouse-level stock breakdown.
+
+    Called by DotMac CRM to get full item details including stock per warehouse.
+    """
+    org_id = auth["organization_id"]
+    service = DotMacCRMSyncService(db)
+
+    item_detail = service.get_inventory_item_detail(org_id, item_id)
+    if not item_detail:
+        raise HTTPException(status_code=404, detail="Item not found")
+
+    return item_detail
+
+
+@router.get("/inventory", response_model=InventoryListResponse)
+def list_inventory(
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(_get_db),
+    search: str | None = None,
+    category_code: str | None = None,
+    warehouse_id: UUID | None = None,
+    include_zero_stock: bool = False,
+    only_below_reorder: bool = False,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> InventoryListResponse:
+    """
+    List inventory items with current stock levels for CRM.
+
+    Called by DotMac CRM to retrieve available inventory for installation assignments.
+    Returns items with stock quantities (on-hand, reserved, available).
+    """
+    org_id = auth["organization_id"]
+    service = DotMacCRMSyncService(db)
+
+    return service.list_inventory_items(
+        org_id,
+        search=search,
+        category_code=category_code,
+        warehouse_id=warehouse_id,
+        include_zero_stock=include_zero_stock,
+        only_below_reorder=only_below_reorder,
+        limit=limit,
+        offset=offset,
+    )

@@ -26,6 +26,7 @@
     Edit
 </a>
 <form method="post" action="/inventory/counts/{{ count.count_id }}/start" class="inline">
+    {{ request.state.csrf_form | safe }}
 
     <button type="submit" class="btn btn-primary">
         <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -37,6 +38,7 @@
 </form>
 {% elif count.status.value == 'IN_PROGRESS' %}
 <form method="post" action="/inventory/counts/{{ count.count_id }}/complete" class="inline">
+    {{ request.state.csrf_form | safe }}
 
     <button type="submit" class="btn btn-primary">
         <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -47,6 +49,7 @@
 </form>
 {% elif count.status.value == 'COMPLETED' %}
 <form method="post" action="/inventory/counts/{{ count.count_id }}/post" class="inline">
+    {{ request.state.csrf_form | safe }}
 
     <button type="submit" class="btn btn-primary">
         <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -117,19 +120,19 @@
         </div>
 
         {% if lines | default([]) | length > 0 %}
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="table-ledger">
                 <thead>
                     <tr>
                         <th scope="col">Item Code</th>
                         <th scope="col">Item Name</th>
                         <th scope="col">Warehouse</th>
-                        <th scope="col" class="text-right">System Qty</th>
-                        <th scope="col" class="text-right">Counted Qty</th>
-                        <th scope="col" class="text-right">Variance</th>
-                        <th scope="col" class="text-right">Variance Value</th>
+                        <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider">System Qty</th>
+                        <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider">Counted Qty</th>
+                        <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider">Variance</th>
+                        <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider">Variance Value</th>
                         {% if count.status.value == 'IN_PROGRESS' %}
-                        <th scope="col" class="w-24">Action</th>
+                        <th scope="col" class="w-24 text-xs font-semibold uppercase tracking-wider">Action</th>
                         {% endif %}
                     </tr>
                 </thead>
@@ -143,7 +146,8 @@
                         <td class="text-right font-mono">
                             {% if count.status.value == 'IN_PROGRESS' and line.counted_quantity is none %}
                             <form method="post" action="/inventory/counts/{{ count.count_id }}/lines/{{ line.line_id }}/record" class="flex items-center gap-2">
-                            
+                                {{ request.state.csrf_form | safe }}
+
                                 <input type="number" name="counted_quantity" step="0.01"
                                        class="form-input w-24 text-right" placeholder="0.00">
                                 <button type="submit" class="btn btn-sm btn-primary">Save</button>

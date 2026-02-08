@@ -11,7 +11,6 @@ import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -60,8 +59,8 @@ class LoanApplicationInput:
     loan_type_id: UUID
     principal_amount: Decimal
     tenure_months: int
-    purpose: Optional[str] = None
-    first_repayment_date: Optional[date] = None
+    purpose: str | None = None
+    first_repayment_date: date | None = None
 
 
 class LoanService:
@@ -400,7 +399,7 @@ class LoanService:
         organization_id: UUID,
         loan_id: UUID,
         disbursed_by_id: UUID,
-        disbursement_reference: Optional[str] = None,
+        disbursement_reference: str | None = None,
     ) -> EmployeeLoan:
         """Mark an approved loan as disbursed."""
         org_id = coerce_uuid(organization_id)
@@ -430,7 +429,7 @@ class LoanService:
     def get_active_loans_for_employee(
         self,
         employee_id: UUID,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
     ) -> list[EmployeeLoan]:
         """Get all active (disbursed, not completed) loans for an employee."""
         emp_id = coerce_uuid(employee_id)
@@ -488,7 +487,7 @@ class LoanService:
                 interest_portion = Decimal("0")
             else:
                 # Approximate split based on remaining balance ratio
-                remaining_ratio = balance / loan.total_repayable
+                balance / loan.total_repayable
                 interest_portion = _round_currency(
                     amount * (loan.total_interest / loan.total_repayable)
                 )
@@ -522,7 +521,7 @@ class LoanService:
         principal_portion: Decimal,
         interest_portion: Decimal,
         repayment_date: date,
-        created_by_id: Optional[UUID] = None,
+        created_by_id: UUID | None = None,
     ) -> LoanRepayment:
         """
         Record a loan deduction from payroll.
@@ -597,10 +596,10 @@ class LoanService:
         loan_id: UUID,
         amount: Decimal,
         payment_date: date,
-        payment_reference: Optional[str] = None,
-        payment_method: Optional[str] = None,
-        notes: Optional[str] = None,
-        created_by_id: Optional[UUID] = None,
+        payment_reference: str | None = None,
+        payment_method: str | None = None,
+        notes: str | None = None,
+        created_by_id: UUID | None = None,
     ) -> LoanRepayment:
         """Record a manual (non-payroll) loan payment."""
         org_id = coerce_uuid(organization_id)
@@ -696,7 +695,7 @@ class LoanService:
         self,
         organization_id: UUID,
         employee_id: UUID,
-        status: Optional[LoanStatus] = None,
+        status: LoanStatus | None = None,
     ) -> list[EmployeeLoan]:
         """List all loans for an employee."""
         org_id = coerce_uuid(organization_id)

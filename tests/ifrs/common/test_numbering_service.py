@@ -4,19 +4,20 @@ Tests for NumberingService and SyncNumberingService.
 Tests document number generation, sequence reset logic, and formatting.
 """
 
-import pytest
 from datetime import date
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
+import pytest
+
 from app.models.finance.core_config.numbering_sequence import (
-    SequenceType,
     ResetFrequency,
+    SequenceType,
 )
 from app.services.finance.common.numbering import (
+    DEFAULT_PREFIXES,
     NumberingService,
     SyncNumberingService,
-    DEFAULT_PREFIXES,
 )
 
 
@@ -100,19 +101,23 @@ class TestSyncNumberingServiceGetSequence:
     def test_get_sequence_exists(self, mock_db, org_id):
         """Test getting an existing sequence."""
         sequence = MockNumberingSequence(organization_id=org_id)
-        mock_db.query.return_value.filter.return_value.first.return_value = sequence
+        mock_db.scalar.return_value = sequence
 
-        service = SyncNumberingService(mock_db)
-        result = service.get_sequence(org_id, SequenceType.INVOICE)
+        with patch("app.services.finance.common.numbering.select") as mock_select:
+            mock_select.return_value = MagicMock()
+            service = SyncNumberingService(mock_db)
+            result = service.get_sequence(org_id, SequenceType.INVOICE)
 
         assert result == sequence
 
     def test_get_sequence_not_found(self, mock_db, org_id):
         """Test getting a non-existent sequence."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalar.return_value = None
 
-        service = SyncNumberingService(mock_db)
-        result = service.get_sequence(org_id, SequenceType.INVOICE)
+        with patch("app.services.finance.common.numbering.select") as mock_select:
+            mock_select.return_value = MagicMock()
+            service = SyncNumberingService(mock_db)
+            result = service.get_sequence(org_id, SequenceType.INVOICE)
 
         assert result is None
 
@@ -123,10 +128,12 @@ class TestSyncNumberingServiceGetOrCreateSequence:
     def test_get_or_create_existing_sequence(self, mock_db, org_id):
         """Test getting an existing sequence doesn't create new one."""
         sequence = MockNumberingSequence(organization_id=org_id)
-        mock_db.query.return_value.filter.return_value.first.return_value = sequence
+        mock_db.scalar.return_value = sequence
 
-        service = SyncNumberingService(mock_db)
-        result = service.get_or_create_sequence(org_id, SequenceType.INVOICE)
+        with patch("app.services.finance.common.numbering.select") as mock_select:
+            mock_select.return_value = MagicMock()
+            service = SyncNumberingService(mock_db)
+            result = service.get_or_create_sequence(org_id, SequenceType.INVOICE)
 
         assert result == sequence
         mock_db.add.assert_not_called()
@@ -134,11 +141,13 @@ class TestSyncNumberingServiceGetOrCreateSequence:
     @patch("app.services.finance.common.numbering.NumberingSequence")
     def test_get_or_create_new_sequence(self, mock_seq_class, mock_db, org_id):
         """Test creating a new sequence when none exists."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalar.return_value = None
         mock_seq_class.return_value = MockNumberingSequence(organization_id=org_id)
 
-        service = SyncNumberingService(mock_db)
-        result = service.get_or_create_sequence(org_id, SequenceType.INVOICE)
+        with patch("app.services.finance.common.numbering.select") as mock_select:
+            mock_select.return_value = MagicMock()
+            service = SyncNumberingService(mock_db)
+            service.get_or_create_sequence(org_id, SequenceType.INVOICE)
 
         mock_db.add.assert_called_once()
         mock_db.flush.assert_called_once()
@@ -146,24 +155,33 @@ class TestSyncNumberingServiceGetOrCreateSequence:
     @patch("app.services.finance.common.numbering.NumberingSequence")
     def test_get_or_create_uses_default_prefix(self, mock_seq_class, mock_db, org_id):
         """Test that new sequences use default prefixes."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        from app.services.finance.common.numbering import DEFAULT_SEQUENCE_CONFIGS
 
-        service = SyncNumberingService(mock_db)
+        mock_db.scalar.return_value = None
 
-        for seq_type in SequenceType:
-            mock_seq_class.reset_mock()
-            mock_db.reset_mock()
-            mock_db.query.return_value.filter.return_value.first.return_value = None
-            mock_seq_class.return_value = MockNumberingSequence(
-                organization_id=org_id, sequence_type=seq_type
-            )
+        with patch("app.services.finance.common.numbering.select") as mock_select:
+            mock_select.return_value = MagicMock()
+            service = SyncNumberingService(mock_db)
 
-            service.get_or_create_sequence(org_id, seq_type)
+            for seq_type in SequenceType:
+                mock_seq_class.reset_mock()
+                mock_db.reset_mock()
+                mock_db.scalar.return_value = None
+                mock_seq_class.return_value = MockNumberingSequence(
+                    organization_id=org_id, sequence_type=seq_type
+                )
 
-            # Verify default prefix was used
-            call_kwargs = mock_seq_class.call_args[1]
-            expected_prefix = DEFAULT_PREFIXES.get(seq_type, "DOC")
-            assert call_kwargs["prefix"] == expected_prefix
+                service.get_or_create_sequence(org_id, seq_type)
+
+                # Verify default prefix was used — types with a
+                # DEFAULT_SEQUENCE_CONFIGS entry use the config's prefix,
+                # others fall back to DEFAULT_PREFIXES.
+                call_kwargs = mock_seq_class.call_args[1]
+                if seq_type in DEFAULT_SEQUENCE_CONFIGS:
+                    expected_prefix = DEFAULT_SEQUENCE_CONFIGS[seq_type]["prefix"]
+                else:
+                    expected_prefix = DEFAULT_PREFIXES.get(seq_type, "DOC")
+                assert call_kwargs["prefix"] == expected_prefix
 
 
 class TestSyncNumberingServiceShouldReset:
@@ -418,12 +436,12 @@ class TestSyncNumberingServiceGenerateNextNumber:
             current_year=None,
             reset_frequency=ResetFrequency.MONTHLY,
         )
-        (
-            mock_db.query.return_value.filter.return_value.with_for_update.return_value.first
-        ).return_value = sequence
+        mock_db.scalar.return_value = sequence
 
-        service = SyncNumberingService(mock_db)
-        result = service.generate_next_number(org_id, SequenceType.INVOICE)
+        with patch("app.services.finance.common.numbering.select") as mock_select:
+            mock_select.return_value = MagicMock()
+            service = SyncNumberingService(mock_db)
+            service.generate_next_number(org_id, SequenceType.INVOICE)
 
         assert sequence.current_number == 1
         assert sequence.current_year == date.today().year
@@ -440,12 +458,12 @@ class TestSyncNumberingServiceGenerateNextNumber:
             current_month=today.month,
             reset_frequency=ResetFrequency.MONTHLY,
         )
-        (
-            mock_db.query.return_value.filter.return_value.with_for_update.return_value.first
-        ).return_value = sequence
+        mock_db.scalar.return_value = sequence
 
-        service = SyncNumberingService(mock_db)
-        result = service.generate_next_number(org_id, SequenceType.INVOICE)
+        with patch("app.services.finance.common.numbering.select") as mock_select:
+            mock_select.return_value = MagicMock()
+            service = SyncNumberingService(mock_db)
+            result = service.generate_next_number(org_id, SequenceType.INVOICE)
 
         assert sequence.current_number == 6
         assert "0006" in result
@@ -459,14 +477,14 @@ class TestSyncNumberingServiceGenerateNextNumber:
             current_month=12,
             reset_frequency=ResetFrequency.MONTHLY,
         )
-        (
-            mock_db.query.return_value.filter.return_value.with_for_update.return_value.first
-        ).return_value = sequence
+        mock_db.scalar.return_value = sequence
 
-        service = SyncNumberingService(mock_db)
-        result = service.generate_next_number(
-            org_id, SequenceType.INVOICE, reference_date=date(2025, 1, 1)
-        )
+        with patch("app.services.finance.common.numbering.select") as mock_select:
+            mock_select.return_value = MagicMock()
+            service = SyncNumberingService(mock_db)
+            service.generate_next_number(
+                org_id, SequenceType.INVOICE, reference_date=date(2025, 1, 1)
+            )
 
         assert sequence.current_number == 1
         assert sequence.current_year == 2025
@@ -480,14 +498,14 @@ class TestSyncNumberingServiceGenerateNextNumber:
             current_year=2024,
             reset_frequency=ResetFrequency.NEVER,
         )
-        (
-            mock_db.query.return_value.filter.return_value.with_for_update.return_value.first
-        ).return_value = sequence
+        mock_db.scalar.return_value = sequence
 
-        service = SyncNumberingService(mock_db)
-        result = service.generate_next_number(
-            org_id, SequenceType.INVOICE, reference_date=date(2025, 1, 1)
-        )
+        with patch("app.services.finance.common.numbering.select") as mock_select:
+            mock_select.return_value = MagicMock()
+            service = SyncNumberingService(mock_db)
+            service.generate_next_number(
+                org_id, SequenceType.INVOICE, reference_date=date(2025, 1, 1)
+            )
 
         assert sequence.current_number == 101
 
@@ -501,12 +519,12 @@ class TestSyncNumberingServiceGenerateNextNumber:
             current_month=today.month,
             last_used_at=None,
         )
-        (
-            mock_db.query.return_value.filter.return_value.with_for_update.return_value.first
-        ).return_value = sequence
+        mock_db.scalar.return_value = sequence
 
-        service = SyncNumberingService(mock_db)
-        service.generate_next_number(org_id, SequenceType.INVOICE)
+        with patch("app.services.finance.common.numbering.select") as mock_select:
+            mock_select.return_value = MagicMock()
+            service = SyncNumberingService(mock_db)
+            service.generate_next_number(org_id, SequenceType.INVOICE)
 
         assert sequence.last_used_at is not None
 
@@ -641,7 +659,7 @@ class TestAsyncNumberingService:
             service, "get_or_create_sequence", new_callable=AsyncMock
         ) as mock_get_or_create:
             mock_get_or_create.return_value = MockNumberingSequence()
-            result = await service.initialize_all_sequences(org_id)
+            await service.initialize_all_sequences(org_id)
 
         # Should create one sequence per SequenceType
         assert mock_get_or_create.call_count == len(SequenceType)

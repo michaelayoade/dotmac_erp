@@ -54,6 +54,7 @@
 
     {% if organization %}
     <form method="POST" action="/people/settings/payroll" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
         <!-- Payroll Frequency -->
         <div class="card p-6">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Payroll Frequency</h2>

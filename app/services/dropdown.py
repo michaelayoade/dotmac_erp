@@ -6,7 +6,7 @@ Keeps "active items" filtering logic in one place.
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -26,7 +26,7 @@ class DropdownService:
         organization_id: UUID,
         *,
         include_inactive: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get employees for dropdown selection.
 
@@ -76,7 +76,7 @@ class DropdownService:
         organization_id: UUID,
         *,
         include_inactive: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get projects for dropdown selection.
 
@@ -130,7 +130,7 @@ class DropdownService:
         organization_id: UUID,
         *,
         include_inactive: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get customers for dropdown selection.
 
@@ -190,7 +190,7 @@ class DropdownService:
         organization_id: UUID,
         *,
         include_inactive: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get suppliers for dropdown selection.
 
@@ -245,7 +245,7 @@ class DropdownService:
         organization_id: UUID,
         *,
         include_inactive: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get warehouses for dropdown selection.
 
@@ -300,7 +300,7 @@ class DropdownService:
         *,
         account_type: str | None = None,
         include_inactive: bool = False,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Get GL accounts for dropdown selection.
 

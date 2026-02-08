@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}{{ kra.kra_name }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -102,9 +103,7 @@
                             'LEARNING': 'bg-teal-100 text-teal-700 dark:bg-teal-900 dark:text-teal-300',
                             'OTHER': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300'
                         } %}
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ cat_colors.get(kra.category, 'bg-slate-100 text-slate-700') }}">
-                            {{ kra.category | title }}
-                        </span>
+                        {{ status_badge(kra.category, size="sm") }}
                         {% endif %}
                         {% if kra.is_active %}
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">Active</span>

@@ -6,7 +6,7 @@ import logging
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -72,7 +72,7 @@ class AssetCategorySyncService(BaseSyncService[AssetCategory]):
 
         return self._default_accounts
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         """Fetch asset categories from ERPNext."""
         if since:
             yield from client.get_modified_since(
@@ -147,7 +147,7 @@ class AssetCategorySyncService(BaseSyncService[AssetCategory]):
         """Get category ID."""
         return entity.category_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[AssetCategory]:
+    def find_existing_entity(self, source_name: str) -> AssetCategory | None:
         """Find existing category by code."""
         if source_name in self._category_cache:
             return self._category_cache[source_name]
@@ -189,7 +189,7 @@ class AssetSyncService(BaseSyncService[Asset]):
         self._asset_cache: dict[str, Asset] = {}
         self._category_sync = AssetCategorySyncService(db, organization_id, user_id)
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         """Fetch assets from ERPNext."""
         if since:
             yield from client.get_modified_since(
@@ -300,7 +300,7 @@ class AssetSyncService(BaseSyncService[Asset]):
         """Get asset ID."""
         return entity.asset_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[Asset]:
+    def find_existing_entity(self, source_name: str) -> Asset | None:
         """Find existing asset by number."""
         if source_name in self._asset_cache:
             return self._asset_cache[source_name]
@@ -324,7 +324,7 @@ class AssetSyncService(BaseSyncService[Asset]):
 
         return result
 
-    def _resolve_category_id(self, category_source: Optional[str]) -> uuid.UUID:
+    def _resolve_category_id(self, category_source: str | None) -> uuid.UUID:
         """Resolve category ID, raising error if not found."""
         if not category_source:
             raise ValueError("Asset category is required")

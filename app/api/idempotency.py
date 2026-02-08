@@ -7,12 +7,12 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from starlette.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
+from starlette.responses import JSONResponse, Response
 
 from app.services.finance.platform.idempotency import IdempotencyService
 
@@ -20,7 +20,7 @@ from app.services.finance.platform.idempotency import IdempotencyService
 @dataclass
 class IdempotencyReplay:
     status_code: int
-    body: Optional[dict[str, Any]]
+    body: dict[str, Any] | None
 
 
 def _normalize_payload(payload: Any) -> Any:
@@ -31,7 +31,7 @@ def _normalize_payload(payload: Any) -> Any:
     return payload
 
 
-def build_request_hash(payload: Any, extra: Optional[dict[str, Any]] = None) -> str:
+def build_request_hash(payload: Any, extra: dict[str, Any] | None = None) -> str:
     """Build a stable SHA256 hash for request idempotency."""
     normalized = {
         "payload": _normalize_payload(payload),
@@ -48,7 +48,7 @@ def check_or_reserve_idempotency(
     idempotency_key: str,
     endpoint: str,
     request_hash: str,
-) -> Optional[IdempotencyReplay]:
+) -> IdempotencyReplay | None:
     """
     Check for an existing idempotency record, or reserve a new one.
     """
@@ -83,7 +83,7 @@ def build_cached_response(replay: IdempotencyReplay) -> Response:
     return JSONResponse(status_code=replay.status_code, content=replay.body)
 
 
-def require_idempotency_key(idempotency_key: Optional[str]) -> str:
+def require_idempotency_key(idempotency_key: str | None) -> str:
     if not idempotency_key:
         raise HTTPException(
             status_code=400, detail="Idempotency-Key header is required"

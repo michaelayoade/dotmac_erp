@@ -1,5 +1,6 @@
 {% extends "expense/base_expense.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}{{ advance.advance_number if advance else 'Cash Advance' }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -38,27 +39,7 @@
             <div>
                 <div class="flex items-center gap-3">
                     <h2 class="text-xl font-bold text-slate-900 dark:text-white font-mono">{{ advance.advance_number }}</h2>
-                    {% if advance.status.value == 'DRAFT' %}
-                    <span class="badge badge-neutral">Draft</span>
-                    {% elif advance.status.value == 'SUBMITTED' %}
-                    <span class="badge badge-warning">Submitted</span>
-                    {% elif advance.status.value == 'PENDING_APPROVAL' %}
-                    <span class="badge badge-warning">Pending Approval</span>
-                    {% elif advance.status.value == 'APPROVED' %}
-                    <span class="badge badge-info">Approved - Ready to Disburse</span>
-                    {% elif advance.status.value == 'DISBURSED' %}
-                    <span class="badge badge-primary">Disbursed</span>
-                    {% elif advance.status.value == 'PARTIALLY_SETTLED' %}
-                    <span class="badge badge-warning">Partially Settled</span>
-                    {% elif advance.status.value == 'FULLY_SETTLED' %}
-                    <span class="badge badge-success">Fully Settled</span>
-                    {% elif advance.status.value == 'REJECTED' %}
-                    <span class="badge badge-danger">Rejected</span>
-                    {% elif advance.status.value == 'REFUNDED' %}
-                    <span class="badge badge-info">Refunded</span>
-                    {% elif advance.status.value == 'CANCELLED' %}
-                    <span class="badge badge-neutral">Cancelled</span>
-                    {% endif %}
+                    {{ status_badge(advance.status.value) }}
                 </div>
                 <p class="text-slate-500 dark:text-slate-400 mt-1">
                     {{ advance.employee.full_name if advance.employee else 'Unknown Employee' }}
@@ -247,7 +228,7 @@
     {% if can_disburse %}
     <div id="disburse-modal" class="hidden fixed inset-0 z-50 overflow-y-auto">
         <div class="flex min-h-screen items-center justify-center p-4">
-            <div class="fixed inset-0 bg-black/50" onclick="this.parentElement.parentElement.classList.add('hidden')"></div>
+            <div class="fixed inset-0 bg-slate-900/50" onclick="this.parentElement.parentElement.classList.add('hidden')"></div>
             <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6">
                 <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Disburse Cash Advance</h3>
                 <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
@@ -257,7 +238,7 @@
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <div class="space-y-4">
                         <div>
-                            <label class="form-label">Bank Account</label>
+                            <label class="form-label">Bank Account <span class="text-rose-500">*</span></label>
                             <select name="bank_account_id" required class="form-input form-select w-full">
                                 {% for account in bank_accounts %}
                                 <option value="{{ account.bank_account_id }}">{{ account.account_name }} ({{ account.account_number[-4:] if account.account_number else 'N/A' }})</option>
@@ -291,7 +272,7 @@
     {% if can_settle %}
     <div id="settle-modal" class="hidden fixed inset-0 z-50 overflow-y-auto">
         <div class="flex min-h-screen items-center justify-center p-4">
-            <div class="fixed inset-0 bg-black/50" onclick="this.parentElement.parentElement.classList.add('hidden')"></div>
+            <div class="fixed inset-0 bg-slate-900/50" onclick="this.parentElement.parentElement.classList.add('hidden')"></div>
             <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6">
                 <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Settle Cash Advance</h3>
                 <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
@@ -301,7 +282,7 @@
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <div class="space-y-4">
                         <div>
-                            <label class="form-label">Expense Claim ID</label>
+                            <label class="form-label">Expense Claim ID <span class="text-rose-500">*</span></label>
                             <input type="text" name="claim_id" required class="form-input w-full font-mono" placeholder="Enter claim UUID">
                             <p class="text-xs text-slate-400 mt-1">Enter the UUID of an approved expense claim for this employee</p>
                         </div>

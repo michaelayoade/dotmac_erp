@@ -7,8 +7,9 @@ Template response helpers for the support/helpdesk module.
 from __future__ import annotations
 
 import logging
+import re
 from datetime import date
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 from uuid import UUID
 
@@ -92,9 +93,6 @@ PRIORITY_STYLES = {
 }
 
 
-import re
-
-
 def _strip_html(html: str) -> str:
     """Strip HTML tags and decode entities from text."""
     if not html:
@@ -119,7 +117,7 @@ def _is_numeric_subject(subject: str) -> bool:
     return cleaned.isdigit()
 
 
-def _format_ticket_for_list(ticket: Ticket) -> Dict[str, Any]:
+def _format_ticket_for_list(ticket: Ticket) -> dict[str, Any]:
     """Format a ticket for list view display."""
     status_style = STATUS_STYLES.get(ticket.status, STATUS_STYLES[TicketStatus.OPEN])
     priority_style = PRIORITY_STYLES.get(
@@ -181,8 +179,8 @@ def _format_ticket_for_list(ticket: Ticket) -> Dict[str, Any]:
 
 
 def _format_ticket_for_detail(
-    ticket: Ticket, linked_expenses: List[ExpenseClaim], db: Session = None
-) -> Dict[str, Any]:
+    ticket: Ticket, linked_expenses: list[ExpenseClaim], db: Session = None
+) -> dict[str, Any]:
     """Format a ticket for detail view display."""
     base = _format_ticket_for_list(ticket)
     status_style = STATUS_STYLES.get(ticket.status, STATUS_STYLES[TicketStatus.OPEN])
@@ -305,7 +303,7 @@ class SupportWebService:
         db: Session,
         organization_id: UUID,
         ticket_ref: str,
-    ) -> Optional[Ticket]:
+    ) -> Ticket | None:
         """Resolve ticket by UUID or ticket_number."""
         org_id = coerce_uuid(organization_id)
         try:
@@ -324,17 +322,17 @@ class SupportWebService:
     def list_tickets_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
         *,
-        search: Optional[str] = None,
-        status: Optional[str] = None,
-        priority: Optional[str] = None,
-        assigned_to: Optional[str] = None,
-        category_id: Optional[str] = None,
-        team_id: Optional[str] = None,
-        date_from: Optional[str] = None,
-        date_to: Optional[str] = None,
+        search: str | None = None,
+        status: str | None = None,
+        priority: str | None = None,
+        assigned_to: str | None = None,
+        category_id: str | None = None,
+        team_id: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
         page: int = 1,
         per_page: int = 50,
     ) -> HTMLResponse:
@@ -434,7 +432,7 @@ class SupportWebService:
     def ticket_detail_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
         ticket_id: str,
     ) -> HTMLResponse:
@@ -470,7 +468,7 @@ class SupportWebService:
         # Get attachments (split ticket vs comment attachments)
         all_attachments = attachment_service.list_attachments(db, ticket.ticket_id)
         ticket_attachments = []
-        comment_attachments: Dict[str, List[Any]] = {}
+        comment_attachments: dict[str, list[Any]] = {}
         for att in all_attachments:
             if att.comment_id:
                 comment_attachments.setdefault(str(att.comment_id), []).append(att)
@@ -507,10 +505,10 @@ class SupportWebService:
     def ticket_form_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
-        ticket_id: Optional[str] = None,
-        error: Optional[str] = None,
+        ticket_id: str | None = None,
+        error: str | None = None,
     ) -> HTMLResponse:
         """Render the ticket create/edit form."""
         from app.web.deps import base_context
@@ -562,23 +560,23 @@ class SupportWebService:
     def create_ticket_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
         *,
         subject: str,
-        description: Optional[str] = None,
+        description: str | None = None,
         priority: str = "MEDIUM",
-        raised_by_email: Optional[str] = None,
-        assigned_to_id: Optional[str] = None,
-        project_id: Optional[str] = None,
-        customer_id: Optional[str] = None,
-        category_id: Optional[str] = None,
-        team_id: Optional[str] = None,
-        opening_date: Optional[str] = None,
-        contact_email: Optional[str] = None,
-        contact_phone: Optional[str] = None,
-        contact_address: Optional[str] = None,
-        files: Optional[list[UploadFile]] = None,
+        raised_by_email: str | None = None,
+        assigned_to_id: str | None = None,
+        project_id: str | None = None,
+        customer_id: str | None = None,
+        category_id: str | None = None,
+        team_id: str | None = None,
+        opening_date: str | None = None,
+        contact_email: str | None = None,
+        contact_phone: str | None = None,
+        contact_address: str | None = None,
+        files: list[UploadFile] | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Create a new ticket and redirect to detail page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -661,23 +659,23 @@ class SupportWebService:
     def update_ticket_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
         ticket_id: str,
         *,
-        subject: Optional[str] = None,
-        description: Optional[str] = None,
-        priority: Optional[str] = None,
-        raised_by_email: Optional[str] = None,
-        assigned_to_id: Optional[str] = None,
-        project_id: Optional[str] = None,
-        customer_id: Optional[str] = None,
-        category_id: Optional[str] = None,
-        team_id: Optional[str] = None,
-        contact_email: Optional[str] = None,
-        contact_phone: Optional[str] = None,
-        contact_address: Optional[str] = None,
-        files: Optional[list[UploadFile]] = None,
+        subject: str | None = None,
+        description: str | None = None,
+        priority: str | None = None,
+        raised_by_email: str | None = None,
+        assigned_to_id: str | None = None,
+        project_id: str | None = None,
+        customer_id: str | None = None,
+        category_id: str | None = None,
+        team_id: str | None = None,
+        contact_email: str | None = None,
+        contact_phone: str | None = None,
+        contact_address: str | None = None,
+        files: list[UploadFile] | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Update a ticket and redirect to detail page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -743,11 +741,11 @@ class SupportWebService:
     def update_status_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
         ticket_id: str,
         new_status: str,
-        notes: Optional[str] = None,
+        notes: str | None = None,
     ) -> RedirectResponse:
         """Update ticket status."""
         org_id = coerce_uuid(auth.organization_id)
@@ -778,7 +776,7 @@ class SupportWebService:
     def assign_ticket_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
         ticket_id: str,
         assigned_to_id: str,
@@ -808,7 +806,7 @@ class SupportWebService:
     def resolve_ticket_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
         ticket_id: str,
         resolution: str,
@@ -838,7 +836,7 @@ class SupportWebService:
     def archive_ticket_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
         ticket_id: str,
     ) -> RedirectResponse:
@@ -871,7 +869,7 @@ class SupportWebService:
     def delete_ticket_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
         ticket_id: str,
     ) -> RedirectResponse:
@@ -904,7 +902,7 @@ class SupportWebService:
     def restore_ticket_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
         ticket_id: str,
     ) -> RedirectResponse:
@@ -937,10 +935,10 @@ class SupportWebService:
     def archived_tickets_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
         *,
-        search: Optional[str] = None,
+        search: str | None = None,
         page: int = 1,
         per_page: int = 50,
     ) -> HTMLResponse:
@@ -983,7 +981,7 @@ class SupportWebService:
         self,
         db: Session,
         organization_id: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get support dashboard context for operations dashboard widget."""
         org_id = coerce_uuid(organization_id)
 
@@ -1010,11 +1008,11 @@ class SupportWebService:
     def sla_dashboard_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
         *,
-        date_from: Optional[str] = None,
-        date_to: Optional[str] = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
     ) -> HTMLResponse:
         """Render the SLA dashboard page."""
         from datetime import timedelta
@@ -1154,7 +1152,7 @@ class SupportWebService:
     def breached_tickets_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
         *,
         breach_type: str = "all",
@@ -1229,10 +1227,10 @@ class SupportWebService:
     def aging_report_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
         *,
-        status_filter: Optional[str] = None,
+        status_filter: str | None = None,
     ) -> HTMLResponse:
         """Render the ticket aging report page."""
         from app.web.deps import base_context
@@ -1271,7 +1269,7 @@ class SupportWebService:
 
         return templates.TemplateResponse(request, "support/aging_report.html", context)
 
-    def _format_sla_status(self, sla_status) -> Optional[Dict[str, Any]]:
+    def _format_sla_status(self, sla_status) -> dict[str, Any] | None:
         """Format SLA status for template display."""
 
         if not sla_status:
@@ -1389,7 +1387,7 @@ class SupportWebService:
         db: Session,
         organization_id: UUID,
         ticket_id: UUID,
-    ) -> List[Any]:
+    ) -> list[Any]:
         """Get tasks linked to this ticket."""
         from sqlalchemy.orm import joinedload
 
@@ -1408,8 +1406,8 @@ class SupportWebService:
 
     def _format_activity_timeline(
         self,
-        activities: List[Any],
-    ) -> List[Dict[str, Any]]:
+        activities: list[Any],
+    ) -> list[dict[str, Any]]:
         """Format activity timeline for template display."""
         from app.models.support.comment import CommentType
 
@@ -1609,12 +1607,12 @@ class SupportWebService:
     def bulk_update_status_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
         *,
-        ticket_ids: List[str],
+        ticket_ids: list[str],
         new_status: str,
-        notes: Optional[str] = None,
+        notes: str | None = None,
     ) -> RedirectResponse:
         """Bulk update status for multiple tickets."""
         org_id = coerce_uuid(auth.organization_id)
@@ -1668,10 +1666,10 @@ class SupportWebService:
     def bulk_assign_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
         *,
-        ticket_ids: List[str],
+        ticket_ids: list[str],
         assigned_to_id: str,
     ) -> RedirectResponse:
         """Bulk assign multiple tickets to an employee."""
@@ -1734,10 +1732,10 @@ class SupportWebService:
     def bulk_archive_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
         *,
-        ticket_ids: List[str],
+        ticket_ids: list[str],
     ) -> RedirectResponse:
         """Bulk archive multiple tickets."""
         org_id = coerce_uuid(auth.organization_id)

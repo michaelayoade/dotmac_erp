@@ -4,15 +4,12 @@ Quote Web Routes.
 HTML template routes for sales quote management.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.ar.web import quote_web_service
-from app.web.deps import get_db, require_finance_access, WebAuthContext
-
+from app.web.deps import WebAuthContext, get_db, require_finance_access
 
 router = APIRouter(prefix="/quotes", tags=["quotes-web"])
 
@@ -26,10 +23,10 @@ router = APIRouter(prefix="/quotes", tags=["quotes-web"])
 @router.get("/", response_class=HTMLResponse)
 def quote_list(
     request: Request,
-    status: Optional[str] = None,
-    customer_id: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    status: str | None = None,
+    customer_id: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -47,7 +44,7 @@ def quote_list(
 @router.get("/new", response_class=HTMLResponse)
 def new_quote_form(
     request: Request,
-    customer_id: Optional[str] = None,
+    customer_id: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -61,13 +58,13 @@ def create_quote(
     customer_id: str = Form(...),
     quote_date: str = Form(...),
     valid_until: str = Form(...),
-    currency_code: Optional[str] = Form(None),
-    contact_name: Optional[str] = Form(None),
-    contact_email: Optional[str] = Form(None),
-    payment_terms_id: Optional[str] = Form(None),
-    customer_notes: Optional[str] = Form(None),
-    internal_notes: Optional[str] = Form(None),
-    terms_and_conditions: Optional[str] = Form(None),
+    currency_code: str | None = Form(None),
+    contact_name: str | None = Form(None),
+    contact_email: str | None = Form(None),
+    payment_terms_id: str | None = Form(None),
+    customer_notes: str | None = Form(None),
+    internal_notes: str | None = Form(None),
+    terms_and_conditions: str | None = Form(None),
     lines_json: str = Form("[]"),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -138,7 +135,7 @@ def accept_quote(
 def reject_quote(
     request: Request,
     quote_id: str,
-    reason: Optional[str] = Form(None),
+    reason: str | None = Form(None),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -161,7 +158,7 @@ def convert_to_invoice(
 def convert_to_sales_order(
     request: Request,
     quote_id: str,
-    customer_po_number: Optional[str] = Form(None),
+    customer_po_number: str | None = Form(None),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):

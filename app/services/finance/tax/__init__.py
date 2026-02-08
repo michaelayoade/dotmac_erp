@@ -50,11 +50,13 @@ from app.services.finance.tax.tax_reconciliation import (
 from app.services.finance.tax.tax_return import (
     TaxReturnInput,
     TaxReturnService,
+    TaxReturnUpdateInput,
     tax_return_service,
 )
 from app.services.finance.tax.tax_transaction import (
     TaxByCodeSummary,
     TaxReturnSummary,
+    TaxTransactionCreateInput,
     TaxTransactionInput,
     TaxTransactionService,
     tax_transaction_service,
@@ -73,6 +75,7 @@ __all__ = [
     # Tax Transaction
     "TaxTransactionService",
     "TaxTransactionInput",
+    "TaxTransactionCreateInput",
     "TaxReturnSummary",
     "TaxByCodeSummary",
     "tax_transaction_service",
@@ -100,6 +103,7 @@ __all__ = [
     "TaxReturnService",
     "tax_return_service",
     "TaxReturnInput",
+    "TaxReturnUpdateInput",
     # Tax Calculation
     "TaxCalculationService",
     "LineTaxInput",

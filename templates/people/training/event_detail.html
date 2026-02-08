@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}{{ event.event_name }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -62,9 +63,7 @@
                         'COMPLETED': 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
                         'CANCELLED': 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300'
                     } %}
-                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {{ status_colors.get(event.status.value, 'bg-slate-100 text-slate-700') }}">
-                        {{ event.status.value | replace('_', ' ') | title }}
-                    </span>
+                    {{ status_badge(event.status.value, size="sm") }}
                 </div>
                 {% if event.program %}
                 <a href="/people/training/programs/{{ event.program.program_id }}" class="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400">{{ event.program.program_name }}</a>
@@ -234,7 +233,7 @@
             {% endif %}
         </div>
         {% if event.attendees %}
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">

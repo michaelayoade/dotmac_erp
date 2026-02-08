@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 
+{% from "components/macros.html" import empty_state %}
 {% block page_title %}Job Offers{% endblock %}
 
 {% block breadcrumbs %}
@@ -68,7 +69,7 @@
 
     {% if offers %}
     <div class="card overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
@@ -112,6 +113,12 @@
                         </td>
                         <td class="px-4 py-3 text-right">
                             <a href="/people/recruit/offers/{{ offer.offer_id }}" class="text-teal-600 dark:text-teal-400 hover:underline text-sm">View</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No offers found", "There are no offers to display.") }}
                         </td>
                     </tr>
                     {% endfor %}

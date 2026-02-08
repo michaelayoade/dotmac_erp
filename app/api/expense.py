@@ -11,72 +11,74 @@ Independent expense module API endpoints for:
 
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, Header, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import (
     require_organization_id,
     require_tenant_permission,
 )
+from app.api.idempotency import (
+    build_cached_response,
+    build_request_hash,
+    check_or_reserve_idempotency,
+    require_idempotency_key,
+)
 from app.db import SessionLocal
 from app.models.expense import (
-    CashAdvanceStatus,
     CardTransactionStatus,
+    CashAdvanceStatus,
     ExpenseClaimStatus,
 )
 from app.schemas.expense import (
-    # Expense Category
-    ExpenseCategoryCreate,
-    ExpenseCategoryUpdate,
-    ExpenseCategoryRead,
-    ExpenseCategoryListResponse,
-    # Expense Claim
-    ExpenseClaimCreate,
-    ExpenseClaimUpdate,
-    ExpenseClaimRead,
-    ExpenseClaimListResponse,
-    ExpenseClaimItemCreate,
-    ExpenseClaimItemRead,
-    ExpenseClaimApprovalRequest,
-    ExpenseClaimRejectRequest,
-    MarkPaidRequest,
-    LinkAdvanceRequest,
-    # Cash Advance
-    CashAdvanceCreate,
-    CashAdvanceUpdate,
-    CashAdvanceRead,
-    CashAdvanceListResponse,
-    CashAdvanceDisburseRequest,
-    CashAdvanceSettleRequest,
-    # Corporate Card
-    CorporateCardCreate,
-    CorporateCardUpdate,
-    CorporateCardRead,
-    CorporateCardListResponse,
-    DeactivateCardRequest,
     # Card Transaction
     CardTransactionCreate,
-    CardTransactionUpdate,
-    CardTransactionRead,
     CardTransactionListResponse,
-    MatchTransactionRequest,
+    CardTransactionRead,
+    CardTransactionUpdate,
+    # Cash Advance
+    CashAdvanceCreate,
+    CashAdvanceDisburseRequest,
+    CashAdvanceListResponse,
+    CashAdvanceRead,
+    CashAdvanceSettleRequest,
+    CashAdvanceUpdate,
+    # Corporate Card
+    CorporateCardCreate,
+    CorporateCardListResponse,
+    CorporateCardRead,
+    CorporateCardUpdate,
+    DeactivateCardRequest,
+    EmployeeExpenseSummary,
+    # Expense Category
+    ExpenseCategoryCreate,
+    ExpenseCategoryListResponse,
+    ExpenseCategoryRead,
+    ExpenseCategoryUpdate,
+    ExpenseClaimApprovalRequest,
+    # Expense Claim
+    ExpenseClaimCreate,
+    ExpenseClaimItemCreate,
+    ExpenseClaimItemRead,
+    ExpenseClaimListResponse,
+    ExpenseClaimRead,
+    ExpenseClaimRejectRequest,
+    ExpenseClaimUpdate,
     # Reports
     ExpenseStats,
-    EmployeeExpenseSummary,
+    LinkAdvanceRequest,
+    MarkPaidRequest,
+    MatchTransactionRequest,
 )
-from app.services.expense import ExpenseService
-from app.services.expense.expense_service import ApproverAuthorityError
 from app.services.common import PaginationParams
-from app.services.finance.platform.idempotency import IdempotencyService
-from app.api.idempotency import (
-    build_request_hash,
-    check_or_reserve_idempotency,
-    build_cached_response,
-    require_idempotency_key,
+from app.services.expense import ExpenseService
+from app.services.expense.expense_service import (
+    ApproverAuthorityError,
+    ExpenseClaimStatusError,
 )
+from app.services.finance.platform.idempotency import IdempotencyService
 
 router = APIRouter(
     prefix="/expenses",
@@ -93,7 +95,7 @@ def get_db():
         db.close()
 
 
-def parse_enum(value: Optional[str], enum_type, field_name: str):
+def parse_enum(value: str | None, enum_type, field_name: str):
     if value is None:
         return None
     try:
@@ -113,8 +115,8 @@ def parse_enum(value: Optional[str], enum_type, field_name: str):
 def list_expense_categories(
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:categories:read")),
-    search: Optional[str] = None,
-    is_active: Optional[bool] = None,
+    search: str | None = None,
+    is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -214,11 +216,11 @@ def delete_expense_category(
 def list_expense_claims(
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:claims:read")),
-    employee_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
-    search: Optional[str] = None,
+    employee_id: UUID | None = None,
+    status: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
+    search: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -292,6 +294,7 @@ def create_expense_claim(
             recipient_bank_name=payload.recipient_bank_name,
             recipient_account_number=payload.recipient_account_number,
             recipient_name=payload.recipient_name,
+            requested_approver_id=payload.requested_approver_id,
             notes=payload.notes,
             items=items_data,
         )
@@ -705,6 +708,56 @@ def mark_claim_paid(
         raise
 
 
+@router.post("/claims/{claim_id}/cancel", response_model=ExpenseClaimRead)
+def cancel_claim(
+    claim_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:claims:update")),
+    db: Session = Depends(get_db),
+    reason: str | None = None,
+):
+    """Cancel an expense claim (DRAFT or SUBMITTED only)."""
+    svc = ExpenseService(db)
+    try:
+        claim = svc.cancel_claim(
+            org_id=organization_id,
+            claim_id=claim_id,
+            reason=reason,
+        )
+        db.commit()
+        return ExpenseClaimRead.model_validate(claim)
+    except ExpenseClaimStatusError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+
+
+@router.post("/claims/{claim_id}/resubmit", response_model=ExpenseClaimRead)
+def resubmit_claim(
+    claim_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
+    _auth: dict = Depends(require_tenant_permission("expense:claims:update")),
+    db: Session = Depends(get_db),
+):
+    """Resubmit a rejected expense claim (resets to DRAFT)."""
+    svc = ExpenseService(db)
+    try:
+        claim = svc.resubmit_claim(
+            org_id=organization_id,
+            claim_id=claim_id,
+        )
+        db.commit()
+        return ExpenseClaimRead.model_validate(claim)
+    except ExpenseClaimStatusError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+
+
 @router.post("/claims/{claim_id}/link-advance", response_model=ExpenseClaimRead)
 def link_advance_to_claim(
     claim_id: UUID,
@@ -783,10 +836,10 @@ def link_advance_to_claim(
 def list_cash_advances(
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:advances:read")),
-    employee_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    employee_id: UUID | None = None,
+    status: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -898,8 +951,8 @@ def approve_advance(
     advance_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:advances:approve:tier1")),
-    approver_id: Optional[UUID] = None,
-    approved_amount: Optional[Decimal] = None,
+    approver_id: UUID | None = None,
+    approved_amount: Decimal | None = None,
     db: Session = Depends(get_db),
 ):
     """Approve a cash advance."""
@@ -923,7 +976,7 @@ def reject_advance(
     advance_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:advances:approve:tier1")),
-    approver_id: Optional[UUID] = None,
+    approver_id: UUID | None = None,
     reason: str = Query(...),
     db: Session = Depends(get_db),
 ):
@@ -990,8 +1043,8 @@ def settle_advance(
 def list_corporate_cards(
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:cards:read")),
-    employee_id: Optional[UUID] = None,
-    is_active: Optional[bool] = None,
+    employee_id: UUID | None = None,
+    is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -1093,10 +1146,10 @@ def deactivate_corporate_card(
 def list_card_transactions(
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:cards:transactions:read")),
-    card_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    card_id: UUID | None = None,
+    status: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     unmatched_only: bool = False,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
@@ -1230,8 +1283,8 @@ def get_employee_expense_summary(
     employee_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
     _auth: dict = Depends(require_tenant_permission("expense:reports:read")),
-    year: Optional[int] = None,
-    month: Optional[int] = None,
+    year: int | None = None,
+    month: int | None = None,
     db: Session = Depends(get_db),
 ):
     """Get expense summary for an employee."""

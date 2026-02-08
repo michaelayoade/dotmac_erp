@@ -7,7 +7,7 @@ Tracks interview scheduling, rounds, and feedback.
 import enum
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     DateTime,
@@ -27,8 +27,8 @@ from app.db import Base
 from app.models.people.base import AuditMixin, ERPNextSyncMixin
 
 if TYPE_CHECKING:
-    from app.models.people.recruit.job_applicant import JobApplicant
     from app.models.people.hr.employee import Employee
+    from app.models.people.recruit.job_applicant import JobApplicant
 
 
 class InterviewRound(str, enum.Enum):
@@ -109,21 +109,21 @@ class Interview(Base, AuditMixin, ERPNextSyncMixin):
         DateTime(timezone=True),
         nullable=False,
     )
-    actual_start: Mapped[Optional[datetime]] = mapped_column(
+    actual_start: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    actual_end: Mapped[Optional[datetime]] = mapped_column(
+    actual_end: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
     # Location/Link
-    location: Mapped[Optional[str]] = mapped_column(
+    location: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
     )
-    meeting_link: Mapped[Optional[str]] = mapped_column(
+    meeting_link: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
         comment="Video call link",
@@ -143,25 +143,25 @@ class Interview(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # Feedback (filled after interview)
-    rating: Mapped[Optional[int]] = mapped_column(
+    rating: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="1-5 rating",
     )
-    recommendation: Mapped[Optional[str]] = mapped_column(
+    recommendation: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="STRONG_YES, YES, MAYBE, NO, STRONG_NO",
     )
-    feedback: Mapped[Optional[str]] = mapped_column(
+    feedback: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    strengths: Mapped[Optional[str]] = mapped_column(
+    strengths: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    weaknesses: Mapped[Optional[str]] = mapped_column(
+    weaknesses: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -171,7 +171,7 @@ class Interview(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

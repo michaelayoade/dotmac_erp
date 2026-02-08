@@ -1,5 +1,6 @@
 {% extends "modules/base_modules.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block title %}Tasks - {{ project.project_name }}{% endblock %}
 
 {% block page_title %}Tasks{% endblock %}
@@ -96,6 +97,7 @@
         <div class="flex flex-wrap items-center gap-2">
             <!-- Bulk Status Change -->
             <form method="post" action="/projects/{{ project.project_code }}/tasks/bulk-status" class="flex items-center gap-2">
+                {{ request.state.csrf_form | safe }}
                 <input type="hidden" name="task_ids" :value="selectedTasks.join(',')">
                 <select name="status" class="rounded-lg border-slate-300 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                     <option value="">Change status...</option>
@@ -111,6 +113,7 @@
             <!-- Bulk Delete -->
             <form method="post" action="/projects/{{ project.project_code }}/tasks/bulk-delete"
                   onsubmit="return confirm('Delete selected tasks? This cannot be undone.');">
+                {{ request.state.csrf_form | safe }}
                 <input type="hidden" name="task_ids" :value="selectedTasks.join(',')">
                 <button type="submit" class="rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-rose-700 transition-colors">
                     Delete
@@ -129,7 +132,7 @@
         <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
             <thead class="bg-slate-50 dark:bg-slate-800/50">
                 <tr>
-                    <th scope="col" class="px-4 py-3 text-left">
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
                         <input type="checkbox" x-model="selectAll"
                                @change="selectedTasks = selectAll ? [{% for task in tasks %}'{{ task.task_id }}'{% if not loop.last %},{% endif %}{% endfor %}] : []"
                                class="rounded border-slate-300 text-amber-600 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700">
@@ -186,9 +189,7 @@
                                 </div>
                             </td>
                             <td class="px-4 py-4">
-                                <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium {{ status_colors.get(task.status.value, 'bg-slate-100') }}">
-                                    {{ task.status.value }}
-                                </span>
+                                {{ status_badge(task.status.value, size="sm") }}
                             </td>
                             <td class="px-4 py-4">
                                 <span class="text-sm font-medium {{ priority_colors.get(task.priority.value, 'text-slate-500') }}">
@@ -246,9 +247,7 @@
                                 </div>
                             </td>
                             <td class="px-4 py-3">
-                                <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium {{ status_colors.get(subtask.status.value, 'bg-slate-100') }}">
-                                    {{ subtask.status.value }}
-                                </span>
+                                {{ status_badge(subtask.status.value, size="sm") }}
                             </td>
                             <td class="px-4 py-3">
                                 <span class="text-xs font-medium {{ priority_colors.get(subtask.priority.value, 'text-slate-500') }}">
@@ -310,9 +309,7 @@
                                 </div>
                             </td>
                             <td class="px-4 py-4">
-                                <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium {{ status_colors.get(task.status.value, 'bg-slate-100') }}">
-                                    {{ task.status.value }}
-                                </span>
+                                {{ status_badge(task.status.value, size="sm") }}
                             </td>
                             <td class="px-4 py-4">
                                 <span class="text-sm font-medium {{ priority_colors.get(task.priority.value, 'text-slate-500') }}">

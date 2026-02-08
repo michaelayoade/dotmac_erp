@@ -10,15 +10,14 @@ These tasks handle:
 
 import logging
 import uuid
-from typing import Optional
 
 from celery import shared_task
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.models.sync import SyncHistory, SyncType, IntegrationType
 from app.models.finance.core_org.organization import Organization
+from app.models.sync import IntegrationType, SyncHistory, SyncType
 from app.services.erpnext.client import ERPNextClient, ERPNextConfig
 from app.services.erpnext.sync.orchestrator import (
     ERPNextSyncOrchestrator,
@@ -28,7 +27,7 @@ from app.services.erpnext.sync.orchestrator import (
 logger = logging.getLogger(__name__)
 
 
-def _get_erpnext_config(db: "Session", org: Organization) -> Optional[ERPNextConfig]:
+def _get_erpnext_config(db: "Session", org: Organization) -> ERPNextConfig | None:
     """
     Get ERPNext configuration from IntegrationConfig table.
 
@@ -63,7 +62,7 @@ def run_full_erpnext_sync(
     self,
     organization_id: str,
     user_id: str,
-    entity_types: Optional[list[str]] = None,
+    entity_types: list[str] | None = None,
 ) -> dict:
     """
     Run full ERPNext sync for an organization.
@@ -135,7 +134,7 @@ def run_incremental_erpnext_sync(
     self,
     organization_id: str,
     user_id: str,
-    entity_types: Optional[list[str]] = None,
+    entity_types: list[str] | None = None,
 ) -> dict:
     """
     Run incremental ERPNext sync - only sync records modified since last sync.

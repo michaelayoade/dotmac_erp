@@ -7,7 +7,7 @@ Handles resolution of email profiles for different modules and organizations.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import select
@@ -37,9 +37,9 @@ class EmailProfileService:
 
     def get_profile_for_module(
         self,
-        organization_id: Optional[UUID],
+        organization_id: UUID | None,
         module: EmailModule = EmailModule.ADMIN,
-    ) -> Optional[EmailProfile]:
+    ) -> EmailProfile | None:
         """
         Get the email profile to use for a specific module and organization.
 
@@ -125,9 +125,9 @@ class EmailProfileService:
 
     def get_profile_config(
         self,
-        organization_id: Optional[UUID] = None,
+        organization_id: UUID | None = None,
         module: EmailModule = EmailModule.ADMIN,
-    ) -> Optional["SMTPConfig"]:
+    ) -> SMTPConfig | None:
         """
         Get the config dict for an email profile.
 
@@ -145,14 +145,14 @@ class EmailProfileService:
         smtp_port: int,
         from_email: str,
         from_name: str = "Dotmac ERP",
-        smtp_username: Optional[str] = None,
-        smtp_password: Optional[str] = None,
+        smtp_username: str | None = None,
+        smtp_password: str | None = None,
         use_tls: bool = True,
         use_ssl: bool = False,
-        reply_to: Optional[str] = None,
-        organization_id: Optional[UUID] = None,
+        reply_to: str | None = None,
+        organization_id: UUID | None = None,
         is_default: bool = False,
-        created_by_id: Optional[UUID] = None,
+        created_by_id: UUID | None = None,
         validate_smtp: bool = True,
     ) -> EmailProfile:
         """
@@ -317,7 +317,7 @@ class EmailProfileService:
 
     def list_profiles(
         self,
-        organization_id: Optional[UUID] = None,
+        organization_id: UUID | None = None,
         include_system: bool = True,
     ) -> list[EmailProfile]:
         """List email profiles for an organization."""

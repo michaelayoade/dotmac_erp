@@ -7,7 +7,6 @@ Stores configuration for external system integrations like ERPNext.
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -62,19 +61,19 @@ class IntegrationConfig(Base):
 
     # Connection settings
     base_url: Mapped[str] = mapped_column(String(500), nullable=False)
-    api_key: Mapped[Optional[str]] = mapped_column(
+    api_key: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="API key - should be encrypted at rest",
     )
-    api_secret: Mapped[Optional[str]] = mapped_column(
+    api_secret: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="API secret - should be encrypted at rest",
     )
 
     # Additional settings (e.g., company name for ERPNext)
-    company: Mapped[Optional[str]] = mapped_column(
+    company: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
         comment="Company/tenant identifier in the external system",
@@ -82,7 +81,7 @@ class IntegrationConfig(Base):
 
     # Status
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
-    last_verified_at: Mapped[Optional[datetime]] = mapped_column(
+    last_verified_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="Last successful connection verification",
@@ -94,12 +93,12 @@ class IntegrationConfig(Base):
         server_default=func.now(),
         nullable=False,
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
     )
-    created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )

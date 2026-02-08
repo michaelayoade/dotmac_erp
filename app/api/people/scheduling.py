@@ -5,62 +5,61 @@ Thin API wrapper for Shift Scheduling endpoints. All business logic is in servic
 """
 
 from datetime import date
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import (
+    require_current_employee_id,
     require_organization_id,
     require_tenant_auth,
-    require_current_employee_id,
 )
 from app.db import SessionLocal
 from app.models.people.scheduling import RotationType, ScheduleStatus, SwapRequestStatus
 from app.schemas.people.scheduling import (
-    # Patterns
-    ShiftPatternCreate,
-    ShiftPatternUpdate,
-    ShiftPatternRead,
-    ShiftPatternListResponse,
+    GenerateScheduleResult,
+    PatternAssignmentBulkCreate,
     # Assignments
     PatternAssignmentCreate,
-    PatternAssignmentUpdate,
-    PatternAssignmentRead,
     PatternAssignmentListResponse,
-    PatternAssignmentBulkCreate,
+    PatternAssignmentRead,
+    PatternAssignmentUpdate,
+    ScheduleGenerateRequest,
+    SchedulePublishRequest,
+    # Patterns
+    ShiftPatternCreate,
+    ShiftPatternListResponse,
+    ShiftPatternRead,
+    ShiftPatternUpdate,
+    ShiftScheduleListResponse,
     # Schedules
     ShiftScheduleRead,
     ShiftScheduleUpdate,
-    ShiftScheduleListResponse,
-    ScheduleGenerateRequest,
-    SchedulePublishRequest,
-    GenerateScheduleResult,
     # Swap Requests
     SwapRequestCreate,
+    SwapRequestListResponse,
     SwapRequestRead,
     SwapRequestReview,
-    SwapRequestListResponse,
-)
-from app.services.people.scheduling import (
-    SchedulingService,
-    ScheduleGenerator,
-    SwapService,
-)
-from app.services.people.scheduling.scheduling_service import (
-    SchedulingServiceError,
-    ShiftPatternNotFoundError,
-    PatternAssignmentNotFoundError,
-    ShiftScheduleNotFoundError,
-)
-from app.services.people.scheduling.schedule_generator import ScheduleGeneratorError
-from app.services.people.scheduling.swap_service import (
-    SwapServiceError,
-    SwapRequestNotFoundError,
-    InvalidSwapTransitionError,
 )
 from app.services.common import PaginationParams
+from app.services.people.scheduling import (
+    ScheduleGenerator,
+    SchedulingService,
+    SwapService,
+)
+from app.services.people.scheduling.schedule_generator import ScheduleGeneratorError
+from app.services.people.scheduling.scheduling_service import (
+    PatternAssignmentNotFoundError,
+    SchedulingServiceError,
+    ShiftPatternNotFoundError,
+    ShiftScheduleNotFoundError,
+)
+from app.services.people.scheduling.swap_service import (
+    InvalidSwapTransitionError,
+    SwapRequestNotFoundError,
+    SwapServiceError,
+)
 
 
 def handle_scheduling_error(e: Exception) -> None:
@@ -107,9 +106,9 @@ def get_db():
 @router.get("/patterns", response_model=ShiftPatternListResponse)
 def list_patterns(
     organization_id: UUID = Depends(require_organization_id),
-    search: Optional[str] = None,
-    is_active: Optional[bool] = None,
-    rotation_type: Optional[RotationType] = None,
+    search: str | None = None,
+    is_active: bool | None = None,
+    rotation_type: RotationType | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -211,11 +210,11 @@ def delete_pattern(
 @router.get("/assignments", response_model=PatternAssignmentListResponse)
 def list_assignments(
     organization_id: UUID = Depends(require_organization_id),
-    department_id: Optional[UUID] = None,
-    employee_id: Optional[UUID] = None,
-    shift_pattern_id: Optional[UUID] = None,
-    is_active: Optional[bool] = None,
-    effective_date: Optional[date] = None,
+    department_id: UUID | None = None,
+    employee_id: UUID | None = None,
+    shift_pattern_id: UUID | None = None,
+    is_active: bool | None = None,
+    effective_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -334,12 +333,12 @@ def delete_assignment(
 @router.get("/schedules", response_model=ShiftScheduleListResponse)
 def list_schedules(
     organization_id: UUID = Depends(require_organization_id),
-    department_id: Optional[UUID] = None,
-    employee_id: Optional[UUID] = None,
-    schedule_month: Optional[str] = Query(None, pattern=r"^\d{4}-\d{2}$"),
-    status: Optional[ScheduleStatus] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    department_id: UUID | None = None,
+    employee_id: UUID | None = None,
+    schedule_month: str | None = Query(None, pattern=r"^\d{4}-\d{2}$"),
+    status: ScheduleStatus | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
@@ -475,9 +474,9 @@ def delete_schedule(
 @router.get("/swaps", response_model=SwapRequestListResponse)
 def list_swap_requests(
     organization_id: UUID = Depends(require_organization_id),
-    status: Optional[SwapRequestStatus] = None,
-    requester_id: Optional[UUID] = None,
-    target_employee_id: Optional[UUID] = None,
+    status: SwapRequestStatus | None = None,
+    requester_id: UUID | None = None,
+    target_employee_id: UUID | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),

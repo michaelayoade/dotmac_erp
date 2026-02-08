@@ -5,15 +5,12 @@ HTML template routes for Salary Components, Structures, and Slips.
 All business logic is delegated to the payroll_web_service.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.people.payroll.web import payroll_web_service
-from app.web.deps import get_db, require_hr_access, WebAuthContext
-
+from app.web.deps import WebAuthContext, get_db, require_hr_access
 
 router = APIRouter(prefix="/payroll", tags=["payroll-web"])
 
@@ -26,8 +23,8 @@ router = APIRouter(prefix="/payroll", tags=["payroll-web"])
 @router.get("/components", response_class=HTMLResponse)
 def list_salary_components(
     request: Request,
-    search: Optional[str] = None,
-    component_type: Optional[str] = None,
+    search: str | None = None,
+    component_type: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -102,8 +99,8 @@ def delete_component(
 @router.get("/slips", response_class=HTMLResponse)
 def list_salary_slips(
     request: Request,
-    search: Optional[str] = None,
-    status: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -117,8 +114,8 @@ def list_salary_slips(
 @router.get("/slips/export")
 def export_salary_slips(
     request: Request,
-    search: Optional[str] = None,
-    status: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -191,7 +188,7 @@ def approve_slip(
 @router.post("/slips/{slip_id}/post")
 def post_slip(
     slip_id: str,
-    posting_date: Optional[str] = Form(None),
+    posting_date: str | None = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -228,7 +225,7 @@ def delete_slip(
 @router.get("/structures", response_class=HTMLResponse)
 def list_salary_structures(
     request: Request,
-    search: Optional[str] = None,
+    search: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -314,9 +311,9 @@ def view_structure(
 @router.get("/assignments", response_class=HTMLResponse)
 def list_assignments(
     request: Request,
-    search: Optional[str] = None,
-    bulk_created: Optional[int] = None,
-    bulk_skipped: Optional[int] = None,
+    search: str | None = None,
+    bulk_created: int | None = None,
+    bulk_skipped: int | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -330,7 +327,7 @@ def list_assignments(
 @router.get("/assignments/new", response_class=HTMLResponse)
 def new_assignment_form(
     request: Request,
-    employee_id: Optional[str] = None,
+    employee_id: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -399,7 +396,7 @@ async def update_assignment(
 @router.post("/assignments/{assignment_id}/end")
 def end_assignment(
     assignment_id: str,
-    end_date: Optional[str] = Form(None),
+    end_date: str | None = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -427,9 +424,9 @@ def delete_assignment(
 @router.get("/runs", response_class=HTMLResponse)
 def list_payroll_runs(
     request: Request,
-    status: Optional[str] = None,
-    year: Optional[int] = None,
-    month: Optional[int] = None,
+    status: str | None = None,
+    year: int | None = None,
+    month: int | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -464,8 +461,8 @@ async def create_run(
 def view_run(
     request: Request,
     entry_id: str,
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -518,7 +515,7 @@ def approve_run(
 @router.post("/runs/{entry_id}/post")
 def post_run(
     entry_id: str,
-    posting_date: Optional[str] = Form(None),
+    posting_date: str | None = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -539,7 +536,7 @@ def delete_run(
 @router.get("/runs/{entry_id}/bank-upload")
 def bank_upload(
     entry_id: str,
-    source_account: Optional[str] = Query(default=None),
+    source_account: str | None = Query(default=None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -555,8 +552,8 @@ def bank_upload(
 @router.get("/reports/summary", response_class=HTMLResponse)
 def report_summary(
     request: Request,
-    year: Optional[int] = None,
-    month: Optional[int] = None,
+    year: int | None = None,
+    month: int | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -567,8 +564,8 @@ def report_summary(
 @router.get("/reports/by-department", response_class=HTMLResponse)
 def report_by_department(
     request: Request,
-    year: Optional[int] = None,
-    month: Optional[int] = None,
+    year: int | None = None,
+    month: int | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -581,8 +578,8 @@ def report_by_department(
 @router.get("/reports/tax-summary", response_class=HTMLResponse)
 def report_tax_summary(
     request: Request,
-    year: Optional[int] = None,
-    month: Optional[int] = None,
+    year: int | None = None,
+    month: int | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -595,8 +592,8 @@ def report_tax_summary(
 @router.get("/reports/trends", response_class=HTMLResponse)
 def report_trends(
     request: Request,
-    year: Optional[int] = None,
-    months: Optional[int] = 12,
+    year: int | None = None,
+    months: int | None = 12,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -672,7 +669,7 @@ def list_tax_profiles(
 @router.get("/tax/profiles/new", response_class=HTMLResponse)
 def new_tax_profile_form(
     request: Request,
-    employee_id: Optional[str] = None,
+    employee_id: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):

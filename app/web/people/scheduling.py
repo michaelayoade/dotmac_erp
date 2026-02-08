@@ -4,15 +4,12 @@ Shift Scheduling web routes.
 Shift patterns, assignments, schedules, and swap requests pages.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.services.people.scheduling.web import scheduling_web_service
 from app.web.deps import WebAuthContext, get_db, require_hr_access
-
 
 router = APIRouter(prefix="/scheduling", tags=["people-scheduling-web"])
 
@@ -27,8 +24,8 @@ router = APIRouter(prefix="/scheduling", tags=["people-scheduling-web"])
 @router.get("/patterns", response_class=HTMLResponse)
 def patterns_list(
     request: Request,
-    search: Optional[str] = None,
-    is_active: Optional[str] = None,
+    search: str | None = None,
+    is_active: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -112,7 +109,7 @@ async def update_pattern(
 @router.get("/assignments", response_class=HTMLResponse)
 def assignments_list(
     request: Request,
-    department_id: Optional[str] = None,
+    department_id: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -163,8 +160,8 @@ async def create_assignment(
 @router.get("/schedules", response_class=HTMLResponse)
 def schedules_list(
     request: Request,
-    department_id: Optional[str] = None,
-    year_month: Optional[str] = None,
+    department_id: str | None = None,
+    year_month: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -230,7 +227,7 @@ async def publish_schedule(
 @router.get("/swaps", response_class=HTMLResponse)
 def swap_requests_list(
     request: Request,
-    status: Optional[str] = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),

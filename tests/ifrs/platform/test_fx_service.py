@@ -31,14 +31,16 @@ def patch_fx_service():
             mock_rate.to_currency_code = MockColumn()
             mock_rate.rate_type_id = MockColumn()
             mock_rate.effective_date = MockColumn()
-            with patch(
-                "app.services.finance.platform.fx.and_", return_value=MagicMock()
-            ):
-                with patch(
+            with (
+                patch(
+                    "app.services.finance.platform.fx.and_", return_value=MagicMock()
+                ),
+                patch(
                     "app.services.finance.platform.fx.coerce_uuid",
                     side_effect=lambda x: x,
-                ):
-                    yield mock_rate_type, mock_rate
+                ),
+            ):
+                yield mock_rate_type, mock_rate
 
 
 class TestFXService:
@@ -67,7 +69,7 @@ class TestFXService:
             "app.services.finance.platform.fx.coerce_uuid", side_effect=lambda x: x
         ):
             # Same currency - should short-circuit and return a rate of 1.0
-            result = service.get_rate(
+            service.get_rate(
                 mock_db_session,
                 organization_id=organization_id,
                 from_currency="USD",
@@ -144,7 +146,7 @@ class TestFXService:
         with patch_fx_service() as (mock_rate_type, mock_rate_cls):
             mock_instance = MagicMock()
             mock_rate_cls.return_value = mock_instance
-            result = service.get_rate(
+            service.get_rate(
                 mock_db_session,
                 organization_id=organization_id,
                 from_currency="USD",
@@ -162,19 +164,21 @@ class TestFXService:
         """get_rate should raise 404 when rate type not found."""
         mock_db_session.query.return_value.filter.return_value.first.return_value = None
 
-        with patch("app.services.finance.platform.fx.ExchangeRateType"):
-            with patch(
+        with (
+            patch("app.services.finance.platform.fx.ExchangeRateType"),
+            patch(
                 "app.services.finance.platform.fx.coerce_uuid", side_effect=lambda x: x
-            ):
-                with pytest.raises(HTTPException) as exc_info:
-                    service.get_rate(
-                        mock_db_session,
-                        organization_id=organization_id,
-                        from_currency="USD",
-                        to_currency="EUR",
-                        rate_type_code="INVALID",
-                        effective_date=date.today(),
-                    )
+            ),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            service.get_rate(
+                mock_db_session,
+                organization_id=organization_id,
+                from_currency="USD",
+                to_currency="EUR",
+                rate_type_code="INVALID",
+                effective_date=date.today(),
+            )
 
         assert exc_info.value.status_code == 404
         assert "rate type" in exc_info.value.detail.lower()
@@ -192,16 +196,15 @@ class TestFXService:
         )
         mock_db_session.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
 
-        with patch_fx_service():
-            with pytest.raises(HTTPException) as exc_info:
-                service.get_rate(
-                    mock_db_session,
-                    organization_id=organization_id,
-                    from_currency="USD",
-                    to_currency="JPY",
-                    rate_type_code="SPOT",
-                    effective_date=date.today(),
-                )
+        with patch_fx_service(), pytest.raises(HTTPException) as exc_info:
+            service.get_rate(
+                mock_db_session,
+                organization_id=organization_id,
+                from_currency="USD",
+                to_currency="JPY",
+                rate_type_code="SPOT",
+                effective_date=date.today(),
+            )
 
         assert exc_info.value.status_code == 404
         assert "No exchange rate found" in exc_info.value.detail
@@ -272,22 +275,22 @@ class TestFXService:
         )
         mock_db_session.get.return_value = mock_org
 
-        with patch("app.services.finance.platform.fx.Organization"):
+        with (
+            patch("app.services.finance.platform.fx.Organization"),
+            patch("app.services.finance.platform.fx.FXService.convert") as mock_convert,
+        ):
+            mock_convert.return_value = MagicMock()
             with patch(
-                "app.services.finance.platform.fx.FXService.convert"
-            ) as mock_convert:
-                mock_convert.return_value = MagicMock()
-                with patch(
-                    "app.services.finance.platform.fx.coerce_uuid",
-                    side_effect=lambda x: x,
-                ):
-                    service.convert_to_functional(
-                        mock_db_session,
-                        organization_id=organization_id,
-                        amount=Decimal("100.00"),
-                        currency_code="EUR",
-                        effective_date=date.today(),
-                    )
+                "app.services.finance.platform.fx.coerce_uuid",
+                side_effect=lambda x: x,
+            ):
+                service.convert_to_functional(
+                    mock_db_session,
+                    organization_id=organization_id,
+                    amount=Decimal("100.00"),
+                    currency_code="EUR",
+                    effective_date=date.today(),
+                )
 
         mock_convert.assert_called_once()
         call_args = mock_convert.call_args
@@ -299,18 +302,20 @@ class TestFXService:
         """convert_to_functional should raise 404 for missing org."""
         mock_db_session.get.return_value = None
 
-        with patch("app.services.finance.platform.fx.Organization"):
-            with patch(
+        with (
+            patch("app.services.finance.platform.fx.Organization"),
+            patch(
                 "app.services.finance.platform.fx.coerce_uuid", side_effect=lambda x: x
-            ):
-                with pytest.raises(HTTPException) as exc_info:
-                    service.convert_to_functional(
-                        mock_db_session,
-                        organization_id=organization_id,
-                        amount=Decimal("100.00"),
-                        currency_code="EUR",
-                        effective_date=date.today(),
-                    )
+            ),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            service.convert_to_functional(
+                mock_db_session,
+                organization_id=organization_id,
+                amount=Decimal("100.00"),
+                currency_code="EUR",
+                effective_date=date.today(),
+            )
 
         assert exc_info.value.status_code == 404
         assert "Organization not found" in exc_info.value.detail
@@ -362,14 +367,16 @@ class TestFXService:
             default_type
         )
 
-        with patch("app.services.finance.platform.fx.ExchangeRateType"):
-            with patch(
+        with (
+            patch("app.services.finance.platform.fx.ExchangeRateType"),
+            patch(
                 "app.services.finance.platform.fx.coerce_uuid", side_effect=lambda x: x
-            ):
-                result = service.get_default_rate_type(
-                    mock_db_session,
-                    organization_id=organization_id,
-                )
+            ),
+        ):
+            result = service.get_default_rate_type(
+                mock_db_session,
+                organization_id=organization_id,
+            )
 
         assert result == default_type
 
@@ -379,15 +386,17 @@ class TestFXService:
         """get_default_rate_type should raise 404 if no default."""
         mock_db_session.query.return_value.filter.return_value.first.return_value = None
 
-        with patch("app.services.finance.platform.fx.ExchangeRateType"):
-            with patch(
+        with (
+            patch("app.services.finance.platform.fx.ExchangeRateType"),
+            patch(
                 "app.services.finance.platform.fx.coerce_uuid", side_effect=lambda x: x
-            ):
-                with pytest.raises(HTTPException) as exc_info:
-                    service.get_default_rate_type(
-                        mock_db_session,
-                        organization_id=organization_id,
-                    )
+            ),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            service.get_default_rate_type(
+                mock_db_session,
+                organization_id=organization_id,
+            )
 
         assert exc_info.value.status_code == 404
 
@@ -428,19 +437,21 @@ class TestFXService:
         self, service, mock_db_session, organization_id
     ):
         """create_rate should reject negative rates."""
-        with patch(
-            "app.services.finance.platform.fx.coerce_uuid", side_effect=lambda x: x
+        with (
+            patch(
+                "app.services.finance.platform.fx.coerce_uuid", side_effect=lambda x: x
+            ),
+            pytest.raises(HTTPException) as exc_info,
         ):
-            with pytest.raises(HTTPException) as exc_info:
-                service.create_rate(
-                    mock_db_session,
-                    organization_id=organization_id,
-                    from_currency="USD",
-                    to_currency="EUR",
-                    rate_type_code="SPOT",
-                    effective_date=date.today(),
-                    exchange_rate=Decimal("-0.85"),
-                )
+            service.create_rate(
+                mock_db_session,
+                organization_id=organization_id,
+                from_currency="USD",
+                to_currency="EUR",
+                rate_type_code="SPOT",
+                effective_date=date.today(),
+                exchange_rate=Decimal("-0.85"),
+            )
 
         assert exc_info.value.status_code == 400
         assert "positive" in exc_info.value.detail
@@ -449,19 +460,21 @@ class TestFXService:
         self, service, mock_db_session, organization_id
     ):
         """create_rate should reject zero rates."""
-        with patch(
-            "app.services.finance.platform.fx.coerce_uuid", side_effect=lambda x: x
+        with (
+            patch(
+                "app.services.finance.platform.fx.coerce_uuid", side_effect=lambda x: x
+            ),
+            pytest.raises(HTTPException) as exc_info,
         ):
-            with pytest.raises(HTTPException) as exc_info:
-                service.create_rate(
-                    mock_db_session,
-                    organization_id=organization_id,
-                    from_currency="USD",
-                    to_currency="EUR",
-                    rate_type_code="SPOT",
-                    effective_date=date.today(),
-                    exchange_rate=Decimal("0"),
-                )
+            service.create_rate(
+                mock_db_session,
+                organization_id=organization_id,
+                from_currency="USD",
+                to_currency="EUR",
+                rate_type_code="SPOT",
+                effective_date=date.today(),
+                exchange_rate=Decimal("0"),
+            )
 
         assert exc_info.value.status_code == 400
 
@@ -473,16 +486,18 @@ class TestFXService:
         ]
         mock_db_session.query.return_value.filter.return_value.order_by.return_value.limit.return_value.offset.return_value.all.return_value = mock_rates
 
-        with patch("app.services.finance.platform.fx.ExchangeRate"):
-            with patch(
+        with (
+            patch("app.services.finance.platform.fx.ExchangeRate"),
+            patch(
                 "app.services.finance.platform.fx.coerce_uuid", side_effect=lambda x: x
-            ):
-                result = service.list(
-                    mock_db_session,
-                    organization_id=str(organization_id),
-                    limit=50,
-                    offset=0,
-                )
+            ),
+        ):
+            result = service.list(
+                mock_db_session,
+                organization_id=str(organization_id),
+                limit=50,
+                offset=0,
+            )
 
         assert len(result) == 2
 
@@ -496,14 +511,16 @@ class TestFXService:
         )
         mock_db_session.get.return_value = mock_org
 
-        with patch("app.services.finance.platform.fx.Organization"):
-            with patch(
+        with (
+            patch("app.services.finance.platform.fx.Organization"),
+            patch(
                 "app.services.finance.platform.fx.coerce_uuid", side_effect=lambda x: x
-            ):
-                result = service.get_functional_currency(
-                    mock_db_session,
-                    organization_id=organization_id,
-                )
+            ),
+        ):
+            result = service.get_functional_currency(
+                mock_db_session,
+                organization_id=organization_id,
+            )
 
         assert result == "EUR"
 
@@ -513,14 +530,16 @@ class TestFXService:
         """get_functional_currency should raise 404 for missing org."""
         mock_db_session.get.return_value = None
 
-        with patch("app.services.finance.platform.fx.Organization"):
-            with patch(
+        with (
+            patch("app.services.finance.platform.fx.Organization"),
+            patch(
                 "app.services.finance.platform.fx.coerce_uuid", side_effect=lambda x: x
-            ):
-                with pytest.raises(HTTPException) as exc_info:
-                    service.get_functional_currency(
-                        mock_db_session,
-                        organization_id=organization_id,
-                    )
+            ),
+            pytest.raises(HTTPException) as exc_info,
+        ):
+            service.get_functional_currency(
+                mock_db_session,
+                organization_id=organization_id,
+            )
 
         assert exc_info.value.status_code == 404

@@ -7,7 +7,7 @@ Imports customer and supplier payments from CSV data.
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -54,14 +54,14 @@ class CustomerPaymentImporter(BaseImporter[CustomerPayment]):
         self,
         db: Session,
         config: ImportConfig,
-        default_bank_account_id: Optional[UUID] = None,
+        default_bank_account_id: UUID | None = None,
     ):
         super().__init__(db, config)
         self.default_bank_account_id = default_bank_account_id
-        self._customer_cache: Dict[str, UUID] = {}
+        self._customer_cache: dict[str, UUID] = {}
         self._payment_counter = 0
 
-    def get_field_mappings(self) -> List[FieldMapping]:
+    def get_field_mappings(self) -> list[FieldMapping]:
         """Define flexible field mappings."""
         return [
             # Reference
@@ -117,7 +117,7 @@ class CustomerPaymentImporter(BaseImporter[CustomerPayment]):
             FieldMapping("Status", "status_str", required=False, default="PENDING"),
         ]
 
-    def get_unique_key(self, row: Dict[str, Any]) -> str:
+    def get_unique_key(self, row: dict[str, Any]) -> str:
         return str(
             row.get("Payment Number")
             or row.get("Payment No")
@@ -125,7 +125,7 @@ class CustomerPaymentImporter(BaseImporter[CustomerPayment]):
             or ""
         ).strip()
 
-    def check_duplicate(self, row: Dict[str, Any]) -> Optional[CustomerPayment]:
+    def check_duplicate(self, row: dict[str, Any]) -> CustomerPayment | None:
         payment_number = self.get_unique_key(row)
         if not payment_number:
             return None
@@ -139,7 +139,7 @@ class CustomerPaymentImporter(BaseImporter[CustomerPayment]):
 
         return existing
 
-    def validate_row(self, row: Dict[str, Any], row_num: int) -> bool:
+    def validate_row(self, row: dict[str, Any], row_num: int) -> bool:
         is_valid = super().validate_row(row, row_num)
 
         customer_name = str(
@@ -156,7 +156,7 @@ class CustomerPaymentImporter(BaseImporter[CustomerPayment]):
 
         return is_valid
 
-    def create_entity(self, row: Dict[str, Any]) -> CustomerPayment:
+    def create_entity(self, row: dict[str, Any]) -> CustomerPayment:
         # Get payment number
         payment_number = str(
             row.get("payment_number")
@@ -285,10 +285,10 @@ class SupplierPaymentImporter(BaseImporter[SupplierPayment]):
     ):
         super().__init__(db, config)
         self.bank_account_id = bank_account_id
-        self._supplier_cache: Dict[str, UUID] = {}
+        self._supplier_cache: dict[str, UUID] = {}
         self._payment_counter = 0
 
-    def get_field_mappings(self) -> List[FieldMapping]:
+    def get_field_mappings(self) -> list[FieldMapping]:
         return [
             FieldMapping("Payment Number", "payment_number", required=False),
             FieldMapping("Payment No", "payment_no_alt", required=False),
@@ -342,7 +342,7 @@ class SupplierPaymentImporter(BaseImporter[SupplierPayment]):
             ),
         ]
 
-    def get_unique_key(self, row: Dict[str, Any]) -> str:
+    def get_unique_key(self, row: dict[str, Any]) -> str:
         return str(
             row.get("Payment Number")
             or row.get("Payment No")
@@ -350,7 +350,7 @@ class SupplierPaymentImporter(BaseImporter[SupplierPayment]):
             or ""
         ).strip()
 
-    def check_duplicate(self, row: Dict[str, Any]) -> Optional[SupplierPayment]:
+    def check_duplicate(self, row: dict[str, Any]) -> SupplierPayment | None:
         payment_number = self.get_unique_key(row)
         if not payment_number:
             return None
@@ -364,7 +364,7 @@ class SupplierPaymentImporter(BaseImporter[SupplierPayment]):
 
         return existing
 
-    def validate_row(self, row: Dict[str, Any], row_num: int) -> bool:
+    def validate_row(self, row: dict[str, Any], row_num: int) -> bool:
         is_valid = super().validate_row(row, row_num)
 
         supplier_name = str(
@@ -387,7 +387,7 @@ class SupplierPaymentImporter(BaseImporter[SupplierPayment]):
 
         return is_valid
 
-    def create_entity(self, row: Dict[str, Any]) -> SupplierPayment:
+    def create_entity(self, row: dict[str, Any]) -> SupplierPayment:
         # Get payment number
         payment_number = str(
             row.get("payment_number")

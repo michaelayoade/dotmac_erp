@@ -42,6 +42,8 @@ class BulkActionService(ABC, Generic[T]):
     id_field: str = "id"
     org_field: str = "organization_id"
     export_fields: list[tuple[str, str]] = []
+    search_fields: list[str] = []
+    date_field: str = ""  # Column name for date range filtering (e.g. "invoice_date")
 
     def __init__(self, db: Session, organization_id: UUID, user_id: UUID | None = None):
         """
@@ -228,32 +230,16 @@ class BulkActionService(ABC, Generic[T]):
             return json.dumps(value)
         return str(value)
 
-    async def bulk_export(
-        self,
-        ids: list[UUID],
-        format: str = "csv",
-    ) -> Response:
+    def _build_csv(self, entities: list[T]) -> Response:
         """
-        Export selected records to CSV.
+        Build a CSV response from a list of entities.
 
         Args:
-            ids: List of entity IDs to export
-            format: Export format (only 'csv' supported currently)
+            entities: List of entity instances
 
         Returns:
-            StreamingResponse with CSV data
+            Response with CSV content
         """
-        if not ids:
-            raise HTTPException(status_code=400, detail="No IDs provided")
-
-        entities = self._get_entities(ids)
-
-        if not entities:
-            raise HTTPException(
-                status_code=404, detail="No entities found with provided IDs"
-            )
-
-        # Create CSV in memory
         output = io.StringIO()
         writer = csv.writer(output)
 
@@ -270,7 +256,6 @@ class BulkActionService(ABC, Generic[T]):
 
         output.seek(0)
 
-        # Return as a plain response (content is already in memory)
         return Response(
             content=output.getvalue(),
             media_type="text/csv",
@@ -278,6 +263,148 @@ class BulkActionService(ABC, Generic[T]):
                 "Content-Disposition": f'attachment; filename="{self._get_export_filename()}"',
             },
         )
+
+    async def bulk_export(
+        self,
+        ids: list[UUID],
+        format: str = "csv",
+    ) -> Response:
+        """
+        Export selected records to CSV.
+
+        Args:
+            ids: List of entity IDs to export
+            format: Export format (only 'csv' supported currently)
+
+        Returns:
+            Response with CSV data
+        """
+        if not ids:
+            raise HTTPException(status_code=400, detail="No IDs provided")
+
+        entities = self._get_entities(ids)
+
+        if not entities:
+            raise HTTPException(
+                status_code=404, detail="No entities found with provided IDs"
+            )
+
+        return self._build_csv(entities)
+
+    def _get_all_query(self, search: str = ""):
+        """
+        Get query for all entities in the org, optionally filtered by search.
+
+        Uses ``search_fields`` class attribute to determine which columns
+        to apply an ILIKE filter on.
+
+        Args:
+            search: Optional search term
+
+        Returns:
+            SQLAlchemy query
+        """
+        from sqlalchemy import or_
+
+        org_col = getattr(self.model, self.org_field)
+        query = self.db.query(self.model).filter(
+            org_col == self.organization_id,
+        )
+
+        if search and self.search_fields:
+            term = f"%{search}%"
+            conditions = []
+            for field_name in self.search_fields:
+                col = getattr(self.model, field_name, None)
+                if col is not None:
+                    conditions.append(col.ilike(term))
+            if conditions:
+                query = query.filter(or_(*conditions))
+
+        return query
+
+    async def export_all(
+        self,
+        search: str = "",
+        status: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        extra_filters: dict[str, Any] | None = None,
+        format: str = "csv",
+    ) -> Response:
+        """
+        Export all records matching filters to CSV.
+
+        Args:
+            search: Optional search term
+            status: Optional status filter
+            start_date: Optional start date (ISO format YYYY-MM-DD)
+            end_date: Optional end date (ISO format YYYY-MM-DD)
+            extra_filters: Optional dict of {column_name: value} for
+                entity-specific filters (e.g. customer_id, category)
+            format: Export format (only 'csv' supported currently)
+
+        Returns:
+            Response with CSV data
+        """
+        from datetime import date as date_type
+
+        query = self._get_all_query(search)
+
+        if status:
+            status_col = getattr(self.model, "status", None)
+            if status_col is not None:
+                query = query.filter(status_col == status)
+
+        # Date range filtering using the date_field class attribute
+        if self.date_field and (start_date or end_date):
+            date_col = getattr(self.model, self.date_field, None)
+            if date_col is not None:
+                if start_date:
+                    try:
+                        query = query.filter(
+                            date_col >= date_type.fromisoformat(start_date)
+                        )
+                    except ValueError:
+                        logger.warning("Invalid start_date: %r", start_date)
+                if end_date:
+                    try:
+                        query = query.filter(
+                            date_col <= date_type.fromisoformat(end_date)
+                        )
+                    except ValueError:
+                        logger.warning("Invalid end_date: %r", end_date)
+
+        # Entity-specific filters (customer_id, supplier_id, category, etc.)
+        if extra_filters:
+            for col_name, value in extra_filters.items():
+                if value:
+                    col = getattr(self.model, col_name, None)
+                    if col is not None:
+                        query = query.filter(col == value)
+
+        entities = cast(list[T], query.all())
+
+        if not entities:
+            logger.info(
+                "Export all: no %s found for org %s (search=%r, status=%r)",
+                self.model.__name__,
+                self.organization_id,
+                search,
+                status,
+            )
+            return self._build_csv([])
+
+        logger.info(
+            "Exporting all %d %s for org %s (search=%r, status=%r)",
+            len(entities),
+            self.model.__name__,
+            self.organization_id,
+            search,
+            status,
+        )
+
+        return self._build_csv(entities)
 
     def _get_export_filename(self) -> str:
         """Get the filename for export. Override in subclasses."""

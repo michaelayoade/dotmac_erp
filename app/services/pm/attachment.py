@@ -8,7 +8,7 @@ Uses the common.attachment model with polymorphic association.
 import logging
 import uuid
 from pathlib import Path
-from typing import BinaryIO, List, Optional, Tuple
+from typing import BinaryIO
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -58,7 +58,7 @@ class ProjectAttachmentService:
         organization_id: uuid.UUID,
         entity_type: str,
         entity_id: uuid.UUID,
-    ) -> List[Attachment]:
+    ) -> list[Attachment]:
         """
         List attachments for a project or task.
 
@@ -88,7 +88,7 @@ class ProjectAttachmentService:
         db: Session,
         organization_id: uuid.UUID,
         attachment_id: uuid.UUID,
-    ) -> Optional[Attachment]:
+    ) -> Attachment | None:
         """Get an attachment by ID with org check."""
         attachment = db.get(Attachment, attachment_id)
         if attachment and attachment.organization_id == organization_id:
@@ -99,8 +99,8 @@ class ProjectAttachmentService:
         self,
         filename: str,
         file_size: int,
-        content_type: Optional[str] = None,
-    ) -> Tuple[bool, Optional[str]]:
+        content_type: str | None = None,
+    ) -> tuple[bool, str | None]:
         """
         Validate a file for upload.
 
@@ -128,8 +128,8 @@ class ProjectAttachmentService:
         file_data: BinaryIO,
         content_type: str,
         uploaded_by_id: uuid.UUID,
-        description: Optional[str] = None,
-    ) -> Tuple[Optional[Attachment], Optional[str]]:
+        description: str | None = None,
+    ) -> tuple[Attachment | None, str | None]:
         """
         Save an uploaded file.
 
@@ -206,7 +206,7 @@ class ProjectAttachmentService:
         organization_id: uuid.UUID,
         attachment_id: uuid.UUID,
         hard_delete: bool = True,
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Delete an attachment.
 
@@ -248,7 +248,7 @@ class ProjectAttachmentService:
         db: Session,
         organization_id: uuid.UUID,
         attachment_id: uuid.UUID,
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         Get the file path for an attachment.
 

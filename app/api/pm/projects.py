@@ -74,9 +74,11 @@ def get_project_team(
     db: Session = Depends(get_db),
 ):
     """Get team members allocated to a project."""
-    from app.models.finance.core_org.project import Project
-    from sqlalchemy import select
     from decimal import Decimal
+
+    from sqlalchemy import select
+
+    from app.models.finance.core_org.project import Project
 
     # Get project
     project = db.scalars(
@@ -131,8 +133,9 @@ def get_time_summary(
     db: Session = Depends(get_db),
 ):
     """Get time tracking summary for a project."""
-    from app.models.finance.core_org.project import Project
     from sqlalchemy import select
+
+    from app.models.finance.core_org.project import Project
 
     # Get project
     project = db.scalars(

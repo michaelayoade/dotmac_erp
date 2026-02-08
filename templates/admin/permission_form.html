@@ -16,6 +16,7 @@
     </div>
 
     <form action="{{ '/admin/permissions/' ~ permission_data.id ~ '/edit' if permission_data else '/admin/permissions/new' }}" method="POST" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
         <!-- Error Alert -->
         {% if error %}
         <div class="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">

@@ -8,7 +8,7 @@ import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
@@ -80,7 +80,7 @@ class LeaveType(Base, AuditMixin, ERPNextSyncMixin):
         String(100),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -90,12 +90,12 @@ class LeaveType(Base, AuditMixin, ERPNextSyncMixin):
         Enum(LeaveTypePolicy, name="leave_type_policy"),
         default=LeaveTypePolicy.ANNUAL,
     )
-    max_days_per_year: Mapped[Optional[Decimal]] = mapped_column(
+    max_days_per_year: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 1),
         nullable=True,
         comment="Maximum days allowed per year (null = unlimited)",
     )
-    max_continuous_days: Mapped[Optional[int]] = mapped_column(
+    max_continuous_days: Mapped[int | None] = mapped_column(
         nullable=True,
         comment="Max consecutive days allowed",
     )
@@ -105,11 +105,11 @@ class LeaveType(Base, AuditMixin, ERPNextSyncMixin):
         Boolean,
         default=False,
     )
-    max_carry_forward_days: Mapped[Optional[Decimal]] = mapped_column(
+    max_carry_forward_days: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 1),
         nullable=True,
     )
-    carry_forward_expiry_months: Mapped[Optional[int]] = mapped_column(
+    carry_forward_expiry_months: Mapped[int | None] = mapped_column(
         nullable=True,
         comment="Months after which carried forward leave expires",
     )
@@ -120,7 +120,7 @@ class LeaveType(Base, AuditMixin, ERPNextSyncMixin):
         default=False,
         comment="Can unused leave be converted to cash",
     )
-    encashment_threshold_days: Mapped[Optional[Decimal]] = mapped_column(
+    encashment_threshold_days: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 1),
         nullable=True,
         comment="Min days required before encashment allowed",
@@ -153,7 +153,7 @@ class LeaveType(Base, AuditMixin, ERPNextSyncMixin):
         default=False,
         comment="Optional leave (e.g., religious holidays)",
     )
-    max_optional_leaves: Mapped[Optional[int]] = mapped_column(
+    max_optional_leaves: Mapped[int | None] = mapped_column(
         nullable=True,
     )
 
@@ -168,7 +168,7 @@ class LeaveType(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

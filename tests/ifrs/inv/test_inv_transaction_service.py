@@ -5,19 +5,19 @@ Tests inventory receipts, issues, adjustments, transfers, and costing methods.
 """
 
 import uuid
-from datetime import datetime, timezone, date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
 
+from app.models.inventory.inventory_transaction import TransactionType
+from app.models.inventory.item import CostingMethod
 from app.services.inventory.transaction import (
     InventoryTransactionService,
     TransactionInput,
 )
-from app.models.inventory.item import CostingMethod
-from app.models.inventory.inventory_transaction import TransactionType
 
 
 class MockItem:
@@ -123,7 +123,7 @@ class MockInventoryTransaction:
         self.transaction_id = transaction_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
         self.transaction_type = transaction_type
-        self.transaction_date = transaction_date or datetime.now(timezone.utc)
+        self.transaction_date = transaction_date or datetime.now(UTC)
         self.item_id = item_id or uuid.uuid4()
         self.warehouse_id = warehouse_id or uuid.uuid4()
         self.quantity = quantity
@@ -143,7 +143,7 @@ def create_transaction_input(
     """Helper to create TransactionInput."""
     return TransactionInput(
         transaction_type=transaction_type,
-        transaction_date=kwargs.get("transaction_date", datetime.now(timezone.utc)),
+        transaction_date=kwargs.get("transaction_date", datetime.now(UTC)),
         fiscal_period_id=kwargs.get("fiscal_period_id", uuid.uuid4()),
         item_id=item_id or uuid.uuid4(),
         warehouse_id=warehouse_id or uuid.uuid4(),
@@ -349,22 +349,24 @@ class TestCreateReceipt:
             unit_cost=Decimal("12.00"),
         )
 
-        with patch.object(
-            InventoryTransactionService,
-            "get_current_balance",
-            return_value=Decimal("100"),
-        ):
-            with patch.object(
+        with (
+            patch.object(
+                InventoryTransactionService,
+                "get_current_balance",
+                return_value=Decimal("100"),
+            ),
+            patch.object(
                 InventoryTransactionService,
                 "calculate_weighted_average_cost",
                 return_value=Decimal("10.666667"),
-            ):
-                result = InventoryTransactionService.create_receipt(
-                    db=mock_db,
-                    organization_id=org_id,
-                    input=input_data,
-                    created_by_user_id=user_id,
-                )
+            ),
+        ):
+            InventoryTransactionService.create_receipt(
+                db=mock_db,
+                organization_id=org_id,
+                input=input_data,
+                created_by_user_id=user_id,
+            )
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -570,7 +572,7 @@ class TestCreateReceipt:
             "get_current_balance",
             return_value=Decimal("0"),
         ):
-            result = InventoryTransactionService.create_receipt(
+            InventoryTransactionService.create_receipt(
                 db=mock_db,
                 organization_id=org_id,
                 input=input_data,
@@ -637,7 +639,7 @@ class TestCreateIssue:
             "get_current_balance",
             return_value=Decimal("100"),  # Sufficient balance
         ):
-            result = InventoryTransactionService.create_issue(
+            InventoryTransactionService.create_issue(
                 db=mock_db,
                 organization_id=org_id,
                 input=input_data,
@@ -742,18 +744,20 @@ class TestCreateIssue:
             lot_id=None,  # No lot ID provided
         )
 
-        with patch.object(
-            InventoryTransactionService,
-            "get_current_balance",
-            return_value=Decimal("100"),
+        with (
+            patch.object(
+                InventoryTransactionService,
+                "get_current_balance",
+                return_value=Decimal("100"),
+            ),
+            pytest.raises(HTTPException) as exc_info,
         ):
-            with pytest.raises(HTTPException) as exc_info:
-                InventoryTransactionService.create_issue(
-                    db=mock_db,
-                    organization_id=org_id,
-                    input=input_data,
-                    created_by_user_id=user_id,
-                )
+            InventoryTransactionService.create_issue(
+                db=mock_db,
+                organization_id=org_id,
+                input=input_data,
+                created_by_user_id=user_id,
+            )
 
         assert exc_info.value.status_code == 400
         assert "Lot ID is required" in exc_info.value.detail
@@ -780,9 +784,9 @@ class TestCreateIssue:
         )
 
         def mock_get(model_class, id_val):
+            from app.models.inventory.inventory_lot import InventoryLot
             from app.models.inventory.item import Item
             from app.models.inventory.warehouse import Warehouse
-            from app.models.inventory.inventory_lot import InventoryLot
 
             if (
                 model_class == Item
@@ -813,18 +817,20 @@ class TestCreateIssue:
             lot_id=lot_id,
         )
 
-        with patch.object(
-            InventoryTransactionService,
-            "get_current_balance",
-            return_value=Decimal("100"),
+        with (
+            patch.object(
+                InventoryTransactionService,
+                "get_current_balance",
+                return_value=Decimal("100"),
+            ),
+            pytest.raises(HTTPException) as exc_info,
         ):
-            with pytest.raises(HTTPException) as exc_info:
-                InventoryTransactionService.create_issue(
-                    db=mock_db,
-                    organization_id=org_id,
-                    input=input_data,
-                    created_by_user_id=user_id,
-                )
+            InventoryTransactionService.create_issue(
+                db=mock_db,
+                organization_id=org_id,
+                input=input_data,
+                created_by_user_id=user_id,
+            )
 
         assert exc_info.value.status_code == 400
         assert "quarantined" in exc_info.value.detail
@@ -851,9 +857,9 @@ class TestCreateIssue:
         )
 
         def mock_get(model_class, id_val):
+            from app.models.inventory.inventory_lot import InventoryLot
             from app.models.inventory.item import Item
             from app.models.inventory.warehouse import Warehouse
-            from app.models.inventory.inventory_lot import InventoryLot
 
             if (
                 model_class == Item
@@ -884,18 +890,20 @@ class TestCreateIssue:
             lot_id=lot_id,
         )
 
-        with patch.object(
-            InventoryTransactionService,
-            "get_current_balance",
-            return_value=Decimal("100"),
+        with (
+            patch.object(
+                InventoryTransactionService,
+                "get_current_balance",
+                return_value=Decimal("100"),
+            ),
+            pytest.raises(HTTPException) as exc_info,
         ):
-            with pytest.raises(HTTPException) as exc_info:
-                InventoryTransactionService.create_issue(
-                    db=mock_db,
-                    organization_id=org_id,
-                    input=input_data,
-                    created_by_user_id=user_id,
-                )
+            InventoryTransactionService.create_issue(
+                db=mock_db,
+                organization_id=org_id,
+                input=input_data,
+                created_by_user_id=user_id,
+            )
 
         assert exc_info.value.status_code == 400
         assert "Insufficient quantity in lot" in exc_info.value.detail
@@ -943,18 +951,20 @@ class TestCreateIssue:
             lot_id=None,
         )
 
-        with patch.object(
-            InventoryTransactionService,
-            "get_current_balance",
-            return_value=Decimal("100"),
+        with (
+            patch.object(
+                InventoryTransactionService,
+                "get_current_balance",
+                return_value=Decimal("100"),
+            ),
+            pytest.raises(HTTPException) as exc_info,
         ):
-            with pytest.raises(HTTPException) as exc_info:
-                InventoryTransactionService.create_issue(
-                    db=mock_db,
-                    organization_id=org_id,
-                    input=input_data,
-                    created_by_user_id=user_id,
-                )
+            InventoryTransactionService.create_issue(
+                db=mock_db,
+                organization_id=org_id,
+                input=input_data,
+                created_by_user_id=user_id,
+            )
 
         assert exc_info.value.status_code == 400
         assert "Lot ID required for specific identification" in exc_info.value.detail
@@ -1132,7 +1142,7 @@ class TestCreateAdjustment:
             "get_current_balance",
             return_value=Decimal("100"),
         ):
-            result = InventoryTransactionService.create_adjustment(
+            InventoryTransactionService.create_adjustment(
                 db=mock_db,
                 organization_id=org_id,
                 input=input_data,
@@ -1188,7 +1198,7 @@ class TestCreateAdjustment:
             "get_current_balance",
             return_value=Decimal("100"),
         ):
-            result = InventoryTransactionService.create_adjustment(
+            InventoryTransactionService.create_adjustment(
                 db=mock_db,
                 organization_id=org_id,
                 input=input_data,
@@ -1235,18 +1245,20 @@ class TestCreateAdjustment:
             quantity=Decimal("-150"),  # More than available
         )
 
-        with patch.object(
-            InventoryTransactionService,
-            "get_current_balance",
-            return_value=Decimal("100"),
+        with (
+            patch.object(
+                InventoryTransactionService,
+                "get_current_balance",
+                return_value=Decimal("100"),
+            ),
+            pytest.raises(HTTPException) as exc_info,
         ):
-            with pytest.raises(HTTPException) as exc_info:
-                InventoryTransactionService.create_adjustment(
-                    db=mock_db,
-                    organization_id=org_id,
-                    input=input_data,
-                    created_by_user_id=user_id,
-                )
+            InventoryTransactionService.create_adjustment(
+                db=mock_db,
+                organization_id=org_id,
+                input=input_data,
+                created_by_user_id=user_id,
+            )
 
         assert exc_info.value.status_code == 400
         assert "negative inventory" in exc_info.value.detail

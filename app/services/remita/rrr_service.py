@@ -6,9 +6,8 @@ Used by all modules needing to make government payments: Payroll, Finance, Procu
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -32,7 +31,7 @@ class RemitaRRRService:
 
     def __init__(self, db: Session):
         self.db = db
-        self._client: Optional[RemitaClient] = None
+        self._client: RemitaClient | None = None
 
     @property
     def client(self) -> RemitaClient:
@@ -55,11 +54,11 @@ class RemitaRRRService:
         """Check if Remita credentials are configured."""
         return bool(settings.remita_merchant_id and settings.remita_api_key)
 
-    def get_by_id(self, rrr_id: UUID) -> Optional[RemitaRRR]:
+    def get_by_id(self, rrr_id: UUID) -> RemitaRRR | None:
         """Get a RRR record by ID."""
         return self.db.get(RemitaRRR, rrr_id)
 
-    def get_by_rrr(self, rrr: str) -> Optional[RemitaRRR]:
+    def get_by_rrr(self, rrr: str) -> RemitaRRR | None:
         """Get a RRR record by the RRR number."""
         stmt = select(RemitaRRR).where(RemitaRRR.rrr == rrr)
         return self.db.scalar(stmt)
@@ -69,8 +68,8 @@ class RemitaRRRService:
         organization_id: UUID,
         source_type: str,
         source_id: UUID,
-        status: Optional[RRRStatus] = None,
-    ) -> Optional[RemitaRRR]:
+        status: RRRStatus | None = None,
+    ) -> RemitaRRR | None:
         """Get the most recent RRR linked to a source entity."""
         stmt = select(RemitaRRR).where(
             RemitaRRR.organization_id == organization_id,
@@ -92,11 +91,11 @@ class RemitaRRRService:
         amount: Decimal,
         payer_name: str,
         payer_email: str,
-        payer_phone: Optional[str] = None,
+        payer_phone: str | None = None,
         description: str = "",
-        source_type: Optional[str] = None,
-        source_id: Optional[UUID] = None,
-        created_by_id: Optional[UUID] = None,
+        source_type: str | None = None,
+        source_id: UUID | None = None,
+        created_by_id: UUID | None = None,
     ) -> RemitaRRR:
         """
         Generate RRR via Remita API and save to database.
@@ -196,7 +195,7 @@ class RemitaRRRService:
         response = self.client.check_status(rrr_record.rrr)
 
         # Update record with response
-        rrr_record.last_status_check = datetime.now(timezone.utc)
+        rrr_record.last_status_check = datetime.now(UTC)
         rrr_record.last_status_response = response.raw_response
 
         # Map Remita status codes to our status
@@ -206,7 +205,7 @@ class RemitaRRRService:
 
         if status_code == "00":
             rrr_record.status = RRRStatus.paid
-            rrr_record.paid_at = datetime.now(timezone.utc)
+            rrr_record.paid_at = datetime.now(UTC)
             if response.payment_date:
                 try:
                     # Try to parse Remita's date format
@@ -239,7 +238,7 @@ class RemitaRRRService:
         rrr_id: UUID,
         payment_reference: str,
         payment_channel: str = "Bank",
-        paid_at: Optional[datetime] = None,
+        paid_at: datetime | None = None,
     ) -> RemitaRRR:
         """
         Manually mark RRR as paid.
@@ -266,7 +265,7 @@ class RemitaRRRService:
             raise ValueError(f"RRR {rrr_record.rrr} is already marked as paid")
 
         rrr_record.status = RRRStatus.paid
-        rrr_record.paid_at = paid_at or datetime.now(timezone.utc)
+        rrr_record.paid_at = paid_at or datetime.now(UTC)
         rrr_record.payment_reference = payment_reference
         rrr_record.payment_channel = payment_channel
 
@@ -351,9 +350,9 @@ class RemitaRRRService:
     def list_rrrs(
         self,
         organization_id: UUID,
-        status: Optional[RRRStatus] = None,
-        source_type: Optional[str] = None,
-        biller_id: Optional[str] = None,
+        status: RRRStatus | None = None,
+        source_type: str | None = None,
+        biller_id: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[RemitaRRR]:

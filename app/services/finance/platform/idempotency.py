@@ -6,8 +6,8 @@ return cached responses rather than re-executing operations.
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any, List, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -39,7 +39,7 @@ class IdempotencyService(ListResponseMixin):
         idempotency_key: str,
         endpoint: str,
         request_hash: str,
-    ) -> Optional[IdempotencyRecord]:
+    ) -> IdempotencyRecord | None:
         """
         Check if an idempotency key exists and is valid.
 
@@ -57,7 +57,7 @@ class IdempotencyService(ListResponseMixin):
             HTTPException(409): If key exists but request_hash differs (conflict)
         """
         org_id = coerce_uuid(organization_id)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         record = (
             db.query(IdempotencyRecord)
@@ -77,7 +77,7 @@ class IdempotencyService(ListResponseMixin):
         # Check if expired (handle naive datetimes in SQLite)
         expires_at = record.expires_at
         if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
+            expires_at = expires_at.replace(tzinfo=UTC)
         if expires_at < now:
             # Expired record - delete it and return None
             db.delete(record)
@@ -101,7 +101,7 @@ class IdempotencyService(ListResponseMixin):
         endpoint: str,
         request_hash: str,
         response_status: int,
-        response_body: Optional[dict[str, Any]] = None,
+        response_body: dict[str, Any] | None = None,
         ttl_hours: int = 24,
     ) -> IdempotencyRecord:
         """
@@ -121,7 +121,7 @@ class IdempotencyService(ListResponseMixin):
             Created IdempotencyRecord
         """
         org_id = coerce_uuid(organization_id)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires_at = now + timedelta(hours=ttl_hours)
 
         record = IdempotencyRecord(
@@ -186,7 +186,7 @@ class IdempotencyService(ListResponseMixin):
         idempotency_key: str,
         endpoint: str,
         response_status: int,
-        response_body: Optional[dict[str, Any]] = None,
+        response_body: dict[str, Any] | None = None,
     ) -> IdempotencyRecord:
         """
         Update the cached response for an existing idempotency key.
@@ -230,7 +230,7 @@ class IdempotencyService(ListResponseMixin):
         organization_id: UUID,
         idempotency_key: str,
         endpoint: str,
-    ) -> Optional[tuple[int, Optional[dict[str, Any]]]]:
+    ) -> tuple[int, dict[str, Any] | None] | None:
         """
         Retrieve cached response for replay.
 
@@ -244,7 +244,7 @@ class IdempotencyService(ListResponseMixin):
             Tuple of (status_code, response_body) if found, None otherwise
         """
         org_id = coerce_uuid(organization_id)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         record = (
             db.query(IdempotencyRecord)
@@ -279,7 +279,7 @@ class IdempotencyService(ListResponseMixin):
         Returns:
             Number of records deleted
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Get IDs of expired records (limited by batch_size)
         expired_ids = (
@@ -308,6 +308,7 @@ class IdempotencyService(ListResponseMixin):
     def get(
         db: Session,
         record_id: str,
+        organization_id: UUID | None = None,
     ) -> IdempotencyRecord:
         """
         Get an idempotency record by ID.
@@ -325,17 +326,21 @@ class IdempotencyService(ListResponseMixin):
         record = db.get(IdempotencyRecord, coerce_uuid(record_id))
         if not record:
             raise HTTPException(status_code=404, detail="Idempotency record not found")
+        if organization_id is not None and record.organization_id != coerce_uuid(
+            organization_id
+        ):
+            raise HTTPException(status_code=404, detail="Idempotency record not found")
         return record
 
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        endpoint: Optional[str] = None,
+        organization_id: str | None = None,
+        endpoint: str | None = None,
         include_expired: bool = False,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[IdempotencyRecord]:
+    ) -> list[IdempotencyRecord]:
         """
         List idempotency records.
 
@@ -361,7 +366,7 @@ class IdempotencyService(ListResponseMixin):
             query = query.filter(IdempotencyRecord.endpoint == endpoint)
 
         if not include_expired:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             query = query.filter(IdempotencyRecord.expires_at > now)
 
         query = query.order_by(IdempotencyRecord.created_at.desc())

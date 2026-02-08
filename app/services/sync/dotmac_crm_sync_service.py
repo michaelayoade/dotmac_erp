@@ -9,9 +9,8 @@ Handles:
 
 import hashlib
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -90,6 +89,10 @@ CRM_SYNC_STATUS_MAP = {
 }
 
 
+# Valid local_entity_type values for CRMSyncMapping
+VALID_LOCAL_ENTITY_TYPES = frozenset({"project", "ticket", "task"})
+
+
 class DotMacCRMSyncService:
     """Service for syncing entities from DotMac CRM."""
 
@@ -147,6 +150,7 @@ class DotMacCRMSyncService:
                 display_code=data.code,
                 customer_name=data.customer_name,
                 crm_data=data.metadata,
+                synced_at=datetime.now(UTC),
             )
             self.db.add(mapping)
 
@@ -199,6 +203,7 @@ class DotMacCRMSyncService:
                 display_code=data.ticket_number,
                 customer_name=data.customer_name,
                 crm_data=data.metadata,
+                synced_at=datetime.now(UTC),
             )
             self.db.add(mapping)
 
@@ -261,6 +266,7 @@ class DotMacCRMSyncService:
                 ),
                 display_name=data.title,
                 crm_data=data.metadata,
+                synced_at=datetime.now(UTC),
             )
             self.db.add(mapping)
 
@@ -274,8 +280,8 @@ class DotMacCRMSyncService:
     def list_projects(
         self,
         org_id: UUID,
-        search: Optional[str] = None,
-        status: Optional[str] = None,
+        search: str | None = None,
+        status: str | None = None,
         limit: int = 50,
     ) -> list[CRMProjectRead]:
         """List CRM projects for expense claim dropdown."""
@@ -317,7 +323,7 @@ class DotMacCRMSyncService:
     def list_tickets(
         self,
         org_id: UUID,
-        search: Optional[str] = None,
+        search: str | None = None,
         limit: int = 50,
     ) -> list[CRMTicketRead]:
         """List CRM tickets for expense claim dropdown."""
@@ -353,8 +359,8 @@ class DotMacCRMSyncService:
     def list_work_orders(
         self,
         org_id: UUID,
-        search: Optional[str] = None,
-        employee_id: Optional[UUID] = None,
+        search: str | None = None,
+        employee_id: UUID | None = None,
         limit: int = 50,
     ) -> list[CRMWorkOrderRead]:
         """List CRM work orders for expense claim dropdown."""
@@ -396,9 +402,9 @@ class DotMacCRMSyncService:
     def list_inventory_items(
         self,
         org_id: UUID,
-        search: Optional[str] = None,
-        category_code: Optional[str] = None,
-        warehouse_id: Optional[UUID] = None,
+        search: str | None = None,
+        category_code: str | None = None,
+        warehouse_id: UUID | None = None,
         include_zero_stock: bool = False,
         only_below_reorder: bool = False,
         limit: int = 100,
@@ -407,7 +413,7 @@ class DotMacCRMSyncService:
         """
         List inventory items with current stock levels for CRM.
 
-        Returns items that CRM can use for installation assignments.
+        Uses batch stock loading (2 queries) instead of per-item queries.
 
         Args:
             org_id: Organization ID
@@ -422,7 +428,6 @@ class DotMacCRMSyncService:
         Returns:
             InventoryListResponse with items and pagination info
         """
-        # Import here to avoid circular imports
         from app.models.inventory.item import Item
         from app.models.inventory.item_category import ItemCategory
         from app.services.inventory.balance import InventoryBalanceService
@@ -449,10 +454,7 @@ class DotMacCRMSyncService:
         if category_code:
             stmt = stmt.where(ItemCategory.category_code == category_code)
 
-        items: list[InventoryItemStock] = []
-        has_more = False
-
-        # Fast path when we don't filter by availability or reorder point
+        # Fast path: no stock-level filtering needed
         if include_zero_stock and not only_below_reorder:
             count_stmt = select(func.count()).select_from(
                 stmt.with_only_columns(Item.item_id).subquery()
@@ -466,29 +468,51 @@ class DotMacCRMSyncService:
             if has_more:
                 results = results[:limit]
 
+            # Batch-load stock levels (2 queries instead of 2*N)
+            item_ids = [item.item_id for item, _cat in results]
+            stock_map = InventoryBalanceService.get_batch_stock_levels(
+                self.db, org_id, item_ids, warehouse_id
+            )
+
+            items = self._build_stock_items(list(results), stock_map)
+            return InventoryListResponse(
+                items=items, total_count=total_count, has_more=has_more
+            )
+
+        # Filtered path: need stock levels to filter, process in batches
+        all_qualified: list[InventoryItemStock] = []
+        batch_size = 500
+        current_offset = 0
+
+        while True:
+            page_stmt = (
+                stmt.order_by(Item.item_code).offset(current_offset).limit(batch_size)
+            )
+            results = self.db.execute(page_stmt).all()
+            if not results:
+                break
+
+            # Batch-load stock for this page (2 queries per batch)
+            item_ids = [item.item_id for item, _cat in results]
+            stock_map = InventoryBalanceService.get_batch_stock_levels(
+                self.db, org_id, item_ids, warehouse_id
+            )
+
             for item, category in results:
-                if warehouse_id:
-                    balance = InventoryBalanceService.get_item_balance(
-                        self.db, org_id, item.item_id, warehouse_id
-                    )
-                    on_hand = balance.quantity_on_hand if balance else Decimal("0")
-                    reserved = balance.quantity_reserved if balance else Decimal("0")
-                    available = balance.quantity_available if balance else Decimal("0")
-                else:
-                    on_hand = InventoryBalanceService.get_on_hand(
-                        self.db, org_id, item.item_id
-                    )
-                    reserved = InventoryBalanceService.get_reserved(
-                        self.db, org_id, item.item_id
-                    )
-                    available = on_hand - reserved
+                on_hand, reserved = stock_map.get(
+                    item.item_id, (Decimal("0"), Decimal("0"))
+                )
+                available = on_hand - reserved
+
+                if not include_zero_stock and available <= 0:
+                    continue
 
                 reorder_point = item.reorder_point or Decimal("0")
-                is_below_reorder = (
-                    available <= reorder_point if reorder_point else False
-                )
+                is_below = available <= reorder_point if reorder_point else False
+                if only_below_reorder and not is_below:
+                    continue
 
-                items.append(
+                all_qualified.append(
                     InventoryItemStock(
                         item_id=item.item_id,
                         item_code=item.item_code,
@@ -497,115 +521,69 @@ class DotMacCRMSyncService:
                         category_code=category.category_code if category else None,
                         category_name=category.category_name if category else None,
                         base_uom=item.base_uom,
-                        stock_uom=item.base_uom,
                         quantity_on_hand=on_hand,
                         quantity_reserved=reserved,
                         quantity_available=available,
-                        on_hand=on_hand,
-                        reserved=reserved,
                         reorder_point=item.reorder_point,
                         list_price=item.list_price,
                         currency_code=item.currency_code,
                         barcode=item.barcode,
-                        is_below_reorder=is_below_reorder,
+                        is_below_reorder=is_below,
                     )
                 )
-        else:
-            # Filtered pagination: compute total_count and has_more against filtered items
-            total_count = 0
-            seen_filtered = 0
-            batch_size = max(limit, 200)
-            current_offset = 0
 
-            while True:
-                page_stmt = (
-                    stmt.order_by(Item.item_code)
-                    .offset(current_offset)
-                    .limit(batch_size)
-                )
-                results = self.db.execute(page_stmt).all()
-                if not results:
-                    break
+            current_offset += batch_size
 
-                for item, category in results:
-                    if warehouse_id:
-                        balance = InventoryBalanceService.get_item_balance(
-                            self.db, org_id, item.item_id, warehouse_id
-                        )
-                        on_hand = balance.quantity_on_hand if balance else Decimal("0")
-                        reserved = (
-                            balance.quantity_reserved if balance else Decimal("0")
-                        )
-                        available = (
-                            balance.quantity_available if balance else Decimal("0")
-                        )
-                    else:
-                        on_hand = InventoryBalanceService.get_on_hand(
-                            self.db, org_id, item.item_id
-                        )
-                        reserved = InventoryBalanceService.get_reserved(
-                            self.db, org_id, item.item_id
-                        )
-                        available = on_hand - reserved
-
-                    if not include_zero_stock and available <= 0:
-                        continue
-
-                    reorder_point = item.reorder_point or Decimal("0")
-                    is_below_reorder = (
-                        available <= reorder_point if reorder_point else False
-                    )
-                    if only_below_reorder and not is_below_reorder:
-                        continue
-
-                    total_count += 1
-                    if seen_filtered < offset:
-                        seen_filtered += 1
-                        continue
-
-                    if len(items) < limit:
-                        items.append(
-                            InventoryItemStock(
-                                item_id=item.item_id,
-                                item_code=item.item_code,
-                                item_name=item.item_name,
-                                description=item.description,
-                                category_code=category.category_code
-                                if category
-                                else None,
-                                category_name=category.category_name
-                                if category
-                                else None,
-                                base_uom=item.base_uom,
-                                stock_uom=item.base_uom,
-                                quantity_on_hand=on_hand,
-                                quantity_reserved=reserved,
-                                quantity_available=available,
-                                on_hand=on_hand,
-                                reserved=reserved,
-                                reorder_point=item.reorder_point,
-                                list_price=item.list_price,
-                                currency_code=item.currency_code,
-                                barcode=item.barcode,
-                                is_below_reorder=is_below_reorder,
-                            )
-                        )
-                    else:
-                        has_more = True
-
-                current_offset += batch_size
+        total_count = len(all_qualified)
+        page_items = all_qualified[offset : offset + limit]
+        has_more = (offset + limit) < total_count
 
         return InventoryListResponse(
-            items=items,
-            total_count=total_count,
-            has_more=has_more,
+            items=page_items, total_count=total_count, has_more=has_more
         )
+
+    def _build_stock_items(
+        self,
+        results: list,
+        stock_map: dict[UUID, tuple[Decimal, Decimal]],
+    ) -> list[InventoryItemStock]:
+        """Build InventoryItemStock list from query results and batch stock data."""
+        items: list[InventoryItemStock] = []
+        for item, category in results:
+            on_hand, reserved = stock_map.get(
+                item.item_id, (Decimal("0"), Decimal("0"))
+            )
+            available = on_hand - reserved
+            reorder_point = item.reorder_point or Decimal("0")
+
+            items.append(
+                InventoryItemStock(
+                    item_id=item.item_id,
+                    item_code=item.item_code,
+                    item_name=item.item_name,
+                    description=item.description,
+                    category_code=category.category_code if category else None,
+                    category_name=category.category_name if category else None,
+                    base_uom=item.base_uom,
+                    quantity_on_hand=on_hand,
+                    quantity_reserved=reserved,
+                    quantity_available=available,
+                    reorder_point=item.reorder_point,
+                    list_price=item.list_price,
+                    currency_code=item.currency_code,
+                    barcode=item.barcode,
+                    is_below_reorder=(
+                        available <= reorder_point if reorder_point else False
+                    ),
+                )
+            )
+        return items
 
     def get_inventory_item_detail(
         self,
         org_id: UUID,
         item_id: UUID,
-    ) -> Optional[InventoryItemDetail]:
+    ) -> InventoryItemDetail | None:
         """
         Get detailed inventory item info with warehouse breakdown.
 
@@ -729,7 +707,7 @@ class DotMacCRMSyncService:
         self,
         org_id: UUID,
         crm_id: str,
-    ) -> Optional[ExpenseTotals]:
+    ) -> ExpenseTotals | None:
         """Get expense totals for a CRM project."""
         mapping = self._get_mapping(org_id, CRMEntityType.PROJECT, crm_id)
         if not mapping:
@@ -744,7 +722,7 @@ class DotMacCRMSyncService:
         self,
         org_id: UUID,
         crm_id: str,
-    ) -> Optional[ExpenseTotals]:
+    ) -> ExpenseTotals | None:
         """Get expense totals for a CRM ticket."""
         mapping = self._get_mapping(org_id, CRMEntityType.TICKET, crm_id)
         if not mapping:
@@ -759,7 +737,7 @@ class DotMacCRMSyncService:
         self,
         org_id: UUID,
         crm_id: str,
-    ) -> Optional[ExpenseTotals]:
+    ) -> ExpenseTotals | None:
         """Get expense totals for a CRM work order."""
         mapping = self._get_mapping(org_id, CRMEntityType.WORK_ORDER, crm_id)
         if not mapping:
@@ -770,19 +748,98 @@ class DotMacCRMSyncService:
             task_id=mapping.local_entity_id,
         )
 
+    def get_batch_expense_totals(
+        self,
+        org_id: UUID,
+        project_crm_ids: list[str],
+        ticket_crm_ids: list[str],
+        work_order_crm_ids: list[str],
+    ) -> dict[str, ExpenseTotals]:
+        """
+        Get expense totals for multiple CRM entities in batched queries.
+
+        Instead of 2 queries per CRM ID (mapping lookup + aggregation),
+        resolves all mappings in up to 3 queries then aggregates in up to 3.
+        """
+        result: dict[str, ExpenseTotals] = {}
+
+        # Batch-resolve mappings (up to 3 queries)
+        project_map = self._batch_get_mappings(
+            org_id, CRMEntityType.PROJECT, project_crm_ids
+        )
+        ticket_map = self._batch_get_mappings(
+            org_id, CRMEntityType.TICKET, ticket_crm_ids
+        )
+        wo_map = self._batch_get_mappings(
+            org_id, CRMEntityType.WORK_ORDER, work_order_crm_ids
+        )
+
+        # Batch-aggregate expenses (up to 3 queries)
+        for crm_to_local, fk_col in [
+            (project_map, ExpenseClaim.project_id),
+            (ticket_map, ExpenseClaim.ticket_id),
+            (wo_map, ExpenseClaim.task_id),
+        ]:
+            if not crm_to_local:
+                continue
+            local_to_crm = {v: k for k, v in crm_to_local.items()}
+            local_ids = list(crm_to_local.values())
+
+            stmt = (
+                select(
+                    fk_col,
+                    ExpenseClaim.status,
+                    func.coalesce(func.sum(ExpenseClaim.total_claimed_amount), 0).label(
+                        "total"
+                    ),
+                )
+                .where(
+                    ExpenseClaim.organization_id == org_id,
+                    fk_col.in_(local_ids),
+                )
+                .group_by(fk_col, ExpenseClaim.status)
+            )
+            rows = self.db.execute(stmt).all()
+
+            # Group by local_id
+            grouped: dict[UUID, ExpenseTotals] = {}
+            for local_id, status, total in rows:
+                if local_id not in grouped:
+                    grouped[local_id] = ExpenseTotals()
+                amount = Decimal(str(total)) if total else Decimal("0.00")
+                totals = grouped[local_id]
+                if status == ExpenseClaimStatus.DRAFT:
+                    totals.draft = amount
+                elif status == ExpenseClaimStatus.SUBMITTED:
+                    totals.submitted = amount
+                elif status in (
+                    ExpenseClaimStatus.APPROVED,
+                    ExpenseClaimStatus.PENDING_APPROVAL,
+                ):
+                    totals.approved += amount
+                elif status == ExpenseClaimStatus.PAID:
+                    totals.paid = amount
+
+            for local_id, totals in grouped.items():
+                crm_id = local_to_crm.get(local_id)
+                if crm_id:
+                    result[crm_id] = totals
+
+        return result
+
     # ============ Lookup Helpers ============
 
-    def get_local_project_id(self, org_id: UUID, crm_id: str) -> Optional[UUID]:
+    def get_local_project_id(self, org_id: UUID, crm_id: str) -> UUID | None:
         """Get local project ID for a CRM project."""
         mapping = self._get_mapping(org_id, CRMEntityType.PROJECT, crm_id)
         return mapping.local_entity_id if mapping else None
 
-    def get_local_ticket_id(self, org_id: UUID, crm_id: str) -> Optional[UUID]:
+    def get_local_ticket_id(self, org_id: UUID, crm_id: str) -> UUID | None:
         """Get local ticket ID for a CRM ticket."""
         mapping = self._get_mapping(org_id, CRMEntityType.TICKET, crm_id)
         return mapping.local_entity_id if mapping else None
 
-    def get_local_task_id(self, org_id: UUID, crm_id: str) -> Optional[UUID]:
+    def get_local_task_id(self, org_id: UUID, crm_id: str) -> UUID | None:
         """Get local task ID for a CRM work order."""
         mapping = self._get_mapping(org_id, CRMEntityType.WORK_ORDER, crm_id)
         return mapping.local_entity_id if mapping else None
@@ -794,7 +851,7 @@ class DotMacCRMSyncService:
         org_id: UUID,
         entity_type: CRMEntityType,
         crm_id: str,
-    ) -> Optional[CRMSyncMapping]:
+    ) -> CRMSyncMapping | None:
         """Get CRM sync mapping by org, type, and CRM ID."""
         stmt = select(CRMSyncMapping).where(
             CRMSyncMapping.organization_id == org_id,
@@ -803,14 +860,35 @@ class DotMacCRMSyncService:
         )
         return self.db.scalar(stmt)
 
+    def _batch_get_mappings(
+        self,
+        org_id: UUID,
+        entity_type: CRMEntityType,
+        crm_ids: list[str],
+    ) -> dict[str, UUID]:
+        """Get multiple CRM sync mappings in a single query.
+
+        Returns:
+            Dict mapping crm_id -> local_entity_id
+        """
+        if not crm_ids:
+            return {}
+        stmt = select(CRMSyncMapping.crm_id, CRMSyncMapping.local_entity_id).where(
+            CRMSyncMapping.organization_id == org_id,
+            CRMSyncMapping.crm_entity_type == entity_type,
+            CRMSyncMapping.crm_id.in_(crm_ids),
+        )
+        rows = self.db.execute(stmt).all()
+        return {crm_id: local_id for crm_id, local_id in rows}
+
     def _update_mapping(
         self,
         mapping: CRMSyncMapping,
         display_name: str,
-        display_code: Optional[str],
-        customer_name: Optional[str],
+        display_code: str | None,
+        customer_name: str | None,
         status: str,
-        crm_data: Optional[dict] = None,
+        crm_data: dict | None = None,
     ) -> None:
         """Update mapping fields on sync."""
         mapping.display_name = display_name
@@ -819,7 +897,7 @@ class DotMacCRMSyncService:
         mapping.crm_status = CRM_SYNC_STATUS_MAP.get(
             status.lower(), CRMSyncStatus.ACTIVE
         )
-        mapping.synced_at = datetime.now(timezone.utc)
+        mapping.synced_at = datetime.now(UTC)
         if crm_data is not None:
             mapping.crm_data = crm_data
 
@@ -888,8 +966,8 @@ class DotMacCRMSyncService:
         org_id: UUID,
         data: CRMWorkOrderPayload,
         project_id: UUID,
-        ticket_id: Optional[UUID],
-        employee_id: Optional[UUID],
+        ticket_id: UUID | None,
+        employee_id: UUID | None,
     ) -> Task:
         """Create a local Task from CRM work order data."""
         task_code = self._generate_unique_code("WO", data.crm_id, max_len=30)
@@ -913,9 +991,9 @@ class DotMacCRMSyncService:
         self,
         task: Task,
         data: CRMWorkOrderPayload,
-        project_id: Optional[UUID],
-        ticket_id: Optional[UUID],
-        employee_id: Optional[UUID],
+        project_id: UUID | None,
+        ticket_id: UUID | None,
+        employee_id: UUID | None,
     ) -> None:
         """Update existing task from CRM work order data."""
         task.task_name = data.title
@@ -932,25 +1010,21 @@ class DotMacCRMSyncService:
         if data.scheduled_end:
             task.due_date = data.scheduled_end.date()
 
-    def _resolve_project_id(
-        self, org_id: UUID, crm_id: Optional[str]
-    ) -> Optional[UUID]:
+    def _resolve_project_id(self, org_id: UUID, crm_id: str | None) -> UUID | None:
         """Resolve CRM project ID to local project ID."""
         if not crm_id:
             return None
         mapping = self._get_mapping(org_id, CRMEntityType.PROJECT, crm_id)
         return mapping.local_entity_id if mapping else None
 
-    def _resolve_ticket_id(self, org_id: UUID, crm_id: Optional[str]) -> Optional[UUID]:
+    def _resolve_ticket_id(self, org_id: UUID, crm_id: str | None) -> UUID | None:
         """Resolve CRM ticket ID to local ticket ID."""
         if not crm_id:
             return None
         mapping = self._get_mapping(org_id, CRMEntityType.TICKET, crm_id)
         return mapping.local_entity_id if mapping else None
 
-    def _resolve_employee_id(
-        self, org_id: UUID, email: Optional[str]
-    ) -> Optional[UUID]:
+    def _resolve_employee_id(self, org_id: UUID, email: str | None) -> UUID | None:
         """Resolve employee email to employee ID.
 
         Looks up by person.email (work email) or employee.personal_email.
@@ -983,6 +1057,7 @@ class DotMacCRMSyncService:
         """Get or create a default project for orphan work orders.
 
         Handles race condition by catching IntegrityError on duplicate insert.
+        Uses a savepoint to avoid rolling back the entire transaction.
         """
         from sqlalchemy.exc import IntegrityError
 
@@ -995,7 +1070,9 @@ class DotMacCRMSyncService:
         if project:
             return project.project_id
 
-        # Try to create - may fail if concurrent request created it
+        # Try to create inside savepoint so failure doesn't roll back the
+        # outer transaction (e.g. an in-progress bulk sync batch).
+        savepoint = self.db.begin_nested()
         try:
             project = Project(
                 organization_id=org_id,
@@ -1007,16 +1084,17 @@ class DotMacCRMSyncService:
             )
             self.db.add(project)
             self.db.flush()
+            savepoint.commit()
             return project.project_id
         except IntegrityError:
-            # Race condition - another request created it, rollback and fetch
-            self.db.rollback()
+            # Race condition - another request created it
+            savepoint.rollback()
             project = self.db.scalar(stmt)
             if project:
                 return project.project_id
             raise  # Re-raise if still not found (unexpected)
 
-    def _map_project_type(self, type_str: Optional[str]) -> ProjectType:
+    def _map_project_type(self, type_str: str | None) -> ProjectType:
         """Map CRM project type to local enum."""
         if not type_str:
             return ProjectType.CLIENT
@@ -1028,7 +1106,7 @@ class DotMacCRMSyncService:
         }
         return type_map.get(type_str.lower(), ProjectType.CLIENT)
 
-    def _map_ticket_priority(self, priority_str: Optional[str]) -> TicketPriority:
+    def _map_ticket_priority(self, priority_str: str | None) -> TicketPriority:
         """Map CRM priority to local enum."""
         if not priority_str:
             return TicketPriority.MEDIUM
@@ -1041,7 +1119,7 @@ class DotMacCRMSyncService:
         }
         return priority_map.get(priority_str.lower(), TicketPriority.MEDIUM)
 
-    def _map_task_priority(self, priority_str: Optional[str]) -> TaskPriority:
+    def _map_task_priority(self, priority_str: str | None) -> TaskPriority:
         """Map CRM priority to local enum."""
         if not priority_str:
             return TaskPriority.MEDIUM
@@ -1057,9 +1135,9 @@ class DotMacCRMSyncService:
     def _calculate_expense_totals(
         self,
         org_id: UUID,
-        project_id: Optional[UUID] = None,
-        ticket_id: Optional[UUID] = None,
-        task_id: Optional[UUID] = None,
+        project_id: UUID | None = None,
+        ticket_id: UUID | None = None,
+        task_id: UUID | None = None,
     ) -> ExpenseTotals:
         """Calculate expense totals grouped by status."""
         # Build base query

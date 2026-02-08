@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}Case {{ case.case_number }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -65,9 +66,7 @@
                             'CLOSED': 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
                             'WITHDRAWN': 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
                         } %}
-                        <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium {{ status_colors.get(case.status.value, 'bg-slate-100 text-slate-700') }}">
-                            {{ case.status.value | replace('_', ' ') | title }}
-                        </span>
+                        {{ status_badge(case.status.value) }}
                     </div>
                 </div>
             </div>
@@ -103,7 +102,7 @@
                     <h3 class="font-medium text-slate-900 dark:text-white">Violation Details</h3>
                 </div>
                 <div class="card-body space-y-4">
-                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-3 gap-4">
                         <div>
                             <label class="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider">Type</label>
                             <p class="text-sm font-medium text-slate-900 dark:text-white mt-1">{{ case.violation_type.value | replace('_', ' ') | title if case.violation_type else '-' }}</p>
@@ -142,7 +141,7 @@
                     <div class="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
                         <p class="text-sm text-blue-700 dark:text-blue-300 whitespace-pre-wrap">{{ case.query_text }}</p>
                     </div>
-                    <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                         <div>
                             <label class="text-slate-500 dark:text-slate-400">Issued On</label>
                             <p class="text-slate-900 dark:text-white">{{ case.query_issued_date.strftime("%b %d, %Y") if case.query_issued_date else '-' }}</p>
@@ -194,7 +193,7 @@
                     <h3 class="font-medium text-slate-900 dark:text-white">Hearing</h3>
                 </div>
                 <div class="card-body space-y-4">
-                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
                         <div>
                             <label class="text-slate-500 dark:text-slate-400">Date & Time</label>
                             <p class="text-slate-900 dark:text-white">{{ case.hearing_date.strftime("%b %d, %Y %H:%M") if case.hearing_date else '-' }}</p>
@@ -412,7 +411,7 @@
                 <div class="card-body space-y-4">
                     <!-- Issue Query (from DRAFT) -->
                     {% if case.status.value == 'DRAFT' %}
-                    <form method="post" action="/people/hr/discipline/{{ case.case_id }}/issue-query" class="space-y-3">
+                    <form method="post" action="/people/hr/discipline/{{ case.case_id }}/issue-query" class="space-y-4">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                         <div>
                             <label class="label required">Query Text</label>
@@ -428,7 +427,7 @@
 
                     <!-- Schedule Hearing (from QUERY_ISSUED or RESPONSE_RECEIVED) -->
                     {% if case.status.value in ['QUERY_ISSUED', 'RESPONSE_RECEIVED'] %}
-                    <form method="post" action="/people/hr/discipline/{{ case.case_id }}/schedule-hearing" class="space-y-3">
+                    <form method="post" action="/people/hr/discipline/{{ case.case_id }}/schedule-hearing" class="space-y-4">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                         <div>
                             <label class="label required">Hearing Date & Time</label>
@@ -453,7 +452,7 @@
 
                     <!-- Record Hearing Notes (from HEARING_SCHEDULED) -->
                     {% if case.status.value == 'HEARING_SCHEDULED' %}
-                    <form method="post" action="/people/hr/discipline/{{ case.case_id }}/record-hearing" class="space-y-3">
+                    <form method="post" action="/people/hr/discipline/{{ case.case_id }}/record-hearing" class="space-y-4">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                         <div>
                             <label class="label required">Hearing Notes</label>
@@ -465,7 +464,7 @@
 
                     <!-- Record Decision (from HEARING_COMPLETED) -->
                     {% if case.status.value == 'HEARING_COMPLETED' %}
-                    <form method="post" action="/people/hr/discipline/{{ case.case_id }}/decision" class="space-y-3">
+                    <form method="post" action="/people/hr/discipline/{{ case.case_id }}/decision" class="space-y-4">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                         <div>
                             <label class="label required">Decision Summary</label>
@@ -484,7 +483,7 @@
                             <label class="label">Action Description</label>
                             <textarea name="action_description" class="input" rows="2" placeholder="Details of the action..."></textarea>
                         </div>
-                        <div class="grid grid-cols-2 gap-2">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             <div>
                                 <label class="label">Effective Date</label>
                                 <input type="date" name="effective_date" class="input">
@@ -521,7 +520,7 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                             </svg>
                         </summary>
-                        <form method="post" action="/people/hr/discipline/{{ case.case_id }}/witnesses" class="mt-3 space-y-3">
+                        <form method="post" action="/people/hr/discipline/{{ case.case_id }}/witnesses" class="mt-3 space-y-4">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
                             <div>
                                 <label class="label">Employee Witness</label>

@@ -9,9 +9,9 @@ HR schema tables. Uses the same pattern as the finance schemas - tenant
 isolation based on organization_id with bypass capability.
 """
 
-from alembic import op
 from sqlalchemy import text
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "add_hr_rls_policies"

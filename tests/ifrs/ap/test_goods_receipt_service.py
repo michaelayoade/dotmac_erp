@@ -9,17 +9,17 @@ Tests cover:
 - Getter and list methods
 """
 
-import pytest
 from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+import pytest
 from fastapi import HTTPException
 
 from app.services.finance.ap.goods_receipt import (
-    GoodsReceiptService,
     GoodsReceiptInput,
+    GoodsReceiptService,
     GRLineInput,
     InspectionResult,
 )

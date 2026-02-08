@@ -6,11 +6,9 @@ Pydantic schemas for Inventory API endpoints.
 
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 # =============================================================================
 # Item Categories
@@ -26,11 +24,11 @@ class ItemCategoryCreate(BaseModel):
     cogs_account_id: UUID
     revenue_account_id: UUID
     inventory_adjustment_account_id: UUID
-    description: Optional[str] = None
-    parent_category_id: Optional[UUID] = None
-    purchase_variance_account_id: Optional[UUID] = None
-    reorder_point: Optional[Decimal] = None
-    minimum_stock: Optional[Decimal] = None
+    description: str | None = None
+    parent_category_id: UUID | None = None
+    purchase_variance_account_id: UUID | None = None
+    reorder_point: Decimal | None = None
+    minimum_stock: Decimal | None = None
 
 
 class ItemCategoryRead(BaseModel):
@@ -42,15 +40,15 @@ class ItemCategoryRead(BaseModel):
     organization_id: UUID
     category_code: str
     category_name: str
-    description: Optional[str]
-    parent_category_id: Optional[UUID]
+    description: str | None
+    parent_category_id: UUID | None
     inventory_account_id: UUID
     cogs_account_id: UUID
     revenue_account_id: UUID
     inventory_adjustment_account_id: UUID
-    purchase_variance_account_id: Optional[UUID]
-    reorder_point: Optional[Decimal]
-    minimum_stock: Optional[Decimal]
+    purchase_variance_account_id: UUID | None
+    reorder_point: Decimal | None
+    minimum_stock: Decimal | None
     is_active: bool
 
 
@@ -64,15 +62,15 @@ class InventoryItemCreate(BaseModel):
 
     item_code: str = Field(max_length=30)
     item_name: str = Field(max_length=200)
-    item_category_id: Optional[UUID] = None
+    item_category_id: UUID | None = None
     unit_of_measure: str = Field(max_length=20)
     costing_method: str = "WEIGHTED_AVERAGE"
-    standard_cost: Optional[Decimal] = None
-    reorder_point: Optional[Decimal] = None
-    reorder_quantity: Optional[Decimal] = None
-    inventory_account_id: Optional[UUID] = None
-    cogs_account_id: Optional[UUID] = None
-    description: Optional[str] = None
+    standard_cost: Decimal | None = None
+    reorder_point: Decimal | None = None
+    reorder_quantity: Decimal | None = None
+    inventory_account_id: UUID | None = None
+    cogs_account_id: UUID | None = None
+    description: str | None = None
 
 
 class InventoryItemRead(BaseModel):
@@ -86,14 +84,14 @@ class InventoryItemRead(BaseModel):
     item_name: str
     base_uom: str
     costing_method: str
-    standard_cost: Optional[Decimal]
-    average_cost: Optional[Decimal]
-    last_purchase_cost: Optional[Decimal]
-    list_price: Optional[Decimal]
-    reorder_point: Optional[Decimal]
-    reorder_quantity: Optional[Decimal]
-    minimum_stock: Optional[Decimal]
-    maximum_stock: Optional[Decimal]
+    standard_cost: Decimal | None
+    average_cost: Decimal | None
+    last_purchase_cost: Decimal | None
+    list_price: Decimal | None
+    reorder_point: Decimal | None
+    reorder_quantity: Decimal | None
+    minimum_stock: Decimal | None
+    maximum_stock: Decimal | None
     track_inventory: bool
     track_lots: bool
     track_serial_numbers: bool
@@ -111,8 +109,8 @@ class InventoryItemWithBalanceRead(BaseModel):
     item_name: str
     base_uom: str
     costing_method: str
-    standard_cost: Optional[Decimal]
-    average_cost: Optional[Decimal]
+    standard_cost: Decimal | None
+    average_cost: Decimal | None
     quantity_on_hand: Decimal
     quantity_reserved: Decimal
     quantity_available: Decimal
@@ -130,20 +128,20 @@ class TransactionCreate(BaseModel):
 
     item_id: UUID
     warehouse_id: UUID
-    location_id: Optional[UUID] = None
-    lot_id: Optional[UUID] = None
-    to_warehouse_id: Optional[UUID] = None
-    to_location_id: Optional[UUID] = None
+    location_id: UUID | None = None
+    lot_id: UUID | None = None
+    to_warehouse_id: UUID | None = None
+    to_location_id: UUID | None = None
     transaction_type: str = Field(max_length=30)
     transaction_date: date
     quantity: Decimal
-    unit_cost: Optional[Decimal] = None
-    uom: Optional[str] = None
-    currency_code: Optional[str] = None
-    reason_code: Optional[str] = None
-    reference_type: Optional[str] = None
-    reference_id: Optional[UUID] = None
-    notes: Optional[str] = None
+    unit_cost: Decimal | None = None
+    uom: str | None = None
+    currency_code: str | None = None
+    reason_code: str | None = None
+    reference_type: str | None = None
+    reference_id: UUID | None = None
+    notes: str | None = None
 
 
 class TransactionRead(BaseModel):
@@ -155,10 +153,10 @@ class TransactionRead(BaseModel):
     organization_id: UUID
     item_id: UUID
     warehouse_id: UUID
-    location_id: Optional[UUID] = None
-    lot_id: Optional[UUID] = None
-    to_warehouse_id: Optional[UUID] = None
-    to_location_id: Optional[UUID] = None
+    location_id: UUID | None = None
+    lot_id: UUID | None = None
+    to_warehouse_id: UUID | None = None
+    to_location_id: UUID | None = None
     transaction_type: str
     transaction_date: date
     quantity: Decimal
@@ -166,8 +164,8 @@ class TransactionRead(BaseModel):
     total_cost: Decimal
     quantity_before: Decimal
     quantity_after: Decimal
-    reference: Optional[str] = None
-    reason_code: Optional[str] = None
+    reference: str | None = None
+    reason_code: str | None = None
 
 
 # =============================================================================
@@ -207,8 +205,8 @@ class StockBalanceRead(BaseModel):
     item_id: UUID
     item_code: str
     item_name: str
-    warehouse_id: Optional[UUID]
-    warehouse_code: Optional[str]
+    warehouse_id: UUID | None
+    warehouse_code: str | None
     quantity_on_hand: Decimal
     quantity_reserved: Decimal
     quantity_available: Decimal
@@ -225,10 +223,10 @@ class LowStockItemRead(BaseModel):
     quantity_on_hand: Decimal
     quantity_available: Decimal
     reorder_point: Decimal
-    reorder_quantity: Optional[Decimal]
+    reorder_quantity: Decimal | None
     suggested_order_qty: Decimal
-    default_supplier_id: Optional[UUID]
-    lead_time_days: Optional[int]
+    default_supplier_id: UUID | None
+    lead_time_days: int | None
 
 
 # =============================================================================
@@ -243,8 +241,8 @@ class FIFOLayerRead(BaseModel):
     quantity: Decimal
     unit_cost: Decimal
     total_cost: Decimal
-    lot_id: Optional[UUID] = None
-    reference: Optional[str] = None
+    lot_id: UUID | None = None
+    reference: str | None = None
 
 
 class FIFOInventoryRead(BaseModel):
@@ -287,8 +285,8 @@ class AddLayerCreate(BaseModel):
     quantity: Decimal
     unit_cost: Decimal
     layer_date: date
-    lot_id: Optional[UUID] = None
-    reference: Optional[str] = None
+    lot_id: UUID | None = None
+    reference: str | None = None
 
 
 # =============================================================================
@@ -304,12 +302,12 @@ class LotCreate(BaseModel):
     received_date: date
     unit_cost: Decimal
     initial_quantity: Decimal
-    manufacture_date: Optional[date] = None
-    expiry_date: Optional[date] = None
-    supplier_id: Optional[UUID] = None
-    supplier_lot_number: Optional[str] = None
-    purchase_order_id: Optional[UUID] = None
-    certificate_of_analysis: Optional[str] = None
+    manufacture_date: date | None = None
+    expiry_date: date | None = None
+    supplier_id: UUID | None = None
+    supplier_lot_number: str | None = None
+    purchase_order_id: UUID | None = None
+    certificate_of_analysis: str | None = None
 
 
 class LotRead(BaseModel):
@@ -320,7 +318,7 @@ class LotRead(BaseModel):
     item_id: UUID
     lot_number: str
     received_date: date
-    expiry_date: Optional[date]
+    expiry_date: date | None
     initial_quantity: Decimal
     quantity_on_hand: Decimal
     quantity_available: Decimal
@@ -336,9 +334,9 @@ class LotTraceabilityRead(BaseModel):
     lot_number: str
     item_id: UUID
     item_code: str
-    supplier_lot: Optional[str]
+    supplier_lot: str | None
     received_date: date
-    expiry_date: Optional[date]
+    expiry_date: date | None
     total_received: Decimal
     total_remaining: Decimal
     total_consumed: Decimal

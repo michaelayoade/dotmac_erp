@@ -9,9 +9,9 @@ Handles:
 """
 
 import logging
-from datetime import date, datetime, timedelta, timezone
-from typing import Any, Optional
 import uuid
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 from celery import shared_task
 from sqlalchemy import select
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task
-def refresh_period_usage_cache(organization_id: Optional[str] = None) -> dict:
+def refresh_period_usage_cache(organization_id: str | None = None) -> dict:
     """
     Refresh period usage cache for expense limits.
 
@@ -223,9 +223,12 @@ def process_expense_approval_reminders() -> dict:
                 if claim.approver_id:
                     approver = db.get(Employee, claim.approver_id)
 
-                # Fall back to employee's manager
-                if not approver and claim.employee and claim.employee.reports_to_id:
-                    approver = db.get(Employee, claim.employee.reports_to_id)
+                # Fall back to employee's expense approver, then manager
+                if not approver and claim.employee:
+                    if claim.employee.expense_approver_id:
+                        approver = db.get(Employee, claim.employee.expense_approver_id)
+                    if not approver and claim.employee.reports_to_id:
+                        approver = db.get(Employee, claim.employee.reports_to_id)
 
                 if not approver:
                     continue  # No approver to remind
@@ -449,7 +452,7 @@ def settle_cash_advance_with_claim(
     advance_id: str,
     claim_id: str,
     user_id: str,
-    settlement_amount: Optional[str] = None,
+    settlement_amount: str | None = None,
 ) -> dict:
     """
     Settle a cash advance against an expense claim.
@@ -467,6 +470,7 @@ def settle_cash_advance_with_claim(
         Dict with settlement result
     """
     from decimal import Decimal
+
     from app.services.expense.expense_posting_adapter import ExpensePostingAdapter
 
     logger.info(
@@ -644,12 +648,12 @@ def poll_stuck_expense_transfers() -> dict:
     """
     from datetime import timedelta
 
+    from app.models.domain_settings import SettingDomain
     from app.models.finance.payments.payment_intent import (
         PaymentDirection,
         PaymentIntent,
         PaymentIntentStatus,
     )
-    from app.models.domain_settings import SettingDomain
     from app.services.finance.payments.payment_service import PaymentService
     from app.services.finance.payments.paystack_client import PaystackConfig
     from app.services.settings_spec import resolve_value
@@ -666,7 +670,7 @@ def poll_stuck_expense_transfers() -> dict:
 
     with SessionLocal() as db:
         # Find transfers stuck in PROCESSING for more than 1 hour
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
+        cutoff = datetime.now(UTC) - timedelta(hours=1)
 
         stuck_intents = db.scalars(
             select(PaymentIntent).where(
@@ -712,7 +716,6 @@ def poll_stuck_expense_transfers() -> dict:
             for intent in intents:
                 try:
                     results["intents_checked"] += 1
-                    old_status = intent.status
 
                     svc.poll_transfer_status(intent, config)
 

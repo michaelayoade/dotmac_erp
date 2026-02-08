@@ -5,7 +5,7 @@ HTML template routes for Recurring Transactions, Workflow Rules,
 Custom Fields, and Document Templates.
 """
 
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -17,8 +17,7 @@ from app.services.finance.automation.recurring import recurring_service
 from app.services.finance.automation.web import automation_web_service
 from app.services.finance.automation.workflow import workflow_service
 from app.templates import templates
-from app.web.deps import get_db, require_finance_access, WebAuthContext, base_context
-
+from app.web.deps import WebAuthContext, base_context, get_db, require_finance_access
 
 router = APIRouter(prefix="/automation", tags=["automation-web"])
 
@@ -81,8 +80,8 @@ def automation_dashboard(
 @router.get("/recurring", response_class=HTMLResponse)
 def list_recurring(
     request: Request,
-    entity_type: Optional[str] = None,
-    status: Optional[str] = None,
+    entity_type: str | None = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -393,9 +392,9 @@ def generate_now(
 @router.get("/workflows", response_class=HTMLResponse)
 def list_workflows(
     request: Request,
-    entity_type: Optional[str] = None,
-    trigger_event: Optional[str] = None,
-    is_active: Optional[str] = None,
+    entity_type: str | None = None,
+    trigger_event: str | None = None,
+    is_active: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -560,7 +559,7 @@ async def update_workflow(
 ):
     """Handle workflow rule update form submission."""
 
-    def _parse_json_field(value: Any, default: Optional[dict]) -> Optional[dict]:
+    def _parse_json_field(value: Any, default: dict | None) -> dict | None:
         if value in (None, "", {}):
             return default
         if isinstance(value, dict):
@@ -764,8 +763,8 @@ def delete_workflow(
 @router.get("/fields", response_class=HTMLResponse)
 def list_custom_fields(
     request: Request,
-    entity_type: Optional[str] = None,
-    is_active: Optional[str] = None,
+    entity_type: str | None = None,
+    is_active: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -1007,8 +1006,8 @@ def delete_custom_field(
 @router.get("/templates", response_class=HTMLResponse)
 def list_templates(
     request: Request,
-    template_type: Optional[str] = None,
-    is_active: Optional[str] = None,
+    template_type: str | None = None,
+    is_active: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),

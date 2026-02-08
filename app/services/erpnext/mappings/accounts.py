@@ -3,7 +3,7 @@ Account mapping from ERPNext to DotMac ERP.
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from .base import (
     DocTypeMapping,
@@ -54,7 +54,7 @@ def map_root_type_to_category(root_type: Any) -> str:
     return ROOT_TYPE_MAP.get(str(root_type), "ASSETS")
 
 
-def map_account_type_to_subledger(account_type: Any) -> Optional[str]:
+def map_account_type_to_subledger(account_type: Any) -> str | None:
     """Map ERPNext account_type to DotMac ERP subledger_type."""
     if not account_type:
         return None

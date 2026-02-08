@@ -5,9 +5,9 @@ Tests login, logout, password reset, and session handling.
 """
 
 import re
+
 import pytest
 from playwright.sync_api import expect
-
 
 ALPINE_JS_MARKER = "cdn.jsdelivr.net/npm/alpinejs@"
 
@@ -253,17 +253,11 @@ class TestForgotPassword:
         """Test that forgot password page loads."""
         response = page.goto(f"{base_url}/forgot-password")
 
-        if response.status == 404:
-            pytest.skip("Forgot password page not implemented")
-
         assert response.ok, f"Forgot password page failed: {response.status}"
 
     def test_forgot_password_has_email_field(self, page, base_url):
         """Test that forgot password page has email field."""
-        response = page.goto(f"{base_url}/forgot-password")
-
-        if response.status == 404:
-            pytest.skip("Forgot password page not implemented")
+        page.goto(f"{base_url}/forgot-password")
 
         page.wait_for_load_state("networkidle")
 
@@ -273,10 +267,7 @@ class TestForgotPassword:
 
     def test_forgot_password_has_submit_button(self, page, base_url):
         """Test that forgot password page has submit button."""
-        response = page.goto(f"{base_url}/forgot-password")
-
-        if response.status == 404:
-            pytest.skip("Forgot password page not implemented")
+        page.goto(f"{base_url}/forgot-password")
 
         page.wait_for_load_state("networkidle")
 
@@ -292,9 +283,6 @@ class TestResetPassword:
     def test_reset_password_page_requires_token(self, page, base_url):
         """Test that reset password page requires a token."""
         response = page.goto(f"{base_url}/reset-password")
-
-        if response.status == 404:
-            pytest.skip("Reset password page not implemented")
 
         # If response is 422 (missing token), that's expected behavior
         if response.status == 422:
@@ -318,10 +306,7 @@ class TestResetPassword:
 
     def test_reset_password_with_invalid_token(self, page, base_url):
         """Test reset password with invalid token shows error."""
-        response = page.goto(f"{base_url}/reset-password?token=invalid_token_12345")
-
-        if response.status == 404:
-            pytest.skip("Reset password page not implemented")
+        page.goto(f"{base_url}/reset-password?token=invalid_token_12345")
 
         page.wait_for_load_state("networkidle")
 
@@ -351,18 +336,12 @@ class TestAdminLogin:
         """Test that admin login page loads."""
         response = goto_auth_page(page, f"{base_url}/admin/login")
 
-        if response.status == 404:
-            pytest.skip("Separate admin login not implemented")
-
         assert response.ok, f"Admin login page failed: {response.status}"
         assert_alpinejs_in_response(response)
 
     def test_admin_login_has_form(self, page, base_url):
         """Test that admin login page has a form."""
-        response = goto_auth_page(page, f"{base_url}/admin/login")
-
-        if response.status == 404:
-            pytest.skip("Separate admin login not implemented")
+        goto_auth_page(page, f"{base_url}/admin/login")
 
         wait_for_alpine(page)
 

@@ -8,9 +8,10 @@ Revises:
 Create Date: 2026-01-24
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260124_expense_gl"

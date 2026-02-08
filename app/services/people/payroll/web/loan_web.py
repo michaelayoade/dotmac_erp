@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal, InvalidOperation
-from typing import Optional
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -40,7 +39,7 @@ class LoanWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
+        search: str | None = None,
     ) -> HTMLResponse:
         """Render loan types list page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -78,7 +77,7 @@ class LoanWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        loan_type_id: Optional[str] = None,
+        loan_type_id: str | None = None,
     ) -> HTMLResponse:
         """Render loan type create/edit form."""
         org_id = coerce_uuid(auth.organization_id)
@@ -118,7 +117,7 @@ class LoanWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        loan_type_id: Optional[str] = None,
+        loan_type_id: str | None = None,
     ) -> RedirectResponse:
         """Save loan type (create or update)."""
         org_id = coerce_uuid(auth.organization_id)
@@ -189,8 +188,8 @@ class LoanWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
-        status: Optional[str] = None,
+        search: str | None = None,
+        status: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Render loans list page."""
@@ -308,7 +307,7 @@ class LoanWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        employee_id: Optional[str] = None,
+        employee_id: str | None = None,
     ) -> HTMLResponse:
         """Render new loan application form."""
         org_id = coerce_uuid(auth.organization_id)

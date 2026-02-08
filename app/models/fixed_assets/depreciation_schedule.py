@@ -5,7 +5,6 @@ Depreciation Schedule Model - FA Schema.
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import DateTime, ForeignKey, Numeric, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -43,7 +42,7 @@ class DepreciationSchedule(Base):
     )
 
     # Component (if component accounting)
-    component_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    component_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("fa.asset_component.component_id"),
         nullable=True,
@@ -90,7 +89,7 @@ class DepreciationSchedule(Base):
         UUID(as_uuid=True),
         nullable=False,
     )
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )

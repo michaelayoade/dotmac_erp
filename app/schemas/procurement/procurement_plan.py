@@ -4,7 +4,6 @@ Procurement Plan Schemas.
 
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -21,12 +20,12 @@ class PlanItemCreate(BaseModel):
 
     line_number: int = Field(ge=1)
     description: str
-    budget_line_code: Optional[str] = None
-    budget_id: Optional[UUID] = None
+    budget_line_code: str | None = None
+    budget_id: UUID | None = None
     estimated_value: Decimal = Field(ge=0)
     procurement_method: ProcurementMethod = ProcurementMethod.OPEN_COMPETITIVE
     planned_quarter: int = Field(ge=1, le=4)
-    category: Optional[str] = None
+    category: str | None = None
 
 
 class PlanItemResponse(BaseModel):
@@ -39,13 +38,13 @@ class PlanItemResponse(BaseModel):
     organization_id: UUID
     line_number: int
     description: str
-    budget_line_code: Optional[str] = None
-    budget_id: Optional[UUID] = None
+    budget_line_code: str | None = None
+    budget_id: UUID | None = None
     estimated_value: Decimal
     procurement_method: ProcurementMethod
     planned_quarter: int
-    approving_authority: Optional[str] = None
-    category: Optional[str] = None
+    approving_authority: str | None = None
+    category: str | None = None
     status: PlanItemStatus
 
 
@@ -56,15 +55,15 @@ class ProcurementPlanCreate(BaseModel):
     fiscal_year: str = Field(max_length=10)
     title: str = Field(max_length=200)
     currency_code: str = Field(default="NGN", max_length=3)
-    items: List[PlanItemCreate] = Field(default_factory=list)
+    items: list[PlanItemCreate] = Field(default_factory=list)
 
 
 class ProcurementPlanUpdate(BaseModel):
     """Schema for updating a procurement plan."""
 
-    title: Optional[str] = Field(default=None, max_length=200)
-    fiscal_year: Optional[str] = Field(default=None, max_length=10)
-    currency_code: Optional[str] = Field(default=None, max_length=3)
+    title: str | None = Field(default=None, max_length=200)
+    fiscal_year: str | None = Field(default=None, max_length=10)
+    currency_code: str | None = Field(default=None, max_length=3)
 
 
 class ProcurementPlanResponse(BaseModel):
@@ -80,9 +79,9 @@ class ProcurementPlanResponse(BaseModel):
     status: ProcurementPlanStatus
     total_estimated_value: Decimal
     currency_code: str
-    approved_by_user_id: Optional[UUID] = None
-    approved_at: Optional[datetime] = None
+    approved_by_user_id: UUID | None = None
+    approved_at: datetime | None = None
     created_by_user_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    items: List[PlanItemResponse] = Field(default_factory=list)
+    updated_at: datetime | None = None
+    items: list[PlanItemResponse] = Field(default_factory=list)

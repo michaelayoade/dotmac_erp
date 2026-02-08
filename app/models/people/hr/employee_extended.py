@@ -157,7 +157,7 @@ class EmployeeDocument(Base, AuditMixin, SoftDeleteMixin):
         String(255),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -173,22 +173,22 @@ class EmployeeDocument(Base, AuditMixin, SoftDeleteMixin):
         nullable=False,
         comment="Original filename",
     )
-    file_size: Mapped[Optional[int]] = mapped_column(
+    file_size: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="File size in bytes",
     )
-    mime_type: Mapped[Optional[str]] = mapped_column(
+    mime_type: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
 
     # Dates
-    issue_date: Mapped[Optional[date]] = mapped_column(
+    issue_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    expiry_date: Mapped[Optional[date]] = mapped_column(
+    expiry_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -202,15 +202,15 @@ class EmployeeDocument(Base, AuditMixin, SoftDeleteMixin):
         Boolean,
         default=False,
     )
-    verified_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    verified_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
     )
-    verified_at: Mapped[Optional[datetime]] = mapped_column(
+    verified_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
     )
-    verification_notes: Mapped[Optional[str]] = mapped_column(
+    verification_notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -234,7 +234,7 @@ class EmployeeDocument(Base, AuditMixin, SoftDeleteMixin):
         return date.today() > self.expiry_date
 
     @property
-    def days_until_expiry(self) -> Optional[int]:
+    def days_until_expiry(self) -> int | None:
         """Days until document expires (negative if already expired)."""
         if self.expiry_date is None:
             return None
@@ -291,7 +291,7 @@ class EmployeeQualification(Base, AuditMixin, SoftDeleteMixin):
         nullable=False,
         comment="Degree/Diploma name",
     )
-    field_of_study: Mapped[Optional[str]] = mapped_column(
+    field_of_study: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
         comment="Major/Specialization",
@@ -300,17 +300,17 @@ class EmployeeQualification(Base, AuditMixin, SoftDeleteMixin):
         String(255),
         nullable=False,
     )
-    institution_location: Mapped[Optional[str]] = mapped_column(
+    institution_location: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
     )
 
     # Dates
-    start_date: Mapped[Optional[date]] = mapped_column(
+    start_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    end_date: Mapped[Optional[date]] = mapped_column(
+    end_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -320,17 +320,17 @@ class EmployeeQualification(Base, AuditMixin, SoftDeleteMixin):
     )
 
     # Achievement
-    grade: Mapped[Optional[str]] = mapped_column(
+    grade: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Grade/GPA/Classification",
     )
-    score: Mapped[Optional[Decimal]] = mapped_column(
+    score: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
         comment="Numeric score if applicable",
     )
-    max_score: Mapped[Optional[Decimal]] = mapped_column(
+    max_score: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
     )
@@ -340,14 +340,14 @@ class EmployeeQualification(Base, AuditMixin, SoftDeleteMixin):
         Boolean,
         default=False,
     )
-    document_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee_document.document_id"),
         nullable=True,
         comment="Link to uploaded certificate",
     )
 
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -412,12 +412,12 @@ class EmployeeCertification(Base, AuditMixin, SoftDeleteMixin):
         String(255),
         nullable=False,
     )
-    credential_id: Mapped[Optional[str]] = mapped_column(
+    credential_id: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Certificate/License number",
     )
-    credential_url: Mapped[Optional[str]] = mapped_column(
+    credential_url: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
         comment="Verification URL",
@@ -428,7 +428,7 @@ class EmployeeCertification(Base, AuditMixin, SoftDeleteMixin):
         Date,
         nullable=False,
     )
-    expiry_date: Mapped[Optional[date]] = mapped_column(
+    expiry_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -443,7 +443,7 @@ class EmployeeCertification(Base, AuditMixin, SoftDeleteMixin):
         default=30,
         comment="Days before expiry to send reminder",
     )
-    last_reminder_sent: Mapped[Optional[datetime]] = mapped_column(
+    last_reminder_sent: Mapped[datetime | None] = mapped_column(
         nullable=True,
     )
 
@@ -452,13 +452,13 @@ class EmployeeCertification(Base, AuditMixin, SoftDeleteMixin):
         Boolean,
         default=False,
     )
-    document_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee_document.document_id"),
         nullable=True,
     )
 
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -480,7 +480,7 @@ class EmployeeCertification(Base, AuditMixin, SoftDeleteMixin):
         return date.today() > self.expiry_date
 
     @property
-    def days_until_expiry(self) -> Optional[int]:
+    def days_until_expiry(self) -> int | None:
         """Days until certification expires."""
         if self.does_not_expire or self.expiry_date is None:
             return None
@@ -548,25 +548,25 @@ class EmployeeDependent(Base, AuditMixin, SoftDeleteMixin):
         Enum(RelationshipType, name="relationship_type"),
         nullable=False,
     )
-    date_of_birth: Mapped[Optional[date]] = mapped_column(
+    date_of_birth: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    gender: Mapped[Optional[Gender]] = mapped_column(
+    gender: Mapped[Gender | None] = mapped_column(
         Enum(Gender, name="dependent_gender"),
         nullable=True,
     )
 
     # Contact information
-    phone: Mapped[Optional[str]] = mapped_column(
+    phone: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
     )
-    email: Mapped[Optional[str]] = mapped_column(
+    email: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
     )
-    address: Mapped[Optional[str]] = mapped_column(
+    address: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -576,7 +576,7 @@ class EmployeeDependent(Base, AuditMixin, SoftDeleteMixin):
         Boolean,
         default=False,
     )
-    emergency_contact_priority: Mapped[Optional[int]] = mapped_column(
+    emergency_contact_priority: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Priority order for emergency contacts (1 = primary)",
@@ -587,7 +587,7 @@ class EmployeeDependent(Base, AuditMixin, SoftDeleteMixin):
         Boolean,
         default=False,
     )
-    beneficiary_percentage: Mapped[Optional[Decimal]] = mapped_column(
+    beneficiary_percentage: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
         comment="Percentage for benefit allocation",
@@ -598,12 +598,12 @@ class EmployeeDependent(Base, AuditMixin, SoftDeleteMixin):
         Boolean,
         default=False,
     )
-    insurance_id: Mapped[Optional[str]] = mapped_column(
+    insurance_id: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
 
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -615,7 +615,7 @@ class EmployeeDependent(Base, AuditMixin, SoftDeleteMixin):
     )
 
     @property
-    def age(self) -> Optional[int]:
+    def age(self) -> int | None:
         """Calculate dependent's age."""
         if self.date_of_birth is None:
             return None
@@ -673,7 +673,7 @@ class Skill(Base, AuditMixin, SoftDeleteMixin):
         Enum(SkillCategory, name="skill_category"),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -741,11 +741,11 @@ class EmployeeSkill(Base, AuditMixin):
         nullable=False,
         comment="1=Beginner, 2=Elementary, 3=Intermediate, 4=Advanced, 5=Expert",
     )
-    years_experience: Mapped[Optional[Decimal]] = mapped_column(
+    years_experience: Mapped[Decimal | None] = mapped_column(
         Numeric(4, 1),
         nullable=True,
     )
-    last_used_date: Mapped[Optional[date]] = mapped_column(
+    last_used_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -755,12 +755,12 @@ class EmployeeSkill(Base, AuditMixin):
         Boolean,
         default=True,
     )
-    assessed_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    assessed_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
     )
-    assessed_at: Mapped[Optional[datetime]] = mapped_column(
+    assessed_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
     )
 
@@ -776,7 +776,7 @@ class EmployeeSkill(Base, AuditMixin):
         comment="Has formal certification for this skill",
     )
 
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )

@@ -5,9 +5,8 @@ Handles vehicle CRUD, status transitions, odometer updates, and fleet statistics
 """
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy import case, extract, func, or_, select
@@ -36,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 
 # Valid status transitions
-VEHICLE_STATUS_TRANSITIONS: Dict[VehicleStatus, set] = {
+VEHICLE_STATUS_TRANSITIONS: dict[VehicleStatus, set] = {
     VehicleStatus.ACTIVE: {
         VehicleStatus.MAINTENANCE,
         VehicleStatus.OUT_OF_SERVICE,
@@ -73,7 +72,7 @@ class VehicleService:
     # Read Operations
     # ─────────────────────────────────────────────────────────────
 
-    def get_by_id(self, vehicle_id: UUID) -> Optional[Vehicle]:
+    def get_by_id(self, vehicle_id: UUID) -> Vehicle | None:
         """Get vehicle by ID."""
         return self.db.get(Vehicle, vehicle_id)
 
@@ -86,7 +85,7 @@ class VehicleService:
             raise NotFoundError(f"Vehicle {vehicle_id} has been deleted")
         return vehicle
 
-    def get_by_registration(self, registration_number: str) -> Optional[Vehicle]:
+    def get_by_registration(self, registration_number: str) -> Vehicle | None:
         """Find vehicle by registration number."""
         stmt = select(Vehicle).where(
             Vehicle.organization_id == self.organization_id,
@@ -95,7 +94,7 @@ class VehicleService:
         )
         return self.db.scalar(stmt)
 
-    def get_by_code(self, vehicle_code: str) -> Optional[Vehicle]:
+    def get_by_code(self, vehicle_code: str) -> Vehicle | None:
         """Find vehicle by internal code."""
         stmt = select(Vehicle).where(
             Vehicle.organization_id == self.organization_id,
@@ -107,14 +106,14 @@ class VehicleService:
     def list_vehicles(
         self,
         *,
-        status: Optional[VehicleStatus] = None,
-        vehicle_type: Optional[VehicleType] = None,
-        assignment_type: Optional[AssignmentType] = None,
-        ownership_type: Optional[OwnershipType] = None,
-        assigned_employee_id: Optional[UUID] = None,
-        search: Optional[str] = None,
+        status: VehicleStatus | None = None,
+        vehicle_type: VehicleType | None = None,
+        assignment_type: AssignmentType | None = None,
+        ownership_type: OwnershipType | None = None,
+        assigned_employee_id: UUID | None = None,
+        search: str | None = None,
         include_disposed: bool = False,
-        params: Optional[PaginationParams] = None,
+        params: PaginationParams | None = None,
     ) -> PaginatedResult[Vehicle]:
         """
         List vehicles with filtering and pagination.
@@ -173,7 +172,7 @@ class VehicleService:
 
         return paginate(self.db, stmt, params)
 
-    def count_by_status(self) -> Dict[str, int]:
+    def count_by_status(self) -> dict[str, int]:
         """Get vehicle counts grouped by status."""
         stmt = (
             select(Vehicle.status, func.count(Vehicle.vehicle_id))
@@ -190,7 +189,7 @@ class VehicleService:
         self,
         start_datetime,
         end_datetime,
-    ) -> List[Vehicle]:
+    ) -> list[Vehicle]:
         """Get pool vehicles available for reservation in a time period."""
         from app.models.fleet.enums import ReservationStatus
         from app.models.fleet.vehicle_reservation import VehicleReservation
@@ -294,7 +293,7 @@ class VehicleService:
         self,
         vehicle_id: UUID,
         new_status: VehicleStatus,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> Vehicle:
         """
         Change vehicle status with transition validation.
@@ -331,7 +330,7 @@ class VehicleService:
         self,
         vehicle_id: UUID,
         reading: int,
-        reading_date: Optional[date] = None,
+        reading_date: date | None = None,
     ) -> Vehicle:
         """Update vehicle odometer reading."""
         vehicle = self.get_or_raise(vehicle_id)
@@ -356,8 +355,8 @@ class VehicleService:
         self,
         vehicle_id: UUID,
         method: DisposalMethod,
-        amount: Optional[Decimal] = None,
-        notes: Optional[str] = None,
+        amount: Decimal | None = None,
+        notes: str | None = None,
     ) -> Vehicle:
         """Dispose of a vehicle (sell, scrap, trade-in)."""
         vehicle = self.get_or_raise(vehicle_id)
@@ -384,7 +383,7 @@ class VehicleService:
         """Soft delete a vehicle."""
         vehicle = self.get_or_raise(vehicle_id)
         vehicle.is_deleted = True
-        vehicle.deleted_at = datetime.now(timezone.utc)
+        vehicle.deleted_at = datetime.now(UTC)
 
         logger.info("Soft deleted vehicle %s", vehicle.vehicle_code)
         return vehicle
@@ -393,7 +392,7 @@ class VehicleService:
     # Fleet Statistics
     # ─────────────────────────────────────────────────────────────
 
-    def get_fleet_summary(self) -> Dict:
+    def get_fleet_summary(self) -> dict:
         """Get overall fleet statistics using SQL aggregations."""
         not_disposed = Vehicle.status != VehicleStatus.DISPOSED
         base_filter = (

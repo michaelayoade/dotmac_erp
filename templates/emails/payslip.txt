@@ -1,6 +1,6 @@
-{% if email_header_text %}{{ email_header_text }}
-{% endif %}
-Dear {{ first_name }},
+{% extends "emails/base_email.txt" %}
+{% block content %}{% if email_header_text %}{{ email_header_text }}
+{% endif %}Dear {{ first_name }},
 
 Your payslip for {{ period_str }} is now available.
 
@@ -11,12 +11,7 @@ Deductions: ({{ currency_code }} {{ "{:,.2f}".format(total_deduction) }})
 Net Pay: {{ currency_code }} {{ "{:,.2f}".format(net_pay) }}
 
 Please find your detailed payslip attached to this email as a PDF document.
-
-{% if email_footer_text %}{{ email_footer_text }}
+{% if email_footer_text %}
+{{ email_footer_text }}
 {% endif %}
-This is an automated message. Please do not reply to this email.
-{% if contact_email %}
-For any queries regarding your payslip, please contact HR at {{ contact_email }}.
-{% else %}
-For any queries regarding your payslip, please contact HR.
-{% endif %}
+{% if contact_email %}For any queries regarding your payslip, please contact HR at {{ contact_email }}.{% else %}For any queries regarding your payslip, please contact HR.{% endif %}{% endblock %}

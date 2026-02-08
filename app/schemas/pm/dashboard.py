@@ -6,13 +6,11 @@ Schemas for PM Dashboard and reporting.
 
 from datetime import date
 from decimal import Decimal
-from typing import Dict, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel
 
 from app.models.pm import MilestoneStatus, TaskPriority, TaskStatus
-
 
 # =============================================================================
 # Project Summary Schemas
@@ -28,13 +26,13 @@ class ProjectSummary(BaseModel):
     status: str
     priority: str
     percent_complete: Decimal = Decimal("0.00")
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    budget_amount: Optional[Decimal] = None
-    estimated_cost: Optional[Decimal] = None
-    actual_cost: Optional[Decimal] = None
+    start_date: date | None = None
+    end_date: date | None = None
+    budget_amount: Decimal | None = None
+    estimated_cost: Decimal | None = None
+    actual_cost: Decimal | None = None
     is_overdue: bool = False
-    days_remaining: Optional[int] = None
+    days_remaining: int | None = None
 
 
 # =============================================================================
@@ -51,8 +49,8 @@ class TaskMetrics(BaseModel):
     in_progress_tasks: int = 0
     completed_tasks: int = 0
     overdue_tasks: int = 0
-    tasks_by_status: Dict[str, int] = {}
-    tasks_by_priority: Dict[str, int] = {}
+    tasks_by_status: dict[str, int] = {}
+    tasks_by_priority: dict[str, int] = {}
     completion_rate: Decimal = Decimal("0.00")  # percentage
 
 
@@ -80,14 +78,14 @@ class BudgetComparison(BaseModel):
 
     project_id: UUID
     project_name: str
-    budget_amount: Optional[Decimal] = None
-    estimated_cost: Optional[Decimal] = None
-    actual_cost: Optional[Decimal] = None
-    remaining_budget: Optional[Decimal] = None
-    budget_variance: Optional[Decimal] = None  # positive = under, negative = over
-    budget_variance_percent: Optional[Decimal] = None
-    cost_to_complete: Optional[Decimal] = None
-    estimated_at_completion: Optional[Decimal] = None
+    budget_amount: Decimal | None = None
+    estimated_cost: Decimal | None = None
+    actual_cost: Decimal | None = None
+    remaining_budget: Decimal | None = None
+    budget_variance: Decimal | None = None  # positive = under, negative = over
+    budget_variance_percent: Decimal | None = None
+    cost_to_complete: Decimal | None = None
+    estimated_at_completion: Decimal | None = None
 
 
 # =============================================================================
@@ -132,7 +130,7 @@ class ExpenseSummary(BaseModel):
     expense_count: int = 0
     approved_amount: Decimal = Decimal("0.00")
     pending_amount: Decimal = Decimal("0.00")
-    expenses_by_category: Dict[str, Decimal] = {}
+    expenses_by_category: dict[str, Decimal] = {}
 
 
 class ExpenseByCategory(BaseModel):
@@ -157,8 +155,8 @@ class MilestoneSummary(BaseModel):
     achieved: int = 0
     pending: int = 0
     missed: int = 0
-    upcoming: List["UpcomingMilestone"] = []
-    overdue: List["OverdueMilestone"] = []
+    upcoming: list["UpcomingMilestone"] = []
+    overdue: list["OverdueMilestone"] = []
 
 
 class UpcomingMilestone(BaseModel):

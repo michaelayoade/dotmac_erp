@@ -6,7 +6,7 @@ Provides operations for managing HR policy documents and employee acknowledgment
 
 import hashlib
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 from uuid import UUID
 
@@ -196,7 +196,7 @@ class HRDocumentService:
             if status == DocumentStatus.ACTIVE:
                 existing.status = DocumentStatus.SUPERSEDED
                 existing.updated_by = created_by
-                existing.updated_at = datetime.now(timezone.utc)
+                existing.updated_at = datetime.now(UTC)
 
         document = HRDocument(
             organization_id=org_id,
@@ -276,7 +276,7 @@ class HRDocumentService:
             doc.status = status
 
         doc.updated_by = updated_by
-        doc.updated_at = datetime.now(timezone.utc)
+        doc.updated_at = datetime.now(UTC)
 
         self.db.flush()
         logger.info("Updated HR document %s", document_id)
@@ -308,11 +308,11 @@ class HRDocumentService:
         for active_doc in active_docs:
             active_doc.status = DocumentStatus.SUPERSEDED
             active_doc.updated_by = updated_by
-            active_doc.updated_at = datetime.now(timezone.utc)
+            active_doc.updated_at = datetime.now(UTC)
 
         doc.status = DocumentStatus.ACTIVE
         doc.updated_by = updated_by
-        doc.updated_at = datetime.now(timezone.utc)
+        doc.updated_at = datetime.now(UTC)
 
         self.db.flush()
         logger.info("Activated HR document %s v%d", doc.document_code, doc.version)
@@ -329,7 +329,7 @@ class HRDocumentService:
         doc = self.get_document(org_id, document_id)
         doc.status = DocumentStatus.ARCHIVED
         doc.updated_by = updated_by
-        doc.updated_at = datetime.now(timezone.utc)
+        doc.updated_at = datetime.now(UTC)
         self.db.flush()
         logger.info("Archived HR document %s", document_id)
         return doc
@@ -634,7 +634,7 @@ class HRDocumentService:
 
         Returns dict with total_employees, acknowledged_count, pending_count, percentage.
         """
-        doc = self.get_document(org_id, document_id)
+        self.get_document(org_id, document_id)
 
         # Count active employees
         total_employees = (
@@ -660,7 +660,7 @@ class HRDocumentService:
 
         pending_count = total_employees - acknowledged_count
         percentage = (
-            int((acknowledged_count / total_employees * 100))
+            int(acknowledged_count / total_employees * 100)
             if total_employees > 0
             else 0
         )
@@ -724,7 +724,7 @@ class HRDocumentService:
             acknowledged_count = ack_counts.get(doc_id, 0)
             pending_count = max(0, total_employees - acknowledged_count)
             percentage = (
-                int((acknowledged_count / total_employees * 100))
+                int(acknowledged_count / total_employees * 100)
                 if total_employees > 0
                 else 0
             )
@@ -744,7 +744,7 @@ class HRDocumentService:
         document_id: UUID,
     ) -> list[Employee]:
         """Get list of employees who haven't acknowledged a document."""
-        doc = self.get_document(org_id, document_id)
+        self.get_document(org_id, document_id)
 
         # Get acknowledged employee IDs
         acknowledged_ids = self.db.scalars(

@@ -1,4 +1,5 @@
 {% extends "expense/base_expense.html" %}
+{% from "components/macros.html" import status_badge %}
 {% from "components/macros.html" import pagination, empty_state %}
 
 {% block page_title %}Cash Advances{% endblock %}
@@ -97,23 +98,7 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if adv.status.value == 'DRAFT' %}
-                            <span class="badge badge-neutral">Draft</span>
-                            {% elif adv.status.value == 'SUBMITTED' %}
-                            <span class="badge badge-warning">Submitted</span>
-                            {% elif adv.status.value == 'APPROVED' %}
-                            <span class="badge badge-info">Approved</span>
-                            {% elif adv.status.value == 'DISBURSED' %}
-                            <span class="badge badge-primary">Disbursed</span>
-                            {% elif adv.status.value == 'PARTIALLY_SETTLED' %}
-                            <span class="badge badge-warning">Partial</span>
-                            {% elif adv.status.value == 'FULLY_SETTLED' %}
-                            <span class="badge badge-success">Settled</span>
-                            {% elif adv.status.value == 'REJECTED' %}
-                            <span class="badge badge-danger">Rejected</span>
-                            {% else %}
-                            <span class="badge badge-neutral">{{ adv.status.value }}</span>
-                            {% endif %}
+                            {{ status_badge(adv.status.value) }}
                         </td>
                         <td class="text-right">
                             <a href="/expense/advances/{{ adv.advance_id }}" class="text-teal-600 hover:text-teal-700 dark:text-teal-400">

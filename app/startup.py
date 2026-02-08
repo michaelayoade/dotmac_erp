@@ -105,10 +105,7 @@ def _estimate_entropy_bytes(secret: str) -> int:
 def _is_weak_secret(secret: str) -> bool:
     """Check if a secret matches known weak patterns."""
     secret_lower = secret.lower().strip()
-    for pattern in WEAK_SECRET_PATTERNS:
-        if re.match(pattern, secret_lower):
-            return True
-    return False
+    return any(re.match(pattern, secret_lower) for pattern in WEAK_SECRET_PATTERNS)
 
 
 def _validate_fernet_key(key: str) -> tuple[bool, str]:

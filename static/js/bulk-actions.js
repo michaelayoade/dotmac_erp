@@ -285,3 +285,86 @@ function bulkActions(config = {}) {
 
 // Make it available globally for Alpine
 window.bulkActions = bulkActions;
+
+/**
+ * Export All - downloads CSV of all records matching current search/filters.
+ * Works independently of the bulkActions component (no selection needed).
+ *
+ * Uses native browser download (window.location) instead of fetch+blob,
+ * which is more reliable across browsers (no popup blocker issues,
+ * no blob URL failures, no silent redirect-following).
+ *
+ * @param {string} baseUrl - GET endpoint path (e.g. "/finance/ar/invoices/export")
+ */
+function exportAll(baseUrl) {
+    // Gather current search/filter params from the URL
+    const params = new URLSearchParams(window.location.search);
+    const exportParams = new URLSearchParams();
+
+    // Forward known filter params (matches all list page filter names)
+    for (const key of ['search', 'status', 'category', 'type', 'start_date', 'end_date', 'customer_id', 'supplier_id', 'date_from', 'date_to']) {
+        const val = params.get(key);
+        if (val) {
+            exportParams.set(key, val);
+        }
+    }
+
+    const url = exportParams.toString()
+        ? `${baseUrl}?${exportParams.toString()}`
+        : baseUrl;
+
+    // Show immediate feedback
+    window.dispatchEvent(new CustomEvent('show-toast', {
+        detail: { message: 'Preparing export...', type: 'info' }
+    }));
+
+    // Use fetch for download so we can provide success/error feedback,
+    // then fall back to iframe if blob download fails.
+    fetch(url, { method: 'GET', credentials: 'same-origin' })
+        .then(function(response) {
+            if (!response.ok) {
+                throw new Error('Export failed (HTTP ' + response.status + ')');
+            }
+            return response.blob().then(function(blob) {
+                // Extract filename from Content-Disposition header
+                var disposition = response.headers.get('content-disposition');
+                var filename = 'export.csv';
+                if (disposition) {
+                    var match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                    if (match && match[1]) {
+                        filename = match[1].replace(/['"]/g, '');
+                    }
+                }
+
+                // Trigger download via object URL
+                var a = document.createElement('a');
+                a.href = window.URL.createObjectURL(blob);
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(a.href);
+                document.body.removeChild(a);
+
+                window.dispatchEvent(new CustomEvent('show-toast', {
+                    detail: { message: 'Export downloaded successfully', type: 'success' }
+                }));
+            });
+        })
+        .catch(function(error) {
+            console.warn('Fetch export failed, falling back to iframe:', error);
+            // Fallback: use hidden iframe for browsers where fetch+blob fails
+            var iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = url;
+            document.body.appendChild(iframe);
+            setTimeout(function() {
+                document.body.removeChild(iframe);
+            }, 30000);
+
+            window.dispatchEvent(new CustomEvent('show-toast', {
+                detail: { message: 'Export started — check your downloads', type: 'success' }
+            }));
+        });
+}
+
+window.exportAll = exportAll;

@@ -7,7 +7,7 @@ Tracks team member assignment and utilization on projects.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
@@ -77,23 +77,23 @@ class ResourceAllocation(Base, AuditMixin):
     )
 
     # Role on this project
-    role_on_project: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    role_on_project: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Allocation percentage (0-100)
     allocation_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
 
     # Date range
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
-    end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Active flag
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Rates for costing/billing
-    cost_rate_per_hour: Mapped[Optional[Decimal]] = mapped_column(
+    cost_rate_per_hour: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2), nullable=True
     )
-    billing_rate_per_hour: Mapped[Optional[Decimal]] = mapped_column(
+    billing_rate_per_hour: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2), nullable=True
     )
 
@@ -103,7 +103,7 @@ class ResourceAllocation(Base, AuditMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -134,7 +134,7 @@ class ResourceAllocation(Base, AuditMixin):
             return False
         return today >= self.start_date
 
-    def end_allocation(self, end_date_value: Optional[date] = None) -> None:
+    def end_allocation(self, end_date_value: date | None = None) -> None:
         """End this allocation."""
         self.end_date = end_date_value or date.today()
         self.is_active = False

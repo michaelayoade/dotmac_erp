@@ -1,5 +1,6 @@
 {% extends "admin/base_admin.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}Sync Management{% endblock %}
 {% block page_subtitle %}ERPNext integration and data synchronization{% endblock %}
 
@@ -170,7 +171,7 @@
             </div>
 
             {% if entity_stats %}
-            <div class="overflow-x-auto">
+            <div class="table-container">
                 <table class="w-full">
                     <thead>
                         <tr class="border-b border-slate-200 dark:border-slate-700">
@@ -218,7 +219,7 @@
         </div>
 
         {% if recent_history %}
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="w-full">
                 <thead>
                     <tr class="border-b border-slate-200 dark:border-slate-700">
@@ -227,7 +228,7 @@
                         <th scope="col" class="pb-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
                         <th scope="col" class="pb-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Records</th>
                         <th scope="col" class="pb-3 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Duration</th>
-                        <th scope="col" class="pb-3"></th>
+                        <th scope="col" class="pb-3 text-xs font-semibold uppercase tracking-wider"></th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -237,9 +238,7 @@
                             {{ h.created_at.strftime('%Y-%m-%d %H:%M') if h.created_at else '-' }}
                         </td>
                         <td class="py-3">
-                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300">
-                                {{ h.sync_type.value if h.sync_type else 'Unknown' }}
-                            </span>
+                            {{ status_badge(h.sync_type.value if h.sync_type else 'Unknown', size="sm") }}
                         </td>
                         <td class="py-3">
                             <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold

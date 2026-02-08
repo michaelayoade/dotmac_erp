@@ -8,9 +8,10 @@ for decoupling side effects (notifications, GL posting) from core logic.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Callable, Optional, TypeVar
+from datetime import UTC, datetime
+from typing import Any, TypeVar
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
@@ -44,7 +45,7 @@ class SlipCreated(PayrollEvent):
     slip_id: UUID
     employee_id: UUID
     slip_number: str
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass(frozen=True)
@@ -53,7 +54,7 @@ class SlipSubmitted(PayrollEvent):
 
     slip_id: UUID
     slip_number: str
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass(frozen=True)
@@ -63,7 +64,7 @@ class SlipApproved(PayrollEvent):
     slip_id: UUID
     slip_number: str
     approved_by_id: UUID
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass(frozen=True)
@@ -72,8 +73,8 @@ class SlipPosted(PayrollEvent):
 
     slip_id: UUID
     slip_number: str
-    journal_entry_id: Optional[UUID] = None
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    journal_entry_id: UUID | None = None
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass(frozen=True)
@@ -82,8 +83,8 @@ class SlipPaid(PayrollEvent):
 
     slip_id: UUID
     slip_number: str
-    payment_reference: Optional[str] = None
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    payment_reference: str | None = None
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass(frozen=True)
@@ -92,8 +93,8 @@ class SlipCancelled(PayrollEvent):
 
     slip_id: UUID
     slip_number: str
-    reason: Optional[str] = None
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    reason: str | None = None
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass(frozen=True)
@@ -103,7 +104,7 @@ class SlipRejected(PayrollEvent):
     slip_id: UUID
     slip_number: str
     rejected_by_id: UUID
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +118,7 @@ class RunCreated(PayrollEvent):
 
     run_id: UUID
     run_number: str
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass(frozen=True)
@@ -127,7 +128,7 @@ class RunSlipsCreated(PayrollEvent):
     run_id: UUID
     run_number: str
     slip_count: int
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass(frozen=True)
@@ -136,7 +137,7 @@ class RunSubmitted(PayrollEvent):
 
     run_id: UUID
     run_number: str
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass(frozen=True)
@@ -146,7 +147,7 @@ class RunApproved(PayrollEvent):
     run_id: UUID
     run_number: str
     approved_by_id: UUID
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass(frozen=True)
@@ -155,7 +156,7 @@ class RunPosted(PayrollEvent):
 
     run_id: UUID
     run_number: str
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 @dataclass(frozen=True)
@@ -164,8 +165,8 @@ class RunCancelled(PayrollEvent):
 
     run_id: UUID
     run_number: str
-    reason: Optional[str] = None
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    reason: str | None = None
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 {% extends "expense/base_expense.html" %}
 
+{% from "components/macros.html" import status_badge, empty_state %}
 {% block content %}
 <div class="space-y-6">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -117,15 +118,13 @@
                         <td class="text-slate-600 dark:text-slate-400">{{ rule.period_type.value | title }}</td>
                         <td class="text-right font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(rule.limit_amount) }}</td>
                         <td>
-                            {% if rule.action_type.value == 'BLOCK' %}
-                            <span class="badge badge-danger">Block</span>
-                            {% elif rule.action_type.value == 'WARN' %}
-                            <span class="badge badge-warning">Warn</span>
-                            {% elif rule.action_type.value == 'REQUIRE_APPROVAL' %}
-                            <span class="badge badge-info">Require Approval</span>
-                            {% else %}
-                            <span class="badge badge-neutral">{{ rule.action_type.value | replace('_', ' ') | title }}</span>
-                            {% endif %}
+                            {{ status_badge(rule.action_type.value) }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No usage_summary found", "There are no usage_summary to display.") }}
                         </td>
                     </tr>
                     {% endfor %}
@@ -159,17 +158,7 @@
                         <td class="font-mono text-slate-900 dark:text-white">{{ eval.claim_id | string | truncate(8, True, '') }}</td>
                         <td class="text-right font-mono text-slate-700 dark:text-slate-300">{{ "{:,.2f}".format(eval.claim_amount) }}</td>
                         <td>
-                            {% if eval.result.value == 'PASSED' %}
-                            <span class="badge badge-success">Passed</span>
-                            {% elif eval.result.value == 'BLOCKED' %}
-                            <span class="badge badge-danger">Blocked</span>
-                            {% elif eval.result.value == 'WARNING' %}
-                            <span class="badge badge-warning">Warning</span>
-                            {% elif eval.result.value == 'APPROVAL_REQUIRED' %}
-                            <span class="badge badge-info">Approval Required</span>
-                            {% else %}
-                            <span class="badge badge-neutral">{{ eval.result.value }}</span>
-                            {% endif %}
+                            {{ status_badge(eval.result.value) }}
                         </td>
                         <td class="text-slate-500 dark:text-slate-400">
                             {% if eval.rule %}{{ eval.rule.rule_code }}{% else %}&mdash;{% endif %}

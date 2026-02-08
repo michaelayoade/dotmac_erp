@@ -8,7 +8,6 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -38,7 +37,7 @@ class TaxSeedSummary:
     accounts_created: int = 0
     jurisdictions_created: int = 0
     tax_codes_created: int = 0
-    default_jurisdiction_id: Optional[UUID] = None
+    default_jurisdiction_id: UUID | None = None
 
 
 # Legacy alias for backwards compatibility
@@ -58,12 +57,12 @@ class CountryTaxConfig:
     currency_symbol: str
     corporate_tax_rate: Decimal
     tax_authority_name: str
-    vat_rate: Optional[Decimal] = None
-    vat_code: Optional[str] = None
-    vat_name: Optional[str] = None
-    withholding_rate: Optional[Decimal] = None
-    withholding_code: Optional[str] = None
-    withholding_name: Optional[str] = None
+    vat_rate: Decimal | None = None
+    vat_code: str | None = None
+    vat_name: str | None = None
+    withholding_rate: Decimal | None = None
+    withholding_code: str | None = None
+    withholding_name: str | None = None
 
 
 # Country configuration registry
@@ -155,7 +154,7 @@ COUNTRY_CONFIGS: dict[str, CountryTaxConfig] = {
 }
 
 
-def get_country_config(country_code: str) -> Optional[CountryTaxConfig]:
+def get_country_config(country_code: str) -> CountryTaxConfig | None:
     """Get country configuration by code (supports both 2 and 3 char codes)."""
     return COUNTRY_CONFIGS.get(country_code.upper())
 
@@ -624,7 +623,7 @@ def seed_default_tax_data(
 def get_default_jurisdiction(
     db: Session,
     organization_id: UUID | str,
-) -> Optional[TaxJurisdiction]:
+) -> TaxJurisdiction | None:
     """
     Get the default tax jurisdiction for an organization.
 

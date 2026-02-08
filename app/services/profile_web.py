@@ -5,7 +5,7 @@ Provides response builders for profile-related web routes.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -65,7 +65,7 @@ class ProfileWebService:
         auth: WebAuthContext,
         db: Session,
     ) -> HTMLResponse:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         sessions = (
             db.query(AuthSession)
@@ -139,7 +139,7 @@ class ProfileWebService:
             .first()
         )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         active_sessions = (
             db.query(AuthSession)
             .filter(AuthSession.person_id == auth.person_id)

@@ -9,9 +9,10 @@ Provides simple key-value translation lookup with:
 """
 
 import json
+from collections.abc import Mapping
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Mapping, cast
+from typing import Any, cast
 
 # Base directory for locale files
 LOCALES_DIR = Path(__file__).parent.parent / "locales"

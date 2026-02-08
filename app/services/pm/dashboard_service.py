@@ -10,7 +10,7 @@ import logging
 import uuid
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
@@ -43,7 +43,7 @@ class DashboardService:
         self,
         db: Session,
         organization_id: uuid.UUID,
-        principal: Optional["Principal"] = None,
+        principal: Principal | None = None,
     ) -> None:
         self.db = db
         self.organization_id = organization_id
@@ -53,7 +53,7 @@ class DashboardService:
     # Project Summary
     # =========================================================================
 
-    def get_project_summary(self, project_id: uuid.UUID) -> Dict:
+    def get_project_summary(self, project_id: uuid.UUID) -> dict:
         """Get high-level project summary."""
         project = self.db.scalars(
             select(Project).where(
@@ -91,7 +91,7 @@ class DashboardService:
     # Task Metrics
     # =========================================================================
 
-    def get_task_metrics(self, project_id: uuid.UUID) -> Dict:
+    def get_task_metrics(self, project_id: uuid.UUID) -> dict:
         """Get task statistics for a project."""
         base_where = and_(
             Task.project_id == project_id,
@@ -154,7 +154,7 @@ class DashboardService:
     # Budget Comparison
     # =========================================================================
 
-    def get_budget_vs_actual(self, project_id: uuid.UUID) -> Dict:
+    def get_budget_vs_actual(self, project_id: uuid.UUID) -> dict:
         """Get budget vs actual comparison for a project."""
         project = self.db.scalars(
             select(Project).where(
@@ -197,7 +197,7 @@ class DashboardService:
     # Resource Utilization
     # =========================================================================
 
-    def get_resource_utilization(self, project_id: uuid.UUID) -> Dict:
+    def get_resource_utilization(self, project_id: uuid.UUID) -> dict:
         """Get resource utilization summary for a project."""
         # Get active team members
         team = self.db.scalars(
@@ -245,7 +245,7 @@ class DashboardService:
     # Milestone Summary
     # =========================================================================
 
-    def get_milestone_summary(self, project_id: uuid.UUID) -> Dict:
+    def get_milestone_summary(self, project_id: uuid.UUID) -> dict:
         """Get milestone summary for a project."""
         base_where = and_(
             Milestone.project_id == project_id,
@@ -316,7 +316,7 @@ class DashboardService:
     # Full Dashboard
     # =========================================================================
 
-    def get_project_dashboard(self, project_id: uuid.UUID) -> Dict:
+    def get_project_dashboard(self, project_id: uuid.UUID) -> dict:
         """Get complete dashboard data for a project."""
         return {
             "summary": self.get_project_summary(project_id),
@@ -330,7 +330,7 @@ class DashboardService:
     # Organization-wide Dashboards
     # =========================================================================
 
-    def get_projects_overview(self) -> Dict:
+    def get_projects_overview(self) -> dict:
         """Get overview of all projects in the organization."""
         base_where = Project.organization_id == self.organization_id
 

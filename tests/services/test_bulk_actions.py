@@ -17,7 +17,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db import Base
 from app.services.bulk_actions import BulkActionService
 
-
 # ============ Concrete Test Implementation ============
 
 
@@ -26,6 +25,7 @@ class TestModel(Base):
 
     __tablename__ = "test_bulk_model"
     __table_args__ = {"extend_existing": True}
+    __test__ = False
 
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
@@ -359,7 +359,7 @@ class TestBulkActivateDeactivate:
         service = ConcreteBulkService(mock_db, organization_id)
         ids = [uuid.uuid4()]
 
-        result = await service.bulk_activate(ids)
+        await service.bulk_activate(ids)
 
         assert entity.is_active is True
 
@@ -373,7 +373,7 @@ class TestBulkActivateDeactivate:
         service = ConcreteBulkService(mock_db, organization_id)
         ids = [uuid.uuid4()]
 
-        result = await service.bulk_deactivate(ids)
+        await service.bulk_deactivate(ids)
 
         assert entity.is_active is False
 

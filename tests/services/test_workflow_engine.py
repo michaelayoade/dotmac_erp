@@ -23,7 +23,6 @@ from app.services.finance.automation.workflow import (
     WorkflowService,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -60,13 +59,13 @@ def _make_mock_rule(**overrides: Any) -> MagicMock:
     rule.priority = overrides.get("priority", 100)
     rule.stop_on_match = overrides.get("stop_on_match", False)
     rule.execute_async = overrides.get("execute_async", False)
-    rule.cooldown_seconds = overrides.get("cooldown_seconds", None)
+    rule.cooldown_seconds = overrides.get("cooldown_seconds")
     rule.is_active = overrides.get("is_active", True)
     rule.execution_count = 0
     rule.success_count = 0
     rule.failure_count = 0
     rule.last_executed_at = None
-    rule.schedule_config = overrides.get("schedule_config", None)
+    rule.schedule_config = overrides.get("schedule_config")
     return rule
 
 

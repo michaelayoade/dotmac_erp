@@ -8,9 +8,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import func, literal_column, or_, select
@@ -123,9 +122,9 @@ class PayrollService:
         self,
         org_id: UUID,
         *,
-        search: Optional[str] = None,
-        is_active: Optional[bool] = None,
-        pagination: Optional[PaginationParams] = None,
+        search: str | None = None,
+        is_active: bool | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[SalaryStructure]:
         query = select(SalaryStructure).where(SalaryStructure.organization_id == org_id)
 
@@ -174,11 +173,11 @@ class PayrollService:
         *,
         structure_code: str,
         structure_name: str,
-        description: Optional[str] = None,
+        description: str | None = None,
         payroll_frequency: PayrollFrequency = PayrollFrequency.MONTHLY,
         currency_code: str = "NGN",
-        earnings: Optional[list[dict]] = None,
-        deductions: Optional[list[dict]] = None,
+        earnings: list[dict] | None = None,
+        deductions: list[dict] | None = None,
     ) -> SalaryStructure:
         structure = SalaryStructure(
             organization_id=org_id,
@@ -200,8 +199,8 @@ class PayrollService:
         org_id: UUID,
         structure_id: UUID,
         *,
-        earnings: Optional[list[dict]] = None,
-        deductions: Optional[list[dict]] = None,
+        earnings: list[dict] | None = None,
+        deductions: list[dict] | None = None,
         **kwargs,
     ) -> SalaryStructure:
         structure = self.get_salary_structure(org_id, structure_id)
@@ -224,8 +223,8 @@ class PayrollService:
     def _replace_structure_lines(
         self,
         structure: SalaryStructure,
-        earnings: Optional[list[dict]],
-        deductions: Optional[list[dict]],
+        earnings: list[dict] | None,
+        deductions: list[dict] | None,
     ) -> None:
         if earnings is not None:
             structure.earnings.clear()
@@ -273,10 +272,10 @@ class PayrollService:
         self,
         org_id: UUID,
         *,
-        employee_id: Optional[UUID] = None,
-        structure_id: Optional[UUID] = None,
-        active_on: Optional[date] = None,
-        pagination: Optional[PaginationParams] = None,
+        employee_id: UUID | None = None,
+        structure_id: UUID | None = None,
+        active_on: date | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[SalaryStructureAssignment]:
         query = select(SalaryStructureAssignment).where(
             SalaryStructureAssignment.organization_id == org_id
@@ -333,10 +332,10 @@ class PayrollService:
         employee_id: UUID,
         structure_id: UUID,
         from_date: date,
-        to_date: Optional[date] = None,
+        to_date: date | None = None,
         base: Decimal = Decimal("0"),
         variable: Decimal = Decimal("0"),
-        income_tax_slab: Optional[str] = None,
+        income_tax_slab: str | None = None,
     ) -> SalaryStructureAssignment:
         assignment = SalaryStructureAssignment(
             organization_id=org_id,
@@ -380,11 +379,11 @@ class PayrollService:
         self,
         org_id: UUID,
         *,
-        status: Optional[PayrollEntryStatus] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
-        payroll_frequency: Optional[PayrollFrequency] = None,
-        pagination: Optional[PaginationParams] = None,
+        status: PayrollEntryStatus | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        payroll_frequency: PayrollFrequency | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[PayrollEntry]:
         query = select(PayrollEntry).where(PayrollEntry.organization_id == org_id)
 
@@ -436,21 +435,18 @@ class PayrollService:
         end_date: date,
         payroll_frequency: PayrollFrequency = PayrollFrequency.MONTHLY,
         currency_code: str = "NGN",
-        department_id: Optional[UUID] = None,
-        designation_id: Optional[UUID] = None,
-        source_bank_account_id: Optional[UUID] = None,
-        expense_account_id: Optional[UUID] = None,
-        notes: Optional[str] = None,
+        department_id: UUID | None = None,
+        designation_id: UUID | None = None,
+        source_bank_account_id: UUID | None = None,
+        expense_account_id: UUID | None = None,
+        notes: str | None = None,
     ) -> PayrollEntry:
-        count = (
-            self.db.scalar(
-                select(func.count(PayrollEntry.entry_id)).where(
-                    PayrollEntry.organization_id == org_id
-                )
-            )
-            or 0
+        from app.models.finance.core_config.numbering_sequence import SequenceType
+        from app.services.finance.common.numbering import SyncNumberingService
+
+        entry_number = SyncNumberingService(self.db).generate_next_number(
+            org_id, SequenceType.PAYROLL_ENTRY, reference_date=posting_date
         )
-        entry_number = f"PAY-{posting_date.year}-{count + 1:04d}"
 
         entry = PayrollEntry(
             organization_id=org_id,
@@ -779,7 +775,7 @@ class PayrollService:
                     f"All slips must be DRAFT to submit (found {slip.status.value})"
                 )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         submitted_by_id = coerce_uuid(submitted_by)
         for slip in slips:
             slip.status = SalarySlipStatus.SUBMITTED
@@ -815,7 +811,7 @@ class PayrollService:
                     "Segregation of duties: creator cannot approve their own slip"
                 )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for slip in slips:
             slip.status = SalarySlipStatus.APPROVED
             slip.status_changed_at = now
@@ -868,8 +864,8 @@ class PayrollService:
         entry_id: UUID,
         *,
         paid_by_id: UUID,
-        slip_ids: Optional[list[UUID]] = None,
-        payment_reference: Optional[str] = None,
+        slip_ids: list[UUID] | None = None,
+        payment_reference: str | None = None,
     ) -> dict:
         entry = self.get_payroll_entry(org_id, entry_id)
         slips = list(entry.salary_slips or [])
@@ -1005,8 +1001,8 @@ class PayrollService:
         self,
         org_id: UUID,
         *,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> dict:
         """
         Get payroll summary report by period.
@@ -1085,8 +1081,8 @@ class PayrollService:
         self,
         org_id: UUID,
         *,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> dict:
         """
         Get payroll breakdown by department.
@@ -1174,8 +1170,8 @@ class PayrollService:
         self,
         org_id: UUID,
         *,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> dict:
         """
         Get payroll tax deduction summary.
@@ -1355,7 +1351,7 @@ class PayrollService:
         self,
         org_id: UUID,
         *,
-        year: Optional[int] = None,
+        year: int | None = None,
     ) -> dict:
         """
         Get year-to-date payroll report with employee-level breakdowns.

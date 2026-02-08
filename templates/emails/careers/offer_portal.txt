@@ -1,0 +1,10 @@
+{% extends "emails/base_email.txt" %}
+{% block content %}Dear {{ applicant_name }},
+
+Your offer for the {{ job_title }} position at {{ org_name }} is ready for your review.
+
+Please use the link below to view the full details of your offer, including terms and conditions. You will be able to review and accept the offer directly through the portal.
+
+View Offer: {{ portal_url }}
+
+If you have any questions about the offer, please do not hesitate to reach out to our HR team.{% endblock %}

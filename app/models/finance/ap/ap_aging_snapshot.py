@@ -5,7 +5,6 @@ AP Aging Snapshot Model - AP Schema.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Date,
@@ -65,8 +64,8 @@ class APAgingSnapshot(Base):
     amount_functional: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     invoice_count: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    currency_code: Mapped[Optional[str]] = mapped_column(String(3), nullable=True)
-    amount_original_currency: Mapped[Optional[Decimal]] = mapped_column(
+    currency_code: Mapped[str | None] = mapped_column(String(3), nullable=True)
+    amount_original_currency: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )

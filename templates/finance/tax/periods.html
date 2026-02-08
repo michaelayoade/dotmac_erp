@@ -32,7 +32,7 @@
                     {% for period in periods %}
                     <tr>
                         <td>{{ period.period_name }}</td>
-                        <td>{{ period.frequency }}</td>
+                        <td>{{ period.frequency | replace('_', ' ') | title }}</td>
                         <td>{{ period.start_date }}</td>
                         <td>{{ period.end_date }}</td>
                         <td>{{ period.due_date }}</td>

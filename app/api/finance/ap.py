@@ -4,57 +4,55 @@ AP API Router.
 Accounts Payable API endpoints for suppliers, invoices, and payments.
 """
 
+import logging
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
-from app.services.auth_dependencies import require_tenant_permission
 from app.api.finance.utils import parse_enum
 from app.db import SessionLocal
+from app.models.finance.ap.purchase_order import POStatus
+from app.models.finance.ap.supplier import SupplierType
+from app.models.finance.ap.supplier_invoice import (
+    SupplierInvoiceStatus,
+    SupplierInvoiceType,
+)
+from app.models.finance.ap.supplier_payment import APPaymentMethod, APPaymentStatus
 from app.schemas.finance.ap import (
-    SupplierCreate,
-    SupplierUpdate,
-    SupplierRead,
+    APAgingReportRead,
     APInvoiceCreate,
     APInvoiceRead,
     APPaymentCreate,
     APPaymentRead,
-    APAgingReportRead,
-    POCreate,
-    PORead,
+    BankFileResultRead,
     GRCreate,
     GRRead,
     PaymentBatchCreate,
     PaymentBatchRead,
-    BankFileResultRead,
+    POCreate,
+    PORead,
+    SupplierCreate,
+    SupplierRead,
+    SupplierUpdate,
 )
 from app.schemas.finance.common import ListResponse, PostingResultSchema
-from app.models.finance.ap.supplier import SupplierType
-from app.models.finance.ap.supplier_invoice import (
-    SupplierInvoiceType,
-    SupplierInvoiceStatus,
-)
-from app.models.finance.ap.purchase_order import POStatus
-from app.models.finance.ap.supplier_payment import APPaymentMethod, APPaymentStatus
+from app.services.auth_dependencies import require_tenant_permission
 from app.services.finance.ap import (
-    supplier_service,
-    supplier_invoice_service,
-    supplier_payment_service,
-    ap_posting_adapter,
-    ap_aging_service,
+    InvoiceLineInput,
+    PaymentAllocationInput,
     SupplierInput,
     SupplierInvoiceInput,
-    InvoiceLineInput,
     SupplierPaymentInput,
-    PaymentAllocationInput,
+    ap_aging_service,
+    ap_posting_adapter,
+    supplier_invoice_service,
+    supplier_payment_service,
+    supplier_service,
 )
-
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +118,7 @@ def get_supplier(
 @router.get("/suppliers", response_model=ListResponse[SupplierRead])
 def list_suppliers(
     organization_id: UUID = Depends(require_organization_id),
-    is_active: Optional[bool] = None,
+    is_active: bool | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ap:suppliers:read")),
@@ -224,10 +222,10 @@ def get_ap_invoice(
 @router.get("/invoices", response_model=ListResponse[APInvoiceRead])
 def list_ap_invoices(
     organization_id: UUID = Depends(require_organization_id),
-    supplier_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    supplier_id: UUID | None = None,
+    status: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ap:invoices:read")),
@@ -380,10 +378,10 @@ def get_ap_payment(
 @router.get("/payments", response_model=ListResponse[APPaymentRead])
 def list_ap_payments(
     organization_id: UUID = Depends(require_organization_id),
-    supplier_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    supplier_id: UUID | None = None,
+    status: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ap:payments:read")),
@@ -448,7 +446,7 @@ def post_ap_payment(
 def get_ap_aging(
     organization_id: UUID = Depends(require_organization_id),
     as_of_date: date = Query(...),
-    supplier_id: Optional[UUID] = None,
+    supplier_id: UUID | None = None,
     auth: dict = Depends(require_tenant_permission("ap:aging:read")),
     db: Session = Depends(get_db),
 ):
@@ -481,7 +479,7 @@ def get_ap_aging(
             "supplier_code": summary.supplier_code,
             "supplier_name": summary.supplier_name,
             "current": summary.current,
-            "days_1_30": summary.days_1_30,
+            "days_1_30": summary.current,
             "days_31_60": summary.days_31_60,
             "days_61_90": summary.days_61_90,
             "over_90": summary.over_90,
@@ -495,7 +493,7 @@ def get_ap_aging(
         "supplier_code": "TOTAL",
         "supplier_name": "Total",
         "current": org_summary.current,
-        "days_1_30": org_summary.days_1_30,
+        "days_1_30": org_summary.current,
         "days_31_60": org_summary.days_31_60,
         "days_61_90": org_summary.days_61_90,
         "over_90": org_summary.over_90,
@@ -514,10 +512,10 @@ def get_ap_aging(
 # Purchase Orders
 # =============================================================================
 
-from app.services.finance.ap import (
-    purchase_order_service,
-    PurchaseOrderInput,
+from app.services.finance.ap import (  # noqa: E402
     POLineInput,
+    PurchaseOrderInput,
+    purchase_order_service,
 )
 
 
@@ -569,8 +567,8 @@ def get_purchase_order(
 @router.get("/purchase-orders", response_model=ListResponse[PORead])
 def list_purchase_orders(
     organization_id: UUID = Depends(require_organization_id),
-    supplier_id: Optional[UUID] = None,
-    status: Optional[str] = None,
+    supplier_id: UUID | None = None,
+    status: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ap:purchase_orders:read")),
@@ -637,12 +635,14 @@ def cancel_purchase_order(
 # Goods Receipts
 # =============================================================================
 
-from app.models.finance.ap.goods_receipt import ReceiptStatus
-from app.models.finance.ap.payment_batch import APBatchStatus
-from app.services.finance.ap import (
-    goods_receipt_service,
+from app.models.finance.ap.goods_receipt import ReceiptStatus  # noqa: E402
+from app.models.finance.ap.payment_batch import (  # noqa: E402  # pragma: allowlist secret
+    APBatchStatus,
+)
+from app.services.finance.ap import (  # noqa: E402
     GoodsReceiptInput,
     GRLineInput,
+    goods_receipt_service,
 )
 
 
@@ -695,8 +695,8 @@ def get_goods_receipt(
 @router.get("/goods-receipts", response_model=ListResponse[GRRead])
 def list_goods_receipts(
     organization_id: UUID = Depends(require_organization_id),
-    po_id: Optional[UUID] = None,
-    status: Optional[str] = None,
+    po_id: UUID | None = None,
+    status: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ap:goods_receipts:read")),
@@ -746,7 +746,10 @@ def accept_goods_receipt(
 # Payment Batches
 # =============================================================================
 
-from app.services.finance.ap import payment_batch_service, PaymentBatchInput
+from app.services.finance.ap import (  # noqa: E402
+    PaymentBatchInput,
+    payment_batch_service,
+)
 
 
 @router.post(
@@ -788,7 +791,7 @@ def get_payment_batch(
 @router.get("/payment-batches", response_model=ListResponse[PaymentBatchRead])
 def list_payment_batches(
     organization_id: UUID = Depends(require_organization_id),
-    status: Optional[str] = None,
+    status: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ap:payment_batches:read")),

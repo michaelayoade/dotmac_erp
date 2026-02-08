@@ -8,7 +8,6 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -34,7 +33,7 @@ class ValidationIssue:
     field: str
     issue_type: str  # ERROR, WARNING
     message: str
-    suggested_fix: Optional[str] = None
+    suggested_fix: str | None = None
 
 
 @dataclass

@@ -1,0 +1,9 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Birthday Reminder{% endblock %}
+{% block content %}
+<p style="margin: 0 0 16px 0;">Hi {{ manager_first }},</p>
+
+<p style="margin: 0 0 16px 0;">This is a friendly reminder that <strong>{{ employee_name }}</strong>'s birthday is {{ timing }}.</p>
+
+<p style="margin: 0;">Consider wishing them a happy birthday!</p>
+{% endblock %}

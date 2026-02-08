@@ -1,5 +1,6 @@
 {% extends "procurement/base_procurement.html" %}
 
+{% from "components/macros.html" import empty_state %}
 {% block page_title %}Bid Evaluation - {{ rfq.rfq_number }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -17,6 +18,7 @@
 {% block header_actions %}
 {% if can_finalize %}
 <form method="post" action="/procurement/evaluations/{{ rfq.rfq_id }}/finalize" class="inline">
+    {{ request.state.csrf_form | safe }}
     <button type="submit" class="btn btn-primary">
         <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
         Finalize Evaluation
@@ -37,7 +39,7 @@
             {% set label, classes = status_labels.get(rfq.status, ("Unknown", "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400")) %}
             <span class="inline-flex items-center rounded-full px-3 py-1 text-sm font-medium {{ classes }}">{{ label }}</span>
         </div>
-        <div class="grid grid-cols-3 gap-4 text-sm">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
             <div>
                 <span class="text-slate-500 dark:text-slate-400">Closing Date:</span>
                 <p class="font-semibold text-slate-900 dark:text-white">{{ rfq.closing_date }}</p>
@@ -59,13 +61,13 @@
         <div class="p-4 border-b border-slate-200 dark:border-slate-700">
             <h3 class="font-semibold text-slate-900 dark:text-white">Evaluation Criteria</h3>
         </div>
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 dark:bg-slate-800/50">
                     <tr>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Criterion</th>
-                        <th scope="col" class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Weight (%)</th>
-                        <th scope="col" class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Max Score</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Criterion</th>
+                        <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Weight (%)</th>
+                        <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Max Score</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
@@ -74,6 +76,12 @@
                         <td class="px-4 py-3 text-slate-900 dark:text-white">{{ c.name }}</td>
                         <td class="px-4 py-3 text-right text-slate-600 dark:text-slate-400">{{ c.weight }}</td>
                         <td class="px-4 py-3 text-right text-slate-600 dark:text-slate-400">{{ c.max_score }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No criteria found", "There are no criteria to display.") }}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -88,13 +96,13 @@
         <div class="p-4 border-b border-slate-200 dark:border-slate-700">
             <h3 class="font-semibold text-slate-900 dark:text-white">Response Comparison Matrix</h3>
         </div>
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 dark:bg-slate-800/50">
                     <tr>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Criterion</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Criterion</th>
                         {% for resp in responses %}
-                        <th scope="col" class="px-4 py-3 text-center font-medium text-slate-600 dark:text-slate-400">{{ resp.vendor_name }}</th>
+                        <th scope="col" class="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">{{ resp.vendor_name }}</th>
                         {% endfor %}
                     </tr>
                 </thead>
@@ -114,12 +122,24 @@
                         </td>
                         {% endfor %}
                     </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No criteria found", "There are no criteria to display.") }}
+                        </td>
+                    </tr>
                     {% endfor %}
                     <!-- Quoted Amount Row -->
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
                         <td class="px-4 py-3 font-semibold text-slate-900 dark:text-white">Quoted Amount</td>
                         {% for resp in responses %}
                         <td class="px-4 py-3 text-center font-semibold text-slate-900 dark:text-white">{{ "{:,.2f}".format(resp.total_amount) }}</td>
+                        {% else %}
+                        <tr>
+                            <td colspan="99" class="p-0">
+                                {{ empty_state("No responses found", "There are no responses to display.") }}
+                            </td>
+                        </tr>
                         {% endfor %}
                     </tr>
                     <!-- Total Weighted Score Row -->
@@ -127,6 +147,12 @@
                         <td class="px-4 py-3 font-bold text-blue-900 dark:text-blue-300">Total Weighted Score</td>
                         {% for resp in responses %}
                         <td class="px-4 py-3 text-center font-bold text-blue-900 dark:text-blue-300">{{ "{:.1f}".format(total_scores.get(resp.response_id, 0)) }}</td>
+                        {% else %}
+                        <tr>
+                            <td colspan="99" class="p-0">
+                                {{ empty_state("No responses found", "There are no responses to display.") }}
+                            </td>
+                        </tr>
                         {% endfor %}
                     </tr>
                     <!-- Rank Row -->

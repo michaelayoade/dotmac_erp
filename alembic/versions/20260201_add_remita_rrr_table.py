@@ -9,9 +9,10 @@ tracking Remita Retrieval References (RRRs) used for government payments
 like PAYE, NHF, Pension, taxes, and fees.
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision = "20260201_add_remita_rrr_table"
 down_revision = "20260201_merge_heads_for_remita"

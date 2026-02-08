@@ -27,11 +27,11 @@ from app.schemas.finance.banking import (
 )
 from tests.api.ifrs.conftest import (
     MockBankAccount,
-    MockBankStatement,
     MockBankReconciliation,
-    MockStatementLine,
+    MockBankStatement,
     MockReconciliationLine,
     MockStatementImportResult,
+    MockStatementLine,
 )
 
 

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -23,6 +22,7 @@ from app.services.finance.common import (
     toggle_entity_status,
     validate_unique_code,
 )
+from app.services.finance.platform.org_context import org_context_service
 from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
@@ -47,13 +47,15 @@ class AccountInput:
     category_id: UUID
     normal_balance: NormalBalance
     account_type: AccountType = AccountType.POSTING
-    description: Optional[str] = None
-    search_terms: Optional[str] = None
+    description: str | None = None
+    search_terms: str | None = None
     is_multi_currency: bool = False
-    default_currency_code: Optional[str] = None
+    default_currency_code: str | None = None
+    is_active: bool = True
+    is_posting_allowed: bool = True
     is_budgetable: bool = True
     is_reconciliation_required: bool = False
-    subledger_type: Optional[str] = None
+    subledger_type: str | None = None
     is_cash_equivalent: bool = False
     is_financial_instrument: bool = False
 
@@ -66,11 +68,135 @@ class ChartOfAccountsService(ListResponseMixin):
     """
 
     @staticmethod
+    def ensure_default_categories(
+        db: Session,
+        organization_id: UUID,
+    ) -> list[AccountCategory]:
+        """Ensure default account categories exist and return active categories."""
+        org_id = coerce_uuid(organization_id)
+
+        categories = (
+            db.query(AccountCategory)
+            .filter(
+                AccountCategory.organization_id == org_id,
+                AccountCategory.is_active.is_(True),
+            )
+            .order_by(AccountCategory.category_code)
+            .all()
+        )
+
+        if categories:
+            return categories
+
+        defaults = [
+            ("AST", "Assets", IFRSCategory.ASSETS),
+            ("LIA", "Liabilities", IFRSCategory.LIABILITIES),
+            ("EQT", "Equity", IFRSCategory.EQUITY),
+            ("REV", "Revenue", IFRSCategory.REVENUE),
+            ("EXP", "Expenses", IFRSCategory.EXPENSES),
+            (
+                "OCI",
+                "Other Comprehensive Income",
+                IFRSCategory.OTHER_COMPREHENSIVE_INCOME,
+            ),
+        ]
+        seeded = []
+        for index, (code, name, ifrs_cat) in enumerate(defaults, start=1):
+            seeded.append(
+                AccountCategory(
+                    organization_id=org_id,
+                    category_code=code,
+                    category_name=name,
+                    description=f"Default {name} category",
+                    ifrs_category=ifrs_cat,
+                    hierarchy_level=1,
+                    display_order=index,
+                    is_active=True,
+                )
+            )
+        db.add_all(seeded)
+        db.commit()
+
+        return (
+            db.query(AccountCategory)
+            .filter(
+                AccountCategory.organization_id == org_id,
+                AccountCategory.is_active.is_(True),
+            )
+            .order_by(AccountCategory.category_code)
+            .all()
+        )
+
+    @staticmethod
+    def build_input_from_payload(
+        db: Session,
+        organization_id: UUID,
+        payload: dict,
+    ) -> AccountInput:
+        """Build AccountInput from raw payload."""
+        org_id = coerce_uuid(organization_id)
+
+        account_type_raw = payload.get("account_type")
+        normal_balance_raw = payload.get("normal_balance")
+        try:
+            account_type = AccountType(account_type_raw)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid account type: {account_type_raw}",
+            ) from exc
+
+        try:
+            normal_balance = NormalBalance(normal_balance_raw)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid normal balance: {normal_balance_raw}",
+            ) from exc
+
+        category_id = payload.get("category_id")
+        if not category_id:
+            raise HTTPException(status_code=400, detail="Category is required")
+
+        category = get_org_scoped_entity(
+            db=db,
+            model_class=AccountCategory,
+            entity_id=category_id,
+            org_id=org_id,
+            entity_name="Account category",
+        )
+        if category is None:
+            raise HTTPException(status_code=404, detail="Account category not found")
+
+        default_currency = payload.get(
+            "default_currency_code"
+        ) or org_context_service.get_functional_currency(db, org_id)
+
+        return AccountInput(
+            account_code=payload.get("account_code", ""),
+            account_name=payload.get("account_name", ""),
+            category_id=coerce_uuid(category_id),
+            account_type=account_type,
+            normal_balance=normal_balance,
+            description=payload.get("description") or None,
+            search_terms=payload.get("search_terms") or None,
+            is_multi_currency=bool(payload.get("is_multi_currency")),
+            default_currency_code=default_currency,
+            is_active=payload.get("is_active", True),
+            is_posting_allowed=payload.get("is_posting_allowed", True),
+            is_budgetable=payload.get("is_budgetable", True),
+            is_reconciliation_required=payload.get("is_reconciliation_required", False),
+            subledger_type=payload.get("subledger_type") or None,
+            is_cash_equivalent=payload.get("is_cash_equivalent", False),
+            is_financial_instrument=payload.get("is_financial_instrument", False),
+        )
+
+    @staticmethod
     def create_account(
         db: Session,
         organization_id: UUID,
         input: AccountInput,
-        created_by_user_id: Optional[UUID] = None,
+        created_by_user_id: UUID | None = None,
     ) -> Account:
         """
         Create a new account.
@@ -110,6 +236,8 @@ class ChartOfAccountsService(ListResponseMixin):
             normal_balance=input.normal_balance,
             is_multi_currency=input.is_multi_currency,
             default_currency_code=input.default_currency_code,
+            is_active=input.is_active,
+            is_posting_allowed=input.is_posting_allowed,
             is_budgetable=input.is_budgetable,
             is_reconciliation_required=input.is_reconciliation_required,
             subledger_type=input.subledger_type,
@@ -125,23 +253,131 @@ class ChartOfAccountsService(ListResponseMixin):
         return account
 
     @staticmethod
+    def update_account_full(
+        db: Session,
+        organization_id: UUID,
+        account_id: UUID,
+        input: AccountInput,
+        updated_by_user_id: UUID | None = None,
+    ) -> Account:
+        """Update an existing account using full input."""
+        org_id = coerce_uuid(organization_id)
+        acc_id = coerce_uuid(account_id)
+
+        account = get_org_scoped_entity(
+            db=db,
+            model_class=Account,
+            entity_id=acc_id,
+            org_id=org_id,
+            entity_name="Account",
+        )
+        if account is None:
+            raise HTTPException(status_code=404, detail="Account not found")
+
+        existing = (
+            db.query(Account)
+            .filter(Account.organization_id == org_id)
+            .filter(Account.account_code == input.account_code)
+            .filter(Account.account_id != acc_id)
+            .first()
+        )
+        if existing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Account code '{input.account_code}' already exists",
+            )
+
+        account.account_code = input.account_code
+        account.account_name = input.account_name
+        account.description = input.description
+        account.search_terms = input.search_terms
+        account.category_id = coerce_uuid(input.category_id)
+        account.account_type = input.account_type
+        account.normal_balance = input.normal_balance
+        account.is_multi_currency = input.is_multi_currency
+        account.default_currency_code = input.default_currency_code
+        account.is_active = input.is_active
+        account.is_posting_allowed = input.is_posting_allowed
+        account.is_budgetable = input.is_budgetable
+        account.is_reconciliation_required = input.is_reconciliation_required
+        account.subledger_type = input.subledger_type
+        account.is_cash_equivalent = input.is_cash_equivalent
+        account.is_financial_instrument = input.is_financial_instrument
+        if updated_by_user_id is not None:
+            account.updated_by_user_id = updated_by_user_id
+
+        db.commit()
+        db.refresh(account)
+
+        return account
+
+    @staticmethod
+    def delete_account(
+        db: Session,
+        organization_id: UUID,
+        account_id: UUID,
+    ) -> None:
+        """Delete an account if it has no dependent records."""
+        org_id = coerce_uuid(organization_id)
+        acc_id = coerce_uuid(account_id)
+
+        account = get_org_scoped_entity(
+            db=db,
+            model_class=Account,
+            entity_id=acc_id,
+            org_id=org_id,
+            entity_name="Account",
+        )
+        if account is None:
+            raise HTTPException(status_code=404, detail="Account not found")
+
+        from app.models.finance.gl.account_balance import AccountBalance
+        from app.models.finance.gl.journal_entry_line import JournalEntryLine
+
+        line_count = (
+            db.query(JournalEntryLine)
+            .filter(JournalEntryLine.account_id == acc_id)
+            .count()
+        )
+        if line_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Cannot delete account with {line_count} journal entries. "
+                    "Deactivate instead."
+                ),
+            )
+
+        balance_count = (
+            db.query(AccountBalance).filter(AccountBalance.account_id == acc_id).count()
+        )
+        if balance_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot delete account with balance records. Deactivate instead.",
+            )
+
+        db.delete(account)
+        db.commit()
+
+    @staticmethod
     def update_account(
         db: Session,
         organization_id: UUID,
         account_id: UUID,
-        account_name: Optional[str] = None,
-        description: Optional[str] = None,
-        search_terms: Optional[str] = None,
-        is_active: Optional[bool] = None,
-        is_posting_allowed: Optional[bool] = None,
-        is_budgetable: Optional[bool] = None,
-        is_reconciliation_required: Optional[bool] = None,
-        is_multi_currency: Optional[bool] = None,
-        default_currency_code: Optional[str] = None,
-        subledger_type: Optional[str] = None,
-        is_cash_equivalent: Optional[bool] = None,
-        is_financial_instrument: Optional[bool] = None,
-        updated_by_user_id: Optional[UUID] = None,
+        account_name: str | None = None,
+        description: str | None = None,
+        search_terms: str | None = None,
+        is_active: bool | None = None,
+        is_posting_allowed: bool | None = None,
+        is_budgetable: bool | None = None,
+        is_reconciliation_required: bool | None = None,
+        is_multi_currency: bool | None = None,
+        default_currency_code: str | None = None,
+        subledger_type: str | None = None,
+        is_cash_equivalent: bool | None = None,
+        is_financial_instrument: bool | None = None,
+        updated_by_user_id: UUID | None = None,
     ) -> Account:
         """
         Update an existing account.
@@ -265,6 +501,7 @@ class ChartOfAccountsService(ListResponseMixin):
     def get(
         db: Session,
         account_id: str,
+        organization_id: UUID | None = None,
     ) -> Account:
         """
         Get an account by ID.
@@ -281,6 +518,10 @@ class ChartOfAccountsService(ListResponseMixin):
         """
         account = db.get(Account, coerce_uuid(account_id))
         if not account:
+            raise HTTPException(status_code=404, detail="Account not found")
+        if organization_id is not None and account.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Account not found")
         return account
 
@@ -321,12 +562,12 @@ class ChartOfAccountsService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        category_id: Optional[str] = None,
-        account_type: Optional[AccountType] = None,
-        is_active: Optional[bool] = None,
-        is_posting_allowed: Optional[bool] = None,
-        search: Optional[str] = None,
+        organization_id: str | None = None,
+        category_id: str | None = None,
+        account_type: AccountType | None = None,
+        is_active: bool | None = None,
+        is_posting_allowed: bool | None = None,
+        search: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[Account]:

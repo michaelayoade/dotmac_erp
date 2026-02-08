@@ -6,11 +6,11 @@ Manages legal entities within a consolidation group (IFRS 10).
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -39,19 +39,19 @@ class LegalEntityInput:
     country_code: str
     functional_currency_code: str
     reporting_currency_code: str
-    parent_entity_id: Optional[UUID] = None
-    organization_id: Optional[UUID] = None
+    parent_entity_id: UUID | None = None
+    organization_id: UUID | None = None
     is_consolidating_entity: bool = False
-    description: Optional[str] = None
-    incorporation_date: Optional[date] = None
-    registration_number: Optional[str] = None
-    tax_id: Optional[str] = None
+    description: str | None = None
+    incorporation_date: date | None = None
+    registration_number: str | None = None
+    tax_id: str | None = None
     fiscal_year_end_month: int = 12
     fiscal_year_end_day: int = 31
-    acquisition_date: Optional[date] = None
-    acquisition_cost: Optional[Decimal] = None
-    goodwill_at_acquisition: Optional[Decimal] = None
-    address: Optional[dict] = None
+    acquisition_date: date | None = None
+    acquisition_cost: Decimal | None = None
+    goodwill_at_acquisition: Decimal | None = None
+    address: dict | None = None
 
 
 @dataclass
@@ -59,7 +59,7 @@ class GroupStructure:
     """Group structure hierarchy."""
 
     entity: LegalEntity
-    children: list["GroupStructure"]
+    children: list[GroupStructure]
     level: int
     effective_ownership: Decimal
 
@@ -302,7 +302,7 @@ class LegalEntityService(ListResponseMixin):
     def get_group_structure(
         db: Session,
         group_id: UUID,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
     ) -> list[GroupStructure]:
         """
         Get hierarchical group structure.
@@ -334,8 +334,8 @@ class LegalEntityService(ListResponseMixin):
         entities = query.all()
 
         # Build tree structure
-        entity_map = {e.entity_id: e for e in entities}
-        children_map: dict[Optional[UUID], list[LegalEntity]] = {}
+        {e.entity_id: e for e in entities}
+        children_map: dict[UUID | None, list[LegalEntity]] = {}
 
         for entity in entities:
             parent_id = entity.parent_entity_id
@@ -343,7 +343,7 @@ class LegalEntityService(ListResponseMixin):
                 children_map[parent_id] = []
             children_map[parent_id].append(entity)
 
-        def build_tree(parent_id: Optional[UUID], level: int) -> list[GroupStructure]:
+        def build_tree(parent_id: UUID | None, level: int) -> list[GroupStructure]:
             result = []
             for entity in children_map.get(parent_id, []):
                 children = build_tree(entity.entity_id, level + 1)
@@ -365,8 +365,8 @@ class LegalEntityService(ListResponseMixin):
     def get_entities_for_consolidation(
         db: Session,
         group_id: UUID,
-        consolidation_method: Optional[ConsolidationMethod] = None,
-    ) -> List[LegalEntity]:
+        consolidation_method: ConsolidationMethod | None = None,
+    ) -> builtins.list[LegalEntity]:
         """
         Get entities to include in consolidation.
 
@@ -397,7 +397,7 @@ class LegalEntityService(ListResponseMixin):
     def get_carrying_value_of_goodwill(
         db: Session,
         group_id: UUID,
-        entity_id: Optional[UUID] = None,
+        entity_id: UUID | None = None,
     ) -> Decimal:
         """
         Get carrying value of goodwill.
@@ -438,24 +438,27 @@ class LegalEntityService(ListResponseMixin):
     def get(
         db: Session,
         entity_id: str,
+        group_id: UUID | None = None,
     ) -> LegalEntity:
         """Get a legal entity by ID."""
         entity = db.get(LegalEntity, coerce_uuid(entity_id))
         if not entity:
+            raise HTTPException(status_code=404, detail="Legal entity not found")
+        if group_id is not None and entity.group_id != coerce_uuid(group_id):
             raise HTTPException(status_code=404, detail="Legal entity not found")
         return entity
 
     @staticmethod
     def list(
         db: Session,
-        group_id: Optional[str] = None,
-        entity_type: Optional[EntityType] = None,
-        consolidation_method: Optional[ConsolidationMethod] = None,
-        is_active: Optional[bool] = None,
-        country_code: Optional[str] = None,
+        group_id: str | None = None,
+        entity_type: EntityType | None = None,
+        consolidation_method: ConsolidationMethod | None = None,
+        is_active: bool | None = None,
+        country_code: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[LegalEntity]:
+    ) -> builtins.list[LegalEntity]:
         """List legal entities with optional filters."""
         query = db.query(LegalEntity)
 

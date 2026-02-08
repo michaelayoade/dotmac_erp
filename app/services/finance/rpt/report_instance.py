@@ -10,8 +10,8 @@ import json
 import logging
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Any, Optional, cast
+from datetime import UTC, datetime
+from typing import Any, cast
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -34,12 +34,12 @@ logger = logging.getLogger(__name__)
 class ReportGenerationRequest:
     """Request to generate a report."""
 
-    report_def_id: Optional[UUID] = None
-    report_code: Optional[str] = None
+    report_def_id: UUID | None = None
+    report_code: str | None = None
     output_format: str = "PDF"
-    fiscal_period_id: Optional[UUID] = None
-    parameters: Optional[dict] = None
-    schedule_id: Optional[UUID] = None
+    fiscal_period_id: UUID | None = None
+    parameters: dict | None = None
+    schedule_id: UUID | None = None
 
 
 @dataclass
@@ -48,9 +48,9 @@ class ReportGenerationResult:
 
     instance_id: UUID
     status: ReportStatus
-    output_file_path: Optional[str] = None
-    generation_time_ms: Optional[int] = None
-    error_message: Optional[str] = None
+    output_file_path: str | None = None
+    generation_time_ms: int | None = None
+    error_message: str | None = None
 
 
 class ReportInstanceService(ListResponseMixin):
@@ -169,7 +169,7 @@ class ReportInstanceService(ListResponseMixin):
             )
 
         instance.status = ReportStatus.GENERATING
-        instance.started_at = datetime.now(timezone.utc)
+        instance.started_at = datetime.now(UTC)
 
         db.commit()
         db.refresh(instance)
@@ -205,7 +205,7 @@ class ReportInstanceService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Report definition not found")
 
         instance.status = ReportStatus.GENERATING
-        instance.started_at = datetime.now(timezone.utc)
+        instance.started_at = datetime.now(UTC)
         instance.generated_by_user_id = user_id
         db.commit()
         db.refresh(instance)
@@ -273,7 +273,7 @@ class ReportInstanceService(ListResponseMixin):
                 detail=f"Cannot complete report in {instance.status} status",
             )
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         generation_time_ms = None
         if instance.started_at:
             delta = now - instance.started_at
@@ -313,7 +313,7 @@ class ReportInstanceService(ListResponseMixin):
         if not instance:
             raise HTTPException(status_code=404, detail="Report instance not found")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         generation_time_ms = None
         if instance.started_at:
             delta = now - instance.started_at
@@ -360,7 +360,7 @@ class ReportInstanceService(ListResponseMixin):
             )
 
         instance.status = ReportStatus.CANCELLED
-        instance.completed_at = datetime.now(timezone.utc)
+        instance.completed_at = datetime.now(UTC)
 
         db.commit()
         db.refresh(instance)
@@ -394,7 +394,7 @@ class ReportInstanceService(ListResponseMixin):
         ):
             raise HTTPException(status_code=404, detail="Report output not found")
 
-        with open(instance.output_file_path, "r", encoding="utf-8") as handle:
+        with open(instance.output_file_path, encoding="utf-8") as handle:
             return cast(dict[Any, Any], json.load(handle))
 
     @staticmethod
@@ -449,7 +449,7 @@ class ReportInstanceService(ListResponseMixin):
         raise HTTPException(status_code=400, detail="Report definition is required")
 
     @staticmethod
-    def _standard_definition(report_code: str) -> Optional[dict]:
+    def _standard_definition(report_code: str) -> dict | None:
         code = report_code.upper()
         standard = {
             "TRIAL_BALANCE": {
@@ -538,7 +538,7 @@ class ReportInstanceService(ListResponseMixin):
         organization_id: UUID,
         definition: ReportDefinition,
         parameters: dict,
-        fiscal_period_id: Optional[UUID],
+        fiscal_period_id: UUID | None,
     ) -> dict:
         """Generate report payload based on definition."""
         report_code = (definition.report_code or "").upper()
@@ -619,7 +619,7 @@ class ReportInstanceService(ListResponseMixin):
     @staticmethod
     def get_queued_reports(
         db: Session,
-        organization_id: Optional[str] = None,
+        organization_id: str | None = None,
         limit: int = 50,
     ) -> list[ReportInstance]:
         """
@@ -648,7 +648,7 @@ class ReportInstanceService(ListResponseMixin):
     def get_generation_statistics(
         db: Session,
         organization_id: str,
-        report_def_id: Optional[str] = None,
+        report_def_id: str | None = None,
     ) -> dict:
         """
         Get report generation statistics.
@@ -717,7 +717,7 @@ class ReportInstanceService(ListResponseMixin):
         from datetime import timedelta
 
         org_id = coerce_uuid(organization_id)
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=retention_days)
+        cutoff_date = datetime.now(UTC) - timedelta(days=retention_days)
 
         instances = (
             db.query(ReportInstance)
@@ -788,20 +788,25 @@ class ReportInstanceService(ListResponseMixin):
     def get(
         db: Session,
         instance_id: str,
+        organization_id: UUID | None = None,
     ) -> ReportInstance:
         """Get a report instance by ID."""
         instance = db.get(ReportInstance, coerce_uuid(instance_id))
         if not instance:
+            raise HTTPException(status_code=404, detail="Report instance not found")
+        if organization_id is not None and instance.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Report instance not found")
         return instance
 
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        report_def_id: Optional[str] = None,
-        status: Optional[ReportStatus] = None,
-        fiscal_period_id: Optional[str] = None,
+        organization_id: str | None = None,
+        report_def_id: str | None = None,
+        status: ReportStatus | None = None,
+        fiscal_period_id: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[ReportInstance]:

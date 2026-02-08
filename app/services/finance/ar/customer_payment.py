@@ -9,9 +9,8 @@ from __future__ import annotations
 import logging
 import uuid as uuid_lib
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -27,6 +26,13 @@ from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 from app.models.finance.ar.payment_allocation import PaymentAllocation
 from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.services.common import coerce_uuid
+from app.services.finance.ar.input_utils import (
+    parse_date_str,
+    parse_decimal,
+    parse_json_list,
+    require_uuid,
+    resolve_currency_code,
+)
 from app.services.finance.platform.sequence import SequenceService
 from app.services.response import ListResponseMixin
 
@@ -50,19 +56,17 @@ class CustomerPaymentInput:
     payment_method: PaymentMethod
     currency_code: str
     amount: Decimal  # Net amount received (after WHT)
-    bank_account_id: Optional[UUID] = None
+    bank_account_id: UUID | None = None
     allocations: list[PaymentAllocationInput] = field(default_factory=list)
-    exchange_rate: Optional[Decimal] = None
-    reference: Optional[str] = None
-    description: Optional[str] = None
-    correlation_id: Optional[str] = None
+    exchange_rate: Decimal | None = None
+    reference: str | None = None
+    description: str | None = None
+    correlation_id: str | None = None
     # Withholding Tax (WHT) - when customer deducts WHT before paying
-    gross_amount: Optional[Decimal] = (
-        None  # If not provided, defaults to amount (no WHT)
-    )
-    wht_code_id: Optional[UUID] = None  # WHT tax code applied
+    gross_amount: Decimal | None = None  # If not provided, defaults to amount (no WHT)
+    wht_code_id: UUID | None = None  # WHT tax code applied
     wht_amount: Decimal = field(default_factory=lambda: Decimal("0"))  # WHT deducted
-    wht_certificate_number: Optional[str] = None  # Certificate received from customer
+    wht_certificate_number: str | None = None  # Certificate received from customer
 
 
 class CustomerPaymentService(ListResponseMixin):
@@ -140,12 +144,7 @@ class CustomerPaymentService(ListResponseMixin):
                         detail=f"Allocation exceeds balance due on {invoice.invoice_number}",
                     )
 
-        # Generate payment number
-        payment_number = SequenceService.get_next_number(
-            db, org_id, SequenceType.RECEIPT
-        )
-
-        # Handle WHT amounts
+        # Handle WHT amounts (validate BEFORE generating sequence number)
         # gross_amount = amount before WHT deduction
         # amount = net amount received (after WHT)
         # wht_amount = WHT deducted by customer
@@ -169,6 +168,11 @@ class CustomerPaymentService(ListResponseMixin):
         else:
             # No gross amount provided - calculate from net + WHT
             gross_amount = net_amount + wht_amount
+
+        # Generate payment number (after all validation passes)
+        payment_number = SequenceService.get_next_number(
+            db, org_id, SequenceType.RECEIPT
+        )
 
         # If customer has WHT applicable and no WHT provided, warn (but don't block)
         # The user may have a valid reason (exemption, etc.)
@@ -218,12 +222,79 @@ class CustomerPaymentService(ListResponseMixin):
         return payment
 
     @staticmethod
+    def build_input_from_payload(
+        db: Session,
+        organization_id: UUID,
+        payload: dict,
+    ) -> CustomerPaymentInput:
+        """Build CustomerPaymentInput from raw payload (strings or JSON)."""
+        payment_date = (
+            parse_date_str(payload.get("payment_date"), "Payment date") or date.today()
+        )
+
+        method_str = payload.get("payment_method", "BANK_TRANSFER")
+        try:
+            payment_method = PaymentMethod(method_str)
+        except ValueError:
+            payment_method = PaymentMethod.BANK_TRANSFER
+
+        allocations: list[PaymentAllocationInput] = []
+        allocations_data = parse_json_list(payload.get("allocations"), "Allocations")
+        for alloc in allocations_data:
+            if alloc.get("invoice_id") and alloc.get("amount"):
+                allocations.append(
+                    PaymentAllocationInput(
+                        invoice_id=require_uuid(alloc.get("invoice_id"), "Invoice"),
+                        amount=parse_decimal(alloc.get("amount"), "Allocation amount"),
+                    )
+                )
+
+        has_wht = payload.get("has_wht") in ("true", "1", True, "on")
+        wht_code_id = coerce_uuid(payload.get("wht_code_id")) if has_wht else None
+        wht_amount = (
+            parse_decimal(payload.get("wht_amount", "0"), "WHT amount")
+            if has_wht
+            else Decimal("0")
+        )
+        gross_amount = (
+            parse_decimal(payload.get("gross_amount"), "Gross amount")
+            if has_wht and payload.get("gross_amount") is not None
+            else None
+        )
+        wht_certificate_number = (
+            payload.get("wht_certificate_number") if has_wht else None
+        )
+
+        customer_id = require_uuid(payload.get("customer_id"), "Customer")
+        currency_code = resolve_currency_code(
+            db, coerce_uuid(organization_id), payload.get("currency_code")
+        )
+
+        return CustomerPaymentInput(
+            customer_id=customer_id,
+            payment_date=payment_date,
+            payment_method=payment_method,
+            currency_code=currency_code,
+            amount=parse_decimal(payload.get("amount", 0), "Amount"),
+            bank_account_id=coerce_uuid(payload.get("bank_account_id"))
+            if payload.get("bank_account_id")
+            else None,
+            reference=payload.get("reference"),
+            description=payload.get("description"),
+            allocations=allocations,
+            gross_amount=gross_amount,
+            wht_code_id=wht_code_id,
+            wht_amount=wht_amount,
+            wht_certificate_number=wht_certificate_number,
+        )
+
+    @staticmethod
     def post_payment(
         db: Session,
         organization_id: UUID,
         payment_id: UUID,
         posted_by_user_id: UUID,
-        posting_date: Optional[date] = None,
+        posting_date: date | None = None,
     ) -> CustomerPayment:
         """
         Post a payment to the general ledger and apply allocations.
@@ -262,7 +333,6 @@ class CustomerPaymentService(ListResponseMixin):
 
         # Temporarily update status for posting adapter check
         # The adapter expects APPROVED but AR model uses PENDING
-        original_status = payment.status
 
         # Create journal entry manually since we don't have APPROVED status
         from app.models.finance.gl.journal_entry import JournalType
@@ -394,7 +464,7 @@ class CustomerPaymentService(ListResponseMixin):
         # Update payment status
         payment.status = PaymentStatus.CLEARED
         payment.posted_by_user_id = user_id
-        payment.posted_at = datetime.now(timezone.utc)
+        payment.posted_at = datetime.now(UTC)
         payment.journal_entry_id = journal.journal_entry_id
         payment.posting_batch_id = posting_result.posting_batch_id
 
@@ -578,7 +648,7 @@ class CustomerPaymentService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
         pay_id = coerce_uuid(payment_id)
-        user_id = coerce_uuid(updated_by_user_id)
+        coerce_uuid(updated_by_user_id)
         customer_id = coerce_uuid(input.customer_id)
 
         payment = db.get(CustomerPayment, pay_id)
@@ -726,14 +796,44 @@ class CustomerPaymentService(ListResponseMixin):
         )
 
     @staticmethod
+    def delete_receipt(
+        db: Session,
+        organization_id: UUID,
+        receipt_id: UUID,
+    ) -> None:
+        """Delete a receipt (PENDING only)."""
+        org_id = coerce_uuid(organization_id)
+        pay_id = coerce_uuid(receipt_id)
+
+        payment = db.get(CustomerPayment, pay_id)
+        if not payment or payment.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Receipt not found")
+
+        if payment.status != PaymentStatus.PENDING:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Cannot delete receipt with status '{payment.status.value}'. "
+                    "Only draft receipts can be deleted."
+                ),
+            )
+
+        db.query(PaymentAllocation).filter(
+            PaymentAllocation.payment_id == pay_id
+        ).delete()
+        db.delete(payment)
+        db.flush()
+        db.commit()
+
+    @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        customer_id: Optional[str] = None,
-        status: Optional[PaymentStatus] = None,
-        payment_method: Optional[PaymentMethod] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
+        organization_id: str | None = None,
+        customer_id: str | None = None,
+        status: PaymentStatus | None = None,
+        payment_method: PaymentMethod | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[CustomerPayment]:

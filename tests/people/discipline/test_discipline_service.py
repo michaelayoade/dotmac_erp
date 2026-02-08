@@ -5,41 +5,40 @@ Tests for the DisciplineService business logic using mock objects.
 """
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.errors import NotFoundError, ValidationError
 from app.models.people.discipline import (
-    CaseStatus,
-    ViolationType,
-    SeverityLevel,
     ActionType,
+    CaseStatus,
+    SeverityLevel,
+    ViolationType,
 )
-from app.services.people.discipline import DisciplineService
 from app.schemas.people.discipline import (
+    CaseActionCreate,
+    CaseListFilter,
+    CaseResponseCreate,
+    CaseWitnessCreate,
+    DecideAppealRequest,
     DisciplinaryCaseCreate,
     DisciplinaryCaseUpdate,
-    IssueQueryRequest,
-    ScheduleHearingRequest,
-    RecordDecisionRequest,
     FileAppealRequest,
-    DecideAppealRequest,
-    CaseActionCreate,
-    CaseWitnessCreate,
-    CaseResponseCreate,
-    CaseListFilter,
+    IssueQueryRequest,
+    RecordDecisionRequest,
+    ScheduleHearingRequest,
 )
+from app.services.people.discipline import DisciplineService
 
 from .conftest import (
-    MockDisciplinaryCase,
     MockCaseAction,
     MockCaseWitness,
+    MockDisciplinaryCase,
     MockEmployee,
     create_mock_db_session,
 )
-
 
 # =============================================================================
 # Case CRUD Tests
@@ -106,7 +105,7 @@ class TestCaseCRUD:
             reported_date=date.today(),
         )
 
-        result = service.create_case(organization_id, data)
+        service.create_case(organization_id, data)
 
         # Verify case was added and flushed
         from app.models.people.discipline.case import DisciplinaryCase
@@ -310,7 +309,7 @@ class TestWorkflowTransitions:
         )
         db = create_mock_db_session(get_returns={case_id: mock_case})
 
-        hearing_datetime = datetime.now(timezone.utc) + timedelta(days=5)
+        hearing_datetime = datetime.now(UTC) + timedelta(days=5)
         service = DisciplineService(db)
         data = ScheduleHearingRequest(
             hearing_date=hearing_datetime,
@@ -547,7 +546,7 @@ class TestWitnessManagement:
             statement="I witnessed the incident.",
         )
 
-        result = service.add_witness(case_id, data)
+        service.add_witness(case_id, data)
 
         db.add.assert_called_once()
         db.flush.assert_called_once()
@@ -566,7 +565,7 @@ class TestWitnessManagement:
             external_contact="jane@external.com",
         )
 
-        result = service.add_witness(case_id, data)
+        service.add_witness(case_id, data)
 
         db.add.assert_called_once()
 
@@ -705,7 +704,7 @@ class TestStatusValidation:
         self, organization_id: uuid.UUID, case_id: uuid.UUID
     ):
         """Test valid transitions from DRAFT status."""
-        mock_case = MockDisciplinaryCase(
+        MockDisciplinaryCase(
             case_id=case_id,
             organization_id=organization_id,
             status=CaseStatus.DRAFT,

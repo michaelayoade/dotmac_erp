@@ -15,8 +15,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
 if TYPE_CHECKING:
-    from app.models.people.hr.employee import Employee
     from app.models.people.discipline.case import DisciplinaryCase
+    from app.models.people.hr.employee import Employee
 
 
 class CaseWitness(Base):
@@ -46,30 +46,30 @@ class CaseWitness(Base):
     )
 
     # Witness (can be internal employee or external)
-    employee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    employee_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
         comment="Internal employee witness",
     )
-    external_name: Mapped[Optional[str]] = mapped_column(
+    external_name: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
         comment="External witness name if not an employee",
     )
-    external_contact: Mapped[Optional[str]] = mapped_column(
+    external_contact: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
         comment="External witness contact details",
     )
 
     # Witness statement
-    statement: Mapped[Optional[str]] = mapped_column(
+    statement: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Written statement from witness",
     )
-    statement_date: Mapped[Optional[datetime]] = mapped_column(
+    statement_date: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="Date statement was provided",

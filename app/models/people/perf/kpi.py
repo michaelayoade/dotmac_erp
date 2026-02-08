@@ -84,7 +84,7 @@ class KPI(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # KRA (optional, can be standalone KPI)
-    kra_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    kra_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("perf.kra.kra_id"),
         nullable=True,
@@ -95,7 +95,7 @@ class KPI(Base, AuditMixin, ERPNextSyncMixin):
         String(200),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -115,28 +115,28 @@ class KPI(Base, AuditMixin, ERPNextSyncMixin):
         Numeric(12, 2),
         nullable=False,
     )
-    unit_of_measure: Mapped[Optional[str]] = mapped_column(
+    unit_of_measure: Mapped[str | None] = mapped_column(
         String(30),
         nullable=True,
         comment="%, units, dollars, etc.",
     )
-    threshold_value: Mapped[Optional[Decimal]] = mapped_column(
+    threshold_value: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
         comment="Minimum acceptable value",
     )
-    stretch_value: Mapped[Optional[Decimal]] = mapped_column(
+    stretch_value: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
         comment="Exceptional performance value",
     )
 
     # Actual
-    actual_value: Mapped[Optional[Decimal]] = mapped_column(
+    actual_value: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
     )
-    achievement_percentage: Mapped[Optional[Decimal]] = mapped_column(
+    achievement_percentage: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
         comment="(actual/target) * 100",
@@ -156,11 +156,11 @@ class KPI(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # Notes
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    evidence: Mapped[Optional[str]] = mapped_column(
+    evidence: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Supporting evidence or documentation",
@@ -171,7 +171,7 @@ class KPI(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )
@@ -187,7 +187,7 @@ class KPI(Base, AuditMixin, ERPNextSyncMixin):
             return False
         return self.actual_value >= self.target_value
 
-    def calculate_achievement(self) -> Optional[Decimal]:
+    def calculate_achievement(self) -> Decimal | None:
         """Calculate achievement percentage."""
         if (
             self.actual_value is None

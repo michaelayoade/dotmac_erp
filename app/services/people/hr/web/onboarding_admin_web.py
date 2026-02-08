@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, timedelta
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import Request
@@ -218,7 +218,7 @@ class OnboardingAdminWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        template_id: Optional[UUID] = None,
+        template_id: UUID | None = None,
     ) -> HTMLResponse:
         """Render template create/edit form."""
         org_id = coerce_uuid(auth.organization_id)
@@ -251,7 +251,7 @@ class OnboardingAdminWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        template_id: Optional[UUID] = None,
+        template_id: UUID | None = None,
     ) -> RedirectResponse:
         """Save checklist template."""
         org_id = coerce_uuid(auth.organization_id)
@@ -446,7 +446,7 @@ class OnboardingAdminWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        status_filter: Optional[str] = None,
+        status_filter: str | None = None,
     ) -> HTMLResponse:
         """Render list of all onboardings."""
         org_id = coerce_uuid(auth.organization_id)

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Any, Optional, cast
+from typing import Any, cast
 from uuid import UUID
 
 from fastapi import Request, UploadFile
@@ -35,7 +35,7 @@ class LeaveWebService:
     """Service layer for leave-related web routes."""
 
     @staticmethod
-    def _parse_date(value: Optional[str]) -> Optional[date]:
+    def _parse_date(value: str | None) -> date | None:
         if not value:
             return None
         try:
@@ -44,7 +44,7 @@ class LeaveWebService:
             return None
 
     @staticmethod
-    def _parse_uuid(value: Optional[str]) -> Optional[UUID]:
+    def _parse_uuid(value: str | None) -> UUID | None:
         if not value:
             return None
         try:
@@ -53,7 +53,7 @@ class LeaveWebService:
             return None
 
     @staticmethod
-    def _parse_int(value: Optional[str]) -> Optional[int]:
+    def _parse_int(value: str | None) -> int | None:
         if value is None:
             return None
         value = str(value).strip()
@@ -65,7 +65,7 @@ class LeaveWebService:
             return None
 
     @staticmethod
-    def _parse_bool(value: Optional[str]) -> Optional[bool]:
+    def _parse_bool(value: str | None) -> bool | None:
         if value is None:
             return None
         value = str(value).strip().lower()
@@ -121,8 +121,8 @@ class LeaveWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
-        is_active: Optional[bool] = None,
+        search: str | None = None,
+        is_active: bool | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Leave types list page."""
@@ -155,14 +155,14 @@ class LeaveWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        employee_id: Optional[str] = None,
-        leave_type_id: Optional[str] = None,
-        status: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        employee_id: str | None = None,
+        leave_type_id: str | None = None,
+        status: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
         page: int = 1,
-        success: Optional[str] = None,
-        error: Optional[str] = None,
+        success: str | None = None,
+        error: str | None = None,
     ) -> HTMLResponse:
         """Leave applications list page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -211,14 +211,14 @@ class LeaveWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        employee_id: Optional[str] = None,
-        leave_type_id: Optional[str] = None,
-        year: Optional[str] = None,
-        is_active: Optional[str] = None,
+        employee_id: str | None = None,
+        leave_type_id: str | None = None,
+        year: str | None = None,
+        is_active: str | None = None,
         page: int = 1,
         per_page: int = 25,
-        success: Optional[str] = None,
-        error: Optional[str] = None,
+        success: str | None = None,
+        error: str | None = None,
     ) -> HTMLResponse:
         """Leave allocations list page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -271,8 +271,8 @@ class LeaveWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        year: Optional[int] = None,
-        is_active: Optional[bool] = None,
+        year: int | None = None,
+        is_active: bool | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Holiday lists page."""
@@ -604,8 +604,8 @@ class LeaveWebService:
         allocation_id: str,
         auth: WebAuthContext,
         db: Session,
-        success: Optional[str] = None,
-        error: Optional[str] = None,
+        success: str | None = None,
+        error: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """View allocation details."""
         org_id = coerce_uuid(auth.organization_id)
@@ -1433,8 +1433,8 @@ class LeaveWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        year: Optional[int] = None,
-        department_id: Optional[str] = None,
+        year: int | None = None,
+        department_id: str | None = None,
     ) -> HTMLResponse:
         """Leave balance report page."""
         from app.services.people.hr import DepartmentFilters, OrganizationService
@@ -1472,8 +1472,8 @@ class LeaveWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> HTMLResponse:
         """Leave usage report page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -1502,9 +1502,9 @@ class LeaveWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        department_id: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        department_id: str | None = None,
     ) -> HTMLResponse:
         """Leave calendar report page."""
         from app.services.people.hr import DepartmentFilters, OrganizationService

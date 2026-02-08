@@ -6,7 +6,6 @@ import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -60,9 +59,9 @@ class AssetCategory(Base):
 
     category_code: Mapped[str] = mapped_column(String(30), nullable=False)
     category_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    parent_category_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    parent_category_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("fa.asset_category.category_id"),
         nullable=True,
@@ -98,11 +97,11 @@ class AssetCategory(Base):
         UUID(as_uuid=True),
         nullable=False,
     )
-    revaluation_surplus_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    revaluation_surplus_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    impairment_loss_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    impairment_loss_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -128,7 +127,7 @@ class AssetCategory(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

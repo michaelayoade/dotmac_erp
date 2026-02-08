@@ -18,6 +18,7 @@ from tests.ifrs.banking.conftest import (
     MockBankAccount,
     MockBankReconciliation,
     MockBankReconciliationLine,
+    MockBankStatement,
     MockBankStatementLine,
     MockJournalEntry,
     MockJournalEntryLine,
@@ -78,7 +79,7 @@ class TestCreateReconciliation:
                 with patch.object(
                     BankReconciliation, "calculate_difference", return_value=None
                 ):
-                    result = service.create_reconciliation(
+                    service.create_reconciliation(
                         mock_db,
                         org_id,
                         bank_account.bank_account_id,
@@ -134,17 +135,17 @@ class TestGetReconciliation:
         recon = MockBankReconciliation()
         mock_db.get.return_value = recon
 
-        result = service.get(mock_db, recon.reconciliation_id)
+        result = service.get(mock_db, recon.organization_id, recon.reconciliation_id)
 
         assert result == recon
 
     def test_get_nonexistent_reconciliation(self, service, mock_db):
         """Test getting non-existent reconciliation returns None."""
+        from fastapi import HTTPException
+
         mock_db.get.return_value = None
-
-        result = service.get(mock_db, uuid4())
-
-        assert result is None
+        with pytest.raises(HTTPException):
+            service.get(mock_db, uuid4(), uuid4())
 
 
 class TestListReconciliations:
@@ -199,6 +200,8 @@ class TestAddMatch:
             debit_amount=Decimal("100.00"),
             credit_amount=None,
         )
+        stmt_line.statement = MockBankStatement(organization_id=recon.organization_id)
+        gl_line.journal_entry = MockJournalEntry(organization_id=recon.organization_id)
 
         mock_db.get.side_effect = [recon, stmt_line, gl_line]
 
@@ -207,8 +210,12 @@ class TestAddMatch:
             journal_line_id=gl_line.line_id,
         )
 
-        result = service.add_match(
-            mock_db, recon.reconciliation_id, match_input, user_id
+        service.add_match(
+            mock_db,
+            recon.organization_id,
+            recon.reconciliation_id,
+            match_input,
+            user_id,
         )
 
         mock_db.add.assert_called_once()
@@ -226,13 +233,14 @@ class TestAddMatch:
         )
 
         with pytest.raises(HTTPException) as exc:
-            service.add_match(mock_db, uuid4(), match_input)
+            service.add_match(mock_db, uuid4(), uuid4(), match_input)
 
         assert exc.value.status_code == 404
 
     def test_add_match_approved_reconciliation_fails(self, service, mock_db):
         """Test adding match to approved reconciliation fails."""
         from fastapi import HTTPException
+
         from app.models.finance.banking.bank_reconciliation import ReconciliationStatus
 
         recon = MockBankReconciliation(status=ReconciliationStatus.approved)
@@ -244,7 +252,9 @@ class TestAddMatch:
         )
 
         with pytest.raises(HTTPException) as exc:
-            service.add_match(mock_db, recon.reconciliation_id, match_input)
+            service.add_match(
+                mock_db, recon.organization_id, recon.reconciliation_id, match_input
+            )
 
         assert exc.value.status_code == 400
 
@@ -259,7 +269,7 @@ class TestAutoMatch:
         mock_db.get.return_value = None
 
         with pytest.raises(HTTPException) as exc:
-            service.auto_match(mock_db, uuid4())
+            service.auto_match(mock_db, uuid4(), uuid4())
 
         assert exc.value.status_code == 404
 
@@ -274,7 +284,9 @@ class TestSubmitForReview:
         recon = MockBankReconciliation(status=ReconciliationStatus.draft)
         mock_db.get.return_value = recon
 
-        result = service.submit_for_review(mock_db, recon.reconciliation_id)
+        result = service.submit_for_review(
+            mock_db, recon.organization_id, recon.reconciliation_id
+        )
 
         assert result.status == ReconciliationStatus.pending_review
         mock_db.flush.assert_called_once()
@@ -282,13 +294,16 @@ class TestSubmitForReview:
     def test_submit_non_draft_fails(self, service, mock_db):
         """Test submitting non-draft reconciliation fails."""
         from fastapi import HTTPException
+
         from app.models.finance.banking.bank_reconciliation import ReconciliationStatus
 
         recon = MockBankReconciliation(status=ReconciliationStatus.approved)
         mock_db.get.return_value = recon
 
         with pytest.raises(HTTPException) as exc:
-            service.submit_for_review(mock_db, recon.reconciliation_id)
+            service.submit_for_review(
+                mock_db, recon.organization_id, recon.reconciliation_id
+            )
 
         assert exc.value.status_code == 400
 
@@ -299,7 +314,7 @@ class TestSubmitForReview:
         mock_db.get.return_value = None
 
         with pytest.raises(HTTPException) as exc:
-            service.submit_for_review(mock_db, uuid4())
+            service.submit_for_review(mock_db, uuid4(), uuid4())
 
         assert exc.value.status_code == 404
 
@@ -319,7 +334,9 @@ class TestApproveReconciliation:
         recon.bank_account = bank_account
         mock_db.get.return_value = recon
 
-        result = service.approve(mock_db, recon.reconciliation_id, user_id)
+        result = service.approve(
+            mock_db, recon.organization_id, recon.reconciliation_id, user_id
+        )
 
         assert result.status == ReconciliationStatus.approved
         assert result.approved_by == user_id
@@ -328,19 +345,23 @@ class TestApproveReconciliation:
     def test_approve_non_pending_fails(self, service, mock_db, user_id):
         """Test approving non-pending reconciliation fails."""
         from fastapi import HTTPException
+
         from app.models.finance.banking.bank_reconciliation import ReconciliationStatus
 
         recon = MockBankReconciliation(status=ReconciliationStatus.draft)
         mock_db.get.return_value = recon
 
         with pytest.raises(HTTPException) as exc:
-            service.approve(mock_db, recon.reconciliation_id, user_id)
+            service.approve(
+                mock_db, recon.organization_id, recon.reconciliation_id, user_id
+            )
 
         assert exc.value.status_code == 400
 
     def test_approve_with_difference_fails(self, service, mock_db, user_id):
         """Test approving reconciliation with difference fails."""
         from fastapi import HTTPException
+
         from app.models.finance.banking.bank_reconciliation import ReconciliationStatus
 
         recon = MockBankReconciliation(
@@ -350,7 +371,9 @@ class TestApproveReconciliation:
         mock_db.get.return_value = recon
 
         with pytest.raises(HTTPException) as exc:
-            service.approve(mock_db, recon.reconciliation_id, user_id)
+            service.approve(
+                mock_db, recon.organization_id, recon.reconciliation_id, user_id
+            )
 
         assert exc.value.status_code == 400
         assert "difference" in exc.value.detail
@@ -362,7 +385,7 @@ class TestApproveReconciliation:
         mock_db.get.return_value = None
 
         with pytest.raises(HTTPException) as exc:
-            service.approve(mock_db, uuid4(), user_id)
+            service.approve(mock_db, uuid4(), uuid4(), user_id)
 
         assert exc.value.status_code == 404
 
@@ -388,13 +411,20 @@ class TestRejectReconciliation:
     def test_reject_non_pending_fails(self, service, mock_db, user_id):
         """Test rejecting non-pending reconciliation fails."""
         from fastapi import HTTPException
+
         from app.models.finance.banking.bank_reconciliation import ReconciliationStatus
 
         recon = MockBankReconciliation(status=ReconciliationStatus.draft)
         mock_db.get.return_value = recon
 
         with pytest.raises(HTTPException) as exc:
-            service.reject(mock_db, recon.reconciliation_id, user_id, "Reason")
+            service.reject(
+                mock_db,
+                recon.organization_id,
+                recon.reconciliation_id,
+                user_id,
+                "Reason",
+            )
 
         assert exc.value.status_code == 400
 
@@ -405,7 +435,7 @@ class TestRejectReconciliation:
         mock_db.get.return_value = None
 
         with pytest.raises(HTTPException) as exc:
-            service.reject(mock_db, uuid4(), user_id, "Reason")
+            service.reject(mock_db, uuid4(), uuid4(), user_id, "Reason")
 
         assert exc.value.status_code == 404
 
@@ -433,7 +463,9 @@ class TestGetReconciliationReport:
         ]
         mock_db.get.return_value = recon
 
-        result = service.get_reconciliation_report(mock_db, recon.reconciliation_id)
+        result = service.get_reconciliation_report(
+            mock_db, recon.organization_id, recon.reconciliation_id
+        )
 
         assert result["reconciliation"] == recon
         assert result["bank_account"] == bank_account
@@ -448,7 +480,7 @@ class TestGetReconciliationReport:
         mock_db.get.return_value = None
 
         with pytest.raises(HTTPException) as exc:
-            service.get_reconciliation_report(mock_db, uuid4())
+            service.get_reconciliation_report(mock_db, uuid4(), uuid4())
 
         assert exc.value.status_code == 404
 
@@ -462,8 +494,9 @@ class TestAddAdjustment:
         recon.calculate_difference = MagicMock()
         mock_db.get.return_value = recon
 
-        result = service.add_adjustment(
+        service.add_adjustment(
             mock_db,
+            recon.organization_id,
             recon.reconciliation_id,
             transaction_date=date.today(),
             amount=Decimal("50.00"),
@@ -484,6 +517,7 @@ class TestAddAdjustment:
         with pytest.raises(HTTPException) as exc:
             service.add_adjustment(
                 mock_db,
+                uuid4(),
                 uuid4(),
                 transaction_date=date.today(),
                 amount=Decimal("50.00"),
@@ -506,8 +540,9 @@ class TestAddOutstandingItem:
         recon.calculate_difference = MagicMock()
         mock_db.get.return_value = recon
 
-        result = service.add_outstanding_item(
+        service.add_outstanding_item(
             mock_db,
+            recon.organization_id,
             recon.reconciliation_id,
             transaction_date=date.today(),
             amount=Decimal("500.00"),
@@ -527,8 +562,9 @@ class TestAddOutstandingItem:
         recon.calculate_difference = MagicMock()
         mock_db.get.return_value = recon
 
-        result = service.add_outstanding_item(
+        service.add_outstanding_item(
             mock_db,
+            recon.organization_id,
             recon.reconciliation_id,
             transaction_date=date.today(),
             amount=Decimal("200.00"),
@@ -549,6 +585,7 @@ class TestAddOutstandingItem:
         with pytest.raises(HTTPException) as exc:
             service.add_outstanding_item(
                 mock_db,
+                uuid4(),
                 uuid4(),
                 transaction_date=date.today(),
                 amount=Decimal("500.00"),
@@ -571,18 +608,21 @@ class TestGetWithLines:
         ]
         mock_db.get.return_value = recon
 
-        result = service.get_with_lines(mock_db, recon.reconciliation_id)
+        result = service.get_with_lines(
+            mock_db, recon.organization_id, recon.reconciliation_id
+        )
 
         assert result == recon
         assert len(result.lines) == 2
 
     def test_get_with_lines_nonexistent(self, service, mock_db):
         """Test getting non-existent reconciliation with lines."""
+        from fastapi import HTTPException
+
         mock_db.get.return_value = None
 
-        result = service.get_with_lines(mock_db, uuid4())
-
-        assert result is None
+        with pytest.raises(HTTPException):
+            service.get_with_lines(mock_db, uuid4(), uuid4())
 
 
 class TestListFilters:
@@ -640,7 +680,9 @@ class TestAddMatchNotFound:
         )
 
         with pytest.raises(HTTPException) as exc:
-            service.add_match(mock_db, recon.reconciliation_id, match_input)
+            service.add_match(
+                mock_db, recon.organization_id, recon.reconciliation_id, match_input
+            )
 
         assert exc.value.status_code == 404
         assert "Statement line" in exc.value.detail
@@ -651,6 +693,7 @@ class TestAddMatchNotFound:
 
         recon = MockBankReconciliation(status="draft")
         stmt_line = MockBankStatementLine()
+        stmt_line.statement = MockBankStatement(organization_id=recon.organization_id)
         mock_db.get.side_effect = [recon, stmt_line, None]  # GL line not found
 
         match_input = ReconciliationMatchInput(
@@ -659,7 +702,9 @@ class TestAddMatchNotFound:
         )
 
         with pytest.raises(HTTPException) as exc:
-            service.add_match(mock_db, recon.reconciliation_id, match_input)
+            service.add_match(
+                mock_db, recon.organization_id, recon.reconciliation_id, match_input
+            )
 
         assert exc.value.status_code == 404
         assert "Journal line" in exc.value.detail
@@ -695,7 +740,7 @@ class TestCreateReconciliationWithPrior:
                 with patch.object(
                     BankReconciliation, "calculate_difference", return_value=None
                 ):
-                    result = service.create_reconciliation(
+                    service.create_reconciliation(
                         mock_db,
                         org_id,
                         bank_account.bank_account_id,
@@ -722,7 +767,11 @@ class TestApproveWithNotes:
         mock_db.get.return_value = recon
 
         result = service.approve(
-            mock_db, recon.reconciliation_id, user_id, notes="All items verified"
+            mock_db,
+            recon.organization_id,
+            recon.reconciliation_id,
+            user_id,
+            notes="All items verified",
         )
 
         assert result.review_notes == "All items verified"
@@ -837,7 +886,10 @@ class TestAutoMatchWithItems:
             service, "add_match", return_value=MockBankReconciliationLine()
         ):
             result = service.auto_match(
-                mock_db, recon.reconciliation_id, created_by=user_id
+                mock_db,
+                recon.organization_id,
+                recon.reconciliation_id,
+                created_by=user_id,
             )
 
         assert result.matches_found >= 0  # Depends on match score threshold
@@ -864,7 +916,7 @@ class TestAutoMatchWithItems:
         mock_db.execute.side_effect = [mock_stmt_result, mock_gl_result]
 
         result = service.auto_match(
-            mock_db, recon.reconciliation_id, created_by=user_id
+            mock_db, recon.organization_id, recon.reconciliation_id, created_by=user_id
         )
 
         assert result.matches_found == 0

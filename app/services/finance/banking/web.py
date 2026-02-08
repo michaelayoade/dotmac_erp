@@ -6,12 +6,15 @@ Provides view-focused data for banking web routes.
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 from decimal import Decimal
-from typing import Optional
+from uuid import UUID
 
-from fastapi import Request
-from fastapi.responses import HTMLResponse
+from fastapi import HTTPException, Request, UploadFile
+from fastapi.responses import HTMLResponse, RedirectResponse
+from pydantic import ValidationError
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
@@ -29,7 +32,9 @@ from app.models.finance.banking.bank_statement import (
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
+from app.schemas.finance.banking import BankStatementImport
 from app.services.common import coerce_uuid
+from app.services.finance.banking import bank_statement_service
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.formatters import format_currency as _base_format_currency
 from app.services.formatters import format_date as _format_date
@@ -41,14 +46,14 @@ logger = logging.getLogger(__name__)
 
 
 def _format_currency(
-    amount: Optional[Decimal],
-    currency: Optional[str] = None,
+    amount: Decimal | None,
+    currency: str | None = None,
 ) -> str:
     """Format currency with em-dash for None values."""
     return _base_format_currency(amount, currency, none_value="\u2014")
 
 
-def _parse_account_status(value: Optional[str]) -> Optional[BankAccountStatus]:
+def _parse_account_status(value: str | None) -> BankAccountStatus | None:
     """Parse bank account status enum value.
 
     Logs warning on parse failure for debugging.
@@ -62,7 +67,7 @@ def _parse_account_status(value: Optional[str]) -> Optional[BankAccountStatus]:
         return None
 
 
-def _parse_statement_status(value: Optional[str]) -> Optional[BankStatementStatus]:
+def _parse_statement_status(value: str | None) -> BankStatementStatus | None:
     """Parse bank statement status enum value.
 
     Logs warning on parse failure for debugging.
@@ -91,8 +96,8 @@ def _statement_status_label(status: BankStatementStatus) -> str:
 
 
 def _parse_reconciliation_status(
-    value: Optional[str],
-) -> Optional[ReconciliationStatus]:
+    value: str | None,
+) -> ReconciliationStatus | None:
     """Parse reconciliation status enum value.
 
     Logs warning on parse failure for debugging.
@@ -142,27 +147,32 @@ def _account_view(account: BankAccount) -> dict:
 
 def _statement_view(statement: BankStatement) -> dict:
     account = statement.bank_account
+    currency = statement.currency_code
     return {
         "statement_id": statement.statement_id,
         "statement_number": statement.statement_number,
         "statement_date": _format_date(statement.statement_date),
         "period_start": _format_date(statement.period_start),
         "period_end": _format_date(statement.period_end),
-        "opening_balance": statement.opening_balance,
-        "closing_balance": statement.closing_balance,
+        "opening_balance": _format_currency(statement.opening_balance, currency),
+        "closing_balance": _format_currency(statement.closing_balance, currency),
+        "opening_balance_raw": statement.opening_balance,
+        "closing_balance_raw": statement.closing_balance,
         "matched_lines": statement.matched_lines,
         "unmatched_lines": statement.unmatched_lines,
         "total_lines": statement.total_lines,
-        "total_credits": statement.total_credits,
-        "total_debits": statement.total_debits,
+        "total_credits": _format_currency(statement.total_credits, currency),
+        "total_debits": _format_currency(statement.total_debits, currency),
+        "currency_code": currency,
         "bank_account_id": statement.bank_account_id,
         "bank_name": account.bank_name if account else "",
         "account_number": account.account_number if account else "",
+        "account_type": account.account_type if account else "",
         "status": _statement_status_label(statement.status),
     }
 
 
-def _statement_line_view(line: BankStatementLine) -> dict:
+def _statement_line_view(line: BankStatementLine, currency: str = "") -> dict:
     return {
         "line_id": line.line_id,
         "line_number": line.line_number,
@@ -170,13 +180,25 @@ def _statement_line_view(line: BankStatementLine) -> dict:
         "transaction_type": line.transaction_type.value
         if line.transaction_type
         else "",
-        "amount": line.amount,
+        "amount": _format_currency(line.amount, currency),
         "description": line.description,
         "reference": line.reference,
         "payee_payer": line.payee_payer,
         "bank_reference": line.bank_reference,
-        "running_balance": line.running_balance,
+        "running_balance": _format_currency(line.running_balance, currency),
         "is_matched": line.is_matched,
+        # Categorization fields
+        "categorization_status": line.categorization_status.value
+        if line.categorization_status
+        else None,
+        "suggested_account_id": str(line.suggested_account_id)
+        if line.suggested_account_id
+        else None,
+        "suggested_rule_id": str(line.suggested_rule_id)
+        if line.suggested_rule_id
+        else None,
+        "suggested_confidence": line.suggested_confidence,
+        "suggested_match_reason": line.suggested_match_reason,
     }
 
 
@@ -245,8 +267,8 @@ class BankingWebService:
     def list_accounts_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        status: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -321,7 +343,7 @@ class BankingWebService:
     def account_form_context(
         db: Session,
         organization_id: str,
-        account_id: Optional[str] = None,
+        account_id: str | None = None,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
         account = None
@@ -394,10 +416,10 @@ class BankingWebService:
     def list_statements_context(
         db: Session,
         organization_id: str,
-        account_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        account_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -486,19 +508,64 @@ class BankingWebService:
         org_id = coerce_uuid(organization_id)
         statement = db.get(BankStatement, coerce_uuid(statement_id))
         if not statement or statement.organization_id != org_id:
-            return {"statement": None, "lines": []}
+            return {"statement": None, "lines": [], "account_map": {}}
 
-        lines = [_statement_line_view(line) for line in statement.lines]
-        return {"statement": _statement_view(statement), "lines": lines}
+        currency = statement.currency_code
+        lines = [_statement_line_view(line, currency) for line in statement.lines]
+
+        # Build account name lookup for suggested accounts
+        account_ids = [
+            line.suggested_account_id
+            for line in statement.lines
+            if line.suggested_account_id
+        ]
+        account_map: dict[str, str] = {}
+        if account_ids:
+            accounts = (
+                db.query(Account).filter(Account.account_id.in_(account_ids)).all()
+            )
+            account_map = {
+                str(a.account_id): f"{a.account_code} - {a.account_name}"
+                for a in accounts
+            }
+
+        # Categorization summary counts
+        from app.models.finance.banking.bank_statement import CategorizationStatus
+
+        cat_summary = {
+            "suggested": 0,
+            "accepted": 0,
+            "rejected": 0,
+            "auto_applied": 0,
+            "flagged": 0,
+        }
+        for line in statement.lines:
+            if line.categorization_status == CategorizationStatus.SUGGESTED:
+                cat_summary["suggested"] += 1
+            elif line.categorization_status == CategorizationStatus.ACCEPTED:
+                cat_summary["accepted"] += 1
+            elif line.categorization_status == CategorizationStatus.REJECTED:
+                cat_summary["rejected"] += 1
+            elif line.categorization_status == CategorizationStatus.AUTO_APPLIED:
+                cat_summary["auto_applied"] += 1
+            elif line.categorization_status == CategorizationStatus.FLAGGED:
+                cat_summary["flagged"] += 1
+
+        return {
+            "statement": _statement_view(statement),
+            "lines": lines,
+            "account_map": account_map,
+            "categorization_summary": cat_summary,
+        }
 
     @staticmethod
     def list_reconciliations_context(
         db: Session,
         organization_id: str,
-        account_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        account_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -585,7 +652,7 @@ class BankingWebService:
         db: Session,
         organization_id: str,
         *,
-        account_id: Optional[str] = None,
+        account_id: str | None = None,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
         accounts = (
@@ -770,8 +837,8 @@ class BankingWebService:
     def list_payees_context(
         db: Session,
         organization_id: str,
-        search: Optional[str] = None,
-        payee_type: Optional[str] = None,
+        search: str | None = None,
+        payee_type: str | None = None,
         page: int = 1,
         per_page: int = 25,
     ) -> dict:
@@ -862,7 +929,7 @@ class BankingWebService:
     def payee_form_context(
         db: Session,
         organization_id: str,
-        payee_id: Optional[str] = None,
+        payee_id: str | None = None,
     ) -> dict:
         """Context for payee create/edit form."""
         from app.models.finance.banking.payee import Payee, PayeeType
@@ -923,7 +990,7 @@ class BankingWebService:
     def list_rules_context(
         db: Session,
         organization_id: str,
-        rule_type: Optional[str] = None,
+        rule_type: str | None = None,
         page: int = 1,
         per_page: int = 25,
     ) -> dict:
@@ -1007,10 +1074,28 @@ class BankingWebService:
         }
 
     @staticmethod
+    def _normalize_to_combined(rule_type: str, conditions: dict) -> dict:
+        """Normalize a single-type rule's conditions into COMBINED format.
+
+        The visual builder always works with the COMBINED structure:
+        ``{"operator": "AND", "rules": [{"type": "...", "conditions": {...}}]}``
+
+        Legacy rules stored as single types get wrapped so the builder can
+        display them.
+        """
+        if rule_type == "COMBINED":
+            return conditions
+
+        return {
+            "operator": "AND",
+            "rules": [{"type": rule_type, "conditions": conditions}],
+        }
+
+    @staticmethod
     def rule_form_context(
         db: Session,
         organization_id: str,
-        rule_id: Optional[str] = None,
+        rule_id: str | None = None,
     ) -> dict:
         """Context for transaction rule create/edit form."""
         from app.models.finance.banking.payee import Payee
@@ -1019,6 +1104,7 @@ class BankingWebService:
             RuleType,
             TransactionRule,
         )
+        from app.models.finance.tax.tax_code import TaxCode
 
         org_id = coerce_uuid(organization_id)
 
@@ -1069,6 +1155,22 @@ class BankingWebService:
             {"value": str(p.payee_id), "label": p.payee_name} for p in payees
         ]
 
+        # Get tax codes for dropdown
+        tax_codes = (
+            db.query(TaxCode)
+            .filter(TaxCode.organization_id == org_id, TaxCode.is_active == True)
+            .order_by(TaxCode.tax_code)
+            .all()
+        )
+
+        tax_code_options = [
+            {
+                "value": str(tc.tax_code_id),
+                "label": f"{tc.tax_code} - {tc.tax_name} ({tc.tax_rate}%)",
+            }
+            for tc in tax_codes
+        ]
+
         rule = None
         if rule_id:
             rule = db.get(TransactionRule, coerce_uuid(rule_id))
@@ -1077,16 +1179,23 @@ class BankingWebService:
 
         rule_data = None
         if rule:
+            raw_type = rule.rule_type.value if rule.rule_type else "COMBINED"
+            raw_conditions = rule.conditions or {}
+            combined_conditions = BankingWebService._normalize_to_combined(
+                raw_type, raw_conditions
+            )
+
             rule_data = {
                 "rule_id": str(rule.rule_id),
                 "rule_name": rule.rule_name,
                 "description": rule.description or "",
-                "rule_type": rule.rule_type.value if rule.rule_type else "",
-                "conditions": rule.conditions or {},
+                "rule_type": raw_type,
+                "conditions": combined_conditions,
                 "action": rule.action.value if rule.action else "",
                 "target_account_id": str(rule.target_account_id)
                 if rule.target_account_id
                 else "",
+                "tax_code_id": str(rule.tax_code_id) if rule.tax_code_id else "",
                 "bank_account_id": str(rule.bank_account_id)
                 if rule.bank_account_id
                 else "",
@@ -1097,6 +1206,10 @@ class BankingWebService:
                 "applies_to_credits": rule.applies_to_credits,
                 "applies_to_debits": rule.applies_to_debits,
                 "is_active": rule.is_active,
+                "match_count": rule.match_count,
+                "success_count": rule.success_count,
+                "reject_count": rule.reject_count,
+                "created_at": rule.created_at,
             }
 
         return {
@@ -1113,18 +1226,197 @@ class BankingWebService:
             "accounts": account_options,
             "bank_accounts": bank_account_options,
             "payees": payee_options,
+            "tax_codes": tax_code_options,
         }
+
+    @staticmethod
+    def build_rule_input(form_data: dict) -> dict:
+        """Parse and validate raw form data into rule kwargs.
+
+        Raises ``ValueError`` on invalid input.
+        """
+        from app.models.finance.banking.transaction_rule import RuleAction, RuleType
+
+        rule_name = (form_data.get("rule_name") or "").strip()
+        if not rule_name:
+            raise ValueError("Rule name is required")
+
+        # Parse conditions JSON from the visual builder
+        conditions_raw = form_data.get("conditions_json", "")
+        if not conditions_raw:
+            raise ValueError("At least one matching condition is required")
+
+        try:
+            conditions = json.loads(conditions_raw)
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise ValueError(f"Invalid conditions: {exc}") from exc
+
+        # Validate conditions structure
+        if not isinstance(conditions, dict):
+            raise ValueError("Conditions must be a JSON object")
+        sub_rules = conditions.get("rules", [])
+        if not sub_rules:
+            raise ValueError("At least one matching condition is required")
+
+        valid_sub_types = {rt.value for rt in RuleType if rt != RuleType.COMBINED}
+        for sr in sub_rules:
+            if sr.get("type") not in valid_sub_types:
+                raise ValueError(f"Invalid condition type: {sr.get('type')}")
+
+        # Parse action
+        action_str = form_data.get("action", "CATEGORIZE")
+        try:
+            action = RuleAction(action_str)
+        except ValueError:
+            raise ValueError(f"Invalid action: {action_str}")
+
+        # Parse optional UUIDs
+        target_account_id: UUID | None = None
+        if action == RuleAction.CATEGORIZE:
+            raw = form_data.get("target_account_id", "")
+            if raw:
+                target_account_id = UUID(raw)
+
+        tax_code_id: UUID | None = None
+        raw_tax = form_data.get("tax_code_id", "")
+        if raw_tax:
+            tax_code_id = UUID(raw_tax)
+
+        bank_account_id: UUID | None = None
+        raw_ba = form_data.get("bank_account_id", "")
+        if raw_ba:
+            bank_account_id = UUID(raw_ba)
+
+        priority = int(form_data.get("priority", 100))
+
+        return {
+            "rule_name": rule_name,
+            "description": (form_data.get("description") or "").strip() or None,
+            "rule_type": RuleType.COMBINED,
+            "conditions": conditions,
+            "action": action,
+            "target_account_id": target_account_id,
+            "tax_code_id": tax_code_id,
+            "bank_account_id": bank_account_id,
+            "priority": priority,
+            "auto_apply": form_data.get("auto_apply") == "on",
+            "min_confidence": int(form_data.get("min_confidence", 80)),
+            "applies_to_credits": form_data.get("applies_to_credits") == "on",
+            "applies_to_debits": form_data.get("applies_to_debits") == "on",
+            "is_active": form_data.get("is_active") == "on",
+        }
+
+    def create_rule_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        form_data: dict,
+    ) -> HTMLResponse | RedirectResponse:
+        """Handle POST for new rule creation."""
+        from app.services.finance.banking.categorization import (
+            TransactionCategorizationService,
+        )
+
+        try:
+            kwargs = self.build_rule_input(form_data)
+        except (ValueError, TypeError) as exc:
+            context = base_context(
+                request, auth, "New Transaction Rule", "banking", db=db
+            )
+            context.update(self.rule_form_context(db, str(auth.organization_id)))
+            context["error"] = str(exc)
+            context["form_data"] = form_data
+            return templates.TemplateResponse(
+                request, "finance/banking/rule_form.html", context
+            )
+
+        # is_active isn't a create_rule() param; pop and set after creation
+        is_active = kwargs.pop("is_active", True)
+
+        org_id = auth.organization_id
+        assert org_id is not None  # guaranteed by require_auth
+
+        service = TransactionCategorizationService()
+        rule = service.create_rule(
+            db,
+            organization_id=org_id,
+            created_by=auth.person_id,
+            **kwargs,
+        )
+        rule.is_active = is_active
+        db.commit()
+        return RedirectResponse(
+            url="/finance/banking/rules?success=Rule+created",
+            status_code=303,
+        )
+
+    def update_rule_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        rule_id: str,
+        form_data: dict,
+    ) -> HTMLResponse | RedirectResponse:
+        """Handle POST for rule update."""
+        from app.services.finance.banking.categorization import (
+            TransactionCategorizationService,
+        )
+
+        try:
+            kwargs = self.build_rule_input(form_data)
+        except (ValueError, TypeError) as exc:
+            context = base_context(
+                request, auth, "Edit Transaction Rule", "banking", db=db
+            )
+            context.update(
+                self.rule_form_context(db, str(auth.organization_id), rule_id=rule_id)
+            )
+            context["error"] = str(exc)
+            context["form_data"] = form_data
+            return templates.TemplateResponse(
+                request, "finance/banking/rule_form.html", context
+            )
+
+        org_id = auth.organization_id
+        assert org_id is not None  # guaranteed by require_auth
+
+        service = TransactionCategorizationService()
+        rule = service.update_rule(
+            db,
+            organization_id=org_id,
+            rule_id=UUID(rule_id),
+            **kwargs,
+        )
+        if not rule:
+            context = base_context(
+                request, auth, "Edit Transaction Rule", "banking", db=db
+            )
+            context.update(
+                self.rule_form_context(db, str(auth.organization_id), rule_id=rule_id)
+            )
+            context["error"] = "Rule not found"
+            return templates.TemplateResponse(
+                request, "finance/banking/rule_form.html", context
+            )
+
+        db.commit()
+        return RedirectResponse(
+            url="/finance/banking/rules?success=Rule+updated",
+            status_code=303,
+        )
 
     def list_accounts_response(
         self,
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        status: str | None,
         page: int,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Bank Accounts", "banking")
+        context = base_context(request, auth, "Bank Accounts", "banking", db=db)
         context.update(
             self.list_accounts_context(
                 db,
@@ -1144,7 +1436,7 @@ class BankingWebService:
         auth: WebAuthContext,
         db: Session,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "New Bank Account", "banking")
+        context = base_context(request, auth, "New Bank Account", "banking", db=db)
         context.update(self.account_form_context(db, str(auth.organization_id)))
         return templates.TemplateResponse(
             request, "finance/banking/account_form.html", context
@@ -1157,7 +1449,7 @@ class BankingWebService:
         db: Session,
         account_id: str,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Bank Account Details", "banking")
+        context = base_context(request, auth, "Bank Account Details", "banking", db=db)
         context.update(
             self.account_detail_context(
                 db,
@@ -1176,7 +1468,7 @@ class BankingWebService:
         db: Session,
         account_id: str,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Edit Bank Account", "banking")
+        context = base_context(request, auth, "Edit Bank Account", "banking", db=db)
         context.update(
             self.account_form_context(
                 db,
@@ -1193,13 +1485,13 @@ class BankingWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        account_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        account_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Bank Statements", "banking")
+        context = base_context(request, auth, "Bank Statements", "banking", db=db)
         context.update(
             self.list_statements_context(
                 db,
@@ -1220,12 +1512,246 @@ class BankingWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
+        form_data: dict | None = None,
+        errors: list[str] | None = None,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Import Bank Statement", "banking")
+        context = base_context(request, auth, "Import Bank Statement", "banking", db=db)
         context.update(self.statement_import_context(db, str(auth.organization_id)))
+        form_payload = form_data or {}
+        if not form_payload and request.query_params.get("account_id"):
+            form_payload["bank_account_id"] = request.query_params.get("account_id")
+        context["form_data"] = form_payload
+        context["form_errors"] = errors or []
         return templates.TemplateResponse(
             request, "finance/banking/statement_import.html", context
         )
+
+    async def statement_import_submit_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ):
+        form = getattr(request.state, "csrf_form", None)
+        if form is None:
+            form = await request.form()
+        form_data = dict(form)
+        csv_format = str(form_data.get("csv_format") or "type")
+        errors: list[str] = []
+
+        # Parse lines from file or manual entry.
+        lines_data: list[dict] = []
+        upload = form.get("statement_file")
+        upload_file = upload if isinstance(upload, UploadFile) else None
+        if upload_file and upload_file.filename:
+            # CSRF middleware parses form data first, which can advance the file pointer.
+            try:
+                await upload_file.seek(0)
+            except Exception:
+                try:
+                    upload_file.file.seek(0)
+                except Exception:
+                    pass
+            filename = upload_file.filename or ""
+            lowered = filename.lower()
+            if not (
+                lowered.endswith(".csv")
+                or lowered.endswith(".xlsx")
+                or lowered.endswith(".xlsm")
+            ):
+                errors.append("Supported statement files: CSV, XLSX, XLSM.")
+            else:
+                content = await upload_file.read()
+                if not content:
+                    # Some middleware (e.g., CSRF) may have consumed the file stream.
+                    # Fall back to reading from the underlying file handle.
+                    try:
+                        upload_file.file.seek(0)
+                        content = upload_file.file.read()
+                    except Exception:
+                        content = content or b""
+                if content:
+                    try:
+                        header_preview = content.decode("utf-8-sig", errors="replace")
+                    except Exception:
+                        header_preview = ""
+                    header_line = next(
+                        (line for line in header_preview.splitlines() if line.strip()),
+                        "",
+                    )
+                    logger.info(
+                        "Statement import file read: filename=%s bytes=%s header=%s",
+                        upload_file.filename,
+                        len(content),
+                        header_line,
+                    )
+                if not content:
+                    logger.warning(
+                        "Statement import upload empty after read: filename=%s content_type=%s",
+                        upload_file.filename,
+                        upload_file.content_type,
+                    )
+                    errors.append(
+                        "Uploaded file appears empty. Please re-select the file and try again."
+                    )
+                else:
+                    if lowered.endswith(".csv"):
+                        rows, parse_errors = bank_statement_service.parse_csv_rows(
+                            content, csv_format
+                        )
+                    else:
+                        rows, parse_errors = bank_statement_service.parse_xlsx_rows(
+                            content, csv_format
+                        )
+                    lines_data = rows
+                    errors.extend(parse_errors)
+                    if not rows and not parse_errors:
+                        logger.warning(
+                            "Statement import parsed zero rows: filename=%s csv_format=%s",
+                            upload_file.filename,
+                            csv_format,
+                        )
+        else:
+            lines_data, manual_errors = self._parse_manual_lines(form)
+            errors.extend(manual_errors)
+
+        if not lines_data and not errors:
+            errors.append("Please upload a CSV file or add at least one transaction.")
+
+        payload_data = {
+            "bank_account_id": form_data.get("bank_account_id"),
+            "statement_number": form_data.get("statement_number"),
+            "statement_date": form_data.get("statement_date"),
+            "period_start": form_data.get("period_start"),
+            "period_end": form_data.get("period_end"),
+            "opening_balance": form_data.get("opening_balance"),
+            "closing_balance": form_data.get("closing_balance"),
+            "import_source": "csv"
+            if upload_file and upload_file.filename
+            else "manual",
+            "import_filename": upload_file.filename if upload_file else None,
+            "lines": lines_data,
+        }
+
+        payload = None
+        if not errors:
+            try:
+                payload = BankStatementImport.model_validate(payload_data)
+            except ValidationError as exc:
+                errors.extend(self._format_validation_errors(exc))
+
+        if errors or payload is None:
+            # Preserve select fields for the form.
+            preserved = {
+                "bank_account_id": form_data.get("bank_account_id"),
+                "statement_number": form_data.get("statement_number"),
+                "statement_date": form_data.get("statement_date"),
+                "period_start": form_data.get("period_start"),
+                "period_end": form_data.get("period_end"),
+                "opening_balance": form_data.get("opening_balance"),
+                "closing_balance": form_data.get("closing_balance"),
+                "csv_format": csv_format,
+            }
+            return self.statement_import_form_response(
+                request, auth, db, form_data=preserved, errors=errors
+            )
+
+        line_inputs, line_errors = bank_statement_service.build_line_inputs(
+            payload.lines
+        )
+        if line_errors:
+            preserved = {
+                "bank_account_id": form_data.get("bank_account_id"),
+                "statement_number": form_data.get("statement_number"),
+                "statement_date": form_data.get("statement_date"),
+                "period_start": form_data.get("period_start"),
+                "period_end": form_data.get("period_end"),
+                "opening_balance": form_data.get("opening_balance"),
+                "closing_balance": form_data.get("closing_balance"),
+                "csv_format": csv_format,
+            }
+            return self.statement_import_form_response(
+                request, auth, db, form_data=preserved, errors=line_errors
+            )
+
+        if auth.organization_id is None:
+            raise HTTPException(status_code=400, detail="Organization is required")
+
+        result = bank_statement_service.import_statement(
+            db=db,
+            organization_id=auth.organization_id,
+            bank_account_id=payload.bank_account_id,
+            statement_number=payload.statement_number,
+            statement_date=payload.statement_date,
+            period_start=payload.period_start,
+            period_end=payload.period_end,
+            opening_balance=payload.opening_balance,
+            closing_balance=payload.closing_balance,
+            lines=line_inputs,
+            import_source=payload.import_source,
+            import_filename=payload.import_filename,
+            imported_by=auth.user_id,
+        )
+        db.commit()
+        return RedirectResponse(
+            url=f"/finance/banking/statements/{result.statement.statement_id}",
+            status_code=303,
+        )
+
+    @staticmethod
+    def _parse_manual_lines(form) -> tuple[list[dict], list[str]]:
+        pattern = re.compile(r"^lines\\[(\\d+)\\]\\[(.+)\\]$")
+        lines: dict[int, dict] = {}
+        errors: list[str] = []
+
+        for key, value in form.items():
+            match = pattern.match(key)
+            if not match:
+                continue
+            line_index = int(match.group(1))
+            field = match.group(2)
+            lines.setdefault(line_index, {})[field] = value
+
+        if not lines:
+            return [], []
+
+        results: list[dict] = []
+        for idx in sorted(lines):
+            data = lines[idx]
+            # Skip rows that are entirely empty.
+            if not any(str(v).strip() for v in data.values() if v is not None):
+                continue
+
+            line_number = data.get("line_number") or idx
+            result = {
+                "line_number": int(line_number),
+                "transaction_date": data.get("transaction_date"),
+                "transaction_type": data.get("transaction_type"),
+                "amount": data.get("amount"),
+                "description": data.get("description"),
+                "reference": data.get("reference"),
+                "payee_payer": data.get("payee_payer"),
+                "check_number": data.get("check_number"),
+                "value_date": data.get("value_date"),
+                "running_balance": data.get("running_balance"),
+            }
+            results.append(result)
+
+        if not results:
+            errors.append("Please add at least one transaction line.")
+        return results, errors
+
+    @staticmethod
+    def _format_validation_errors(exc: ValidationError) -> list[str]:
+        errors: list[str] = []
+        for err in exc.errors():
+            loc = " -> ".join(str(item) for item in err.get("loc", []))
+            msg = err.get("msg", "Invalid value")
+            if loc:
+                errors.append(f"{loc}: {msg}")
+            else:
+                errors.append(msg)
+        return errors
 
     def statement_detail_response(
         self,
@@ -1234,7 +1760,7 @@ class BankingWebService:
         db: Session,
         statement_id: str,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Bank Statement", "banking")
+        context = base_context(request, auth, "Bank Statement", "banking", db=db)
         context.update(
             self.statement_detail_context(
                 db,
@@ -1246,18 +1772,113 @@ class BankingWebService:
             request, "finance/banking/statement_detail.html", context
         )
 
+    def apply_rules_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        statement_id: str,
+    ) -> RedirectResponse:
+        """Handle POST to apply categorization rules to a statement."""
+        from app.services.finance.banking.categorization import (
+            TransactionCategorizationService,
+        )
+
+        org_id = auth.organization_id
+        assert org_id is not None
+
+        service = TransactionCategorizationService()
+        result = service.apply_rules_to_statement(db, org_id, coerce_uuid(statement_id))
+        db.commit()
+
+        msg = (
+            f"{result.categorized_count}+suggested,"
+            f"{result.high_confidence_count}+auto-applied,"
+            f"{result.no_match_count}+no+match"
+        )
+        return RedirectResponse(
+            url=f"/finance/banking/statements/{statement_id}?success={msg}",
+            status_code=303,
+        )
+
+    def accept_suggestion_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        statement_id: str,
+        line_id: str,
+    ) -> RedirectResponse:
+        """Handle POST to accept a categorization suggestion."""
+        from app.services.finance.banking.categorization import (
+            TransactionCategorizationService,
+        )
+
+        org_id = auth.organization_id
+        assert org_id is not None
+
+        service = TransactionCategorizationService()
+        try:
+            service.accept_suggestion(
+                db, org_id, coerce_uuid(line_id), accepted_by=auth.person_id
+            )
+            db.commit()
+        except ValueError as exc:
+            logger.warning("Accept suggestion failed: %s", exc)
+            return RedirectResponse(
+                url=f"/finance/banking/statements/{statement_id}?error={exc}",
+                status_code=303,
+            )
+
+        return RedirectResponse(
+            url=f"/finance/banking/statements/{statement_id}?success=Suggestion+accepted",
+            status_code=303,
+        )
+
+    def reject_suggestion_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        statement_id: str,
+        line_id: str,
+    ) -> RedirectResponse:
+        """Handle POST to reject a categorization suggestion."""
+        from app.services.finance.banking.categorization import (
+            TransactionCategorizationService,
+        )
+
+        org_id = auth.organization_id
+        assert org_id is not None
+
+        service = TransactionCategorizationService()
+        try:
+            service.reject_suggestion(db, org_id, coerce_uuid(line_id))
+            db.commit()
+        except ValueError as exc:
+            logger.warning("Reject suggestion failed: %s", exc)
+            return RedirectResponse(
+                url=f"/finance/banking/statements/{statement_id}?error={exc}",
+                status_code=303,
+            )
+
+        return RedirectResponse(
+            url=f"/finance/banking/statements/{statement_id}?success=Suggestion+rejected",
+            status_code=303,
+        )
+
     def list_reconciliations_response(
         self,
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        account_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        account_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Bank Reconciliations", "banking")
+        context = base_context(request, auth, "Bank Reconciliations", "banking", db=db)
         context.update(
             self.list_reconciliations_context(
                 db,
@@ -1281,9 +1902,9 @@ class BankingWebService:
         auth: WebAuthContext,
         db: Session,
         *,
-        account_id: Optional[str] = None,
+        account_id: str | None = None,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "New Reconciliation", "banking")
+        context = base_context(request, auth, "New Reconciliation", "banking", db=db)
         context.update(
             self.reconciliation_form_context(
                 db, str(auth.organization_id), account_id=account_id
@@ -1302,7 +1923,7 @@ class BankingWebService:
         db: Session,
         reconciliation_id: str,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Bank Reconciliation", "banking")
+        context = base_context(request, auth, "Bank Reconciliation", "banking", db=db)
         context.update(
             self.reconciliation_detail_context(
                 db,
@@ -1321,7 +1942,7 @@ class BankingWebService:
         db: Session,
         reconciliation_id: str,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Reconciliation Report", "banking")
+        context = base_context(request, auth, "Reconciliation Report", "banking", db=db)
         context.update(
             self.reconciliation_report_context(
                 db,
@@ -1340,11 +1961,11 @@ class BankingWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str],
-        payee_type: Optional[str],
+        search: str | None,
+        payee_type: str | None,
         page: int,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Payees", "banking")
+        context = base_context(request, auth, "Payees", "banking", db=db)
         context.update(
             self.list_payees_context(
                 db,
@@ -1364,7 +1985,7 @@ class BankingWebService:
         auth: WebAuthContext,
         db: Session,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "New Payee", "banking")
+        context = base_context(request, auth, "New Payee", "banking", db=db)
         context.update(self.payee_form_context(db, str(auth.organization_id)))
         return templates.TemplateResponse(
             request, "finance/banking/payee_form.html", context
@@ -1377,7 +1998,7 @@ class BankingWebService:
         db: Session,
         payee_id: str,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Edit Payee", "banking")
+        context = base_context(request, auth, "Edit Payee", "banking", db=db)
         context.update(
             self.payee_form_context(
                 db,
@@ -1394,10 +2015,10 @@ class BankingWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        rule_type: Optional[str],
+        rule_type: str | None,
         page: int,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Transaction Rules", "banking")
+        context = base_context(request, auth, "Transaction Rules", "banking", db=db)
         context.update(
             self.list_rules_context(
                 db,
@@ -1416,7 +2037,7 @@ class BankingWebService:
         auth: WebAuthContext,
         db: Session,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "New Transaction Rule", "banking")
+        context = base_context(request, auth, "New Transaction Rule", "banking", db=db)
         context.update(self.rule_form_context(db, str(auth.organization_id)))
         return templates.TemplateResponse(
             request, "finance/banking/rule_form.html", context
@@ -1429,7 +2050,7 @@ class BankingWebService:
         db: Session,
         rule_id: str,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Edit Transaction Rule", "banking")
+        context = base_context(request, auth, "Edit Transaction Rule", "banking", db=db)
         context.update(
             self.rule_form_context(
                 db,

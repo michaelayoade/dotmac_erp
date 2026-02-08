@@ -8,7 +8,7 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     Date,
@@ -36,8 +36,8 @@ from app.models.people.base import (
 if TYPE_CHECKING:
     from app.models.finance.core_org.project import Project
     from app.models.people.hr.employee import Employee
-    from app.models.pm.task_dependency import TaskDependency
     from app.models.pm.milestone import Milestone
+    from app.models.pm.task_dependency import TaskDependency
     from app.models.pm.time_entry import TimeEntry
     from app.models.support.ticket import Ticket
 
@@ -102,7 +102,7 @@ class Task(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
     )
 
     # Task hierarchy (optional parent)
-    parent_task_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    parent_task_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("pm.task.task_id"),
         nullable=True,
@@ -110,7 +110,7 @@ class Task(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
     )
 
     # Support ticket linkage (optional)
-    ticket_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    ticket_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("support.ticket.ticket_id"),
         nullable=True,
@@ -121,7 +121,7 @@ class Task(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
     # Basic fields
     task_code: Mapped[str] = mapped_column(String(30), nullable=False)
     task_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Status and priority
     status: Mapped[TaskStatus] = mapped_column(
@@ -136,7 +136,7 @@ class Task(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
     )
 
     # Assignment
-    assigned_to_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    assigned_to_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
@@ -144,15 +144,15 @@ class Task(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
     )
 
     # Planned dates
-    start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    due_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True, index=True)
+    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
 
     # Actual dates
-    actual_start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    actual_end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    actual_start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    actual_end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Time tracking
-    estimated_hours: Mapped[Optional[Decimal]] = mapped_column(
+    estimated_hours: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 2), nullable=True
     )
     actual_hours: Mapped[Decimal] = mapped_column(
@@ -168,7 +168,7 @@ class Task(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -186,7 +186,7 @@ class Task(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
         foreign_keys=[parent_task_id],
         back_populates="subtasks",
     )
-    subtasks: Mapped[List["Task"]] = relationship(
+    subtasks: Mapped[list["Task"]] = relationship(
         "Task",
         back_populates="parent_task",
         foreign_keys=[parent_task_id],
@@ -203,7 +203,7 @@ class Task(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
     )
 
     # Dependencies (tasks this task depends on)
-    dependencies: Mapped[List["TaskDependency"]] = relationship(
+    dependencies: Mapped[list["TaskDependency"]] = relationship(
         "TaskDependency",
         foreign_keys="TaskDependency.task_id",
         back_populates="task",
@@ -211,20 +211,20 @@ class Task(Base, AuditMixin, SoftDeleteMixin, ERPNextSyncMixin):
     )
 
     # Dependents (tasks that depend on this task)
-    dependents: Mapped[List["TaskDependency"]] = relationship(
+    dependents: Mapped[list["TaskDependency"]] = relationship(
         "TaskDependency",
         foreign_keys="TaskDependency.depends_on_task_id",
         back_populates="depends_on_task",
     )
 
     # Time entries
-    time_entries: Mapped[List["TimeEntry"]] = relationship(
+    time_entries: Mapped[list["TimeEntry"]] = relationship(
         "TimeEntry",
         back_populates="task",
     )
 
     # Linked milestone (optional)
-    milestones: Mapped[List["Milestone"]] = relationship(
+    milestones: Mapped[list["Milestone"]] = relationship(
         "Milestone",
         back_populates="linked_task",
     )

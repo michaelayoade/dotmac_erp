@@ -10,14 +10,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from app.services.finance.import_export.base import ImportConfig
 from app.services.finance.import_export.contacts import (
     CustomerImporter,
     SupplierImporter,
-    get_ar_control_account,
     get_ap_control_account,
+    get_ar_control_account,
 )
-from app.services.finance.import_export.base import ImportConfig
-
 
 # ============ Fixtures ============
 

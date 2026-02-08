@@ -4,10 +4,9 @@ Creates structured CSV output for data quality improvement.
 """
 
 import csv
-from pathlib import Path
-from decimal import Decimal
 from dataclasses import dataclass
-from typing import Optional
+from decimal import Decimal
+from pathlib import Path
 
 OCR_DIR = Path("/root/projects/dotmac_erp/books_backup/ocr_text")
 OUTPUT_DIR = Path("/root/projects/dotmac_erp/books_backup")
@@ -19,12 +18,12 @@ class AuditedAccount:
     account_category: str
     account_name: str
     amount_current: Decimal
-    amount_prior: Optional[Decimal]
-    note_reference: Optional[str]
+    amount_prior: Decimal | None
+    note_reference: str | None
     ifrs_classification: str  # ASSETS, LIABILITIES, EQUITY, REVENUE, EXPENSES
 
 
-def parse_amount(text: str) -> Optional[Decimal]:
+def parse_amount(text: str) -> Decimal | None:
     """Parse currency amount from text."""
     if not text:
         return None
@@ -35,7 +34,7 @@ def parse_amount(text: str) -> Optional[Decimal]:
         return Decimal("0")
     try:
         return Decimal(cleaned)
-    except:
+    except Exception:
         return None
 
 

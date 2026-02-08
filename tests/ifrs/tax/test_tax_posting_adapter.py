@@ -7,7 +7,6 @@ from decimal import Decimal
 from unittest.mock import patch
 from uuid import uuid4
 
-
 from app.services.finance.tax.tax_posting_adapter import (
     TAXPostingAdapter,
     TAXPostingResult,

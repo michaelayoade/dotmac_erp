@@ -4,10 +4,9 @@ Opening Balance API Endpoints.
 Provides REST API endpoints for importing opening balances.
 """
 
-import tempfile
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
@@ -16,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_tenant_auth
 from app.db import get_db_session
-from app.services.auth_dependencies import get_current_user_id, get_current_org_id
+from app.services.auth_dependencies import get_current_org_id, get_current_user_id
 from app.services.finance.import_export import ImportConfig
 from app.services.finance.import_export.opening_balance import (
     OpeningBalanceImporter,
@@ -24,7 +23,7 @@ from app.services.finance.import_export.opening_balance import (
     OpeningBalanceResult,
     get_opening_balance_template,
 )
-
+from app.services.upload_utils import get_env_max_bytes, write_upload_to_temp
 
 router = APIRouter(
     prefix="/opening-balance",
@@ -46,9 +45,9 @@ class OpeningBalanceLineResponse(BaseModel):
     debit: float
     credit: float
     normal_balance: str
-    notes: Optional[str]
+    notes: str | None
     matched: bool
-    matched_account: Optional[str]
+    matched_account: str | None
 
 
 class OpeningBalancePreviewResponse(BaseModel):
@@ -61,11 +60,11 @@ class OpeningBalancePreviewResponse(BaseModel):
     difference: float
     matched_count: int
     unmatched_count: int
-    unmatched_accounts: List[str]
-    validation_errors: List[str]
+    unmatched_accounts: list[str]
+    validation_errors: list[str]
     entry_date: str
     detected_format: str
-    lines: List[OpeningBalanceLineResponse]
+    lines: list[OpeningBalanceLineResponse]
 
     @classmethod
     def from_preview(
@@ -103,13 +102,13 @@ class OpeningBalanceImportResponse(BaseModel):
     """Response model for opening balance import result."""
 
     success: bool
-    journal_entry_id: Optional[str]
-    journal_number: Optional[str]
+    journal_entry_id: str | None
+    journal_number: str | None
     total_debit: float
     total_credit: float
     lines_created: int
-    errors: List[str]
-    warnings: List[str]
+    errors: list[str]
+    warnings: list[str]
 
     @classmethod
     def from_result(
@@ -135,7 +134,7 @@ class OpeningBalanceImportResponse(BaseModel):
 
 
 @router.get("/template")
-async def get_template() -> Dict[str, Any]:
+async def get_template() -> dict[str, Any]:
     """
     Get CSV template for opening balances.
 
@@ -233,12 +232,13 @@ async def preview_opening_balance(
             detail="Invalid date format. Use YYYY-MM-DD",
         )
 
-    content = await file.read()
-
-    # Save to temp file
-    with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp:
-        tmp.write(content)
-        tmp_path = tmp.name
+    max_bytes = get_env_max_bytes("MAX_IMPORT_FILE_SIZE", 50 * 1024 * 1024)
+    tmp_path = await write_upload_to_temp(
+        file,
+        suffix=".csv",
+        max_bytes=max_bytes,
+        error_detail=f"File too large. Maximum size: {max_bytes // 1024 // 1024}MB",
+    )
 
     try:
         config = ImportConfig(
@@ -301,12 +301,13 @@ async def import_opening_balance(
             detail="Invalid date format. Use YYYY-MM-DD",
         )
 
-    content = await file.read()
-
-    # Save to temp file
-    with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp:
-        tmp.write(content)
-        tmp_path = tmp.name
+    max_bytes = get_env_max_bytes("MAX_IMPORT_FILE_SIZE", 50 * 1024 * 1024)
+    tmp_path = await write_upload_to_temp(
+        file,
+        suffix=".csv",
+        max_bytes=max_bytes,
+        error_detail=f"File too large. Maximum size: {max_bytes // 1024 // 1024}MB",
+    )
 
     try:
         config = ImportConfig(
@@ -351,13 +352,14 @@ async def get_import_status(
     journal_entry_id: UUID,
     db: Session = Depends(get_db_session),
     org_id: UUID = Depends(get_current_org_id),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Get status of an imported opening balance journal entry.
 
     Returns journal entry details and line count.
     """
-    from sqlalchemy import select, func
+    from sqlalchemy import func, select
+
     from app.models.finance.gl.journal_entry import JournalEntry
     from app.models.finance.gl.journal_entry_line import JournalEntryLine
 

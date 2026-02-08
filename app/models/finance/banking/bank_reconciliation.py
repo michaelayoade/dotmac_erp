@@ -7,7 +7,7 @@ Represents bank reconciliation records that match bank statements to GL entries.
 import enum
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -22,7 +22,8 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID as SAUUID
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as SAUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.config import settings
@@ -182,19 +183,19 @@ class BankReconciliation(Base):
     )
 
     # Approval workflow
-    prepared_by: Mapped[Optional[UUID]] = mapped_column(
+    prepared_by: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True), nullable=True
     )
     prepared_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    reviewed_by: Mapped[Optional[UUID]] = mapped_column(
+    reviewed_by: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True), nullable=True
     )
     reviewed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    approved_by: Mapped[Optional[UUID]] = mapped_column(
+    approved_by: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True), nullable=True
     )
     approved_at: Mapped[datetime] = mapped_column(
@@ -224,7 +225,7 @@ class BankReconciliation(Base):
         foreign_keys=[bank_account_id],
         lazy="select",
     )
-    lines: Mapped[List["BankReconciliationLine"]] = relationship(
+    lines: Mapped[list["BankReconciliationLine"]] = relationship(
         "BankReconciliationLine",
         back_populates="reconciliation",
         cascade="all, delete-orphan",
@@ -294,14 +295,14 @@ class BankReconciliationLine(Base):
     )
 
     # Bank statement line reference
-    statement_line_id: Mapped[Optional[UUID]] = mapped_column(
+    statement_line_id: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True),
         ForeignKey("banking.bank_statement_lines.line_id", ondelete="SET NULL"),
         nullable=True,
     )
 
     # GL journal entry line reference
-    journal_line_id: Mapped[Optional[UUID]] = mapped_column(
+    journal_line_id: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True), nullable=True
     )
 
@@ -329,7 +330,7 @@ class BankReconciliationLine(Base):
     adjustment_type: Mapped[str] = mapped_column(
         String(50), nullable=True
     )  # e.g., "bank_fee", "interest", "error"
-    adjustment_account_id: Mapped[Optional[UUID]] = mapped_column(
+    adjustment_account_id: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True),
         nullable=True,
     )
@@ -362,9 +363,7 @@ class BankReconciliationLine(Base):
         nullable=False,
         default=datetime.utcnow,
     )
-    created_by: Mapped[Optional[UUID]] = mapped_column(
-        SAUUID(as_uuid=True), nullable=True
-    )
+    created_by: Mapped[UUID | None] = mapped_column(SAUUID(as_uuid=True), nullable=True)
 
     # Relationships
     reconciliation: Mapped["BankReconciliation"] = relationship(

@@ -4,7 +4,6 @@ Warehouse Location Model - Inventory Schema.
 
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -48,7 +47,7 @@ class WarehouseLocation(Base):
     location_name: Mapped[str] = mapped_column(String(100), nullable=False)
 
     # Hierarchy (Zone > Aisle > Rack > Shelf > Bin)
-    parent_location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    parent_location_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("inv.warehouse_location.location_id"),
         nullable=True,
@@ -56,11 +55,11 @@ class WarehouseLocation(Base):
     location_type: Mapped[str] = mapped_column(String(30), nullable=False)
 
     # Physical coordinates
-    zone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    aisle: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    rack: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    shelf: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    bin: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    zone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    aisle: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    rack: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    shelf: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    bin: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Location type flags
     is_picking: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -75,7 +74,7 @@ class WarehouseLocation(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

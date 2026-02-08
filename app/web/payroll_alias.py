@@ -7,7 +7,6 @@ Provides /payroll/* redirects to the People payroll module.
 from fastapi import APIRouter
 from fastapi.responses import RedirectResponse
 
-
 router = APIRouter(prefix="/payroll", tags=["payroll-alias"])
 
 

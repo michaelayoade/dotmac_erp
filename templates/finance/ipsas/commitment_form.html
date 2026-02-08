@@ -22,13 +22,13 @@
             <div class="space-y-4">
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label for="commitment_number" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Commitment Number</label>
+                        <label for="commitment_number" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Commitment Number <span class="text-rose-500">*</span></label>
                         <input type="text" id="commitment_number" name="commitment_number" required maxlength="30"
                                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white"
                                placeholder="CMT-001">
                     </div>
                     <div>
-                        <label for="commitment_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Commitment Type</label>
+                        <label for="commitment_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Commitment Type <span class="text-rose-500">*</span></label>
                         <select id="commitment_type" name="commitment_type" required
                                 class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                             {% for ct in commitment_types %}
@@ -39,7 +39,7 @@
                 </div>
 
                 <div>
-                    <label for="fund_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fund</label>
+                    <label for="fund_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fund <span class="text-rose-500">*</span></label>
                     <select id="fund_id" name="fund_id" required
                             class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                         <option value="">Select fund...</option>
@@ -61,7 +61,7 @@
                 </div>
 
                 <div>
-                    <label for="account_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">GL Account</label>
+                    <label for="account_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">GL Account <span class="text-rose-500">*</span></label>
                     <select id="account_id" name="account_id" required
                             class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                         <option value="">Select account...</option>
@@ -73,7 +73,7 @@
 
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label for="fiscal_year_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fiscal Year</label>
+                        <label for="fiscal_year_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fiscal Year <span class="text-rose-500">*</span></label>
                         <select id="fiscal_year_id" name="fiscal_year_id" required
                                 class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                             <option value="">Select...</option>
@@ -83,7 +83,7 @@
                         </select>
                     </div>
                     <div>
-                        <label for="fiscal_period_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fiscal Period</label>
+                        <label for="fiscal_period_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fiscal Period <span class="text-rose-500">*</span></label>
                         <select id="fiscal_period_id" name="fiscal_period_id" required
                                 class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                             <option value="">Select...</option>
@@ -96,12 +96,12 @@
 
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label for="committed_amount" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Committed Amount</label>
+                        <label for="committed_amount" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Committed Amount <span class="text-rose-500">*</span></label>
                         <input type="number" id="committed_amount" name="committed_amount" required step="0.01" min="0.01"
                                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                     </div>
                     <div>
-                        <label for="currency_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Currency</label>
+                        <label for="currency_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Currency <span class="text-rose-500">*</span></label>
                         <input type="text" id="currency_code" name="currency_code" required maxlength="3" value="{{ organization.base_currency if organization and organization.base_currency else 'USD' }}"
                                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-700 dark:text-white">
                     </div>

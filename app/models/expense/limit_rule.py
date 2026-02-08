@@ -12,7 +12,7 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import (
     Boolean,
@@ -144,7 +144,7 @@ class ExpenseLimitRule(Base, AuditMixin):
         nullable=False,
         comment="Human-readable name for the rule",
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -154,7 +154,7 @@ class ExpenseLimitRule(Base, AuditMixin):
         Enum(LimitScopeType, name="limit_scope_type", schema="expense"),
         nullable=False,
     )
-    scope_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    scope_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="ID of the scoped entity (null for ORGANIZATION scope)",
@@ -165,7 +165,7 @@ class ExpenseLimitRule(Base, AuditMixin):
         Enum(LimitPeriodType, name="limit_period_type", schema="expense"),
         nullable=False,
     )
-    custom_period_days: Mapped[Optional[int]] = mapped_column(
+    custom_period_days: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Number of days for CUSTOM period type",
@@ -188,14 +188,14 @@ class ExpenseLimitRule(Base, AuditMixin):
     )
 
     # JSONB for flexible filtering and configuration
-    dimension_filters: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+    dimension_filters: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         default=dict,
         server_default="{}",
         comment="Filters: {category_ids: [], cost_center_ids: [], project_ids: [], is_cumulative: true}",
     )
-    action_config: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+    action_config: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         default=dict,
@@ -214,7 +214,7 @@ class ExpenseLimitRule(Base, AuditMixin):
         Date,
         nullable=False,
     )
-    effective_to: Mapped[Optional[date]] = mapped_column(
+    effective_to: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -246,7 +246,7 @@ class ExpenseLimitRule(Base, AuditMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -267,9 +267,7 @@ class ExpenseLimitRule(Base, AuditMixin):
         today = date.today()
         if self.effective_from > today:
             return False
-        if self.effective_to and self.effective_to < today:
-            return False
-        return True
+        return not (self.effective_to and self.effective_to < today)
 
     @property
     def is_cumulative(self) -> bool:
@@ -345,7 +343,7 @@ class ExpenseApproverLimit(Base, AuditMixin):
         nullable=False,
         comment="EMPLOYEE, GRADE, DESIGNATION, or ROLE",
     )
-    scope_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    scope_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -361,7 +359,7 @@ class ExpenseApproverLimit(Base, AuditMixin):
     )
 
     # Dimension restrictions
-    dimension_filters: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+    dimension_filters: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         default=dict,
@@ -370,12 +368,12 @@ class ExpenseApproverLimit(Base, AuditMixin):
     )
 
     # Escalation configuration
-    escalate_to_employee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    escalate_to_employee_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
     )
-    escalate_to_grade_min_rank: Mapped[Optional[int]] = mapped_column(
+    escalate_to_grade_min_rank: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Auto-escalate to grade with this minimum rank",
@@ -396,7 +394,7 @@ class ExpenseApproverLimit(Base, AuditMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -460,26 +458,26 @@ class ExpenseLimitEvaluation(Base):
     )
 
     # Period context
-    period_spent_amount: Mapped[Optional[Decimal]] = mapped_column(
+    period_spent_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(15, 2),
         nullable=True,
     )
-    period_start: Mapped[Optional[date]] = mapped_column(
+    period_start: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    period_end: Mapped[Optional[date]] = mapped_column(
+    period_end: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
 
     # Rule that triggered (if any)
-    rule_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    rule_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("expense.expense_limit_rule.rule_id"),
         nullable=True,
     )
-    rule_code: Mapped[Optional[str]] = mapped_column(
+    rule_code: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
     )
@@ -489,13 +487,13 @@ class ExpenseLimitEvaluation(Base):
         Enum(LimitResultType, name="limit_result_type", schema="expense"),
         nullable=False,
     )
-    result_message: Mapped[Optional[str]] = mapped_column(
+    result_message: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Full context as JSONB
-    context_data: Mapped[Optional[Dict[str, Any]]] = mapped_column(
+    context_data: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         default=dict,
@@ -508,7 +506,7 @@ class ExpenseLimitEvaluation(Base):
         nullable=False,
         server_default=func.now(),
     )
-    evaluated_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    evaluated_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,
@@ -602,12 +600,12 @@ class ExpensePeriodUsage(Base):
     )
 
     # Dimension (optional filter)
-    dimension_type: Mapped[Optional[str]] = mapped_column(
+    dimension_type: Mapped[str | None] = mapped_column(
         String(30),
         nullable=True,
         comment="CATEGORY, COST_CENTER, PROJECT, or NULL for ALL",
     )
-    dimension_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    dimension_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )

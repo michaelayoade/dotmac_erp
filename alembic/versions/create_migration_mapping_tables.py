@@ -12,9 +12,10 @@ Tables:
 - id_mapping: Maps old integer IDs to new UUIDs for all migrated entities
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "create_migration_mapping_tables"

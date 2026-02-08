@@ -1,0 +1,17 @@
+{% extends "emails/base_email.txt" %}
+{% block content %}Hi {{ first_name }},
+
+{% if is_escalation %}** ESCALATED FOR YOUR REVIEW **
+{% if escalation_note %}{{ escalation_note }}
+{% endif %}
+{% endif %}{{ claimant_name }} has submitted an expense claim that requires your approval.
+
+Claim Number: {{ claim_number }}
+Amount: {{ currency }} {{ amount }}
+Purpose: {{ purpose }}
+Date: {{ claim_date }}
+Items: {{ item_count }}
+
+Please review this claim at your earliest convenience.
+
+Review claim at: {{ claim_url }}{% endblock %}

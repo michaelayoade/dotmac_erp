@@ -11,7 +11,6 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -63,7 +62,7 @@ class LineCalculationResult:
 class InvoiceLineTaxInput:
     """Input for a single invoice line with multiple taxes."""
 
-    line_id: Optional[UUID]
+    line_id: UUID | None
     line_amount: Decimal
     tax_code_ids: list[UUID]
 

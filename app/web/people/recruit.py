@@ -5,15 +5,12 @@ Lists job openings, applicants, interviews, and job offers with full CRUD.
 All business logic is delegated to the recruit_web_service.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.services.people.recruit.web import recruit_web_service
 from app.web.deps import WebAuthContext, get_db, require_hr_access
-
 
 router = APIRouter(prefix="/recruit", tags=["people-recruit-web"])
 
@@ -51,9 +48,9 @@ def job_opening_edit_alias(job_opening_id: str) -> RedirectResponse:
 @router.get("/jobs", response_class=HTMLResponse)
 def list_job_openings(
     request: Request,
-    search: Optional[str] = None,
-    status: Optional[str] = None,
-    department_id: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
+    department_id: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -181,10 +178,10 @@ def delete_job_opening(
 @router.get("/applicants", response_class=HTMLResponse)
 def list_applicants(
     request: Request,
-    search: Optional[str] = None,
-    status: Optional[str] = None,
-    job_opening_id: Optional[str] = None,
-    source: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
+    job_opening_id: str | None = None,
+    source: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -198,7 +195,7 @@ def list_applicants(
 @router.get("/applicants/new", response_class=HTMLResponse)
 def new_applicant_form(
     request: Request,
-    job_opening_id: Optional[str] = None,
+    job_opening_id: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -301,11 +298,11 @@ def delete_applicant(
 @router.get("/interviews", response_class=HTMLResponse)
 def list_interviews(
     request: Request,
-    status: Optional[str] = None,
-    job_opening_id: Optional[str] = None,
-    applicant_id: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    status: str | None = None,
+    job_opening_id: str | None = None,
+    applicant_id: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -327,7 +324,7 @@ def list_interviews(
 @router.get("/interviews/new", response_class=HTMLResponse)
 def new_interview_form(
     request: Request,
-    applicant_id: Optional[str] = None,
+    applicant_id: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -420,9 +417,9 @@ async def record_interview_feedback(
 @router.get("/offers", response_class=HTMLResponse)
 def list_job_offers(
     request: Request,
-    status: Optional[str] = None,
-    job_opening_id: Optional[str] = None,
-    applicant_id: Optional[str] = None,
+    status: str | None = None,
+    job_opening_id: str | None = None,
+    applicant_id: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -436,7 +433,7 @@ def list_job_offers(
 @router.get("/offers/new", response_class=HTMLResponse)
 def new_offer_form(
     request: Request,
-    applicant_id: Optional[str] = None,
+    applicant_id: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -539,7 +536,7 @@ async def withdraw_offer(
 @router.get("/reports/pipeline", response_class=HTMLResponse)
 def report_pipeline(
     request: Request,
-    job_opening_id: Optional[str] = None,
+    job_opening_id: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -552,8 +549,8 @@ def report_pipeline(
 @router.get("/reports/time-to-hire", response_class=HTMLResponse)
 def report_time_to_hire(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -566,8 +563,8 @@ def report_time_to_hire(
 @router.get("/reports/sources", response_class=HTMLResponse)
 def report_sources(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -580,8 +577,8 @@ def report_sources(
 @router.get("/reports/overview", response_class=HTMLResponse)
 def report_overview(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):

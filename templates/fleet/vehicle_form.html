@@ -23,6 +23,7 @@
 {% block content %}
 <div class="max-w-4xl mx-auto">
     <form method="POST" action="{{ '/api/v1/fleet/vehicles/' ~ vehicle.vehicle_id if vehicle else '/api/v1/fleet/vehicles' }}" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
         {% if vehicle %}
         <input type="hidden" name="_method" value="PATCH">
         {% endif %}
@@ -211,7 +212,7 @@
         </div>
 
         <!-- Actions -->
-        <div class="flex items-center justify-end gap-3">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/fleet/vehicles" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

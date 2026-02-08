@@ -5,7 +5,7 @@ Handles comment-related template responses.
 """
 
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from fastapi import Request, UploadFile
 from fastapi.responses import RedirectResponse
@@ -33,7 +33,7 @@ class CommentWebService:
         ticket_id: str,
         content: str,
         is_internal: bool = False,
-        files: Optional[list[UploadFile]] = None,
+        files: list[UploadFile] | None = None,
     ) -> RedirectResponse:
         """Add a comment to a ticket."""
         org_id = coerce_uuid(auth.organization_id)

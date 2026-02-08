@@ -1,5 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}RRR {{ rrr.rrr if rrr else 'Detail' }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -42,9 +43,7 @@
                     'failed': 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400',
                     'cancelled': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400'
                 } %}
-                <span class="inline-flex rounded-full px-3 py-1 text-sm font-medium {{ status_colors.get(rrr.status.value, 'bg-slate-100 text-slate-700') }}">
-                    {{ rrr.status.value | title }}
-                </span>
+                {{ status_badge(rrr.status.value) }}
             </div>
             <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ rrr.description }}</p>
         </div>
@@ -53,6 +52,7 @@
         <div class="flex items-center gap-2">
             {% if can_refresh %}
             <form method="POST" action="/finance/remita/{{ rrr.id }}/refresh">
+                {{ request.state.csrf_form | safe }}
                 <button type="submit"
                         class="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -66,6 +66,7 @@
             {% if can_cancel %}
             <form method="POST" action="/finance/remita/{{ rrr.id }}/cancel"
                   onsubmit="return confirm('Are you sure you want to cancel this RRR?')">
+                {{ request.state.csrf_form | safe }}
                 <button type="submit"
                         class="inline-flex items-center gap-2 rounded-lg border border-rose-300 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50 dark:border-rose-600 dark:text-rose-400 dark:hover:bg-rose-900/30">
                     Cancel RRR
@@ -185,6 +186,7 @@
         <form method="POST" action="/finance/remita/{{ rrr.id }}/mark-paid"
               x-show="showMarkPaid" x-transition
               class="mt-4 pt-4 border-t border-slate-200 dark:border-slate-700">
+            {{ request.state.csrf_form | safe }}
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
                     <label for="payment_reference" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -233,12 +235,13 @@
             {% endif %}
         </p>
         {% else %}
-        <form method="POST" action="/finance/remita/{{ rrr.id }}/link" class="space-y-3">
+        <form method="POST" action="/finance/remita/{{ rrr.id }}/link" class="space-y-4">
+            {{ request.state.csrf_form | safe }}
             <div class="grid gap-3 sm:grid-cols-2">
                 <div>
                     <label for="source_type" class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
                         Source Type
-                    </label>
+                     <span class="text-rose-500">*</span></label>
                     <select name="source_type" id="source_type" required
                             class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                         <option value="">Select a source</option>
@@ -250,7 +253,7 @@
                 <div>
                     <label for="source_id" class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
                         Source ID
-                    </label>
+                     <span class="text-rose-500">*</span></label>
                     <input type="text" name="source_id" id="source_id" required
                            placeholder="Paste the record UUID"
                            class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-primary-500 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">

@@ -7,7 +7,7 @@ Line items within a vendor's quotation response.
 import uuid
 from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Date,
@@ -51,7 +51,7 @@ class QuotationResponseLine(Base):
         ForeignKey("proc.quotation_response.response_id", ondelete="CASCADE"),
         nullable=False,
     )
-    requisition_line_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    requisition_line_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="Links to original requisition line",
@@ -76,7 +76,7 @@ class QuotationResponseLine(Base):
         Numeric(20, 6),
         nullable=False,
     )
-    delivery_date: Mapped[Optional[date]] = mapped_column(
+    delivery_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )

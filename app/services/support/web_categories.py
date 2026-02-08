@@ -5,7 +5,7 @@ Handles category management template responses.
 """
 
 import logging
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from fastapi import Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -67,8 +67,8 @@ class CategoryWebService:
         request: Request,
         auth: "WebAuthContext",
         db: Session,
-        category_id: Optional[str] = None,
-        error: Optional[str] = None,
+        category_id: str | None = None,
+        error: str | None = None,
     ) -> HTMLResponse:
         """Render the category create/edit form."""
         from app.models.support.ticket import TicketPriority
@@ -136,12 +136,12 @@ class CategoryWebService:
         *,
         category_code: str,
         category_name: str,
-        description: Optional[str] = None,
-        color: Optional[str] = None,
-        icon: Optional[str] = None,
-        default_priority: Optional[str] = None,
-        response_hours: Optional[int] = None,
-        resolution_hours: Optional[int] = None,
+        description: str | None = None,
+        color: str | None = None,
+        icon: str | None = None,
+        default_priority: str | None = None,
+        response_hours: int | None = None,
+        resolution_hours: int | None = None,
     ) -> Response:
         """Create a new category."""
         org_id = coerce_uuid(auth.organization_id)
@@ -187,21 +187,21 @@ class CategoryWebService:
         db: Session,
         category_id: str,
         *,
-        category_name: Optional[str] = None,
-        description: Optional[str] = None,
-        color: Optional[str] = None,
-        icon: Optional[str] = None,
-        default_priority: Optional[str] = None,
-        response_hours: Optional[int] = None,
-        resolution_hours: Optional[int] = None,
-        is_active: Optional[bool] = None,
+        category_name: str | None = None,
+        description: str | None = None,
+        color: str | None = None,
+        icon: str | None = None,
+        default_priority: str | None = None,
+        response_hours: int | None = None,
+        resolution_hours: int | None = None,
+        is_active: bool | None = None,
     ) -> Response:
         """Update a category."""
         org_id = coerce_uuid(auth.organization_id)
         cid = coerce_uuid(category_id)
 
         try:
-            category = category_service.update_category(
+            category_service.update_category(
                 db,
                 org_id,
                 cid,

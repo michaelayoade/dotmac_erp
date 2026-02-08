@@ -43,6 +43,7 @@
 
     <!-- Form -->
     <form method="POST" action="/settings/numbering/{{ sequence.sequence_id }}" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
         <!-- Format Components -->
         <div class="card p-6">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Format components</h2>
@@ -211,6 +212,7 @@
                 </p>
 
                 <form method="POST" action="/settings/numbering/{{ sequence.sequence_id }}/reset" class="mt-4">
+                    {{ request.state.csrf_form | safe }}
                     <div>
                         <label for="new_value" class="form-label">New counter value</label>
                         <input type="number" id="new_value" name="new_value"

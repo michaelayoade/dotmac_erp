@@ -15,11 +15,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.models.finance.ar.invoice import InvoiceStatus, InvoiceType
 from app.models.finance.ar.customer_payment import PaymentStatus
+from app.models.finance.ar.invoice import InvoiceStatus, InvoiceType
 from app.services.finance.ar.ar_posting_adapter import ARPostingAdapter, ARPostingResult
 from app.services.finance.ar.posting.helpers import create_tax_transactions
-
 
 # ============ Mock Classes ============
 

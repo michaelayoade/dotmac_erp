@@ -92,7 +92,7 @@
                 <a href="/automation/recurring/{{ template.template_id }}" class="flex items-center justify-between px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-800">
                     <div>
                         <p class="text-sm font-medium text-slate-900 dark:text-white">{{ template.template_name }}</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ template.entity_type }} - {{ template.frequency }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ template.entity_type | replace('_', ' ') | title }} - {{ template.frequency | replace('_', ' ') | title }}</p>
                     </div>
                     <div class="text-right">
                         <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium
@@ -126,7 +126,7 @@
                 <a href="/automation/workflows/{{ rule.rule_id }}" class="flex items-center justify-between px-6 py-3 hover:bg-slate-50 dark:hover:bg-slate-800">
                     <div>
                         <p class="text-sm font-medium text-slate-900 dark:text-white">{{ rule.rule_name }}</p>
-                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ rule.entity_type }} - {{ rule.trigger_event }}</p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">{{ rule.entity_type | replace('_', ' ') | title }} - {{ rule.trigger_event }}</p>
                     </div>
                     <div class="text-right">
                         <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium

@@ -7,7 +7,7 @@ Vendor eligibility assessment and compliance tracking.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -61,16 +61,16 @@ class VendorPrequalification(Base, ProcurementBaseMixin):
     status: Mapped[PrequalificationStatus] = mapped_column(
         default=PrequalificationStatus.PENDING,
     )
-    categories: Mapped[Optional[list[dict[str, Any]]]] = mapped_column(
+    categories: Mapped[list[dict[str, Any]] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Qualified procurement categories",
     )
-    valid_from: Mapped[Optional[date]] = mapped_column(
+    valid_from: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    valid_to: Mapped[Optional[date]] = mapped_column(
+    valid_to: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -105,29 +105,29 @@ class VendorPrequalification(Base, ProcurementBaseMixin):
     )
 
     # Capability scores
-    financial_capability_score: Mapped[Optional[Decimal]] = mapped_column(
+    financial_capability_score: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
     )
-    technical_capability_score: Mapped[Optional[Decimal]] = mapped_column(
+    technical_capability_score: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
     )
-    overall_score: Mapped[Optional[Decimal]] = mapped_column(
+    overall_score: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
     )
 
     # Review
-    review_notes: Mapped[Optional[str]] = mapped_column(
+    review_notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    reviewed_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    reviewed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+    reviewed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -138,7 +138,7 @@ class VendorPrequalification(Base, ProcurementBaseMixin):
         nullable=False,
         default=False,
     )
-    blacklist_reason: Mapped[Optional[str]] = mapped_column(
+    blacklist_reason: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )

@@ -3,7 +3,7 @@ Tests for TaxWebService.
 """
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -102,7 +102,7 @@ class TestTaxWebServiceReturnDetail:
             return_id=return_id,
             organization_id=org_id,
             filed_date=date(2024, 1, 20),
-            prepared_at=datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
+            prepared_at=datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
         )
         mock_box_values = [
             MockBoxValue(box_number="1"),
@@ -181,8 +181,8 @@ class TestTaxReturnView:
             payment_date=date(2024, 1, 25),
             payment_reference="PAY-001",
             is_amendment=False,
-            prepared_at=datetime(2024, 1, 15, 10, 0, tzinfo=timezone.utc),
-            reviewed_at=datetime(2024, 1, 18, 14, 0, tzinfo=timezone.utc),
+            prepared_at=datetime(2024, 1, 15, 10, 0, tzinfo=UTC),
+            reviewed_at=datetime(2024, 1, 18, 14, 0, tzinfo=UTC),
         )
 
         result = _tax_return_view(mock_return)

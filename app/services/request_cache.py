@@ -8,15 +8,16 @@ This prevents duplicate database queries within a single HTTP request.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from contextvars import ContextVar
-from typing import Any, Callable, Optional, TypeVar
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
 # Context variable for request-scoped cache
-_request_cache: ContextVar[Optional[dict[str, Any]]] = ContextVar(
+_request_cache: ContextVar[dict[str, Any] | None] = ContextVar(
     "request_cache",
     default=None,
 )
@@ -53,7 +54,7 @@ class RequestCache:
         return cache
 
     @staticmethod
-    def get(key: str, default: T = None) -> Optional[T]:
+    def get(key: str, default: T = None) -> T | None:
         """
         Get a value from the request cache.
 

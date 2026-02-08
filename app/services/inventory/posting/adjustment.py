@@ -8,7 +8,6 @@ Transforms inventory adjustments into journal entries with:
 
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -37,7 +36,7 @@ def post_adjustment(
     transaction_id: UUID,
     posting_date: date,
     posted_by_user_id: UUID,
-    idempotency_key: Optional[str] = None,
+    idempotency_key: str | None = None,
 ) -> INVPostingResult:
     """
     Post an inventory adjustment to the general ledger.

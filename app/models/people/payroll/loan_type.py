@@ -98,13 +98,13 @@ class LoanType(Base):
         Enum(LoanCategory, name="loan_category"),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Loan limits
-    max_amount: Mapped[Optional[Decimal]] = mapped_column(
+    max_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(18, 2),
         nullable=True,
         comment="Maximum loan amount (NULL = no limit)",
@@ -149,19 +149,19 @@ class LoanType(Base):
     )
 
     # GL Account mappings
-    loan_receivable_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    loan_receivable_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,
         comment="Asset account for loans receivable (debit on disbursement)",
     )
-    loan_disbursement_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    loan_disbursement_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,
         comment="Account to credit on disbursement (typically bank)",
     )
-    interest_income_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    interest_income_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,
@@ -180,12 +180,12 @@ class LoanType(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
     )
-    created_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,

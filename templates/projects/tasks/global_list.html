@@ -1,5 +1,6 @@
 {% extends "modules/base_modules.html" %}
 
+{% from "components/macros.html" import status_badge, empty_state %}
 {% block title %}Project Tasks{% endblock %}
 
 {% block page_title %}Project Tasks{% endblock %}
@@ -96,9 +97,7 @@
                         {{ task.project.project_code }} - {{ task.project.project_name }}
                     </td>
                     <td class="px-4 py-4">
-                        <span class="inline-flex rounded-full px-2 py-1 text-xs font-medium {{ status_colors.get(task.status.value, 'bg-slate-100') }}">
-                            {{ task.status.value }}
-                        </span>
+                        {{ status_badge(task.status.value, size="sm") }}
                     </td>
                     <td class="px-4 py-4">
                         <span class="text-sm font-medium {{ priority_colors.get(task.priority.value, 'text-slate-500') }}">
@@ -110,6 +109,12 @@
                     </td>
                     <td class="px-4 py-4 text-sm text-slate-600 dark:text-slate-400">
                         {{ task.due_date.isoformat() if task.due_date else '—' }}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="99" class="p-0">
+                        {{ empty_state("No tasks found", "There are no tasks to display.") }}
                     </td>
                 </tr>
                 {% endfor %}

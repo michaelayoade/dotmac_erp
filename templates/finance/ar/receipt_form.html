@@ -323,7 +323,7 @@ function receiptForm() {
             {% if receipt %}
             customer_id: '{{ receipt.customer_id }}',
             payment_date: '{{ receipt.payment_date }}',
-            payment_method: '{{ receipt.payment_method }}',
+            payment_method: '{{ receipt.payment_method | replace('_', ' ') | title }}',
             bank_account_id: '{{ receipt.bank_account_id or "" }}',
             currency_code: '{{ receipt.currency_code }}',
             reference: '{{ receipt.reference or "" }}',

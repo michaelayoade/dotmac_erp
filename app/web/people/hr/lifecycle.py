@@ -1,6 +1,5 @@
 """Employee lifecycle routes - onboarding, offboarding, bulk operations."""
 
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -8,8 +7,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.people.hr.web.lifecycle_web import lifecycle_web_service
-from app.web.deps import get_db, require_hr_access, WebAuthContext
-
+from app.web.deps import WebAuthContext, get_db, require_hr_access
 
 router = APIRouter(tags=["lifecycle"])
 
@@ -176,7 +174,7 @@ async def bulk_delete_employees(
 @router.get("/promotions", response_class=HTMLResponse)
 def list_promotions(
     request: Request,
-    employee_id: Optional[str] = None,
+    employee_id: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -227,8 +225,8 @@ async def create_promotion(
 def promotion_detail(
     request: Request,
     promotion_id: UUID,
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -251,7 +249,7 @@ def promotion_detail(
 @router.get("/transfers", response_class=HTMLResponse)
 def list_transfers(
     request: Request,
-    employee_id: Optional[str] = None,
+    employee_id: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -302,8 +300,8 @@ async def create_transfer(
 def transfer_detail(
     request: Request,
     transfer_id: UUID,
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):

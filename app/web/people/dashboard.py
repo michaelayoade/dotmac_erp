@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.people.hr.web import people_dashboard_service
-from app.web.deps import get_db, require_hr_access, WebAuthContext
+from app.web.deps import WebAuthContext, get_db, require_hr_access
 
 router = APIRouter(tags=["people-dashboard-web"])
 

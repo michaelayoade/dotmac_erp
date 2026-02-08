@@ -6,7 +6,6 @@ import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Index, Numeric, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -76,23 +75,23 @@ class InventoryTransaction(Base):
         ForeignKey("inv.warehouse.warehouse_id"),
         nullable=False,
     )
-    location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    location_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("inv.warehouse_location.location_id"),
         nullable=True,
     )
-    lot_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    lot_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("inv.inventory_lot.lot_id"),
         nullable=True,
     )
 
     # Transfer destination
-    to_warehouse_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    to_warehouse_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    to_location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    to_location_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
 
@@ -113,23 +112,21 @@ class InventoryTransaction(Base):
     quantity_after: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
 
     # Source documents
-    source_document_type: Mapped[Optional[str]] = mapped_column(
-        String(30), nullable=True
-    )
-    source_document_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    source_document_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    source_document_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    source_document_line_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    source_document_line_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
 
     # Reference
-    reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    reason_code: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
+    reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    reason_code: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
     # Journal entry
-    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
 

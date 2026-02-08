@@ -7,8 +7,8 @@ Provides append-only audit logging with hash chain for integrity verification.
 import hashlib
 import json
 import logging
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import and_
@@ -37,14 +37,14 @@ class AuditLogService(ListResponseMixin):
         table_name: str,
         record_id: str,
         action: AuditAction,
-        old_values: Optional[dict[str, Any]] = None,
-        new_values: Optional[dict[str, Any]] = None,
-        user_id: Optional[UUID] = None,
-        ip_address: Optional[str] = None,
-        user_agent: Optional[str] = None,
-        session_id: Optional[UUID] = None,
-        correlation_id: Optional[str] = None,
-        reason: Optional[str] = None,
+        old_values: dict[str, Any] | None = None,
+        new_values: dict[str, Any] | None = None,
+        user_id: UUID | None = None,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+        session_id: UUID | None = None,
+        correlation_id: str | None = None,
+        reason: str | None = None,
         compute_hash: bool = True,
     ) -> UUID:
         """
@@ -73,7 +73,7 @@ class AuditLogService(ListResponseMixin):
             Created audit log ID
         """
         org_id = coerce_uuid(organization_id)
-        occurred_at = datetime.now(timezone.utc)
+        occurred_at = datetime.now(UTC)
 
         # Compute changed fields
         changed_fields = AuditLogService._compute_changed_fields(old_values, new_values)
@@ -127,13 +127,13 @@ class AuditLogService(ListResponseMixin):
     def get_audit_trail(
         db: Session,
         organization_id: UUID,
-        table_schema: Optional[str] = None,
-        table_name: Optional[str] = None,
-        record_id: Optional[str] = None,
-        user_id: Optional[UUID] = None,
-        correlation_id: Optional[str] = None,
-        from_date: Optional[datetime] = None,
-        to_date: Optional[datetime] = None,
+        table_schema: str | None = None,
+        table_name: str | None = None,
+        record_id: str | None = None,
+        user_id: UUID | None = None,
+        correlation_id: str | None = None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[AuditLog]:
@@ -260,7 +260,7 @@ class AuditLogService(ListResponseMixin):
         if not records:
             return ""
 
-        prev_hash: Optional[str] = None
+        prev_hash: str | None = None
         for record in records:
             record_payload = {
                 "audit_id": str(record.audit_id),
@@ -284,7 +284,7 @@ class AuditLogService(ListResponseMixin):
         organization_id: UUID,
         from_date: datetime,
         to_date: datetime,
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Verify integrity of hash chain.
 
@@ -344,8 +344,8 @@ class AuditLogService(ListResponseMixin):
 
     @staticmethod
     def _compute_changed_fields(
-        old_values: Optional[dict],
-        new_values: Optional[dict],
+        old_values: dict | None,
+        new_values: dict | None,
     ) -> list[str]:
         """Compute list of changed field names."""
         if old_values is None and new_values is None:
@@ -370,7 +370,7 @@ class AuditLogService(ListResponseMixin):
 
     @staticmethod
     def _compute_hash(
-        prev_hash: Optional[str],
+        prev_hash: str | None,
         record_payload: dict,
     ) -> str:
         """Compute SHA256 hash for chain."""
@@ -391,7 +391,7 @@ class AuditLogService(ListResponseMixin):
     def _get_previous_hash(
         db: Session,
         organization_id: UUID,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Get the hash of the most recent audit log entry."""
         latest = (
             db.query(AuditLog)
@@ -405,9 +405,9 @@ class AuditLogService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        table_schema: Optional[str] = None,
-        table_name: Optional[str] = None,
+        organization_id: str | None = None,
+        table_schema: str | None = None,
+        table_name: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[AuditLog]:

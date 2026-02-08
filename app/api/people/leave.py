@@ -4,10 +4,9 @@ Leave Management API Router.
 Thin API wrapper for Leave Management endpoints. All business logic is in services.
 """
 
-from datetime import date
 import csv
 import io
-from typing import Optional
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -15,35 +14,35 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
 from app.db import SessionLocal
+from app.models.people.leave import LeaveApplicationStatus
 from app.schemas.people.leave import (
-    # Leave Type
-    LeaveTypeCreate,
-    LeaveTypeUpdate,
-    LeaveTypeRead,
-    LeaveTypeListResponse,
+    BulkLeaveAllocationCreate,
+    BulkLeaveAllocationResult,
+    HolidayCreate,
     # Holiday List
     HolidayListCreate,
-    HolidayListUpdate,
     HolidayListRead,
-    HolidayCreate,
+    HolidayListUpdate,
     HolidayRead,
     # Leave Allocation
     LeaveAllocationCreate,
-    LeaveAllocationUpdate,
-    LeaveAllocationRead,
     LeaveAllocationListResponse,
-    BulkLeaveAllocationCreate,
-    BulkLeaveAllocationResult,
+    LeaveAllocationRead,
+    LeaveAllocationUpdate,
+    LeaveApplicationBulkAction,
     # Leave Application
     LeaveApplicationCreate,
-    LeaveApplicationUpdate,
-    LeaveApplicationRead,
     LeaveApplicationListResponse,
-    LeaveApplicationBulkAction,
+    LeaveApplicationRead,
+    LeaveApplicationUpdate,
+    # Leave Type
+    LeaveTypeCreate,
+    LeaveTypeListResponse,
+    LeaveTypeRead,
+    LeaveTypeUpdate,
 )
-from app.services.people.leave import LeaveService
 from app.services.common import PaginationParams
-from app.models.people.leave import LeaveApplicationStatus
+from app.services.people.leave import LeaveService
 
 router = APIRouter(
     prefix="/leave",
@@ -81,8 +80,8 @@ def csv_response(rows: list[list[str]], filename: str) -> Response:
 @router.get("/types", response_model=LeaveTypeListResponse)
 def list_leave_types(
     organization_id: UUID = Depends(require_organization_id),
-    search: Optional[str] = None,
-    is_active: Optional[bool] = None,
+    search: str | None = None,
+    is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -187,8 +186,8 @@ def delete_leave_type(
 @router.get("/holiday-lists")
 def list_holiday_lists(
     organization_id: UUID = Depends(require_organization_id),
-    year: Optional[int] = None,
-    is_active: Optional[bool] = None,
+    year: int | None = None,
+    is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -341,10 +340,10 @@ def remove_holiday(
 @router.get("/allocations", response_model=LeaveAllocationListResponse)
 def list_allocations(
     organization_id: UUID = Depends(require_organization_id),
-    employee_id: Optional[UUID] = None,
-    leave_type_id: Optional[UUID] = None,
-    year: Optional[int] = None,
-    is_active: Optional[bool] = None,
+    employee_id: UUID | None = None,
+    leave_type_id: UUID | None = None,
+    year: int | None = None,
+    is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -370,10 +369,10 @@ def list_allocations(
 @router.get("/allocations/export")
 def export_allocations(
     organization_id: UUID = Depends(require_organization_id),
-    employee_id: Optional[UUID] = None,
-    leave_type_id: Optional[UUID] = None,
-    year: Optional[int] = None,
-    is_active: Optional[bool] = None,
+    employee_id: UUID | None = None,
+    leave_type_id: UUID | None = None,
+    year: int | None = None,
+    is_active: bool | None = None,
     db: Session = Depends(get_db),
 ):
     """Export leave allocations to CSV."""
@@ -517,7 +516,7 @@ def delete_allocation(
 def get_employee_leave_balance(
     employee_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    as_of_date: Optional[date] = None,
+    as_of_date: date | None = None,
     db: Session = Depends(get_db),
 ):
     """Get leave balance for an employee."""
@@ -534,7 +533,7 @@ def get_employee_leave_balance(
 def get_leave_balance(
     organization_id: UUID = Depends(require_organization_id),
     employee_id: UUID = Query(...),
-    as_of_date: Optional[date] = None,
+    as_of_date: date | None = None,
     db: Session = Depends(get_db),
 ):
     """Get leave balances for an employee."""
@@ -555,11 +554,11 @@ def get_leave_balance(
 @router.get("/applications", response_model=LeaveApplicationListResponse)
 def list_applications(
     organization_id: UUID = Depends(require_organization_id),
-    employee_id: Optional[UUID] = None,
-    leave_type_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    employee_id: UUID | None = None,
+    leave_type_id: UUID | None = None,
+    status: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -618,11 +617,11 @@ def create_application(
 @router.get("/applications/export")
 def export_applications(
     organization_id: UUID = Depends(require_organization_id),
-    employee_id: Optional[UUID] = None,
-    leave_type_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    employee_id: UUID | None = None,
+    leave_type_id: UUID | None = None,
+    status: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     db: Session = Depends(get_db),
 ):
     """Export leave applications to CSV."""
@@ -719,8 +718,8 @@ def delete_application(
 def approve_application(
     application_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    approver_id: Optional[UUID] = None,
-    notes: Optional[str] = None,
+    approver_id: UUID | None = None,
+    notes: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Approve a leave application."""
@@ -741,7 +740,7 @@ def approve_application(
 def reject_application(
     application_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    approver_id: Optional[UUID] = None,
+    approver_id: UUID | None = None,
     reason: str = Query(...),
     db: Session = Depends(get_db),
 ):
@@ -763,7 +762,7 @@ def reject_application(
 def cancel_application(
     application_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    reason: Optional[str] = None,
+    reason: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Cancel a leave application."""
@@ -781,8 +780,8 @@ def cancel_application(
 def bulk_approve_applications(
     payload: LeaveApplicationBulkAction,
     organization_id: UUID = Depends(require_organization_id),
-    approver_id: Optional[UUID] = None,
-    notes: Optional[str] = None,
+    approver_id: UUID | None = None,
+    notes: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Bulk approve leave applications."""
@@ -801,7 +800,7 @@ def bulk_approve_applications(
 def bulk_reject_applications(
     payload: LeaveApplicationBulkAction,
     organization_id: UUID = Depends(require_organization_id),
-    approver_id: Optional[UUID] = None,
+    approver_id: UUID | None = None,
     db: Session = Depends(get_db),
 ):
     """Bulk reject leave applications."""

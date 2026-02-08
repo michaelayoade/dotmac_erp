@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 
+{% from "components/macros.html" import empty_state %}
 {% block page_title %}Payroll Runs{% endblock %}
 
 {% block breadcrumbs %}
@@ -93,7 +94,7 @@
 
     {% if runs %}
     <div class="card overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
@@ -155,6 +156,12 @@
                                 </form>
                                 {% endif %}
                             </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No runs found", "There are no runs to display.") }}
                         </td>
                     </tr>
                     {% endfor %}

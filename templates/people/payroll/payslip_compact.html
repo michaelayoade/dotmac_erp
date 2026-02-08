@@ -292,14 +292,14 @@
                         {% for earning in earnings %}
                         <tr>
                             <td>{{ earning.component_name }}</td>
-                            <td>{{ earning.amount | format_currency }}</td>
+                            <td class="font-mono tabular-nums">{{ earning.amount | format_currency }}</td>
                         </tr>
                         {% else %}
                         <tr><td colspan="2" class="empty-row">—</td></tr>
                         {% endfor %}
                         <tr class="table-total earnings-total">
                             <td>Total</td>
-                            <td>{{ gross_pay | format_currency }}</td>
+                            <td class="font-mono tabular-nums">{{ gross_pay | format_currency }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -318,14 +318,14 @@
                         {% for deduction in deductions %}
                         <tr>
                             <td>{{ deduction.component_name }}</td>
-                            <td>({{ deduction.amount | format_currency }})</td>
+                            <td class="font-mono tabular-nums">({{ deduction.amount | format_currency }})</td>
                         </tr>
                         {% else %}
                         <tr><td colspan="2" class="empty-row">—</td></tr>
                         {% endfor %}
                         <tr class="table-total deductions-total">
                             <td>Total</td>
-                            <td>({{ total_deduction | format_currency }})</td>
+                            <td class="font-mono tabular-nums">({{ total_deduction | format_currency }})</td>
                         </tr>
                     </tbody>
                 </table>
@@ -337,11 +337,11 @@
             <div class="summary-items">
                 <div class="summary-item">
                     <span class="summary-label">Gross:</span>
-                    <span class="summary-value">{{ gross_pay | format_currency }}</span>
+                    <span class="font-mono tabular-nums summary-value">{{ gross_pay | format_currency }}</span>
                 </div>
                 <div class="summary-item">
                     <span class="summary-label">Deductions:</span>
-                    <span class="summary-value">({{ total_deduction | format_currency }})</span>
+                    <span class="font-mono tabular-nums summary-value">({{ total_deduction | format_currency }})</span>
                 </div>
             </div>
             <div class="net-pay-highlight">

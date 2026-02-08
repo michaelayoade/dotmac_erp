@@ -1,0 +1,14 @@
+{% extends "emails/base_email.txt" %}
+{% block content %}Hi {{ first_name }},
+
+{% if days_pending >= 7 %}** This claim has been pending for {{ days_pending }} days **
+{% endif %}An expense claim from {{ claimant_name }} is still awaiting your review.
+
+Claim Number: {{ claim_number }}
+From: {{ claimant_name }}
+Amount: {{ currency }} {{ amount }}
+Submitted: {{ claim_date }} ({{ days_pending }} day{{ 's' if days_pending != 1 else '' }} ago)
+
+Please take a moment to review and action this claim.
+
+Review now at: {{ claim_url }}{% endblock %}

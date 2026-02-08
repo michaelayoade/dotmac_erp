@@ -37,7 +37,7 @@
             <div class="card-body space-y-4">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                        <label for="first_name" class="form-label{% if not employee %} required{% endif %}">First Name</label>
+                        <label for="first_name" class="form-label{% if not employee %} required{% endif %}">First Name <span class="text-rose-500">*</span></label>
                         <input type="text" name="first_name" id="first_name"
                             value="{{ person.first_name if person else form_data.first_name | default('', true) }}"
                             {% if employee %}readonly class="form-input w-full bg-slate-50 dark:bg-slate-800"{% else %}required class="form-input w-full {% if errors.first_name %}border-red-500{% endif %}"{% endif %}>
@@ -46,7 +46,7 @@
                         {% endif %}
                     </div>
                     <div>
-                        <label for="last_name" class="form-label{% if not employee %} required{% endif %}">Last Name</label>
+                        <label for="last_name" class="form-label{% if not employee %} required{% endif %}">Last Name <span class="text-rose-500">*</span></label>
                         <input type="text" name="last_name" id="last_name"
                             value="{{ person.last_name if person else form_data.last_name | default('', true) }}"
                             {% if employee %}readonly class="form-input w-full bg-slate-50 dark:bg-slate-800"{% else %}required class="form-input w-full {% if errors.last_name %}border-red-500{% endif %}"{% endif %}>
@@ -56,7 +56,7 @@
                     </div>
                 </div>
                 <div>
-                    <label for="email" class="form-label{% if not employee %} required{% endif %}">Email</label>
+                    <label for="email" class="form-label{% if not employee %} required{% endif %}">Email <span class="text-rose-500">*</span></label>
                     <input type="email" name="email" id="email"
                         value="{{ person.email if person else form_data.email | default('', true) }}"
                         {% if employee %}readonly class="form-input w-full bg-slate-50 dark:bg-slate-800"{% else %}required class="form-input w-full {% if errors.email %}border-red-500{% endif %}"{% endif %}>
@@ -156,7 +156,7 @@
                         {% endif %}
                     </div>
                     <div>
-                        <label for="date_of_joining" class="form-label{% if not employee %} required{% endif %}">Date of Joining</label>
+                        <label for="date_of_joining" class="form-label{% if not employee %} required{% endif %}">Date of Joining <span class="text-rose-500">*</span></label>
                         <input type="date" name="date_of_joining" id="date_of_joining"
                             value="{{ employee.date_of_joining.isoformat() if employee and employee.date_of_joining else form_data.date_of_joining | default('', true) }}"
                             {% if not employee %}required{% endif %}
@@ -272,6 +272,19 @@
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="expense_approver_id" class="form-label">Expense Approver</label>
+                        <select name="expense_approver_id" id="expense_approver_id" class="form-input w-full">
+                            <option value="">Select Expense Approver</option>
+                            {% for mgr in managers %}
+                            <option value="{{ mgr.employee_id }}"
+                                {{ 'selected' if (employee and employee.expense_approver_id == mgr.employee_id) or (form_data.expense_approver_id == mgr.employee_id | string) }}>
+                                {{ mgr.employee_code }} - {{ mgr.full_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="text-xs text-slate-500 mt-1">Can be different from the reporting manager.</p>
+                    </div>
                     <div>
                         <label for="linked_person_id" class="form-label">Linked User Account</label>
                         <select name="linked_person_id" id="linked_person_id" class="form-input w-full">
@@ -438,7 +451,7 @@
         </div>
 
         {# Form Actions #}
-        <div class="flex justify-end gap-3">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/people/hr/employees{% if employee %}/{{ employee.employee_id }}{% endif %}"
                class="btn btn-secondary">
                 Cancel

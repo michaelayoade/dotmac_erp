@@ -1,14 +1,15 @@
 """Tests for auth_dependencies - API key auth, audit scope enforcement, session expiry."""
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
-from app.models.auth import ApiKey, Session as AuthSession, SessionStatus
+from app.models.auth import ApiKey, SessionStatus
+from app.models.auth import Session as AuthSession
 from app.services import auth as auth_service
 from app.services.auth_dependencies import (
     _extract_bearer_token,
@@ -27,11 +28,11 @@ class TestHelperFunctions:
         """Test _make_aware adds UTC timezone to naive datetime."""
         naive = datetime(2024, 1, 1, 12, 0, 0)
         aware = _make_aware(naive)
-        assert aware.tzinfo == timezone.utc
+        assert aware.tzinfo == UTC
 
     def test_make_aware_with_aware_datetime(self):
         """Test _make_aware preserves timezone on aware datetime."""
-        aware_dt = datetime(2024, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+        aware_dt = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
         result = _make_aware(aware_dt)
         assert result == aware_dt
 
@@ -127,7 +128,7 @@ class TestRequireAuditAuthWithApiKey:
             label="Test API Key",
             key_hash=auth_service.hash_api_key(raw_key),
             is_active=True,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+            expires_at=datetime.now(UTC) + timedelta(days=30),
         )
         db_session.add(api_key)
         db_session.commit()
@@ -153,7 +154,7 @@ class TestRequireAuditAuthWithApiKey:
             label="Revoked API Key",
             key_hash=auth_service.hash_api_key(raw_key),
             is_active=True,
-            revoked_at=datetime.now(timezone.utc),  # Revoked
+            revoked_at=datetime.now(UTC),  # Revoked
         )
         db_session.add(api_key)
         db_session.commit()
@@ -175,7 +176,7 @@ class TestRequireAuditAuthWithApiKey:
             label="Expired API Key",
             key_hash=auth_service.hash_api_key(raw_key),
             is_active=True,
-            expires_at=datetime.now(timezone.utc) - timedelta(days=1),  # Expired
+            expires_at=datetime.now(UTC) - timedelta(days=1),  # Expired
         )
         db_session.add(api_key)
         db_session.commit()
@@ -250,7 +251,7 @@ class TestSessionExpiry:
             status=SessionStatus.active,
             ip_address="127.0.0.1",
             user_agent="test",
-            expires_at=datetime.now(timezone.utc) - timedelta(hours=1),  # Expired
+            expires_at=datetime.now(UTC) - timedelta(hours=1),  # Expired
         )
         db_session.add(session)
         db_session.commit()
@@ -276,10 +277,10 @@ class TestSessionExpiry:
             person_id=person.id,
             token_hash=hash_session_token(raw_token),
             status=SessionStatus.revoked,
-            revoked_at=datetime.now(timezone.utc),
+            revoked_at=datetime.now(UTC),
             ip_address="127.0.0.1",
             user_agent="test",
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
         )
         db_session.add(session)
         db_session.commit()
@@ -302,13 +303,13 @@ class TestSessionExpiry:
             status=SessionStatus.active,
             ip_address="127.0.0.1",
             user_agent="test",
-            expires_at=datetime.now(timezone.utc) - timedelta(hours=1),  # Expired
+            expires_at=datetime.now(UTC) - timedelta(hours=1),  # Expired
         )
         db_session.add(session)
         db_session.commit()
         db_session.refresh(session)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         payload = {
             "sub": str(person.id),
             "session_id": str(session.id),
@@ -334,7 +335,7 @@ class TestAuditScopeEnforcement:
 
     def test_insufficient_scope_returns_403(self, db_session, person):
         """Test that insufficient scope returns 403."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # Payload without audit scopes - no session_id to skip session lookup
         payload = {
             "sub": str(person.id),
@@ -361,7 +362,7 @@ class TestAuditScopeEnforcement:
 
     def test_audit_scope_via_jwt_succeeds(self, db_session, person):
         """Test that valid audit scope in JWT succeeds (without session_id)."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         # Payload with audit scope but no session_id - skips session lookup
         payload = {
             "sub": str(person.id),
@@ -402,7 +403,7 @@ class TestSessionTokenAuth:
             status=SessionStatus.active,
             ip_address="127.0.0.1",
             user_agent="test",
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            expires_at=datetime.now(UTC) + timedelta(hours=1),
         )
         db_session.add(session)
         db_session.commit()

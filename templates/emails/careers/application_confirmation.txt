@@ -1,0 +1,11 @@
+{% extends "emails/base_email.txt" %}
+{% block content %}Dear {{ applicant_name }},
+
+Thank you for applying for the {{ job_title }} position at {{ org_name }}. We have received your application and it is currently being reviewed by our hiring team.
+
+We appreciate your interest in joining our organization. If your qualifications match our requirements, a member of our team will be in touch to discuss next steps.
+{% if verification_url %}
+To complete your application, please verify your email address:
+{{ verification_url }}
+{% endif %}
+We wish you the best of luck in the selection process.{% endblock %}

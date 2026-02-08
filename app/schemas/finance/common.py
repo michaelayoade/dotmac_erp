@@ -6,11 +6,10 @@ Shared Pydantic schemas for IFRS APIs.
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Generic, Optional, TypeVar
+from typing import Generic, TypeVar
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 T = TypeVar("T")
 
@@ -35,7 +34,7 @@ class PeriodSchema(BaseModel):
     """Fiscal period reference."""
 
     fiscal_period_id: UUID
-    period_name: Optional[str] = None
+    period_name: str | None = None
 
 
 class AuditInfoSchema(BaseModel):
@@ -44,17 +43,17 @@ class AuditInfoSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    created_by_user_id: Optional[UUID] = None
+    updated_at: datetime | None = None
+    created_by_user_id: UUID | None = None
 
 
 class PostingResultSchema(BaseModel):
     """Result of GL posting operation."""
 
     success: bool
-    journal_entry_id: Optional[UUID] = None
-    entry_number: Optional[str] = None
-    message: Optional[str] = None
+    journal_entry_id: UUID | None = None
+    entry_number: str | None = None
+    message: str | None = None
 
 
 class BatchResultSchema(BaseModel):

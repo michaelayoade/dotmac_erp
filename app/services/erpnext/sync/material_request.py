@@ -9,7 +9,7 @@ import logging
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -61,9 +61,9 @@ class MaterialRequestSyncService(BaseSyncService[MaterialRequest]):
         self._project_cache: dict[str, uuid.UUID] = {}
         self._ticket_cache: dict[str, uuid.UUID] = {}
         self._task_cache: dict[str, uuid.UUID] = {}
-        self._employee_by_user_cache: dict[str, Optional[uuid.UUID]] = {}
+        self._employee_by_user_cache: dict[str, uuid.UUID | None] = {}
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         """Fetch Material Requests with their items."""
         if since:
             for request in client.get_modified_since(
@@ -92,8 +92,8 @@ class MaterialRequestSyncService(BaseSyncService[MaterialRequest]):
         return result
 
     def _resolve_entity_id(
-        self, source_name: Optional[str], source_doctype: str
-    ) -> Optional[uuid.UUID]:
+        self, source_name: str | None, source_doctype: str
+    ) -> uuid.UUID | None:
         """Resolve DotMac entity ID from ERPNext source name via SyncEntity."""
         if not source_name:
             return None
@@ -111,7 +111,7 @@ class MaterialRequestSyncService(BaseSyncService[MaterialRequest]):
             return sync_entity.target_id
         return None
 
-    def _resolve_item_id(self, source_name: Optional[str]) -> Optional[uuid.UUID]:
+    def _resolve_item_id(self, source_name: str | None) -> uuid.UUID | None:
         """Resolve DotMac item_id from ERPNext item_code."""
         if not source_name:
             return None
@@ -124,7 +124,7 @@ class MaterialRequestSyncService(BaseSyncService[MaterialRequest]):
             self._item_cache[source_name] = result
         return result
 
-    def _resolve_warehouse_id(self, source_name: Optional[str]) -> Optional[uuid.UUID]:
+    def _resolve_warehouse_id(self, source_name: str | None) -> uuid.UUID | None:
         """Resolve DotMac warehouse_id from ERPNext warehouse name."""
         if not source_name:
             return None
@@ -137,7 +137,7 @@ class MaterialRequestSyncService(BaseSyncService[MaterialRequest]):
             self._warehouse_cache[source_name] = result
         return result
 
-    def _resolve_project_id(self, source_name: Optional[str]) -> Optional[uuid.UUID]:
+    def _resolve_project_id(self, source_name: str | None) -> uuid.UUID | None:
         """Resolve DotMac project_id from ERPNext project name."""
         if not source_name:
             return None
@@ -150,7 +150,7 @@ class MaterialRequestSyncService(BaseSyncService[MaterialRequest]):
             self._project_cache[source_name] = result
         return result
 
-    def _resolve_ticket_id(self, source_name: Optional[str]) -> Optional[uuid.UUID]:
+    def _resolve_ticket_id(self, source_name: str | None) -> uuid.UUID | None:
         """Resolve DotMac ticket_id from ERPNext Issue/HD Ticket name."""
         if not source_name:
             return None
@@ -167,7 +167,7 @@ class MaterialRequestSyncService(BaseSyncService[MaterialRequest]):
             self._ticket_cache[source_name] = result
         return result
 
-    def _resolve_task_id(self, source_name: Optional[str]) -> Optional[uuid.UUID]:
+    def _resolve_task_id(self, source_name: str | None) -> uuid.UUID | None:
         """Resolve DotMac task_id from ERPNext task name."""
         if not source_name:
             return None
@@ -180,9 +180,7 @@ class MaterialRequestSyncService(BaseSyncService[MaterialRequest]):
             self._task_cache[source_name] = result
         return result
 
-    def _resolve_employee_by_user(
-        self, user_email: Optional[str]
-    ) -> Optional[uuid.UUID]:
+    def _resolve_employee_by_user(self, user_email: str | None) -> uuid.UUID | None:
         """
         Resolve employee_id from ERPNext user email.
 
@@ -346,7 +344,7 @@ class MaterialRequestSyncService(BaseSyncService[MaterialRequest]):
         """Get the request ID."""
         return entity.request_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[MaterialRequest]:
+    def find_existing_entity(self, source_name: str) -> MaterialRequest | None:
         """Find existing Material Request by sync record."""
         if source_name in self._request_cache:
             return self._request_cache[source_name]

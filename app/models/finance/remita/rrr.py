@@ -21,7 +21,8 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID as SAUUID
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import UUID as SAUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -91,7 +92,7 @@ class RemitaRRR(Base):
     # Payer information
     payer_name: Mapped[str] = mapped_column(String(200), nullable=False)
     payer_email: Mapped[str] = mapped_column(String(255), nullable=False)
-    payer_phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    payer_phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Remita biller/service details
     biller_id: Mapped[str] = mapped_column(
@@ -115,11 +116,11 @@ class RemitaRRR(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Generic source linking (caller decides what to put)
-    source_type: Mapped[Optional[str]] = mapped_column(
+    source_type: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
     )  # e.g., "payroll_paye", "stamp_duty", "pension"
-    source_id: Mapped[Optional[UUID]] = mapped_column(
+    source_id: Mapped[UUID | None] = mapped_column(
         SAUUID(as_uuid=True),
         nullable=True,
     )
@@ -137,35 +138,35 @@ class RemitaRRR(Base):
         nullable=False,
         default=datetime.utcnow,
     )
-    expires_at: Mapped[Optional[datetime]] = mapped_column(
+    expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    paid_at: Mapped[Optional[datetime]] = mapped_column(
+    paid_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
     # Payment info (populated when paid)
-    payment_reference: Mapped[Optional[str]] = mapped_column(
+    payment_reference: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
-    payment_channel: Mapped[Optional[str]] = mapped_column(
+    payment_channel: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
     )  # e.g., "Bank", "Card", "USSD"
 
     # API response (for debugging/audit)
-    api_response: Mapped[Optional[dict]] = mapped_column(
+    api_response: Mapped[dict | None] = mapped_column(
         JSONB,
         nullable=True,
     )
-    last_status_check: Mapped[Optional[datetime]] = mapped_column(
+    last_status_check: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    last_status_response: Mapped[Optional[dict]] = mapped_column(
+    last_status_response: Mapped[dict | None] = mapped_column(
         JSONB,
         nullable=True,
     )
@@ -213,6 +214,4 @@ class RemitaRRR(Base):
         """Check if RRR has expired."""
         if self.status == RRRStatus.expired:
             return True
-        if self.expires_at and datetime.utcnow() > self.expires_at:
-            return True
-        return False
+        return bool(self.expires_at and datetime.utcnow() > self.expires_at)

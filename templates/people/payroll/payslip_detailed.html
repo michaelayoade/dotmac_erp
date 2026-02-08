@@ -1,3 +1,4 @@
+{% from "components/macros.html" import empty_state %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -492,14 +493,14 @@
                         {% for earning in earnings %}
                         <tr>
                             <td>{{ earning.component_name }}</td>
-                            <td>{{ earning.amount | format_currency }}</td>
+                            <td class="font-mono tabular-nums">{{ earning.amount | format_currency }}</td>
                         </tr>
                         {% else %}
                         <tr><td colspan="2" class="empty-row">No earnings</td></tr>
                         {% endfor %}
                         <tr class="table-total earnings-total">
                             <td>Total Earnings</td>
-                            <td>{{ gross_pay | format_currency }}</td>
+                            <td class="font-mono tabular-nums">{{ gross_pay | format_currency }}</td>
                         </tr>
                     </tbody>
                 </table>
@@ -519,14 +520,14 @@
                         {% for deduction in deductions %}
                         <tr>
                             <td>{{ deduction.component_name }}</td>
-                            <td>({{ deduction.amount | format_currency }})</td>
+                            <td class="font-mono tabular-nums">({{ deduction.amount | format_currency }})</td>
                         </tr>
                         {% else %}
                         <tr><td colspan="2" class="empty-row">No deductions</td></tr>
                         {% endfor %}
                         <tr class="table-total deductions-total">
                             <td>Total Deductions</td>
-                            <td>({{ total_deduction | format_currency }})</td>
+                            <td class="font-mono tabular-nums">({{ total_deduction | format_currency }})</td>
                         </tr>
                     </tbody>
                 </table>
@@ -546,19 +547,19 @@
                     <tbody>
                         <tr>
                             <td>YTD Gross</td>
-                            <td>{{ slip.ytd_gross | format_currency if slip.ytd_gross is defined and slip.ytd_gross else '—' }}</td>
+                            <td class="font-mono tabular-nums">{{ slip.ytd_gross | format_currency if slip.ytd_gross is defined and slip.ytd_gross else '—' }}</td>
                         </tr>
                         <tr>
                             <td>YTD Tax (PAYE)</td>
-                            <td>{{ slip.ytd_tax | format_currency if slip.ytd_tax is defined and slip.ytd_tax else '—' }}</td>
+                            <td class="font-mono tabular-nums">{{ slip.ytd_tax | format_currency if slip.ytd_tax is defined and slip.ytd_tax else '—' }}</td>
                         </tr>
                         <tr>
                             <td>YTD Pension</td>
-                            <td>{{ slip.ytd_pension | format_currency if slip.ytd_pension is defined and slip.ytd_pension else '—' }}</td>
+                            <td class="font-mono tabular-nums">{{ slip.ytd_pension | format_currency if slip.ytd_pension is defined and slip.ytd_pension else '—' }}</td>
                         </tr>
                         <tr>
                             <td>YTD Net</td>
-                            <td>{{ slip.ytd_net | format_currency if slip.ytd_net is defined and slip.ytd_net else '—' }}</td>
+                            <td class="font-mono tabular-nums">{{ slip.ytd_net | format_currency if slip.ytd_net is defined and slip.ytd_net else '—' }}</td>
                         </tr>
                         <tr class="table-total ytd-total">
                             <td>Periods Paid</td>
@@ -614,8 +615,14 @@
                             <tr>
                                 <td>{{ band.band_name }}</td>
                                 <td>{{ band.rate }}%</td>
-                                <td>{{ band.amount | format_currency }}</td>
-                                <td>{{ band.tax | format_currency }}</td>
+                                <td class="font-mono tabular-nums">{{ band.amount | format_currency }}</td>
+                                <td class="font-mono tabular-nums">{{ band.tax | format_currency }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="99" class="p-0">
+                                    {{ empty_state("No paye found", "There are no paye to display.") }}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>

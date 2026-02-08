@@ -6,7 +6,6 @@ Provides HR admin interface for managing:
 - Acknowledgment tracking
 """
 
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -15,8 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.services.people.hr.handbook_service import HRDocumentService
 from app.services.people.hr.web.handbook_web import handbook_web_service
-from app.web.deps import get_db, require_hr_access, WebAuthContext
-
+from app.web.deps import WebAuthContext, get_db, require_hr_access
 
 router = APIRouter(prefix="/handbook", tags=["handbook"])
 
@@ -29,9 +27,9 @@ router = APIRouter(prefix="/handbook", tags=["handbook"])
 @router.get("/", response_class=HTMLResponse)
 def documents_list(
     request: Request,
-    category: Optional[str] = Query(None),
-    status: Optional[str] = Query(None),
-    search: Optional[str] = Query(None),
+    category: str | None = Query(None),
+    status: str | None = Query(None),
+    search: str | None = Query(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):

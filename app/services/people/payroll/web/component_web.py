@@ -5,7 +5,6 @@ Payroll Web Service - Salary Component operations.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from fastapi import Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -23,6 +22,16 @@ from app.models.people.payroll.salary_structure import (
     SalaryStructureEarning,
 )
 from app.services.common import coerce_uuid
+from app.templates import templates
+from app.web.deps import WebAuthContext, base_context
+
+from .base import (
+    COMPONENT_TYPES,
+    DEFAULT_PAGE_SIZE,
+    parse_bool,
+    parse_component_type,
+    parse_uuid,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -38,18 +47,6 @@ def _safe_form_text(value: object) -> str:
     return str(value)
 
 
-from app.templates import templates
-from app.web.deps import WebAuthContext, base_context
-
-from .base import (
-    COMPONENT_TYPES,
-    DEFAULT_PAGE_SIZE,
-    parse_bool,
-    parse_component_type,
-    parse_uuid,
-)
-
-
 class ComponentWebService:
     """Service for salary component web views."""
 
@@ -58,8 +55,8 @@ class ComponentWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
-        component_type: Optional[str] = None,
+        search: str | None = None,
+        component_type: str | None = None,
         page: int = 1,
     ) -> Response:
         """Render salary components list page."""

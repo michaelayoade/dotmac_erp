@@ -8,16 +8,14 @@ from __future__ import annotations
 
 import logging
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
-from fastapi import Request, UploadFile
+from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.config import settings
-from app.models.finance.ar.customer import Customer, RiskCategory
+from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.customer_payment import CustomerPayment
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 from app.models.finance.ar.quote import Quote  # noqa: F811
@@ -37,7 +35,6 @@ from app.services.finance.ar.web.base import (
     format_file_size,
     get_accounts,
     invoice_status_label,
-    parse_customer_type,
 )
 from app.services.finance.common.attachment import AttachmentInput, attachment_service
 from app.services.finance.platform.currency_context import get_currency_context
@@ -52,64 +49,23 @@ class CustomerWebService:
     """Web service methods for AR customers."""
 
     @staticmethod
-    def build_customer_input(form_data: dict) -> CustomerInput:
+    def build_customer_input(
+        db: Session, form_data: dict, organization_id: UUID
+    ) -> CustomerInput:
         """Build CustomerInput from form data."""
-        credit_limit = form_data.get("credit_limit")
-        return CustomerInput(
-            customer_code=form_data.get("customer_code", ""),
-            customer_type=parse_customer_type(form_data.get("customer_type")),
-            customer_name=form_data.get("customer_name", ""),
-            trading_name=form_data.get("trading_name")
-            or form_data.get("customer_name", ""),
-            tax_id=form_data.get("tax_id"),
-            currency_code=form_data.get(
-                "currency_code",
-                settings.default_functional_currency_code,
-            ),
-            payment_terms_days=int(form_data.get("payment_terms_days", 30)),
-            credit_limit=Decimal(credit_limit) if credit_limit else None,
-            credit_hold=form_data.get("credit_hold") is not None,
-            risk_category=RiskCategory.MEDIUM,
-            default_receivable_account_id=(
-                UUID(form_data["default_receivable_account_id"])
-                if form_data.get("default_receivable_account_id")
-                else UUID("00000000-0000-0000-0000-000000000001")
-            ),
-            default_revenue_account_id=(
-                UUID(form_data["default_revenue_account_id"])
-                if form_data.get("default_revenue_account_id")
-                else None
-            ),
-            default_tax_code_id=(
-                UUID(form_data["default_tax_code_id"])
-                if form_data.get("default_tax_code_id")
-                else None
-            ),
-            billing_address={
-                "address": form_data.get("billing_address", ""),
-            }
-            if form_data.get("billing_address")
-            else None,
-            shipping_address={
-                "address": form_data.get("shipping_address", ""),
-            }
-            if form_data.get("shipping_address")
-            else None,
-            primary_contact={
-                "email": form_data.get("email", ""),
-                "phone": form_data.get("phone", ""),
-            }
-            if form_data.get("email") or form_data.get("phone")
-            else None,
-            is_active=form_data.get("is_active") is not None,
+        payload = dict(form_data)
+        return customer_service.build_input_from_payload(
+            db=db,
+            organization_id=organization_id,
+            payload=payload,
         )
 
     @staticmethod
     def list_customers_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        status: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -121,26 +77,16 @@ class CustomerWebService:
             status,
             page,
         )
-        org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
+        org_id = coerce_uuid(organization_id)
+        from app.services.finance.ar.customer_query import build_customer_query
 
-        is_active = None
-        if status == "active":
-            is_active = True
-        elif status == "inactive":
-            is_active = False
-
-        query = db.query(Customer).filter(Customer.organization_id == org_id)
-        if is_active is not None:
-            query = query.filter(Customer.is_active == is_active)
-        if search:
-            search_pattern = f"%{search}%"
-            query = query.filter(
-                (Customer.customer_code.ilike(search_pattern))
-                | (Customer.legal_name.ilike(search_pattern))
-                | (Customer.trading_name.ilike(search_pattern))
-                | (Customer.tax_identification_number.ilike(search_pattern))
-            )
+        query = build_customer_query(
+            db=db,
+            organization_id=organization_id,
+            search=search,
+            status=status,
+        )
 
         total_count = (
             query.with_entities(func.count(Customer.customer_id)).scalar() or 0
@@ -214,7 +160,7 @@ class CustomerWebService:
     def customer_form_context(
         db: Session,
         organization_id: str,
-        customer_id: Optional[str] = None,
+        customer_id: str | None = None,
     ) -> dict:
         """Get context for customer create/edit form."""
         logger.debug(
@@ -287,7 +233,9 @@ class CustomerWebService:
         default_tax_code_label = None
         if customer.default_tax_code_id:
             try:
-                tax_code = tax_code_service.get(db, str(customer.default_tax_code_id))
+                tax_code = tax_code_service.get(
+                    db, str(customer.default_tax_code_id), org_id
+                )
                 if tax_code and tax_code.organization_id == org_id:
                     default_tax_code_label = (
                         f"{tax_code.tax_code} - {tax_code.tax_name}"
@@ -480,7 +428,7 @@ class CustomerWebService:
         db: Session,
         organization_id: str,
         customer_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete a customer. Returns error message or None on success."""
         logger.debug(
             "delete_customer: org=%s customer_id=%s", organization_id, customer_id
@@ -488,47 +436,15 @@ class CustomerWebService:
         org_id = coerce_uuid(organization_id)
         cust_id = coerce_uuid(customer_id)
 
-        customer = db.get(Customer, cust_id)
-        if not customer or customer.organization_id != org_id:
-            return "Customer not found"
-
-        # Check for existing invoices
-        invoice_count = (
-            db.query(func.count(Invoice.invoice_id))
-            .filter(
-                Invoice.organization_id == org_id,
-                Invoice.customer_id == cust_id,
-            )
-            .scalar()
-            or 0
-        )
-
-        if invoice_count > 0:
-            return f"Cannot delete customer with {invoice_count} invoice(s). Deactivate instead."
-
-        # Check for existing payments
-        payment_count = (
-            db.query(func.count(CustomerPayment.payment_id))
-            .filter(
-                CustomerPayment.organization_id == org_id,
-                CustomerPayment.customer_id == cust_id,
-            )
-            .scalar()
-            or 0
-        )
-
-        if payment_count > 0:
-            return f"Cannot delete customer with {payment_count} receipt(s). Deactivate instead."
-
         try:
-            db.delete(customer)
-            db.commit()
+            customer_service.delete_customer(db, org_id, cust_id)
             logger.info(
                 "delete_customer: deleted customer %s for org %s", cust_id, org_id
             )
             return None
+        except HTTPException as exc:
+            return exc.detail
         except Exception as e:
-            db.rollback()
             logger.exception("delete_customer: failed for org %s", org_id)
             return f"Failed to delete customer: {str(e)}"
 
@@ -541,8 +457,8 @@ class CustomerWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        status: str | None,
         page: int,
     ) -> HTMLResponse:
         """Render customer list page."""
@@ -619,7 +535,7 @@ class CustomerWebService:
         try:
             org_id = auth.organization_id
             assert org_id is not None
-            input_data = self.build_customer_input(dict(form_data))
+            input_data = self.build_customer_input(db, dict(form_data), org_id)
 
             customer_service.create_customer(
                 db=db,
@@ -655,7 +571,7 @@ class CustomerWebService:
         try:
             org_id = auth.organization_id
             assert org_id is not None
-            input_data = self.build_customer_input(dict(form_data))
+            input_data = self.build_customer_input(db, dict(form_data), org_id)
 
             customer_service.update_customer(
                 db=db,
@@ -711,7 +627,7 @@ class CustomerWebService:
         self,
         customer_id: str,
         file: UploadFile,
-        description: Optional[str],
+        description: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:

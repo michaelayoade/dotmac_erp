@@ -13,8 +13,8 @@ Usage:
 
 import argparse
 import logging
-import sys
 import os
+import sys
 import uuid
 
 # Add project root to path
@@ -42,9 +42,9 @@ from app.models.sync.staging import (
     StagingSyncBatch,
 )
 from app.services.erpnext.client import ERPNextClient, ERPNextConfig
+from app.services.erpnext.sync.import_staging import StagingImportService
 from app.services.erpnext.sync.staging import StagingSyncOrchestrator
 from app.services.erpnext.sync.validation import StagingValidationService
-from app.services.erpnext.sync.import_staging import StagingImportService
 
 
 def get_erpnext_config(db, org):

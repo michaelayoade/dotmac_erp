@@ -27,7 +27,7 @@
 
         <div class="p-6 space-y-6">
             {# Basic Information #}
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <label for="component_code" class="form-label">Code <span class="text-red-500">*</span></label>
                     <input type="text" name="component_code" id="component_code" required
@@ -46,7 +46,7 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <label for="component_name" class="form-label">Name <span class="text-red-500">*</span></label>
                     <input type="text" name="component_name" id="component_name" required
@@ -110,7 +110,7 @@
             <div class="space-y-4">
                 <h3 class="text-sm font-medium text-slate-900 dark:text-white">Settings</h3>
 
-                <div class="space-y-3">
+                <div class="space-y-4">
                     <label class="flex items-center gap-3">
                         <input type="checkbox" name="is_tax_applicable" value="true"
                             {% if (component and component.is_tax_applicable) or (not component and form_data.get('is_tax_applicable')) %}checked{% endif %}

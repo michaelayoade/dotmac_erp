@@ -6,7 +6,6 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Date,
@@ -95,7 +94,7 @@ class CustomerPayment(Base):
         nullable=False,
         comment="Net amount received (after WHT)",
     )
-    exchange_rate: Mapped[Optional[Decimal]] = mapped_column(
+    exchange_rate: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 10), nullable=True
     )
     functional_currency_amount: Mapped[Decimal] = mapped_column(
@@ -104,7 +103,7 @@ class CustomerPayment(Base):
     )
 
     # Withholding Tax (WHT) - when customer deducts WHT before paying
-    wht_code_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    wht_code_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="WHT rate applied by customer",
@@ -115,19 +114,19 @@ class CustomerPayment(Base):
         default=0,
         comment="WHT deducted by customer",
     )
-    wht_certificate_number: Mapped[Optional[str]] = mapped_column(
+    wht_certificate_number: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="WHT certificate number received from customer",
     )
 
     # Bank
-    bank_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    bank_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Status
     status: Mapped[PaymentStatus] = mapped_column(
@@ -137,15 +136,15 @@ class CustomerPayment(Base):
     )
 
     # Accounting
-    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    posting_batch_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    posting_batch_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    bank_reconciliation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    bank_reconciliation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -155,23 +154,23 @@ class CustomerPayment(Base):
         UUID(as_uuid=True),
         nullable=False,
     )
-    posted_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    posted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    posted_at: Mapped[Optional[datetime]] = mapped_column(
+    posted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
-    correlation_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

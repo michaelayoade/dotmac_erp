@@ -9,7 +9,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import BinaryIO, List, Optional
+from typing import BinaryIO
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -18,6 +18,7 @@ from app.models.finance.common.attachment import Attachment, AttachmentCategory
 from app.services.common import coerce_uuid
 from app.services.file_upload import (
     FileUploadError,
+    FileUploadService,
     get_finance_attachment_upload,
     resolve_safe_path,
     safe_entity_segment,
@@ -35,7 +36,7 @@ class AttachmentInput:
     file_name: str
     content_type: str
     category: AttachmentCategory = AttachmentCategory.OTHER
-    description: Optional[str] = None
+    description: str | None = None
 
 
 @dataclass
@@ -47,12 +48,12 @@ class AttachmentView:
     file_size: int
     content_type: str
     category: str
-    description: Optional[str]
+    description: str | None
     uploaded_at: datetime
     download_url: str
 
 
-def _upload_service():
+def _upload_service() -> FileUploadService:
     return get_finance_attachment_upload()
 
 
@@ -138,7 +139,7 @@ class AttachmentService:
         db: Session,
         organization_id: uuid.UUID,
         attachment_id: str,
-    ) -> Optional[Attachment]:
+    ) -> Attachment | None:
         """Get attachment by ID."""
         org_id = coerce_uuid(organization_id)
         att_id = coerce_uuid(attachment_id)
@@ -158,7 +159,7 @@ class AttachmentService:
         organization_id: uuid.UUID,
         entity_type: str,
         entity_id: uuid.UUID,
-    ) -> List[Attachment]:
+    ) -> list[Attachment]:
         """List all attachments for a specific entity."""
         org_id = coerce_uuid(organization_id)
         ent_id = coerce_uuid(entity_id)

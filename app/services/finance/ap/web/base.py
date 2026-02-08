@@ -13,7 +13,6 @@ import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import func
@@ -47,13 +46,13 @@ logger = logging.getLogger(__name__)
 # ==============================================================================
 
 
-def parse_supplier_type(value: Optional[str]) -> SupplierType:
+def parse_supplier_type(value: str | None) -> SupplierType:
     """Parse supplier type from string value."""
     parsed = parse_enum_safe(SupplierType, value, SupplierType.VENDOR)
     return parsed or SupplierType.VENDOR
 
 
-def parse_invoice_status(value: Optional[str]) -> Optional[SupplierInvoiceStatus]:
+def parse_invoice_status(value: str | None) -> SupplierInvoiceStatus | None:
     """Parse invoice status from string value."""
     if not value:
         return None
@@ -69,7 +68,7 @@ def parse_invoice_status(value: Optional[str]) -> Optional[SupplierInvoiceStatus
         return None
 
 
-def parse_payment_status(value: Optional[str]) -> Optional[APPaymentStatus]:
+def parse_payment_status(value: str | None) -> APPaymentStatus | None:
     """Parse payment status from string value."""
     if not value:
         return None
@@ -224,7 +223,7 @@ def invoice_line_view(line: SupplierInvoiceLine, currency_code: str) -> dict:
     }
 
 
-def invoice_detail_view(invoice: SupplierInvoice, supplier: Optional[Supplier]) -> dict:
+def invoice_detail_view(invoice: SupplierInvoice, supplier: Supplier | None) -> dict:
     """Transform invoice to detail view."""
     balance = invoice.total_amount - invoice.amount_paid
     today = date.today()
@@ -261,7 +260,7 @@ def invoice_detail_view(invoice: SupplierInvoice, supplier: Optional[Supplier]) 
 # ==============================================================================
 
 
-def payment_detail_view(payment: SupplierPayment, supplier: Optional[Supplier]) -> dict:
+def payment_detail_view(payment: SupplierPayment, supplier: Supplier | None) -> dict:
     """Transform payment to detail view."""
     return {
         "payment_id": payment.payment_id,
@@ -280,7 +279,7 @@ def payment_detail_view(payment: SupplierPayment, supplier: Optional[Supplier]) 
 
 def allocation_view(
     allocation: APPaymentAllocation,
-    invoice: Optional[SupplierInvoice],
+    invoice: SupplierInvoice | None,
     currency_code: str,
 ) -> dict:
     """Transform payment allocation to view."""
@@ -307,8 +306,8 @@ def get_accounts(
     db: Session,
     organization_id: UUID,
     ifrs_category: IFRSCategory,
-    subledger_type: Optional[str] = None,
-) -> List[Account]:
+    subledger_type: str | None = None,
+) -> list[Account]:
     """Get accounts filtered by IFRS category and optional subledger type."""
     query = (
         db.query(Account)
@@ -324,7 +323,7 @@ def get_accounts(
     return query.order_by(Account.account_code).all()
 
 
-def get_cost_centers(db: Session, organization_id: UUID) -> List[CostCenter]:
+def get_cost_centers(db: Session, organization_id: UUID) -> list[CostCenter]:
     """Get active cost centers for organization."""
     return (
         db.query(CostCenter)
@@ -337,7 +336,7 @@ def get_cost_centers(db: Session, organization_id: UUID) -> List[CostCenter]:
     )
 
 
-def get_projects(db: Session, organization_id: UUID) -> List[Project]:
+def get_projects(db: Session, organization_id: UUID) -> list[Project]:
     """Get projects for organization."""
     return (
         db.query(Project)

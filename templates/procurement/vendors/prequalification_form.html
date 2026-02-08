@@ -21,11 +21,11 @@
     {% endif %}
     <div class="card p-6">
         <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Prequalify Vendor</h2>
-        <form method="post" action="/procurement/vendors/prequalification" class="space-y-5">
+        <form method="post" action="/procurement/vendors/prequalification" class="space-y-6">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Supplier</label>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Supplier <span class="text-rose-500">*</span></label>
                     <select name="supplier_id" class="form-select" required>
                         <option value="">Select supplier</option>
                         {% for supplier in suppliers %}
@@ -36,7 +36,7 @@
                     </select>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Application Date</label>
+                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Application Date <span class="text-rose-500">*</span></label>
                     <input type="date" name="application_date" class="input-field" required>
                 </div>
             </div>

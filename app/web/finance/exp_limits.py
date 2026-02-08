@@ -8,11 +8,10 @@ HTML template routes for expense limit management:
 - Evaluation audit trail
 """
 
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from app.services.expense.limit_web import expense_limit_web_service
@@ -37,9 +36,9 @@ router = APIRouter(tags=["expense-limits-web"])
 @router.get("/limits/rules", response_class=HTMLResponse)
 def limit_rules_list(
     request: Request,
-    scope_type: Optional[str] = None,
-    is_active: Optional[str] = None,
-    search: Optional[str] = None,
+    scope_type: str | None = None,
+    is_active: str | None = None,
+    search: str | None = None,
     page: int = Query(1, ge=1),
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db),
@@ -139,8 +138,8 @@ async def delete_limit_rule(
 @router.get("/limits/approvers", response_class=HTMLResponse)
 def approver_limits_list(
     request: Request,
-    scope_type: Optional[str] = None,
-    is_active: Optional[str] = None,
+    scope_type: str | None = None,
+    is_active: str | None = None,
     page: int = Query(1, ge=1),
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db),
@@ -168,6 +167,55 @@ def new_approver_limit(
         auth=auth,
         db=db,
     )
+
+
+@router.get("/limits/approvers/{approver_limit_id}/edit", response_class=HTMLResponse)
+def edit_approver_limit(
+    request: Request,
+    approver_limit_id: UUID,
+    auth: WebAuthContext = Depends(require_expense_access),
+    db: Session = Depends(get_db),
+):
+    """Edit expense approver limit form."""
+    return expense_limit_web_service.edit_approver_limit_form_response(
+        request=request,
+        approver_limit_id=approver_limit_id,
+        auth=auth,
+        db=db,
+    )
+
+
+@router.post("/limits/approvers/{approver_limit_id}/edit", response_class=HTMLResponse)
+async def update_approver_limit(
+    request: Request,
+    approver_limit_id: UUID,
+    auth: WebAuthContext = Depends(_require_policies_manage),
+    db: Session = Depends(get_db),
+):
+    """Update expense approver limit."""
+    return await expense_limit_web_service.update_approver_limit_response(
+        request=request,
+        approver_limit_id=approver_limit_id,
+        auth=auth,
+        db=db,
+    )
+
+
+@router.get("/limits/approvers/employees/search")
+def approver_employee_search(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(default=8, ge=1, le=20),
+    auth: WebAuthContext = Depends(require_expense_access),
+    db: Session = Depends(get_db),
+):
+    """Search active employees for approver limit typeahead."""
+    payload = expense_limit_web_service.employee_typeahead(
+        db=db,
+        organization_id=str(auth.organization_id),
+        query=q,
+        limit=limit,
+    )
+    return JSONResponse(payload)
 
 
 @router.post("/limits/approvers/new", response_class=HTMLResponse)
@@ -209,7 +257,7 @@ async def delete_approver_limit(
 @router.get("/limits/usage", response_class=HTMLResponse)
 def usage_dashboard(
     request: Request,
-    employee_id: Optional[str] = None,
+    employee_id: str | None = None,
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db),
 ):
@@ -225,9 +273,9 @@ def usage_dashboard(
 @router.get("/limits/evaluations", response_class=HTMLResponse)
 def evaluations_list(
     request: Request,
-    result: Optional[str] = None,
-    from_date: Optional[str] = None,
-    to_date: Optional[str] = None,
+    result: str | None = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
     page: int = Query(1, ge=1),
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db),

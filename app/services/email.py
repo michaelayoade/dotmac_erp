@@ -4,13 +4,14 @@ import smtplib
 import socket
 import ssl
 import threading
+from collections.abc import Generator
 from contextlib import contextmanager
 from email import encoders
 from email.mime.application import MIMEApplication
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Generator, Optional, TypedDict
+from typing import TypedDict
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -337,7 +338,7 @@ def send_email(
     subject: str,
     body_html: str,
     body_text: str | None = None,
-    attachments: Optional[list[tuple[str, bytes, str]]] = None,
+    attachments: list[tuple[str, bytes, str]] | None = None,
     raise_on_error: bool = False,
     *,
     module: EmailModule | None = EmailModule.ADMIN,

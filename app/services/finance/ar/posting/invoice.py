@@ -8,7 +8,6 @@ Transforms customer invoices into journal entries with:
 
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -35,7 +34,7 @@ def post_invoice(
     invoice_id: UUID,
     posting_date: date,
     posted_by_user_id: UUID,
-    idempotency_key: Optional[str] = None,
+    idempotency_key: str | None = None,
 ) -> ARPostingResult:
     """
     Post an AR invoice to the general ledger.
@@ -150,7 +149,7 @@ def post_invoice(
 
     # Credit lines (revenue accounts)
     for inv_line in lines:
-        account_id: Optional[UUID] = inv_line.revenue_account_id
+        account_id: UUID | None = inv_line.revenue_account_id
         if not account_id:
             account_id = customer.default_revenue_account_id
 

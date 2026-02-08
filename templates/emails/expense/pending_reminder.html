@@ -1,0 +1,38 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Expense Claim Pending Review{% endblock %}
+{% block content %}
+<p style="margin: 0 0 16px 0;">Hi {{ first_name }},</p>
+
+{% if days_pending >= 7 %}
+<div style="margin: 0 0 20px 0; padding: 16px; background-color: #fef3c7; border-left: 4px solid #d97706; border-radius: 4px;">
+  <p style="margin: 0; color: #92400e; font-weight: 600; font-size: 14px;">This claim has been pending for {{ days_pending }} days</p>
+</div>
+{% endif %}
+
+<p style="margin: 0 0 20px 0;">An expense claim from <strong>{{ claimant_name }}</strong> is still awaiting your review.</p>
+
+<table role="presentation" style="width: 100%; border-collapse: collapse; margin: 20px 0; background: #f8fafc; border-radius: 6px;">
+  <tr>
+    <td style="padding: 12px 16px; color: #64748b; width: 45%;">Claim Number</td>
+    <td style="padding: 12px 16px; font-weight: 600;">{{ claim_number }}</td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 16px; color: #64748b; border-top: 1px solid #e2e8f0;">From</td>
+    <td style="padding: 12px 16px; font-weight: 600; border-top: 1px solid #e2e8f0;">{{ claimant_name }}</td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 16px; color: #64748b; border-top: 1px solid #e2e8f0;">Amount</td>
+    <td style="padding: 12px 16px; font-weight: 600; border-top: 1px solid #e2e8f0;">{{ currency }} {{ amount }}</td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 16px; color: #64748b; border-top: 1px solid #e2e8f0;">Submitted</td>
+    <td style="padding: 12px 16px; font-weight: 600; border-top: 1px solid #e2e8f0;">{{ claim_date }} ({{ days_pending }} day{{ 's' if days_pending != 1 else '' }} ago)</td>
+  </tr>
+</table>
+
+<p style="margin: 0 0 20px 0;">Please take a moment to review and action this claim.</p>
+
+<p>
+  <a href="{{ claim_url }}" style="display: inline-block; padding: 12px 24px; background-color: {{ primary_color | default('#0d9488') }}; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600;">Review Now</a>
+</p>
+{% endblock %}

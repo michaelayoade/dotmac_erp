@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 
+{% from "components/macros.html" import empty_state %}
 {% block page_title %}Calibration{% endblock %}
 
 {% block breadcrumbs %}
@@ -59,7 +60,7 @@
             <h3 class="font-medium text-slate-900 dark:text-white">Rating Comparison</h3>
         </div>
         <div class="card-body">
-            <div class="grid grid-cols-2 gap-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div class="text-center p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20">
                     <div class="text-3xl font-bold text-blue-600 dark:text-blue-400">
                         {{ appraisal.self_overall_rating or '-' }}<span class="text-lg">/5</span>
@@ -128,7 +129,7 @@
         <div class="card-header">
             <h3 class="font-medium text-slate-900 dark:text-white">KRA Scores</h3>
         </div>
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
@@ -145,6 +146,12 @@
                         <td class="px-4 py-3 text-sm text-right text-slate-600 dark:text-slate-400 font-mono">{{ score.weightage }}%</td>
                         <td class="px-4 py-3 text-sm text-right text-blue-600 dark:text-blue-400">{{ score.self_rating or '-' }}</td>
                         <td class="px-4 py-3 text-sm text-right text-amber-600 dark:text-amber-400">{{ score.manager_rating or '-' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No appraisal found", "There are no appraisal to display.") }}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -222,7 +229,7 @@
         </div>
 
         {# Form Actions #}
-        <div class="flex justify-end gap-3">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/people/perf/appraisals/{{ appraisal.appraisal_id }}" class="btn btn-secondary">
                 Cancel
             </a>

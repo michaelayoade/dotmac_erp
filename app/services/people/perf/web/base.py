@@ -5,7 +5,7 @@ Performance Web Service - Base utilities and common functions.
 from __future__ import annotations
 
 import logging
-from typing import Optional, cast
+from typing import cast
 from uuid import UUID
 
 from app.models.people.perf import AppraisalStatus, KPIStatus
@@ -18,17 +18,17 @@ from app.services.formatters import parse_int as parse_int  # noqa: F401
 logger = logging.getLogger(__name__)
 
 
-def parse_uuid(value: Optional[str]) -> Optional[UUID]:
+def parse_uuid(value: str | None) -> UUID | None:
     """Parse a string to UUID, returning None on failure."""
     if not value:
         return None
     try:
-        return cast(Optional[UUID], coerce_uuid(value))
+        return cast(UUID | None, coerce_uuid(value))
     except Exception:
         return None
 
 
-def parse_appraisal_status(value: Optional[str]) -> Optional[AppraisalStatus]:
+def parse_appraisal_status(value: str | None) -> AppraisalStatus | None:
     """Parse appraisal status string to enum."""
     if not value:
         return None
@@ -38,7 +38,7 @@ def parse_appraisal_status(value: Optional[str]) -> Optional[AppraisalStatus]:
         return None
 
 
-def parse_kpi_status(value: Optional[str]) -> Optional[KPIStatus]:
+def parse_kpi_status(value: str | None) -> KPIStatus | None:
     """Parse KPI status string to enum."""
     if not value:
         return None
@@ -48,7 +48,7 @@ def parse_kpi_status(value: Optional[str]) -> Optional[KPIStatus]:
         return None
 
 
-def parse_cycle_status(value: Optional[str]) -> Optional[AppraisalCycleStatus]:
+def parse_cycle_status(value: str | None) -> AppraisalCycleStatus | None:
     """Parse cycle status string to enum."""
     if not value:
         return None
@@ -58,7 +58,7 @@ def parse_cycle_status(value: Optional[str]) -> Optional[AppraisalCycleStatus]:
         return None
 
 
-def parse_bool(value: Optional[str]) -> Optional[bool]:
+def parse_bool(value: str | None) -> bool | None:
     """Parse boolean from string."""
     if value == "true":
         return True

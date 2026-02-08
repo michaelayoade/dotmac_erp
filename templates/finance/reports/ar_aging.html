@@ -1,5 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
+{% from "components/macros.html" import empty_state %}
 {% block page_title %}AR aging report{% endblock %}
 
 {% block breadcrumbs %}
@@ -81,11 +82,11 @@
                     <table class="w-full text-sm">
                         <thead class="bg-slate-50 dark:bg-slate-800/50">
                             <tr>
-                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
-                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Customer</th>
-                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Due Date</th>
-                                <th scope="col" class="text-center py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Days</th>
-                                <th scope="col" class="text-right py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
+                                <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Invoice #</th>
+                                <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Customer</th>
+                                <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Due Date</th>
+                                <th scope="col" class="text-center py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Days</th>
+                                <th scope="col" class="text-right py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Amount</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -96,6 +97,12 @@
                                 <td class="py-2 px-4 text-slate-500">{{ inv.due_date }}</td>
                                 <td class="py-2 px-4 text-center text-rose-600 dark:text-rose-400 font-medium">{{ inv.days_overdue }}</td>
                                 <td class="py-2 px-4 text-right font-mono">{{ inv.amount }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="99" class="p-0">
+                                    {{ empty_state("No over_90 found", "There are no over_90 to display.") }}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -121,11 +128,11 @@
                     <table class="w-full text-sm">
                         <thead class="bg-slate-50 dark:bg-slate-800/50">
                             <tr>
-                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
-                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Customer</th>
-                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Due Date</th>
-                                <th scope="col" class="text-center py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Days</th>
-                                <th scope="col" class="text-right py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
+                                <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Invoice #</th>
+                                <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Customer</th>
+                                <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Due Date</th>
+                                <th scope="col" class="text-center py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Days</th>
+                                <th scope="col" class="text-right py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Amount</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -136,6 +143,12 @@
                                 <td class="py-2 px-4 text-slate-500">{{ inv.due_date }}</td>
                                 <td class="py-2 px-4 text-center text-amber-600 dark:text-amber-400 font-medium">{{ inv.days_overdue }}</td>
                                 <td class="py-2 px-4 text-right font-mono">{{ inv.amount }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="99" class="p-0">
+                                    {{ empty_state("No days_61_90 found", "There are no days_61_90 to display.") }}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -161,11 +174,11 @@
                     <table class="w-full text-sm">
                         <thead class="bg-slate-50 dark:bg-slate-800/50">
                             <tr>
-                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
-                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Customer</th>
-                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Due Date</th>
-                                <th scope="col" class="text-center py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Days</th>
-                                <th scope="col" class="text-right py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
+                                <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Invoice #</th>
+                                <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Customer</th>
+                                <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Due Date</th>
+                                <th scope="col" class="text-center py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Days</th>
+                                <th scope="col" class="text-right py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Amount</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -176,6 +189,12 @@
                                 <td class="py-2 px-4 text-slate-500">{{ inv.due_date }}</td>
                                 <td class="py-2 px-4 text-center text-yellow-600 dark:text-yellow-400 font-medium">{{ inv.days_overdue }}</td>
                                 <td class="py-2 px-4 text-right font-mono">{{ inv.amount }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="99" class="p-0">
+                                    {{ empty_state("No days_31_60 found", "There are no days_31_60 to display.") }}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -201,11 +220,11 @@
                     <table class="w-full text-sm">
                         <thead class="bg-slate-50 dark:bg-slate-800/50">
                             <tr>
-                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
-                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Customer</th>
-                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Due Date</th>
-                                <th scope="col" class="text-center py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Days</th>
-                                <th scope="col" class="text-right py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
+                                <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Invoice #</th>
+                                <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Customer</th>
+                                <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Due Date</th>
+                                <th scope="col" class="text-center py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Days</th>
+                                <th scope="col" class="text-right py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Amount</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -216,6 +235,12 @@
                                 <td class="py-2 px-4 text-slate-500">{{ inv.due_date }}</td>
                                 <td class="py-2 px-4 text-center font-medium">{{ inv.days_overdue }}</td>
                                 <td class="py-2 px-4 text-right font-mono">{{ inv.amount }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="99" class="p-0">
+                                    {{ empty_state("No days_1_30 found", "There are no days_1_30 to display.") }}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -241,11 +266,11 @@
                     <table class="w-full text-sm">
                         <thead class="bg-slate-50 dark:bg-slate-800/50">
                             <tr>
-                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Invoice #</th>
-                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Customer</th>
-                                <th scope="col" class="text-left py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Due Date</th>
-                                <th scope="col" class="text-center py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Days</th>
-                                <th scope="col" class="text-right py-2 px-4 font-medium text-slate-600 dark:text-slate-400">Amount</th>
+                                <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Invoice #</th>
+                                <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Customer</th>
+                                <th scope="col" class="text-left py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Due Date</th>
+                                <th scope="col" class="text-center py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Days</th>
+                                <th scope="col" class="text-right py-2 px-4 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Amount</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -256,6 +281,12 @@
                                 <td class="py-2 px-4 text-slate-500">{{ inv.due_date }}</td>
                                 <td class="py-2 px-4 text-center text-emerald-600 dark:text-emerald-400 font-medium">-</td>
                                 <td class="py-2 px-4 text-right font-mono">{{ inv.amount }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="99" class="p-0">
+                                    {{ empty_state("No current found", "There are no current to display.") }}
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>

@@ -1,0 +1,13 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Application Update{% endblock %}
+{% block content %}
+<p style="margin: 0 0 16px 0;">Dear {{ applicant_name }},</p>
+
+<p style="margin: 0 0 16px 0;">Thank you for your interest in the <strong>{{ job_title }}</strong> position at <strong>{{ org_name }}</strong> and for the time you invested in the application process.</p>
+
+<p style="margin: 0 0 16px 0;">After careful consideration, we regret to inform you that we have decided to move forward with another candidate whose experience more closely aligns with the requirements for this particular role.</p>
+
+<p style="margin: 0 0 16px 0;">This was not an easy decision, and it does not diminish the value of your skills and experience. We were genuinely impressed by your background and encourage you to apply for future openings that match your profile.</p>
+
+<p style="margin: 0;">We wish you all the best in your career journey and hope to have the opportunity to consider your application again in the future.</p>
+{% endblock %}

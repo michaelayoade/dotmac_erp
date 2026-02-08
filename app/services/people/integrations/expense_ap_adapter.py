@@ -9,7 +9,6 @@ import uuid
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -32,8 +31,8 @@ class APPostingResult:
     """Result of posting expense claim to AP."""
 
     success: bool
-    supplier_invoice_id: Optional[uuid.UUID] = None
-    error_message: Optional[str] = None
+    supplier_invoice_id: uuid.UUID | None = None
+    error_message: str | None = None
 
 
 class ExpenseAPAdapter:

@@ -10,9 +10,10 @@ Adds:
 """
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
 from alembic import op
 from app.alembic_utils import ensure_enum
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = "add_attendance_requests_shift_assignments"

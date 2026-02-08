@@ -160,7 +160,7 @@ class TestUpdateBalanceForPosting:
             with patch(
                 "app.services.finance.gl.account_balance.BalanceType", MockBalanceType
             ):
-                result = AccountBalanceService.update_balance_for_posting(
+                AccountBalanceService.update_balance_for_posting(
                     mock_db,
                     org_id,
                     account_id,
@@ -178,11 +178,11 @@ class TestUpdateBalanceForPosting:
         account_id = uuid4()
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        with patch("app.services.finance.gl.account_balance.AccountBalance") as mock_ab:
+        with patch("app.services.finance.gl.account_balance.AccountBalance"):
             with patch(
                 "app.services.finance.gl.account_balance.BalanceType", MockBalanceType
             ):
-                result = AccountBalanceService.update_balance_for_posting(
+                AccountBalanceService.update_balance_for_posting(
                     mock_db,
                     org_id,
                     account_id,
@@ -394,25 +394,25 @@ class TestGetYTDBalance:
                 mock_fp.organization_id = MockColumn()
                 mock_fp.period_number = MockColumn()
 
-                with patch(
-                    "app.services.finance.gl.account_balance.BalanceType",
-                    MockBalanceType,
-                ):
-                    with patch(
+                with (
+                    patch(
+                        "app.services.finance.gl.account_balance.BalanceType",
+                        MockBalanceType,
+                    ),
+                    patch(
                         "app.services.finance.gl.account_balance.and_",
                         return_value=MagicMock(),
-                    ):
-                        with patch(
-                            "app.services.finance.gl.account_balance.func"
-                        ) as mock_func:
-                            mock_func.sum.return_value = MagicMock()
+                    ),
+                    patch("app.services.finance.gl.account_balance.func") as mock_func,
+                ):
+                    mock_func.sum.return_value = MagicMock()
 
-                            result = AccountBalanceService.get_ytd_balance(
-                                mock_db,
-                                org_id,
-                                account_id,
-                                fiscal_year_id,
-                                up_to_period_id,
-                            )
+                    result = AccountBalanceService.get_ytd_balance(
+                        mock_db,
+                        org_id,
+                        account_id,
+                        fiscal_year_id,
+                        up_to_period_id,
+                    )
 
         assert result == Decimal("2000.00")

@@ -24,7 +24,6 @@ from app.models.finance.ap.supplier_payment import APPaymentStatus
 from app.services.finance.ap.ap_posting_adapter import APPostingAdapter, APPostingResult
 from app.services.finance.ap.posting.helpers import create_tax_transactions
 
-
 # ============ Mock Classes ============
 
 

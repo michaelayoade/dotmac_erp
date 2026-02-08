@@ -7,7 +7,6 @@ import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Numeric, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -60,7 +59,7 @@ class CurrencyTranslationAdjustment(Base):
     presentation_currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
 
     # Amounts
-    net_investment_amount: Mapped[Optional[Decimal]] = mapped_column(
+    net_investment_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
@@ -75,7 +74,7 @@ class CurrencyTranslationAdjustment(Base):
     )
     oci_balance: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
 
-    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )

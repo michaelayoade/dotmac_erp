@@ -5,7 +5,6 @@ Asset Component Model - FA Schema.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Date,
@@ -49,7 +48,7 @@ class AssetComponent(Base):
 
     component_code: Mapped[str] = mapped_column(String(30), nullable=False)
     component_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Cost allocation
     cost_allocation: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
@@ -72,15 +71,15 @@ class AssetComponent(Base):
     net_book_value: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
 
     # Replacement tracking
-    last_replacement_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    next_replacement_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    last_replacement_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    next_replacement_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

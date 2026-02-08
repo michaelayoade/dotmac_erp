@@ -8,14 +8,17 @@ from __future__ import annotations
 
 import logging
 import secrets
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from sqlalchemy import Integer, delete, func, or_, select, update
 from sqlalchemy.orm import Session, joinedload
 
+from app.config import settings
+from app.models.finance.audit.audit_log import AuditAction
+from app.models.finance.core_org.organization import Organization
 from app.models.people.hr import EmployeeOnboarding
 from app.models.people.recruit import (
     ApplicantStatus,
@@ -29,15 +32,12 @@ from app.models.people.recruit import (
     OfferStatus,
 )
 from app.models.person import Gender, Person, PersonStatus
-from app.models.finance.audit.audit_log import AuditAction
-from app.models.finance.core_org.organization import Organization
 from app.services.audit_dispatcher import fire_audit_event
+from app.services.careers.candidate_notifications import CandidateNotificationService
 from app.services.common import PaginatedResult, PaginationParams, ValidationError
+from app.services.people.hr import EmployeeCreateData
 from app.services.people.recruit.notifications import send_new_applicant_notification
 from app.services.state_machine import StateMachine
-from app.services.careers.candidate_notifications import CandidateNotificationService
-from app.config import settings
-from app.services.people.hr import EmployeeCreateData
 
 logger = logging.getLogger(__name__)
 
@@ -162,7 +162,7 @@ class RecruitmentService:
     def __init__(
         self,
         db: Session,
-        ctx: Optional["WebAuthContext"] = None,
+        ctx: WebAuthContext | None = None,
     ) -> None:
         self.db = db
         self.ctx = ctx
@@ -189,11 +189,11 @@ class RecruitmentService:
         self,
         org_id: UUID,
         *,
-        status: Optional[JobOpeningStatus] = None,
-        department_id: Optional[UUID] = None,
-        designation_id: Optional[UUID] = None,
-        search: Optional[str] = None,
-        pagination: Optional[PaginationParams] = None,
+        status: JobOpeningStatus | None = None,
+        department_id: UUID | None = None,
+        designation_id: UUID | None = None,
+        search: str | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[JobOpening]:
         """List job openings."""
         query = select(JobOpening).where(JobOpening.organization_id == org_id)
@@ -253,23 +253,23 @@ class RecruitmentService:
         *,
         job_code: str,
         job_title: str,
-        department_id: Optional[UUID] = None,
-        designation_id: Optional[UUID] = None,
-        reports_to_id: Optional[UUID] = None,
+        department_id: UUID | None = None,
+        designation_id: UUID | None = None,
+        reports_to_id: UUID | None = None,
         number_of_positions: int = 1,
-        posted_on: Optional[date] = None,
-        closes_on: Optional[date] = None,
+        posted_on: date | None = None,
+        closes_on: date | None = None,
         employment_type: str = "FULL_TIME",
-        location: Optional[str] = None,
+        location: str | None = None,
         is_remote: bool = False,
-        min_salary: Optional[Decimal] = None,
-        max_salary: Optional[Decimal] = None,
+        min_salary: Decimal | None = None,
+        max_salary: Decimal | None = None,
         currency_code: str = "NGN",
-        min_experience_years: Optional[int] = None,
-        description: Optional[str] = None,
-        required_skills: Optional[str] = None,
-        preferred_skills: Optional[str] = None,
-        education_requirements: Optional[str] = None,
+        min_experience_years: int | None = None,
+        description: str | None = None,
+        required_skills: str | None = None,
+        preferred_skills: str | None = None,
+        education_requirements: str | None = None,
         status: JobOpeningStatus = JobOpeningStatus.DRAFT,
     ) -> JobOpening:
         """Create a new job opening."""
@@ -412,11 +412,11 @@ class RecruitmentService:
         self,
         org_id: UUID,
         *,
-        job_opening_id: Optional[UUID] = None,
-        status: Optional[ApplicantStatus] = None,
-        search: Optional[str] = None,
-        source: Optional[str] = None,
-        pagination: Optional[PaginationParams] = None,
+        job_opening_id: UUID | None = None,
+        status: ApplicantStatus | None = None,
+        search: str | None = None,
+        source: str | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[JobApplicant]:
         """List job applicants."""
         query = select(JobApplicant).where(JobApplicant.organization_id == org_id)
@@ -480,20 +480,20 @@ class RecruitmentService:
         first_name: str,
         last_name: str,
         email: str,
-        phone: Optional[str] = None,
-        date_of_birth: Optional[date] = None,
-        gender: Optional[str] = None,
-        city: Optional[str] = None,
-        country_code: Optional[str] = None,
-        current_employer: Optional[str] = None,
-        current_job_title: Optional[str] = None,
-        years_of_experience: Optional[int] = None,
-        highest_qualification: Optional[str] = None,
-        skills: Optional[str] = None,
-        source: Optional[str] = None,
-        referral_employee_id: Optional[UUID] = None,
-        cover_letter: Optional[str] = None,
-        resume_url: Optional[str] = None,
+        phone: str | None = None,
+        date_of_birth: date | None = None,
+        gender: str | None = None,
+        city: str | None = None,
+        country_code: str | None = None,
+        current_employer: str | None = None,
+        current_job_title: str | None = None,
+        years_of_experience: int | None = None,
+        highest_qualification: str | None = None,
+        skills: str | None = None,
+        source: str | None = None,
+        referral_employee_id: UUID | None = None,
+        cover_letter: str | None = None,
+        resume_url: str | None = None,
     ) -> JobApplicant:
         """Create a new job applicant."""
         # Verify job opening exists
@@ -615,7 +615,7 @@ class RecruitmentService:
         applicant_id: UUID,
         to_status: ApplicantStatus,
         *,
-        notes: Optional[str] = None,
+        notes: str | None = None,
     ) -> JobApplicant:
         """Move an applicant through the hiring pipeline."""
         applicant = self.get_applicant(org_id, applicant_id)
@@ -645,7 +645,7 @@ class RecruitmentService:
         org_id: UUID,
         applicant_id: UUID,
         *,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> JobApplicant:
         """Reject an applicant."""
         applicant = self.get_applicant(org_id, applicant_id)
@@ -673,13 +673,13 @@ class RecruitmentService:
         self,
         org_id: UUID,
         *,
-        applicant_id: Optional[UUID] = None,
-        job_opening_id: Optional[UUID] = None,
-        interviewer_id: Optional[UUID] = None,
-        status: Optional[InterviewStatus] = None,
-        from_date: Optional[datetime] = None,
-        to_date: Optional[datetime] = None,
-        pagination: Optional[PaginationParams] = None,
+        applicant_id: UUID | None = None,
+        job_opening_id: UUID | None = None,
+        interviewer_id: UUID | None = None,
+        status: InterviewStatus | None = None,
+        from_date: datetime | None = None,
+        to_date: datetime | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[Interview]:
         """List interviews."""
         query = select(Interview).where(Interview.organization_id == org_id)
@@ -745,8 +745,8 @@ class RecruitmentService:
         scheduled_from: datetime,
         scheduled_to: datetime,
         interviewer_id: UUID,
-        location: Optional[str] = None,
-        meeting_link: Optional[str] = None,
+        location: str | None = None,
+        meeting_link: str | None = None,
     ) -> Interview:
         """Schedule a new interview."""
         # Verify applicant exists
@@ -799,7 +799,7 @@ class RecruitmentService:
         *,
         scheduled_from: datetime,
         scheduled_to: datetime,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> Interview:
         """Reschedule an interview."""
         interview = self.get_interview(org_id, interview_id)
@@ -833,6 +833,40 @@ class RecruitmentService:
         self.db.flush()
         return interview
 
+    def send_interview_invitation(self, org_id: UUID, interview: Interview) -> None:
+        """Send interview invitation email to the applicant (best-effort)."""
+        applicant = self.db.get(JobApplicant, interview.applicant_id)
+        if not applicant or not applicant.email:
+            return
+
+        job_opening = (
+            self.db.get(JobOpening, applicant.job_opening_id)
+            if applicant.job_opening_id
+            else None
+        )
+        org = self.db.get(Organization, org_id)
+        org_name = (org.legal_name or org.trading_name) if org else "Our Company"
+        applicant_name = f"{applicant.first_name} {applicant.last_name}".strip()
+
+        interview_date = interview.scheduled_from.strftime("%Y-%m-%d")
+        interview_time = interview.scheduled_from.strftime("%I:%M %p")
+        interview_type = str(interview.interview_type)
+        location_or_link = interview.meeting_link or interview.location or "TBD"
+
+        candidate_notifications = CandidateNotificationService()
+        candidate_notifications.send_interview_invitation(
+            db=self.db,
+            applicant_email=applicant.email,
+            applicant_name=applicant_name or "Candidate",
+            job_title=job_opening.job_title if job_opening else "Position",
+            interview_date=interview_date,
+            interview_time=interview_time,
+            interview_type=interview_type,
+            location_or_link=location_or_link,
+            org_name=org_name or "Our Company",
+            organization_id=org_id,
+        )
+
     def record_interview_feedback(
         self,
         org_id: UUID,
@@ -840,9 +874,9 @@ class RecruitmentService:
         *,
         rating: int,
         recommendation: str,
-        feedback: Optional[str] = None,
-        strengths: Optional[str] = None,
-        weaknesses: Optional[str] = None,
+        feedback: str | None = None,
+        strengths: str | None = None,
+        weaknesses: str | None = None,
     ) -> Interview:
         """Record feedback for a completed interview."""
         interview = self.get_interview(org_id, interview_id)
@@ -862,7 +896,7 @@ class RecruitmentService:
         org_id: UUID,
         interview_id: UUID,
         *,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> Interview:
         """Cancel an interview."""
         interview = self.get_interview(org_id, interview_id)
@@ -884,12 +918,12 @@ class RecruitmentService:
         self,
         org_id: UUID,
         *,
-        applicant_id: Optional[UUID] = None,
-        job_opening_id: Optional[UUID] = None,
-        status: Optional[OfferStatus] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
-        pagination: Optional[PaginationParams] = None,
+        applicant_id: UUID | None = None,
+        job_opening_id: UUID | None = None,
+        status: OfferStatus | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[JobOffer]:
         """List job offers."""
         query = select(JobOffer).where(JobOffer.organization_id == org_id)
@@ -967,21 +1001,21 @@ class RecruitmentService:
         applicant_id: UUID,
         job_opening_id: UUID,
         designation_id: UUID,
-        department_id: Optional[UUID] = None,
+        department_id: UUID | None = None,
         offer_date: date,
         valid_until: date,
         expected_joining_date: date,
         base_salary: Decimal,
         currency_code: str = "NGN",
         pay_frequency: str = "MONTHLY",
-        signing_bonus: Optional[Decimal] = None,
-        relocation_allowance: Optional[Decimal] = None,
-        other_benefits: Optional[str] = None,
+        signing_bonus: Decimal | None = None,
+        relocation_allowance: Decimal | None = None,
+        other_benefits: str | None = None,
         employment_type: str = "FULL_TIME",
         probation_months: int = 3,
         notice_period_days: int = 30,
-        terms_and_conditions: Optional[str] = None,
-        notes: Optional[str] = None,
+        terms_and_conditions: str | None = None,
+        notes: str | None = None,
     ) -> JobOffer:
         """Create a new job offer."""
         # Verify applicant and job opening exist
@@ -1055,12 +1089,10 @@ class RecruitmentService:
         if (
             not offer.candidate_access_token
             or not offer.candidate_access_expires
-            or offer.candidate_access_expires < datetime.now(timezone.utc)
+            or offer.candidate_access_expires < datetime.now(UTC)
         ):
             offer.candidate_access_token = secrets.token_urlsafe(32)
-            offer.candidate_access_expires = datetime.now(timezone.utc) + timedelta(
-                days=30
-            )
+            offer.candidate_access_expires = datetime.now(UTC) + timedelta(days=30)
 
         # Update applicant status
         if offer.applicant_id:
@@ -1133,7 +1165,7 @@ class RecruitmentService:
         org_id: UUID,
         offer_id: UUID,
         *,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> JobOffer:
         """Mark an offer as declined by the candidate."""
         offer = self.get_job_offer(org_id, offer_id)
@@ -1457,7 +1489,7 @@ class RecruitmentService:
     def get_pipeline_summary(
         self,
         org_id: UUID,
-        job_opening_id: Optional[UUID] = None,
+        job_opening_id: UUID | None = None,
     ) -> dict:
         """Get applicant pipeline summary."""
         query = select(JobApplicant).where(JobApplicant.organization_id == org_id)
@@ -1502,7 +1534,7 @@ class RecruitmentService:
     def get_pipeline_stats(
         self,
         org_id: UUID,
-        job_opening_id: Optional[UUID] = None,
+        job_opening_id: UUID | None = None,
     ) -> dict:
         """Compatibility wrapper for pipeline stats."""
         return self.get_pipeline_summary(org_id, job_opening_id=job_opening_id)
@@ -1515,7 +1547,7 @@ class RecruitmentService:
         self,
         org_id: UUID,
         *,
-        job_opening_id: Optional[UUID] = None,
+        job_opening_id: UUID | None = None,
     ) -> dict:
         """Get detailed recruitment pipeline report.
 
@@ -1610,8 +1642,8 @@ class RecruitmentService:
         self,
         org_id: UUID,
         *,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> dict:
         """Get time to hire metrics.
 
@@ -1713,8 +1745,8 @@ class RecruitmentService:
         self,
         org_id: UUID,
         *,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> dict:
         """Get applicant source analysis report.
 
@@ -1786,8 +1818,8 @@ class RecruitmentService:
         self,
         org_id: UUID,
         *,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> dict:
         """Get recruitment overview/dashboard report.
 

@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.models.finance.core_org.organization import Organization
@@ -108,14 +108,14 @@ class OrgFormattingPrefs:
     decimal_sep: str = "."
     decimal_places: int = 2
     currency_code: str = "NGN"
-    timezone_name: Optional[str] = None
+    timezone_name: str | None = None
 
 
 # ---------------------------------------------------------------------------
 # Context variable — one per request/task
 # ---------------------------------------------------------------------------
 
-_formatting_prefs: ContextVar[Optional[OrgFormattingPrefs]] = ContextVar(
+_formatting_prefs: ContextVar[OrgFormattingPrefs | None] = ContextVar(
     "formatting_prefs",
     default=None,
 )
@@ -126,7 +126,7 @@ def set_formatting_prefs(prefs: OrgFormattingPrefs) -> None:
     _formatting_prefs.set(prefs)
 
 
-def get_formatting_prefs() -> Optional[OrgFormattingPrefs]:
+def get_formatting_prefs() -> OrgFormattingPrefs | None:
     """Return the current formatting preferences, or ``None`` outside a request."""
     return _formatting_prefs.get()
 
@@ -141,7 +141,7 @@ def clear_formatting_prefs() -> None:
 # ---------------------------------------------------------------------------
 
 
-def resolve_from_org(org: Optional[Organization]) -> OrgFormattingPrefs:
+def resolve_from_org(org: Organization | None) -> OrgFormattingPrefs:
     """Build :class:`OrgFormattingPrefs` from an :class:`Organization`.
 
     Falls back to sensible defaults when fields are ``None`` or unrecognised.

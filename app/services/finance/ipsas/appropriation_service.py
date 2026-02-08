@@ -7,7 +7,6 @@ and allotments (sub-allocations to cost centers/periods).
 
 import logging
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -30,15 +29,19 @@ class AppropriationService:
     def __init__(self, db: Session):
         self.db = db
 
+    def _commit_and_refresh(self, entity) -> None:
+        self.db.commit()
+        self.db.refresh(entity)
+
     # ─── Appropriations ───────────────────────────────────────────────
 
     def list_for_org(
         self,
         organization_id: UUID,
         *,
-        fiscal_year_id: Optional[UUID] = None,
-        fund_id: Optional[UUID] = None,
-        status: Optional[str] = None,
+        fiscal_year_id: UUID | None = None,
+        fund_id: UUID | None = None,
+        status: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[Appropriation]:
@@ -60,7 +63,7 @@ class AppropriationService:
         return list(self.db.scalars(stmt).all())
 
     def get_or_404(
-        self, appropriation_id: UUID, organization_id: Optional[UUID] = None
+        self, appropriation_id: UUID, organization_id: UUID | None = None
     ) -> Appropriation:
         """Get an appropriation by ID or raise NotFoundError.
 
@@ -106,6 +109,7 @@ class AppropriationService:
             approp.appropriation_code,
             approp.appropriation_id,
         )
+        self._commit_and_refresh(approp)
         return approp
 
     def approve(self, appropriation_id: UUID, approver_id: UUID) -> Appropriation:
@@ -129,13 +133,14 @@ class AppropriationService:
         self.db.flush()
 
         logger.info("Approved appropriation %s by %s", appropriation_id, approver_id)
+        self._commit_and_refresh(approp)
         return approp
 
     def count_for_org(
         self,
         organization_id: UUID,
         *,
-        fiscal_year_id: Optional[UUID] = None,
+        fiscal_year_id: UUID | None = None,
     ) -> int:
         """Count appropriations for an organization."""
         stmt = select(func.count(Appropriation.appropriation_id)).where(
@@ -151,7 +156,7 @@ class AppropriationService:
         self,
         organization_id: UUID,
         *,
-        appropriation_id: Optional[UUID] = None,
+        appropriation_id: UUID | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[Allotment]:
@@ -194,4 +199,5 @@ class AppropriationService:
             allotment.allotment_code,
             approp.appropriation_code,
         )
+        self._commit_and_refresh(allotment)
         return allotment

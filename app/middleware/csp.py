@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Iterable
+import os
+from collections.abc import Iterable
 
 
 def _split_directives(policy: str) -> list[str]:
@@ -42,7 +43,17 @@ def _update_script_src(policy: str) -> str:
     return _join_directives(updated)
 
 
+def _allow_unsafe_script() -> bool:
+    """Allow unsafe script directives only when explicitly enabled."""
+    value = os.getenv("CSP_ALLOW_UNSAFE", "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
 def add_unsafe_eval_to_csp(policy: str | None) -> str:
+    """Optionally relax CSP for scripts when explicitly enabled via env."""
+    if not _allow_unsafe_script():
+        # Return policy unchanged (or a safe default if missing).
+        return policy or "script-src 'self' https://cdn.jsdelivr.net"
     if not policy:
         return (
             "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://cdn.jsdelivr.net"

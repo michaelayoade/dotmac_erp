@@ -1,5 +1,6 @@
 {% extends "modules/base_modules.html" %}
 
+{% from "components/macros.html" import status_badge, empty_state %}
 {% block page_title %}Operations Dashboard{% endblock %}
 
 {% block breadcrumbs %}
@@ -100,14 +101,14 @@
                 <a href="/inventory/reports/low-stock" class="text-xs text-amber-600 hover:text-amber-700 dark:text-amber-400">View All</a>
             </div>
             {% if items | default([]) | length > 0 %}
-            <div class="overflow-x-auto">
+            <div class="table-container">
                 <table class="w-full text-sm">
                     <thead class="bg-slate-50 dark:bg-slate-800/50">
                         <tr>
-                            <th scope="col" class="px-4 py-2 text-left font-medium text-slate-600 dark:text-slate-400">Item</th>
-                            <th scope="col" class="px-4 py-2 text-right font-medium text-slate-600 dark:text-slate-400">On Hand</th>
-                            <th scope="col" class="px-4 py-2 text-right font-medium text-slate-600 dark:text-slate-400">Reorder</th>
-                            <th scope="col" class="px-4 py-2 text-left font-medium text-slate-600 dark:text-slate-400">Level</th>
+                            <th scope="col" class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Item</th>
+                            <th scope="col" class="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">On Hand</th>
+                            <th scope="col" class="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Reorder</th>
+                            <th scope="col" class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Level</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
@@ -146,14 +147,14 @@
                 <a href="/inventory/lots?status=expired" class="text-xs text-amber-600 hover:text-amber-700 dark:text-amber-400">View All</a>
             </div>
             {% if expiring_lots | default([]) | length > 0 %}
-            <div class="overflow-x-auto">
+            <div class="table-container">
                 <table class="w-full text-sm">
                     <thead class="bg-slate-50 dark:bg-slate-800/50">
                         <tr>
-                            <th scope="col" class="px-4 py-2 text-left font-medium text-slate-600 dark:text-slate-400">Lot</th>
-                            <th scope="col" class="px-4 py-2 text-left font-medium text-slate-600 dark:text-slate-400">Item</th>
-                            <th scope="col" class="px-4 py-2 text-right font-medium text-slate-600 dark:text-slate-400">Qty</th>
-                            <th scope="col" class="px-4 py-2 text-left font-medium text-slate-600 dark:text-slate-400">Expires</th>
+                            <th scope="col" class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Lot</th>
+                            <th scope="col" class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Item</th>
+                            <th scope="col" class="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Qty</th>
+                            <th scope="col" class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Expires</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
@@ -163,6 +164,12 @@
                             <td class="px-4 py-2 text-slate-600 dark:text-slate-400">{{ lot.item.item_name if lot.item else '-' }}</td>
                             <td class="px-4 py-2 text-right font-mono">{{ lot.quantity_available }}</td>
                             <td class="px-4 py-2 text-amber-600 dark:text-amber-400">{{ lot.expiry_date.strftime('%d %b %Y') if lot.expiry_date else '-' }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="99" class="p-0">
+                                {{ empty_state("No expiring_lots found", "There are no expiring_lots to display.") }}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -184,14 +191,14 @@
                 <a href="/inventory/transactions" class="text-xs text-amber-600 hover:text-amber-700 dark:text-amber-400">View All</a>
             </div>
             {% if recent_transactions | default([]) | length > 0 %}
-            <div class="overflow-x-auto">
+            <div class="table-container">
                 <table class="w-full text-sm">
                     <thead class="bg-slate-50 dark:bg-slate-800/50">
                         <tr>
-                            <th scope="col" class="px-4 py-2 text-left font-medium text-slate-600 dark:text-slate-400">Type</th>
-                            <th scope="col" class="px-4 py-2 text-left font-medium text-slate-600 dark:text-slate-400">Reference</th>
-                            <th scope="col" class="px-4 py-2 text-right font-medium text-slate-600 dark:text-slate-400">Qty</th>
-                            <th scope="col" class="px-4 py-2 text-left font-medium text-slate-600 dark:text-slate-400">Date</th>
+                            <th scope="col" class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Type</th>
+                            <th scope="col" class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Reference</th>
+                            <th scope="col" class="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Qty</th>
+                            <th scope="col" class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Date</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
@@ -204,15 +211,19 @@
                                     'TRANSFER': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
                                     'ADJUSTMENT': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
                                 } %}
-                                <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {{ type_colors.get(txn.transaction_type.value if txn.transaction_type else '', 'bg-slate-100 text-slate-700') }}">
-                                    {{ txn.transaction_type.value if txn.transaction_type else '-' }}
-                                </span>
+                                {{ status_badge(txn.transaction_type.value if txn.transaction_type else '-', size="sm") }}
                             </td>
                             <td class="px-4 py-2">
                                 <a href="/inventory/transactions/{{ txn.transaction_id }}" class="text-blue-600 hover:underline dark:text-blue-400">{{ txn.reference_number or '-' }}</a>
                             </td>
                             <td class="px-4 py-2 text-right font-mono">{{ txn.quantity }}</td>
                             <td class="px-4 py-2 text-slate-600 dark:text-slate-400">{{ txn.transaction_date if txn.transaction_date else '-' }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="99" class="p-0">
+                                {{ empty_state("No recent_transactions found", "There are no recent_transactions to display.") }}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -231,7 +242,7 @@
             <div class="card p-4">
                 <h3 class="font-semibold text-slate-900 dark:text-white mb-3">Stock Counts</h3>
                 {% if count_stats %}
-                <div class="grid grid-cols-3 gap-4 text-center">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-center">
                     <div>
                         <p class="text-lg font-bold text-slate-900 dark:text-white">{{ count_stats.draft | default(0) }}</p>
                         <p class="text-xs text-slate-500 dark:text-slate-400">Draft</p>
@@ -257,7 +268,7 @@
             <div class="card p-4">
                 <h3 class="font-semibold text-slate-900 dark:text-white mb-3">Support Tickets</h3>
                 {% if support_stats %}
-                <div class="grid grid-cols-3 gap-4 text-center">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-center">
                     <div>
                         <p class="text-lg font-bold text-slate-900 dark:text-white">{{ support_stats.total | default(0) }}</p>
                         <p class="text-xs text-slate-500 dark:text-slate-400">Total</p>

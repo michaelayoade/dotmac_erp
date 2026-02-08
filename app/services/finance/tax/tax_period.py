@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import date
-from typing import Optional
 from uuid import UUID
 
 from dateutil.relativedelta import relativedelta
@@ -38,7 +37,7 @@ class TaxPeriodInput:
     start_date: date
     end_date: date
     due_date: date
-    fiscal_period_id: Optional[UUID] = None
+    fiscal_period_id: UUID | None = None
 
 
 class TaxPeriodService(ListResponseMixin):
@@ -388,8 +387,8 @@ class TaxPeriodService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         jurisdiction_id: UUID,
-        as_of_date: Optional[date] = None,
-    ) -> Optional[TaxPeriod]:
+        as_of_date: date | None = None,
+    ) -> TaxPeriod | None:
         """
         Get the current open tax period.
 
@@ -421,7 +420,7 @@ class TaxPeriodService(ListResponseMixin):
     def get_overdue_periods(
         db: Session,
         organization_id: UUID,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
     ) -> list[TaxPeriod]:
         """
         Get tax periods that are past due.
@@ -450,22 +449,33 @@ class TaxPeriodService(ListResponseMixin):
         )
 
     @staticmethod
-    def get(db: Session, period_id: str) -> Optional[TaxPeriod]:
+    def get(
+        db: Session,
+        period_id: str,
+        organization_id: UUID | None = None,
+    ) -> TaxPeriod | None:
         """Get a tax period by ID."""
-        return (
+        period = (
             db.query(TaxPeriod)
             .filter(TaxPeriod.period_id == coerce_uuid(period_id))
             .first()
         )
+        if not period:
+            return None
+        if organization_id is not None and period.organization_id != coerce_uuid(
+            organization_id
+        ):
+            return None
+        return period
 
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        jurisdiction_id: Optional[str] = None,
-        status: Optional[TaxPeriodStatus] = None,
-        frequency: Optional[TaxPeriodFrequency] = None,
-        year: Optional[int] = None,
+        organization_id: str | None = None,
+        jurisdiction_id: str | None = None,
+        status: TaxPeriodStatus | None = None,
+        frequency: TaxPeriodFrequency | None = None,
+        year: int | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[TaxPeriod]:

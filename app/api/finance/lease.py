@@ -6,7 +6,6 @@ Lease Accounting API endpoints per IFRS 16.
 
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -14,19 +13,18 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
-from app.services.auth_dependencies import require_tenant_permission
-from app.services.feature_flags import require_feature, FEATURE_LEASES
 from app.api.finance.utils import parse_enum
 from app.db import SessionLocal
-from app.schemas.finance.common import ListResponse, PostingResultSchema
 from app.models.finance.lease.lease_contract import LeaseClassification, LeaseStatus
+from app.schemas.finance.common import ListResponse, PostingResultSchema
+from app.services.auth_dependencies import require_tenant_permission
+from app.services.feature_flags import FEATURE_LEASES, require_feature
 from app.services.finance.lease import (
-    lease_contract_service,
-    lease_calculation_service,
-    lease_posting_adapter,
     LeaseContractInput,
+    lease_calculation_service,
+    lease_contract_service,
+    lease_posting_adapter,
 )
-
 
 router = APIRouter(
     prefix="/lease",
@@ -68,34 +66,34 @@ class LeaseContractCreate(BaseModel):
     interest_expense_account_id: UUID
     rou_asset_account_id: UUID
     depreciation_expense_account_id: UUID
-    description: Optional[str] = None
-    lessor_supplier_id: Optional[UUID] = None
-    external_reference: Optional[str] = None
+    description: str | None = None
+    lessor_supplier_id: UUID | None = None
+    external_reference: str | None = None
     is_lessee: bool = True
     payment_timing: str = "ADVANCE"
     has_renewal_option: bool = False
-    renewal_option_term_months: Optional[int] = None
+    renewal_option_term_months: int | None = None
     renewal_reasonably_certain: bool = False
     has_purchase_option: bool = False
-    purchase_option_price: Optional[Decimal] = None
+    purchase_option_price: Decimal | None = None
     purchase_reasonably_certain: bool = False
     has_termination_option: bool = False
-    termination_penalty: Optional[Decimal] = None
+    termination_penalty: Decimal | None = None
     has_variable_payments: bool = False
-    variable_payment_basis: Optional[str] = None
+    variable_payment_basis: str | None = None
     is_index_linked: bool = False
-    index_type: Optional[str] = None
-    index_base_value: Optional[Decimal] = None
+    index_type: str | None = None
+    index_base_value: Decimal | None = None
     residual_value_guarantee: Decimal = Decimal("0")
     implicit_rate_known: bool = False
-    implicit_rate: Optional[Decimal] = None
+    implicit_rate: Decimal | None = None
     initial_direct_costs: Decimal = Decimal("0")
     lease_incentives_received: Decimal = Decimal("0")
     restoration_obligation: Decimal = Decimal("0")
-    asset_category_id: Optional[UUID] = None
-    location_id: Optional[UUID] = None
-    cost_center_id: Optional[UUID] = None
-    project_id: Optional[UUID] = None
+    asset_category_id: UUID | None = None
+    location_id: UUID | None = None
+    cost_center_id: UUID | None = None
+    project_id: UUID | None = None
 
 
 class LeaseContractRead(BaseModel):
@@ -160,12 +158,12 @@ class LeaseModificationCreate(BaseModel):
 
     fiscal_period_id: UUID
     modification_date: date
-    effective_date: Optional[date] = None
+    effective_date: date | None = None
     modification_type: str = Field(max_length=30)
-    new_lease_payments: Optional[Decimal] = None
-    revised_discount_rate: Optional[Decimal] = None
-    revised_lease_term_months: Optional[int] = None
-    reason: Optional[str] = None
+    new_lease_payments: Decimal | None = None
+    revised_discount_rate: Decimal | None = None
+    revised_lease_term_months: int | None = None
+    reason: str | None = None
 
 
 # =============================================================================
@@ -243,20 +241,21 @@ def create_lease_contract(
 @router.get("/contracts/{lease_id}", response_model=LeaseContractRead)
 def get_lease_contract(
     lease_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("lease:contracts:read")),
     db: Session = Depends(get_db),
 ):
     """Get a lease contract by ID."""
-    return lease_contract_service.get(db, str(lease_id))
+    return lease_contract_service.get(db, str(lease_id), organization_id)
 
 
 @router.get("/contracts", response_model=ListResponse[LeaseContractRead])
 def list_lease_contracts(
     organization_id: UUID = Depends(require_organization_id),
-    classification: Optional[str] = None,
-    status: Optional[str] = None,
-    lessor_supplier_id: Optional[UUID] = None,
-    is_lessee: Optional[bool] = None,
+    classification: str | None = None,
+    status: str | None = None,
+    lessor_supplier_id: UUID | None = None,
+    is_lessee: bool | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("lease:contracts:read")),
@@ -317,7 +316,7 @@ def terminate_lease(
     lease_id: UUID,
     termination_date: date = Query(...),
     organization_id: UUID = Depends(require_organization_id),
-    reason: Optional[str] = None,
+    reason: str | None = None,
     auth: dict = Depends(require_tenant_permission("lease:contracts:terminate")),
     db: Session = Depends(get_db),
 ):
@@ -345,7 +344,7 @@ def calculate_lease(
     db: Session = Depends(get_db),
 ):
     """Calculate initial lease values (ROU asset, liability)."""
-    contract = lease_contract_service.get(db, str(lease_id))
+    contract = lease_contract_service.get(db, str(lease_id), organization_id)
     liability = lease_calculation_service.calculate_initial_liability(db, contract)
     rou_asset_value = (
         liability.total_liability
@@ -381,7 +380,7 @@ def get_lease_schedule(
     db: Session = Depends(get_db),
 ):
     """Get lease amortization schedule."""
-    contract = lease_contract_service.get(db, str(lease_id))
+    contract = lease_contract_service.get(db, str(lease_id), organization_id)
     schedule = lease_calculation_service.generate_amortization_schedule(
         db=db, lease_id=lease_id
     )
@@ -535,7 +534,7 @@ class ModificationResultRead(BaseModel):
     """Modification result response."""
 
     success: bool
-    modification_id: Optional[UUID] = None
+    modification_id: UUID | None = None
     liability_adjustment: Decimal = Decimal("0")
     rou_asset_adjustment: Decimal = Decimal("0")
     gain_loss: Decimal = Decimal("0")
@@ -584,11 +583,13 @@ def modify_lease(
 # IFRS 16 Lease Modifications (Full Service)
 # =============================================================================
 
-from app.services.finance.lease import (
-    lease_modification_service,
-    ModificationInput,
+from app.models.finance.lease.lease_modification import (  # noqa: E402
+    ModificationType,
 )
-from app.models.finance.lease.lease_modification import ModificationType
+from app.services.finance.lease import (  # noqa: E402
+    ModificationInput,
+    lease_modification_service,
+)
 
 
 class FullModificationCreate(BaseModel):
@@ -598,11 +599,11 @@ class FullModificationCreate(BaseModel):
     modification_date: date
     effective_date: date
     modification_type: str = "TERM_EXTENSION"
-    description: Optional[str] = None
+    description: str | None = None
     is_separate_lease: bool = False
-    new_lease_payments: Optional[Decimal] = None
-    revised_discount_rate: Optional[Decimal] = None
-    revised_lease_term_months: Optional[int] = None
+    new_lease_payments: Decimal | None = None
+    revised_discount_rate: Decimal | None = None
+    revised_lease_term_months: int | None = None
 
 
 class LeaseModificationRead(BaseModel):
@@ -660,10 +661,10 @@ def process_lease_modification(
 @router.get("/modifications", response_model=ListResponse[LeaseModificationRead])
 def list_lease_modifications(
     organization_id: UUID = Depends(require_organization_id),
-    lease_id: Optional[UUID] = None,
-    modification_type: Optional[str] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    lease_id: UUID | None = None,
+    modification_type: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("lease:modifications:read")),
@@ -705,10 +706,10 @@ def approve_lease_modification(
 # IFRS 16 Variable Payments & Index Adjustments
 # =============================================================================
 
-from app.services.finance.lease import (
-    lease_variable_payment_service,
-    VariablePaymentInput,
+from app.services.finance.lease import (  # noqa: E402
     IndexAdjustmentInput,
+    VariablePaymentInput,
+    lease_variable_payment_service,
 )
 
 
@@ -717,7 +718,7 @@ class VariablePaymentCreate(BaseModel):
 
     schedule_id: UUID
     variable_amount: Decimal
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class IndexAdjustmentCreate(BaseModel):
@@ -728,7 +729,7 @@ class IndexAdjustmentCreate(BaseModel):
     fiscal_period_id: UUID
     new_index_value: Decimal
     base_index_value: Decimal
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class PaymentScheduleRead(BaseModel):
@@ -806,7 +807,7 @@ def apply_index_adjustment(
 @router.get("/schedules/overdue", response_model=ListResponse[PaymentScheduleRead])
 def get_overdue_lease_payments(
     organization_id: UUID = Depends(require_organization_id),
-    as_of_date: Optional[date] = None,
+    as_of_date: date | None = None,
     auth: dict = Depends(require_tenant_permission("lease:payments:read")),
     db: Session = Depends(get_db),
 ):
@@ -838,7 +839,7 @@ def mark_payment_paid(
     schedule_id: UUID,
     actual_payment_date: date = Query(...),
     actual_payment_amount: Decimal = Query(...),
-    payment_reference: Optional[UUID] = None,
+    payment_reference: UUID | None = None,
     auth: dict = Depends(require_tenant_permission("lease:payments:update")),
     db: Session = Depends(get_db),
 ):

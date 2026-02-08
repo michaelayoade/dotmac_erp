@@ -8,7 +8,7 @@ import hashlib
 import hmac
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional, cast
+from typing import Any, cast
 
 import httpx
 
@@ -20,7 +20,7 @@ PAYSTACK_BASE_URL = "https://api.paystack.co"
 class PaystackError(Exception):
     """Paystack API error."""
 
-    def __init__(self, message: str, status_code: Optional[int] = None):
+    def __init__(self, message: str, status_code: int | None = None):
         super().__init__(message)
         self.message = message
         self.status_code = status_code
@@ -53,7 +53,7 @@ class VerifyResponse:
     amount: int  # in kobo (smallest currency unit)
     currency: str
     transaction_id: str
-    paid_at: Optional[str]
+    paid_at: str | None
     channel: str  # card, bank, ussd, etc.
     gateway_response: str
     customer_email: str
@@ -101,9 +101,9 @@ class VerifyTransferResponse:
     currency: str
     transfer_code: str
     recipient_code: str
-    completed_at: Optional[str] = None
-    reason: Optional[str] = None
-    fee: Optional[int] = None
+    completed_at: str | None = None
+    reason: str | None = None
+    fee: int | None = None
 
 
 @dataclass
@@ -115,7 +115,7 @@ class TransactionRecord:
     amount: int  # in kobo
     currency: str
     status: str
-    paid_at: Optional[str]
+    paid_at: str | None
     created_at: str
     channel: str
     customer_email: str
@@ -133,13 +133,13 @@ class TransferRecord:
     amount: int  # in kobo
     currency: str
     status: str
-    reason: Optional[str]
+    reason: str | None
     created_at: str
-    updated_at: Optional[str]
+    updated_at: str | None
     recipient_name: str
     recipient_account_number: str
     recipient_bank_code: str
-    fees: Optional[int] = None
+    fees: int | None = None
 
 
 @dataclass
@@ -167,7 +167,7 @@ class SettlementTransaction:
     net_amount: int  # in kobo (amount - fees)
     currency: str
     status: str
-    paid_at: Optional[str]
+    paid_at: str | None
     created_at: str
     customer_email: str
     channel: str
@@ -191,9 +191,9 @@ class PaystackCustomer:
     id: int
     customer_code: str
     email: str
-    first_name: Optional[str]
-    last_name: Optional[str]
-    phone: Optional[str]
+    first_name: str | None
+    last_name: str | None
+    phone: str | None
     metadata: dict
     created_at: str
 
@@ -208,7 +208,7 @@ class PaystackClient:
 
     def __init__(self, config: PaystackConfig):
         self.config = config
-        self._client: Optional[httpx.Client] = None
+        self._client: httpx.Client | None = None
 
     def _get_client(self) -> httpx.Client:
         """Get or create HTTP client."""
@@ -229,7 +229,7 @@ class PaystackClient:
         amount: int,  # Amount in kobo (NGN * 100)
         reference: str,
         callback_url: str,
-        metadata: Optional[dict] = None,
+        metadata: dict | None = None,
         currency: str = "NGN",
     ) -> InitializeResponse:
         """
@@ -472,8 +472,8 @@ class PaystackClient:
         bank_code: str,
         currency: str = "NGN",
         recipient_type: str = "nuban",
-        description: Optional[str] = None,
-        metadata: Optional[dict] = None,
+        description: str | None = None,
+        metadata: dict | None = None,
     ) -> CreateRecipientResponse:
         """
         Create a transfer recipient for payouts.
@@ -534,7 +534,7 @@ class PaystackClient:
         amount: int,  # Amount in kobo
         recipient_code: str,
         reference: str,
-        reason: Optional[str] = None,
+        reason: str | None = None,
         currency: str = "NGN",
     ) -> InitiateTransferResponse:
         """
@@ -630,9 +630,9 @@ class PaystackClient:
 
     def list_transactions(
         self,
-        from_date: Optional[str] = None,
-        to_date: Optional[str] = None,
-        status: Optional[str] = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        status: str | None = None,
         per_page: int = 100,
         page: int = 1,
     ) -> list[TransactionRecord]:
@@ -696,9 +696,9 @@ class PaystackClient:
 
     def list_transfers(
         self,
-        from_date: Optional[str] = None,
-        to_date: Optional[str] = None,
-        status: Optional[str] = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        status: str | None = None,
         per_page: int = 100,
         page: int = 1,
     ) -> list[TransferRecord]:
@@ -793,9 +793,9 @@ class PaystackClient:
 
     def list_settlements(
         self,
-        from_date: Optional[str] = None,
-        to_date: Optional[str] = None,
-        status: Optional[str] = None,
+        from_date: str | None = None,
+        to_date: str | None = None,
+        status: str | None = None,
         per_page: int = 100,
         page: int = 1,
     ) -> list[SettlementRecord]:
@@ -928,10 +928,10 @@ class PaystackClient:
     def create_customer(
         self,
         email: str,
-        first_name: Optional[str] = None,
-        last_name: Optional[str] = None,
-        phone: Optional[str] = None,
-        metadata: Optional[dict] = None,
+        first_name: str | None = None,
+        last_name: str | None = None,
+        phone: str | None = None,
+        metadata: dict | None = None,
     ) -> PaystackCustomer:
         """
         Create a customer in Paystack.
@@ -989,10 +989,10 @@ class PaystackClient:
     def update_customer(
         self,
         customer_code: str,
-        first_name: Optional[str] = None,
-        last_name: Optional[str] = None,
-        phone: Optional[str] = None,
-        metadata: Optional[dict] = None,
+        first_name: str | None = None,
+        last_name: str | None = None,
+        phone: str | None = None,
+        metadata: dict | None = None,
     ) -> PaystackCustomer:
         """
         Update an existing customer in Paystack.
@@ -1047,7 +1047,7 @@ class PaystackClient:
             created_at=d.get("createdAt", ""),
         )
 
-    def get_customer(self, email_or_code: str) -> Optional[PaystackCustomer]:
+    def get_customer(self, email_or_code: str) -> PaystackCustomer | None:
         """
         Get a customer by email or customer_code.
 

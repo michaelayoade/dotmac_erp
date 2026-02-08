@@ -6,7 +6,7 @@ import logging
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -90,7 +90,7 @@ class ItemCategorySyncService(BaseSyncService[ItemCategory]):
 
         return self._default_accounts
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         """Fetch item groups from ERPNext."""
         if since:
             yield from client.get_modified_since(
@@ -144,7 +144,7 @@ class ItemCategorySyncService(BaseSyncService[ItemCategory]):
         """Get category ID."""
         return entity.category_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[ItemCategory]:
+    def find_existing_entity(self, source_name: str) -> ItemCategory | None:
         """Find existing category by code."""
         if source_name in self._category_cache:
             return self._category_cache[source_name]
@@ -188,7 +188,7 @@ class ItemSyncService(BaseSyncService[Item]):
         self._item_cache: dict[str, Item] = {}
         self._category_sync = ItemCategorySyncService(db, organization_id, user_id)
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         """Fetch items from ERPNext."""
         if since:
             yield from client.get_modified_since(
@@ -323,7 +323,7 @@ class ItemSyncService(BaseSyncService[Item]):
         """Get item ID."""
         return entity.item_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[Item]:
+    def find_existing_entity(self, source_name: str) -> Item | None:
         """Find existing item by code."""
         if source_name in self._item_cache:
             return self._item_cache[source_name]

@@ -7,7 +7,7 @@ Handles:
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 from celery import shared_task
 
@@ -20,8 +20,8 @@ logger = logging.getLogger(__name__)
 def execute_workflow_action(
     self: Any,
     rule_id: str,
-    context_dict: Dict[str, Any],
-) -> Dict[str, Any]:
+    context_dict: dict[str, Any],
+) -> dict[str, Any]:
     """Execute a single workflow action asynchronously.
 
     Called by WorkflowService.trigger_event() when a rule has
@@ -38,7 +38,7 @@ def execute_workflow_action(
 
     logger.info("Executing async workflow action: rule=%s", rule_id)
 
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "rule_id": rule_id,
         "status": "unknown",
         "error": None,
@@ -91,7 +91,7 @@ def execute_workflow_action(
 
 
 @shared_task
-def process_scheduled_workflow_rules() -> Dict[str, Any]:
+def process_scheduled_workflow_rules() -> dict[str, Any]:
     """Evaluate and execute all due ON_SCHEDULE workflow rules.
 
     This task should be run on a periodic schedule (e.g. every 5 minutes)

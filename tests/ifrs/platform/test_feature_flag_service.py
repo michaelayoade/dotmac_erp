@@ -19,18 +19,21 @@ def patch_feature_flag_service():
     ) as mock_config:
         mock_config.organization_id = MockColumn()
         mock_config.config_key = MockColumn()
-        with patch(
-            "app.services.finance.platform.feature_flag.and_", return_value=MagicMock()
-        ):
-            with patch(
+        with (
+            patch(
+                "app.services.finance.platform.feature_flag.and_",
+                return_value=MagicMock(),
+            ),
+            patch(
                 "app.services.finance.platform.feature_flag.or_",
                 return_value=MagicMock(),
-            ):
-                with patch(
-                    "app.services.finance.platform.feature_flag.coerce_uuid",
-                    side_effect=lambda x: x,
-                ):
-                    yield mock_config
+            ),
+            patch(
+                "app.services.finance.platform.feature_flag.coerce_uuid",
+                side_effect=lambda x: x,
+            ),
+        ):
+            yield mock_config
 
 
 class TestFeatureFlagService:
@@ -152,18 +155,18 @@ class TestFeatureFlagService:
             )
             mock_db_session.query.return_value.filter.return_value.first.return_value = org_flag
 
-            with patch(
-                "app.services.finance.platform.feature_flag.SystemConfiguration"
-            ):
-                with patch(
+            with (
+                patch("app.services.finance.platform.feature_flag.SystemConfiguration"),
+                patch(
                     "app.services.finance.platform.feature_flag.coerce_uuid",
                     side_effect=lambda x: x,
-                ):
-                    result = service.is_enabled(
-                        mock_db_session,
-                        organization_id=organization_id,
-                        feature_code="TEST",
-                    )
+                ),
+            ):
+                result = service.is_enabled(
+                    mock_db_session,
+                    organization_id=organization_id,
+                    feature_code="TEST",
+                )
 
             assert result is True, f"Failed for value: {value}"
 
@@ -274,20 +277,22 @@ class TestFeatureFlagService:
                 "app.services.finance.platform.feature_flag.ConfigType"
             ) as MockType:
                 MockType.BOOLEAN = "BOOLEAN"
-                with patch(
-                    "app.services.finance.platform.feature_flag.and_",
-                    return_value=MagicMock(),
-                ):
-                    with patch(
+                with (
+                    patch(
+                        "app.services.finance.platform.feature_flag.and_",
+                        return_value=MagicMock(),
+                    ),
+                    patch(
                         "app.services.finance.platform.feature_flag.coerce_uuid",
                         side_effect=lambda x: x,
-                    ):
-                        service.set_system_default(
-                            mock_db_session,
-                            feature_code="GLOBAL_FEATURE",
-                            enabled=True,
-                            updated_by_user_id=user_id,
-                        )
+                    ),
+                ):
+                    service.set_system_default(
+                        mock_db_session,
+                        feature_code="GLOBAL_FEATURE",
+                        enabled=True,
+                        updated_by_user_id=user_id,
+                    )
 
         mock_db_session.add.assert_called_once()
         mock_db_session.commit.assert_called_once()

@@ -10,7 +10,7 @@ import logging
 import uuid
 from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, Dict, List, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -44,7 +44,7 @@ class ResourceService:
         self,
         db: Session,
         organization_id: uuid.UUID,
-        principal: Optional["Principal"] = None,
+        principal: Principal | None = None,
     ) -> None:
         self.db = db
         self.organization_id = organization_id
@@ -54,7 +54,7 @@ class ResourceService:
     # Read Operations
     # =========================================================================
 
-    def get_allocation(self, allocation_id: uuid.UUID) -> Optional[ResourceAllocation]:
+    def get_allocation(self, allocation_id: uuid.UUID) -> ResourceAllocation | None:
         """Fetch a single allocation by ID."""
         stmt = (
             select(ResourceAllocation)
@@ -78,10 +78,10 @@ class ResourceService:
 
     def list_allocations(
         self,
-        project_id: Optional[uuid.UUID] = None,
-        employee_id: Optional[uuid.UUID] = None,
-        is_active: Optional[bool] = None,
-        params: Optional[PaginationParams] = None,
+        project_id: uuid.UUID | None = None,
+        employee_id: uuid.UUID | None = None,
+        is_active: bool | None = None,
+        params: PaginationParams | None = None,
     ) -> PaginatedResult[ResourceAllocation]:
         """List resource allocations with filtering and pagination."""
         stmt = (
@@ -106,7 +106,7 @@ class ResourceService:
 
         return paginate(self.db, stmt, params)
 
-    def get_project_team(self, project_id: uuid.UUID) -> List[ResourceAllocation]:
+    def get_project_team(self, project_id: uuid.UUID) -> list[ResourceAllocation]:
         """Get all active team members for a project."""
         stmt = (
             select(ResourceAllocation)
@@ -124,7 +124,7 @@ class ResourceService:
         self,
         employee_id: uuid.UUID,
         include_past: bool = False,
-    ) -> List[ResourceAllocation]:
+    ) -> list[ResourceAllocation]:
         """Get all allocations for an employee."""
         stmt = (
             select(ResourceAllocation)
@@ -149,7 +149,7 @@ class ResourceService:
 
     def get_current_allocations(
         self, employee_id: uuid.UUID
-    ) -> List[ResourceAllocation]:
+    ) -> list[ResourceAllocation]:
         """Get currently active allocations for an employee."""
         today = date.today()
         stmt = (
@@ -172,7 +172,7 @@ class ResourceService:
     # Write Operations
     # =========================================================================
 
-    def allocate_resource(self, data: Dict) -> ResourceAllocation:
+    def allocate_resource(self, data: dict) -> ResourceAllocation:
         """Allocate an employee to a project."""
         # Check for overlapping allocation
         existing = self._get_overlapping_allocation(
@@ -217,7 +217,7 @@ class ResourceService:
         return allocation
 
     def update_allocation(
-        self, allocation_id: uuid.UUID, data: Dict
+        self, allocation_id: uuid.UUID, data: dict
     ) -> ResourceAllocation:
         """Update an existing resource allocation."""
         allocation = self.get_allocation_or_raise(allocation_id)
@@ -243,7 +243,7 @@ class ResourceService:
     def end_allocation(
         self,
         allocation_id: uuid.UUID,
-        end_date_value: Optional[date] = None,
+        end_date_value: date | None = None,
     ) -> ResourceAllocation:
         """End a resource allocation."""
         allocation = self.get_allocation_or_raise(allocation_id)
@@ -274,7 +274,7 @@ class ResourceService:
         employee_id: uuid.UUID,
         start_date: date,
         end_date: date,
-    ) -> Dict:
+    ) -> dict:
         """Get utilization summary for an employee over a period."""
         # Get allocations for the period
         allocations = self.get_current_allocations(employee_id)
@@ -317,7 +317,7 @@ class ResourceService:
             ],
         }
 
-    def get_project_utilization(self, project_id: uuid.UUID) -> Dict:
+    def get_project_utilization(self, project_id: uuid.UUID) -> dict:
         """Get utilization summary for a project."""
         team = self.get_project_team(project_id)
 
@@ -362,8 +362,8 @@ class ResourceService:
         project_id: uuid.UUID,
         employee_id: uuid.UUID,
         start_date: date,
-        end_date: Optional[date] = None,
-    ) -> Optional[ResourceAllocation]:
+        end_date: date | None = None,
+    ) -> ResourceAllocation | None:
         """Check for overlapping allocation."""
         stmt = select(ResourceAllocation).where(
             ResourceAllocation.project_id == project_id,

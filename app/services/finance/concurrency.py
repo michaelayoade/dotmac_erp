@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Optional, Type, TypeVar, cast
+from typing import Any, TypeVar, cast
 from uuid import UUID
 
 from sqlalchemy import inspect, update
@@ -47,19 +47,19 @@ class TransitionResult:
 
     success: bool
     new_version: int = 0
-    entity: Optional[Any] = None
-    error: Optional[str] = None
+    entity: Any | None = None
+    error: str | None = None
 
 
 def atomic_status_transition(
     db: Session,
-    model_class: Type[T],
+    model_class: type[T],
     entity_id: UUID,
     expected_version: int,
     from_status: Any,
     to_status: Any,
-    organization_id: Optional[UUID] = None,
-    additional_updates: Optional[dict[str, Any]] = None,
+    organization_id: UUID | None = None,
+    additional_updates: dict[str, Any] | None = None,
     id_column: str = None,
     status_column: str = "status",
     version_column: str = "version",
@@ -225,11 +225,11 @@ def atomic_status_transition(
 
 def atomic_version_update(
     db: Session,
-    model_class: Type[T],
+    model_class: type[T],
     entity_id: UUID,
     expected_version: int,
     updates: dict[str, Any],
-    organization_id: Optional[UUID] = None,
+    organization_id: UUID | None = None,
     id_column: str = None,
     version_column: str = "version",
     org_column: str = "organization_id",
@@ -318,7 +318,7 @@ def atomic_version_update(
 
 def check_version(
     db: Session,
-    model_class: Type[T],
+    model_class: type[T],
     entity_id: UUID,
     expected_version: int,
     id_column: str = None,

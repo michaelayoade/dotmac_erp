@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import Request
@@ -32,10 +31,10 @@ from app.models.inventory.item_category import ItemCategory
 from app.models.inventory.warehouse import Warehouse
 from app.services.common import coerce_uuid
 from app.services.finance.common.numbering import SyncNumberingService
-from app.services.formatters import format_currency as _format_currency
-from app.services.formatters import format_date as _format_date
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.platform.org_context import org_context_service
+from app.services.formatters import format_currency as _format_currency
+from app.services.formatters import format_date as _format_date
 from app.services.inventory.item import (
     ItemCategoryInput,
     ItemInput,
@@ -50,7 +49,7 @@ from app.web.deps import WebAuthContext, base_context
 logger = logging.getLogger(__name__)
 
 
-def _parse_transaction_type(value: Optional[str]) -> Optional[TransactionType]:
+def _parse_transaction_type(value: str | None) -> TransactionType | None:
     if not value:
         return None
     try:
@@ -62,7 +61,7 @@ def _parse_transaction_type(value: Optional[str]) -> Optional[TransactionType]:
             return None
 
 
-def _try_uuid(value: Optional[str]) -> Optional[UUID]:
+def _try_uuid(value: str | None) -> UUID | None:
     if not value:
         return None
     try:
@@ -171,9 +170,9 @@ class InventoryWebService:
 
     @staticmethod
     def _sequence_preview(
-        sequence: Optional[NumberingSequence],
+        sequence: NumberingSequence | None,
         reference_date: date,
-    ) -> Optional[str]:
+    ) -> str | None:
         if not sequence:
             return None
 
@@ -213,7 +212,7 @@ class InventoryWebService:
     def item_form_context(
         db: Session,
         organization_id: str,
-        item_id: Optional[str] = None,
+        item_id: str | None = None,
     ) -> dict:
         """Build context for item form (create/edit)."""
         org_id = coerce_uuid(organization_id)
@@ -385,47 +384,32 @@ class InventoryWebService:
     def list_items_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        category: Optional[str],
-        status: Optional[str] = None,
+        search: str | None,
+        category: str | None,
+        status: str | None = None,
         page: int = 1,
         limit: int = 50,
     ) -> dict:
-        org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
+        org_id = coerce_uuid(organization_id)
+        from app.services.inventory.item_query import build_item_query
 
-        query = (
-            db.query(Item, ItemCategory)
-            .join(ItemCategory, Item.category_id == ItemCategory.category_id)
-            .filter(Item.organization_id == org_id)
+        query = build_item_query(
+            db=db,
+            organization_id=organization_id,
+            search=search,
+            category=category,
+            status=status,
         )
 
-        # Category filter
-        category_id = _try_uuid(category)
-        if category_id:
-            query = query.filter(Item.category_id == category_id)
-        elif category:
-            query = query.filter(ItemCategory.category_code == category)
-
-        # Status filter
-        if status == "active":
-            query = query.filter(Item.is_active.is_(True))
-        elif status == "inactive":
-            query = query.filter(Item.is_active.is_(False))
-
-        # Search filter
-        if search:
-            search_pattern = f"%{search}%"
-            query = query.filter(
-                or_(
-                    Item.item_code.ilike(search_pattern),
-                    Item.item_name.ilike(search_pattern),
-                    Item.barcode.ilike(search_pattern),
-                )
-            )
-
         total_count = query.with_entities(func.count(Item.item_id)).scalar() or 0
-        rows = query.order_by(Item.item_code).limit(limit).offset(offset).all()
+        rows = (
+            query.with_entities(Item, ItemCategory)
+            .order_by(Item.item_code)
+            .limit(limit)
+            .offset(offset)
+            .all()
+        )
 
         # Batch load inventory quantities for all items on this page
         item_ids = [item.item_id for item, _ in rows]
@@ -511,8 +495,8 @@ class InventoryWebService:
     def list_transactions_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        transaction_type: Optional[str],
+        search: str | None,
+        transaction_type: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -741,9 +725,9 @@ class InventoryWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        search: Optional[str],
-        category: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        category: str | None,
+        status: str | None,
         page: int,
         limit: int,
         db: Session,
@@ -781,18 +765,18 @@ class InventoryWebService:
         category_id: str,
         item_type: str,
         base_uom: str,
-        purchase_uom: Optional[str],
-        sales_uom: Optional[str],
+        purchase_uom: str | None,
+        sales_uom: str | None,
         costing_method: str,
-        currency_code: Optional[str],
-        standard_cost: Optional[str],
-        list_price: Optional[str],
-        reorder_point: Optional[str],
-        reorder_quantity: Optional[str],
-        minimum_stock: Optional[str],
-        maximum_stock: Optional[str],
-        lead_time_days: Optional[str],
-        description: Optional[str],
+        currency_code: str | None,
+        standard_cost: str | None,
+        list_price: str | None,
+        reorder_point: str | None,
+        reorder_quantity: str | None,
+        minimum_stock: str | None,
+        maximum_stock: str | None,
+        lead_time_days: str | None,
+        description: str | None,
         track_inventory: bool,
         track_lots: bool,
         track_serial_numbers: bool,
@@ -880,23 +864,23 @@ class InventoryWebService:
         request: Request,
         auth: WebAuthContext,
         item_id: str,
-        item_code: Optional[str],
-        item_name: Optional[str],
-        category_id: Optional[str],
+        item_code: str | None,
+        item_name: str | None,
+        category_id: str | None,
         item_type: str,
         base_uom: str,
-        purchase_uom: Optional[str],
-        sales_uom: Optional[str],
+        purchase_uom: str | None,
+        sales_uom: str | None,
         costing_method: str,
-        currency_code: Optional[str],
-        standard_cost: Optional[str],
-        list_price: Optional[str],
-        reorder_point: Optional[str],
-        reorder_quantity: Optional[str],
-        minimum_stock: Optional[str],
-        maximum_stock: Optional[str],
-        lead_time_days: Optional[str],
-        description: Optional[str],
+        currency_code: str | None,
+        standard_cost: str | None,
+        list_price: str | None,
+        reorder_point: str | None,
+        reorder_quantity: str | None,
+        minimum_stock: str | None,
+        maximum_stock: str | None,
+        lead_time_days: str | None,
+        description: str | None,
         track_inventory: bool,
         track_lots: bool,
         track_serial_numbers: bool,
@@ -960,8 +944,8 @@ class InventoryWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        search: Optional[str],
-        transaction_type: Optional[str],
+        search: str | None,
+        transaction_type: str | None,
         page: int,
         db: Session,
     ) -> HTMLResponse:
@@ -987,8 +971,8 @@ class InventoryWebService:
     def list_categories_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        status: Optional[str] = None,
+        search: str | None,
+        status: str | None = None,
         page: int = 1,
         limit: int = 50,
     ) -> dict:
@@ -1047,7 +1031,7 @@ class InventoryWebService:
     def category_form_context(
         db: Session,
         organization_id: str,
-        category_id: Optional[str] = None,
+        category_id: str | None = None,
     ) -> dict:
         """Build context for category form (create/edit)."""
         org_id = coerce_uuid(organization_id)
@@ -1102,8 +1086,8 @@ class InventoryWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        search: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        status: str | None,
         page: int,
         limit: int,
         db: Session,
@@ -1160,11 +1144,11 @@ class InventoryWebService:
         cogs_account_id: str,
         revenue_account_id: str,
         inventory_adjustment_account_id: str,
-        reorder_point: Optional[str],
-        minimum_stock: Optional[str],
-        description: Optional[str],
-        parent_category_id: Optional[str],
-        purchase_variance_account_id: Optional[str],
+        reorder_point: str | None,
+        minimum_stock: str | None,
+        description: str | None,
+        parent_category_id: str | None,
+        purchase_variance_account_id: str | None,
         db: Session,
     ) -> HTMLResponse | RedirectResponse:
         try:
@@ -1210,11 +1194,11 @@ class InventoryWebService:
         cogs_account_id: str,
         revenue_account_id: str,
         inventory_adjustment_account_id: str,
-        reorder_point: Optional[str],
-        minimum_stock: Optional[str],
-        description: Optional[str],
-        parent_category_id: Optional[str],
-        purchase_variance_account_id: Optional[str],
+        reorder_point: str | None,
+        minimum_stock: str | None,
+        description: str | None,
+        parent_category_id: str | None,
+        purchase_variance_account_id: str | None,
         db: Session,
     ) -> HTMLResponse | RedirectResponse:
         try:
@@ -1264,7 +1248,7 @@ class InventoryWebService:
         try:
             org_id = auth.organization_id
             assert org_id is not None
-            category = item_category_service.get(db, category_id)
+            category = item_category_service.get(db, category_id, auth.organization_id)
             if category.is_active:
                 item_category_service.deactivate_category(db, org_id, UUID(category_id))
             else:
@@ -1284,8 +1268,8 @@ class InventoryWebService:
     def list_warehouses_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        status: Optional[str] = None,
+        search: str | None,
+        status: str | None = None,
         page: int = 1,
         limit: int = 50,
     ) -> dict:
@@ -1330,12 +1314,12 @@ class InventoryWebService:
     def warehouse_form_context(
         db: Session,
         organization_id: str,
-        warehouse_id: Optional[str] = None,
+        warehouse_id: str | None = None,
     ) -> dict:
         """Build context for warehouse form (create/edit)."""
         org_id = coerce_uuid(organization_id)
 
-        context: dict[str, Optional[Warehouse]] = {
+        context: dict[str, Warehouse | None] = {
             "warehouse": None,
         }
 
@@ -1398,8 +1382,8 @@ class InventoryWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        search: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        status: str | None,
         page: int,
         limit: int,
         db: Session,
@@ -1469,16 +1453,16 @@ class InventoryWebService:
         auth: WebAuthContext,
         warehouse_code: str,
         warehouse_name: str,
-        description: Optional[str],
-        contact_name: Optional[str],
-        contact_phone: Optional[str],
-        contact_email: Optional[str],
-        address_line1: Optional[str],
-        address_line2: Optional[str],
-        address_city: Optional[str],
-        address_state: Optional[str],
-        address_postal_code: Optional[str],
-        address_country: Optional[str],
+        description: str | None,
+        contact_name: str | None,
+        contact_phone: str | None,
+        contact_email: str | None,
+        address_line1: str | None,
+        address_line2: str | None,
+        address_city: str | None,
+        address_state: str | None,
+        address_postal_code: str | None,
+        address_country: str | None,
         is_receiving: bool,
         is_shipping: bool,
         is_consignment: bool,
@@ -1532,16 +1516,16 @@ class InventoryWebService:
         warehouse_id: str,
         warehouse_code: str,
         warehouse_name: str,
-        description: Optional[str],
-        contact_name: Optional[str],
-        contact_phone: Optional[str],
-        contact_email: Optional[str],
-        address_line1: Optional[str],
-        address_line2: Optional[str],
-        address_city: Optional[str],
-        address_state: Optional[str],
-        address_postal_code: Optional[str],
-        address_country: Optional[str],
+        description: str | None,
+        contact_name: str | None,
+        contact_phone: str | None,
+        contact_email: str | None,
+        address_line1: str | None,
+        address_line2: str | None,
+        address_city: str | None,
+        address_state: str | None,
+        address_postal_code: str | None,
+        address_country: str | None,
         is_receiving: bool,
         is_shipping: bool,
         is_consignment: bool,
@@ -1599,7 +1583,7 @@ class InventoryWebService:
         try:
             org_id = auth.organization_id
             assert org_id is not None
-            warehouse = warehouse_service.get(db, warehouse_id)
+            warehouse = warehouse_service.get(db, warehouse_id, auth.organization_id)
             if warehouse.is_active:
                 warehouse_service.deactivate_warehouse(db, org_id, UUID(warehouse_id))
             else:
@@ -1632,9 +1616,9 @@ class InventoryWebService:
         quantity: str,
         unit_cost: str,
         transaction_date: str,
-        reference: Optional[str],
-        notes: Optional[str],
-        lot_number: Optional[str],
+        reference: str | None,
+        notes: str | None,
+        lot_number: str | None,
         db: Session,
     ) -> HTMLResponse | RedirectResponse:
         return InventoryTransactionWebService.create_transaction_response(
@@ -1661,9 +1645,9 @@ class InventoryWebService:
         to_warehouse_id: str,
         quantity: str,
         transaction_date: str,
-        reference: Optional[str],
-        notes: Optional[str],
-        lot_number: Optional[str],
+        reference: str | None,
+        notes: str | None,
+        lot_number: str | None,
         db: Session,
     ) -> RedirectResponse:
         return InventoryTransactionWebService.create_transfer_response(
@@ -1691,7 +1675,7 @@ class InventoryWebService:
         transaction_date: str,
         adjustment_type: str,
         reason: str,
-        reference: Optional[str],
+        reference: str | None,
         db: Session,
     ) -> RedirectResponse:
         return InventoryTransactionWebService.create_adjustment_response(
@@ -1830,9 +1814,9 @@ class InventoryTransactionWebService:
         quantity: str,
         unit_cost: str,
         transaction_date: str,
-        reference: Optional[str],
-        notes: Optional[str],
-        lot_number: Optional[str],
+        reference: str | None,
+        notes: str | None,
+        lot_number: str | None,
         db: Session,
     ) -> RedirectResponse:
         """Create a manual inventory transaction."""
@@ -1917,9 +1901,9 @@ class InventoryTransactionWebService:
         to_warehouse_id: str,
         quantity: str,
         transaction_date: str,
-        reference: Optional[str],
-        notes: Optional[str],
-        lot_number: Optional[str],
+        reference: str | None,
+        notes: str | None,
+        lot_number: str | None,
         db: Session,
     ) -> RedirectResponse:
         """Create an inventory transfer."""
@@ -1999,7 +1983,7 @@ class InventoryTransactionWebService:
         transaction_date: str,
         adjustment_type: str,
         reason: str,
-        reference: Optional[str],
+        reference: str | None,
         db: Session,
     ) -> RedirectResponse:
         """Create an inventory adjustment."""

@@ -5,7 +5,7 @@ Location Model - Core Org.
 import enum
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -65,22 +65,22 @@ class Location(Base):
 
     location_code: Mapped[str] = mapped_column(String(20), nullable=False)
     location_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    location_type: Mapped[Optional[LocationType]] = mapped_column(
+    location_type: Mapped[LocationType | None] = mapped_column(
         Enum(LocationType, name="location_type"),
         nullable=True,
     )
 
     # Address
-    address_line_1: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    address_line_2: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    state_province: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    postal_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    country_code: Mapped[Optional[str]] = mapped_column(String(2), nullable=True)
+    address_line_1: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    address_line_2: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    city: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    state_province: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    postal_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    country_code: Mapped[str | None] = mapped_column(String(2), nullable=True)
 
     # Geolocation (for attendance/geofencing)
-    latitude: Mapped[Optional[float]] = mapped_column(Numeric(9, 6), nullable=True)
-    longitude: Mapped[Optional[float]] = mapped_column(Numeric(9, 6), nullable=True)
+    latitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
+    longitude: Mapped[float | None] = mapped_column(Numeric(9, 6), nullable=True)
     geofence_radius_m: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
@@ -101,7 +101,7 @@ class Location(Base):
         default=GeofenceType.CIRCLE,
         server_default=text("'CIRCLE'"),
     )
-    geofence_polygon: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    geofence_polygon: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="GeoJSON Polygon or MultiPolygon geometry for complex boundaries",

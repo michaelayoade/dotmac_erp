@@ -2,20 +2,19 @@ import os
 import sys
 import uuid
 from contextlib import asynccontextmanager, contextmanager
-from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from datetime import UTC, datetime, timedelta
 from types import ModuleType
 
+import anyio.to_thread as anyio_to_thread
+import fastapi.concurrency as fastapi_concurrency
+import fastapi.dependencies.utils as fastapi_deps
+import fastapi.routing as fastapi_routing
 import pytest
-import asyncio
-import json
-from http.cookies import SimpleCookie
-from urllib.parse import urlencode, urlparse
-
-import httpx
+import starlette.background as starlette_background
+import starlette.concurrency as starlette_concurrency
 from jose import jwt
-from sqlalchemy import create_engine, String, TypeDecorator, Text
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy import String, Text, TypeDecorator, create_engine
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 
@@ -42,7 +41,7 @@ class SQLiteUUID(TypeDecorator):
 
 # Monkey-patch the postgresql UUID import to use our SQLite-compatible version
 # This is done BEFORE any app model imports so they use the patched version
-import sqlalchemy.dialects.postgresql as pg_dialect
+import sqlalchemy.dialects.postgresql as pg_dialect  # noqa: E402
 
 _original_uuid = pg_dialect.UUID
 _original_jsonb = getattr(pg_dialect, "JSONB", None)
@@ -133,6 +132,7 @@ def _get_db_session():
 
 
 mock_db_module.get_db_session = _get_db_session
+mock_db_module.get_db = _get_db_session
 
 # Also mock app.config to prevent .env loading
 mock_config_module = ModuleType("app.config")
@@ -261,34 +261,40 @@ os.environ["JWT_SECRET"] = "test-secret"
 os.environ["JWT_ALGORITHM"] = "HS256"
 os.environ["TOTP_ENCRYPTION_KEY"] = "QLUJktsTSfZEbST4R-37XmQ0tCkiVCBXZN2Zt053w8g="
 os.environ["TOTP_ISSUER"] = "StarterTemplate"
+os.environ.setdefault("PYTEST_CURRENT_TEST", "1")
 
 # Now import the models - they'll use our mocked db module
-from app.models.person import Person
-from app.models.auth import (
-    UserCredential,
-    Session as AuthSession,
-    SessionStatus,
+
+from app.models.audit import AuditActorType, AuditEvent  # noqa: E402
+from app.models.auth import (  # noqa: E402
     ApiKey,
     MFAMethod,
+    SessionStatus,
+    UserCredential,
 )
-from app.models.rbac import Role, Permission, RolePermission, PersonRole
-from app.models.audit import AuditEvent, AuditActorType
-from app.models.domain_settings import (
+from app.models.auth import (  # noqa: E402
+    Session as AuthSession,
+)
+from app.models.domain_settings import (  # noqa: E402
     DomainSetting,
     DomainSettingHistory,
     SettingDomain,
 )
-from app.models.scheduler import ScheduledTask, ScheduleType
-from app.models.expense import (
-    ExpenseClaim,
-    ExpenseClaimItem,
+from app.models.expense import (  # noqa: E402
     ExpenseCategory,
+    ExpenseClaim,
     ExpenseClaimAction,
+    ExpenseClaimItem,
 )
-from app.models.finance.platform.idempotency_record import IdempotencyRecord
+from app.models.finance.platform.idempotency_record import (  # noqa: E402
+    IdempotencyRecord,
+)
 
 # Import discipline models to resolve Employee relationship
-from app.models.people.discipline import DisciplinaryCase  # noqa: F401
+from app.models.people.discipline import DisciplinaryCase  # noqa: E402,F401
+from app.models.person import Person  # noqa: E402
+from app.models.rbac import Permission, PersonRole, Role, RolePermission  # noqa: E402
+from app.models.scheduler import ScheduledTask, ScheduleType  # noqa: E402
 
 # List of tables that are SQLite-compatible (public schema models only)
 # IFRS models use PostgreSQL-specific types (JSONB, ARRAY) that SQLite doesn't support
@@ -314,7 +320,7 @@ SQLITE_COMPATIBLE_TABLES = [
 ]
 
 # Create only SQLite-compatible tables, tolerating per-table failures
-import warnings
+import warnings  # noqa: E402
 
 
 def _strip_sqlite_server_defaults(tables):
@@ -333,7 +339,7 @@ for table in SQLITE_COMPATIBLE_TABLES:
     try:
         table.create(_test_engine, checkfirst=True)
     except Exception as e:
-        warnings.warn(f"Could not create test table {table.name}: {e}")
+        warnings.warn(f"Could not create test table {table.name}: {e}", stacklevel=2)
 
 # Re-export Base for compatibility
 Base = TestBase
@@ -393,22 +399,68 @@ def auth_env():
 @pytest.fixture()
 def client(db_session):
     """Create a test client with database dependency override."""
-    from app.main import app
-    from app.api.persons import get_db as persons_get_db
-    from app.api.auth_flow import get_db as auth_flow_get_db
-    from app.api.rbac import get_db as rbac_get_db
+    from fastapi import APIRouter, Depends, FastAPI
+
     from app.api.audit import get_db as audit_get_db
-    from app.api.settings import get_db as settings_get_db
+    from app.api.audit import router as audit_router
+    from app.api.auth_flow import get_db as auth_flow_get_db
+    from app.api.auth_flow import router as auth_flow_router
+    from app.api.people.discipline import get_db as discipline_get_db
+    from app.api.people.discipline import router as discipline_router
+    from app.api.persons import get_db as persons_get_db
+    from app.api.persons import router as persons_router
+    from app.api.rbac import get_db as rbac_get_db
+    from app.api.rbac import router as rbac_router
     from app.api.scheduler import get_db as scheduler_get_db
-    from app.services.auth_dependencies import _get_db as auth_deps_get_db
+    from app.api.scheduler import router as scheduler_router
+    from app.api.settings import get_db as settings_get_db
+    from app.api.settings import router as settings_router
+    from app.errors import register_error_handlers
+    from app.services.auth_dependencies import (
+        _get_db as auth_deps_get_db,
+    )
+    from app.services.auth_dependencies import (
+        require_tenant_auth,
+    )
     from app.services.settings_seed import (
-        seed_auth_settings,
         seed_audit_settings,
+        seed_auth_settings,
+        seed_automation_settings,
+        seed_email_settings,
+        seed_features_settings,
+        seed_reporting_settings,
         seed_scheduler_settings,
     )
 
+    Session = sessionmaker(bind=db_session.bind, autoflush=False, autocommit=False)
+
     def override_get_db():
-        yield db_session
+        session = Session()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    def _include_api_router(router, dependencies=None):
+        app.include_router(router, dependencies=dependencies)
+        app.include_router(router, prefix="/api/v1", dependencies=dependencies)
+
+    # Build a minimal app for API tests to avoid costly full app import.
+    app = FastAPI()
+    register_error_handlers(app)
+    _include_api_router(auth_flow_router)
+    _include_api_router(audit_router)
+    _include_api_router(rbac_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(persons_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(settings_router, dependencies=[Depends(require_tenant_auth)])
+    _include_api_router(scheduler_router, dependencies=[Depends(require_tenant_auth)])
+
+    # Discipline routes live under /api/v1/people/discipline in tests.
+    people_v1 = APIRouter(
+        prefix="/api/v1/people", dependencies=[Depends(require_tenant_auth)]
+    )
+    people_v1.include_router(discipline_router)
+    app.include_router(people_v1)
 
     # Override all get_db dependencies
     app.dependency_overrides[persons_get_db] = override_get_db
@@ -417,132 +469,144 @@ def client(db_session):
     app.dependency_overrides[audit_get_db] = override_get_db
     app.dependency_overrides[settings_get_db] = override_get_db
     app.dependency_overrides[scheduler_get_db] = override_get_db
+    app.dependency_overrides[discipline_get_db] = override_get_db
     app.dependency_overrides[auth_deps_get_db] = override_get_db
+
+    # Convert sync endpoints to async wrappers to avoid threadpool usage.
+    import inspect
+
+    from fastapi.routing import APIRoute, request_response
+
+    for route in app.router.routes:
+        if isinstance(route, APIRoute) and not inspect.iscoroutinefunction(
+            route.endpoint
+        ):
+            endpoint = route.endpoint
+
+            async def _async_endpoint(*args, __endpoint=endpoint, **kwargs):
+                return __endpoint(*args, **kwargs)
+
+            _async_endpoint.__signature__ = inspect.signature(endpoint)
+            route.endpoint = _async_endpoint
+            route.dependant.call = _async_endpoint
+            route.dependant.is_coroutine = True
+            route.app = request_response(route.get_route_handler())
 
     # Seed the settings in the test database
     seed_auth_settings(db_session)
     seed_audit_settings(db_session)
     seed_scheduler_settings(db_session)
+    seed_email_settings(db_session)
+    seed_features_settings(db_session)
+    seed_automation_settings(db_session)
+    seed_reporting_settings(db_session)
 
-    class _ASGIResponse:
+    import asyncio
+    import json as _json
+    from http.cookies import SimpleCookie
+    from urllib.parse import urlsplit
+
+    class _Response:
         def __init__(
-            self, status_code: int, headers: list[tuple[str, str]], body: bytes
+            self, status_code: int, headers: list[tuple[bytes, bytes]], body: bytes
         ):
             self.status_code = status_code
-            self.headers = httpx.Headers(headers)
-            self.content = body
-            self.text = body.decode(errors="replace")
-            self._cookies = httpx.Cookies()
-
-        def json(self):
-            return json.loads(self.content.decode() or "null")
+            self._headers = {k.decode().lower(): v.decode() for k, v in headers}
+            self._body = body
 
         @property
-        def cookies(self):
-            return self._cookies
+        def text(self):
+            return self._body.decode(errors="replace")
 
-    class _ASGIClient:
-        def __init__(self, app):
-            self._app = app
-            self._cookies = httpx.Cookies()
+        def json(self):
+            return _json.loads(self._body.decode())
 
-        def _build_headers(
-            self, headers: dict | None, body: bytes
-        ) -> list[tuple[bytes, bytes]]:
-            hdrs = []
-            if headers:
-                for k, v in headers.items():
-                    hdrs.append((k.lower().encode(), str(v).encode()))
-            if self._cookies:
-                cookie_header = "; ".join(
-                    f"{name}={value}" for name, value in self._cookies.items()
-                )
-                hdrs.append((b"cookie", cookie_header.encode()))
-            if body and not any(k == b"content-length" for k, _ in hdrs):
-                hdrs.append((b"content-length", str(len(body)).encode()))
-            return hdrs
+        @property
+        def headers(self):
+            return self._headers
 
-        async def _request(
-            self,
-            method: str,
-            url: str,
-            json_data=None,
-            data=None,
-            headers: dict | None = None,
-        ) -> _ASGIResponse:
-            parsed = urlparse(url)
-            path = parsed.path or "/"
-            query = parsed.query.encode()
+    class _ASGITestClient:
+        def __init__(self, asgi_app):
+            self._app = asgi_app
+            self._cookies = SimpleCookie()
+            self._cookie_view = None
 
+        def request(self, method: str, url: str, **kwargs):
             body = b""
-            req_headers = headers.copy() if headers else {}
-
-            if json_data is not None:
-                body = json.dumps(json_data).encode()
-                req_headers.setdefault("content-type", "application/json")
-            elif data is not None:
-                if isinstance(data, dict):
-                    body = urlencode(data, doseq=True).encode()
-                else:
-                    body = str(data).encode()
-                req_headers.setdefault(
-                    "content-type", "application/x-www-form-urlencoded"
+            headers = {k.lower(): v for k, v in (kwargs.get("headers") or {}).items()}
+            if "json" in kwargs and kwargs["json"] is not None:
+                body = _json.dumps(kwargs["json"]).encode()
+                headers.setdefault("content-type", "application/json")
+            elif "data" in kwargs and kwargs["data"] is not None:
+                data = kwargs["data"]
+                body = (
+                    data if isinstance(data, (bytes, bytearray)) else str(data).encode()
                 )
+
+            if self._cookies and "cookie" not in headers:
+                headers["cookie"] = "; ".join(
+                    f"{m.key}={m.value}" for m in self._cookies.values()
+                )
+
+            parsed = urlsplit(url)
+            path = parsed.path or "/"
+            query_string = parsed.query.encode()
 
             scope = {
                 "type": "http",
-                "method": method,
+                "asgi": {"version": "3.0"},
+                "http_version": "1.1",
+                "method": method.upper(),
+                "scheme": "http",
                 "path": path,
                 "raw_path": path.encode(),
-                "query_string": query,
-                "headers": self._build_headers(req_headers, body),
-                "client": ("127.0.0.1", 12345),
+                "query_string": query_string,
+                "headers": [
+                    (k.encode(), v.encode() if isinstance(v, str) else v)
+                    for k, v in headers.items()
+                ],
+                "client": ("testclient", 123),
                 "server": ("testserver", 80),
-                "scheme": "http",
             }
 
-            response_status = 500
-            response_headers: list[tuple[bytes, bytes]] = []
-            response_body_parts: list[bytes] = []
+            async def _call_app():
+                response_headers: list[tuple[bytes, bytes]] = []
+                response_body_parts: list[bytes] = []
+                status_code = 500
 
-            async def receive():
-                nonlocal body
-                if body is None:
+                request_sent = False
+
+                async def receive():
+                    nonlocal body, request_sent
+                    if not request_sent:
+                        request_sent = True
+                        data = body
+                        body = b""
+                        return {
+                            "type": "http.request",
+                            "body": data,
+                            "more_body": False,
+                        }
                     return {"type": "http.disconnect"}
-                data = body
-                body = None
-                return {"type": "http.request", "body": data, "more_body": False}
 
-            async def send(message):
-                nonlocal response_status, response_headers, response_body_parts
-                if message["type"] == "http.response.start":
-                    response_status = message["status"]
-                    response_headers = message.get("headers", [])
-                elif message["type"] == "http.response.body":
-                    response_body_parts.append(message.get("body", b""))
+                async def send(message):
+                    nonlocal status_code
+                    if message["type"] == "http.response.start":
+                        status_code = message["status"]
+                        response_headers.extend(message.get("headers", []))
+                    elif message["type"] == "http.response.body":
+                        response_body_parts.append(message.get("body", b""))
 
-            await self._app(scope, receive, send)
+                await self._app(scope, receive, send)
+                return status_code, response_headers, b"".join(response_body_parts)
 
-            decoded_headers = [
-                (k.decode("latin-1"), v.decode("latin-1")) for k, v in response_headers
-            ]
-            response = _ASGIResponse(
-                response_status, decoded_headers, b"".join(response_body_parts)
-            )
+            status_code, response_headers, response_body = asyncio.run(_call_app())
 
-            # Update cookies from Set-Cookie headers
-            for name, value in decoded_headers:
-                if name.lower() == "set-cookie":
-                    cookie = SimpleCookie()
-                    cookie.load(value)
-                    for key, morsel in cookie.items():
-                        response._cookies.set(key, morsel.value)
-                        self._cookies.set(key, morsel.value)
-
+            response = _Response(status_code, response_headers, response_body)
+            for header_name, header_value in response_headers:
+                if header_name.lower() == b"set-cookie":
+                    self._cookies.load(header_value.decode())
             return response
-
-        def request(self, method: str, url: str, **kwargs):
-            return asyncio.run(self._request(method, url, **kwargs))
 
         def get(self, url: str, **kwargs):
             return self.request("GET", url, **kwargs)
@@ -559,14 +623,24 @@ def client(db_session):
         def delete(self, url: str, **kwargs):
             return self.request("DELETE", url, **kwargs)
 
-    # Mock the app startup seeding to avoid duplicate seeding
-    with (
-        patch("app.main.seed_auth_settings", create=True),
-        patch("app.main.seed_audit_settings", create=True),
-        patch("app.main.seed_scheduler_settings", create=True),
-        patch("app.main.SessionLocal", return_value=MagicMock(), create=True),
-    ):
-        yield _ASGIClient(app)
+        @property
+        def cookies(self):
+            if self._cookie_view is None:
+
+                class _CookieView:
+                    def __init__(self, jar):
+                        self._jar = jar
+
+                    def get(self, key, default=None):
+                        morsel = self._jar.get(key)
+                        if morsel is None:
+                            return default
+                        return morsel.value
+
+                self._cookie_view = _CookieView(self._cookies)
+            return self._cookie_view
+
+    yield _ASGITestClient(app)
 
     app.dependency_overrides.clear()
 
@@ -577,7 +651,7 @@ def _create_access_token(
     """Create a JWT access token for testing."""
     secret = os.getenv("JWT_SECRET", "test-secret")
     algorithm = os.getenv("JWT_ALGORITHM", "HS256")
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expire = now + timedelta(minutes=15)
     payload = {
         "sub": person_id,
@@ -600,7 +674,7 @@ def auth_session(db_session, person):
         status=SessionStatus.active,
         ip_address="127.0.0.1",
         user_agent="pytest",
-        expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+        expires_at=datetime.now(UTC) + timedelta(days=30),
     )
     db_session.add(session)
     db_session.commit()
@@ -611,7 +685,13 @@ def auth_session(db_session, person):
 @pytest.fixture()
 def auth_token(person, auth_session):
     """Create a valid JWT token for authenticated requests."""
-    return _create_access_token(str(person.id), str(auth_session.id))
+    scopes = [
+        "rbac:manage",
+        "people:read",
+        "people:write",
+        "settings:manage",
+    ]
+    return _create_access_token(str(person.id), str(auth_session.id), scopes=scopes)
 
 
 @pytest.fixture()
@@ -663,7 +743,7 @@ def admin_session(db_session, admin_person):
         status=SessionStatus.active,
         ip_address="127.0.0.1",
         user_agent="pytest",
-        expires_at=datetime.now(timezone.utc) + timedelta(days=30),
+        expires_at=datetime.now(UTC) + timedelta(days=30),
     )
     db_session.add(session)
     db_session.commit()
@@ -774,3 +854,21 @@ def scheduled_task(db_session):
     db_session.commit()
     db_session.refresh(task)
     return task
+
+
+# Avoid anyio threadpool hangs by running sync callables inline.
+async def _run_in_threadpool(func, *args, **kwargs):
+    return func(*args, **kwargs)
+
+
+async def _run_sync_no_limiter(func, *args, **kwargs):
+    kwargs.pop("limiter", None)
+    return func(*args, **kwargs)
+
+
+fastapi_concurrency.run_in_threadpool = _run_in_threadpool
+starlette_concurrency.run_in_threadpool = _run_in_threadpool
+fastapi_deps.run_in_threadpool = _run_in_threadpool
+fastapi_routing.run_in_threadpool = _run_in_threadpool
+starlette_background.run_in_threadpool = _run_in_threadpool
+anyio_to_thread.run_sync = _run_sync_no_limiter

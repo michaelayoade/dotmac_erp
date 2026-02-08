@@ -5,9 +5,9 @@ Provides view-focused data for material request web routes.
 """
 
 import logging
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any, Optional, TypedDict
+from typing import Any, TypedDict
 from uuid import UUID
 
 from sqlalchemy import func
@@ -48,11 +48,11 @@ class MaterialRequestWebService:
     def list_context(
         db: Session,
         organization_id: str,
-        status: Optional[str] = None,
-        request_type: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        project_id: Optional[str] = None,
+        status: str | None = None,
+        request_type: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        project_id: str | None = None,
     ) -> dict:
         """Get context for material request list page."""
         org_id = coerce_uuid(organization_id)
@@ -177,7 +177,7 @@ class MaterialRequestWebService:
     def form_context(
         db: Session,
         organization_id: str,
-        request_id: Optional[str] = None,
+        request_id: str | None = None,
     ) -> dict:
         """Get context for material request form (new/edit)."""
         org_id = coerce_uuid(organization_id)
@@ -601,8 +601,8 @@ class MaterialRequestWebService:
     def report_context(
         db: Session,
         organization_id: str,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
         group_by: str = "status",
     ) -> dict:
         """Get context for material request report page."""
@@ -764,22 +764,21 @@ class MaterialRequestWebService:
         organization_id: UUID,
         user_id: UUID,
         request_type: str,
-        schedule_date: Optional[str] = None,
-        default_warehouse_id: Optional[str] = None,
-        project_id: Optional[str] = None,
-        ticket_id: Optional[str] = None,
-        requested_by_id: Optional[str] = None,
-        remarks: Optional[str] = None,
-        items: Optional[list[dict]] = None,
+        schedule_date: str | None = None,
+        default_warehouse_id: str | None = None,
+        project_id: str | None = None,
+        ticket_id: str | None = None,
+        requested_by_id: str | None = None,
+        remarks: str | None = None,
+        items: list[dict] | None = None,
     ) -> MaterialRequest:
         """Create a material request from form data."""
-        from app.services.inventory.material_request_numbering import (
-            material_request_numbering_service,
-        )
+        from app.models.finance.core_config.numbering_sequence import SequenceType
+        from app.services.finance.common.numbering import SyncNumberingService
 
-        # Generate request number
-        request_number = material_request_numbering_service.get_next_number(
-            db, organization_id
+        # Generate request number via unified numbering system
+        request_number = SyncNumberingService(db).generate_next_number(
+            organization_id, SequenceType.MATERIAL_REQUEST
         )
 
         # Parse date
@@ -851,13 +850,13 @@ class MaterialRequestWebService:
         user_id: UUID,
         request_id: str,
         request_type: str,
-        schedule_date: Optional[str] = None,
-        default_warehouse_id: Optional[str] = None,
-        project_id: Optional[str] = None,
-        ticket_id: Optional[str] = None,
-        requested_by_id: Optional[str] = None,
-        remarks: Optional[str] = None,
-        items: Optional[list[dict]] = None,
+        schedule_date: str | None = None,
+        default_warehouse_id: str | None = None,
+        project_id: str | None = None,
+        ticket_id: str | None = None,
+        requested_by_id: str | None = None,
+        remarks: str | None = None,
+        items: list[dict] | None = None,
     ) -> MaterialRequest:
         """Update a material request from form data."""
         request = db.get(MaterialRequest, coerce_uuid(request_id))
@@ -1048,7 +1047,7 @@ class MaterialRequestWebService:
         For PURCHASE requests: no stock movement; status → ORDERED.
         """
         import logging
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from app.models.finance.gl.fiscal_period import FiscalPeriod
         from app.models.inventory.inventory_transaction import TransactionType
@@ -1084,7 +1083,7 @@ class MaterialRequestWebService:
             return request
 
         # For ISSUE and TRANSFER types: create inventory transactions
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         txn_date = now
 
         # Find fiscal period for today

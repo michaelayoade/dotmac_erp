@@ -8,7 +8,7 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     Boolean,
@@ -30,13 +30,13 @@ from app.db import Base
 from app.models.people.base import ERPNextSyncMixin
 
 if TYPE_CHECKING:
-    from app.models.support.ticket import Ticket
-    from app.models.pm.task import Task
-    from app.models.pm.milestone import Milestone
-    from app.models.pm.resource_allocation import ResourceAllocation
-    from app.models.pm.time_entry import TimeEntry
     from app.models.finance.ar.customer import Customer
+    from app.models.pm.milestone import Milestone
     from app.models.pm.project_template import ProjectTemplate
+    from app.models.pm.resource_allocation import ResourceAllocation
+    from app.models.pm.task import Task
+    from app.models.pm.time_entry import TimeEntry
+    from app.models.support.ticket import Ticket
 
 
 class ProjectStatus(str, enum.Enum):
@@ -96,36 +96,34 @@ class Project(Base, ERPNextSyncMixin):
 
     project_code: Mapped[str] = mapped_column(String(20), nullable=False)
     project_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Relationships
-    business_unit_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    business_unit_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.business_unit.business_unit_id"),
         nullable=True,
     )
-    segment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    segment_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.reporting_segment.segment_id"),
         nullable=True,
     )
-    project_manager_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    project_manager_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
 
     # Timeline
-    start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Budget
-    budget_amount: Mapped[Optional[Decimal]] = mapped_column(
+    budget_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
-    budget_currency_code: Mapped[Optional[str]] = mapped_column(
-        String(3), nullable=True
-    )
+    budget_currency_code: Mapped[str | None] = mapped_column(String(3), nullable=True)
 
     # Status
     status: Mapped[ProjectStatus] = mapped_column(
@@ -140,14 +138,14 @@ class Project(Base, ERPNextSyncMixin):
     )
 
     # Cost center for project expenses
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.cost_center.cost_center_id"),
         nullable=True,
     )
 
     # Customer relationship (for client projects)
-    customer_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    customer_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("ar.customer.customer_id"),
         nullable=True,
@@ -162,11 +160,11 @@ class Project(Base, ERPNextSyncMixin):
         default=Decimal("0.00"),
         server_default=text("0.00"),
     )
-    estimated_cost: Mapped[Optional[Decimal]] = mapped_column(
+    estimated_cost: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
-    actual_cost: Mapped[Optional[Decimal]] = mapped_column(
+    actual_cost: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
@@ -181,7 +179,7 @@ class Project(Base, ERPNextSyncMixin):
         default=ProjectType.INTERNAL,
     )
 
-    project_template_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    project_template_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("pm.project_template.template_id"),
         nullable=True,
@@ -192,7 +190,7 @@ class Project(Base, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -209,22 +207,22 @@ class Project(Base, ERPNextSyncMixin):
     )
 
     # PM Relationships
-    tasks: Mapped[List["Task"]] = relationship(
+    tasks: Mapped[list["Task"]] = relationship(
         "Task",
         foreign_keys="Task.project_id",
         back_populates="project",
     )
-    milestones: Mapped[List["Milestone"]] = relationship(
+    milestones: Mapped[list["Milestone"]] = relationship(
         "Milestone",
         foreign_keys="Milestone.project_id",
         back_populates="project",
     )
-    resource_allocations: Mapped[List["ResourceAllocation"]] = relationship(
+    resource_allocations: Mapped[list["ResourceAllocation"]] = relationship(
         "ResourceAllocation",
         foreign_keys="ResourceAllocation.project_id",
         back_populates="project",
     )
-    time_entries: Mapped[List["TimeEntry"]] = relationship(
+    time_entries: Mapped[list["TimeEntry"]] = relationship(
         "TimeEntry",
         foreign_keys="TimeEntry.project_id",
         back_populates="project",

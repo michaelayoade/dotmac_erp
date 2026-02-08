@@ -98,7 +98,7 @@
         </div>
 
         <!-- Secondary Metrics Bar -->
-        <div class="mt-8 pt-6 border-t border-teal-100/50 dark:border-teal-800/30 grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="mt-8 pt-6 border-t border-teal-100/50 dark:border-teal-800/30 grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-4 gap-4">
             <div class="rounded-lg bg-slate-50/80 dark:bg-slate-800/40 px-4 py-3 border-l-2 border-slate-300 dark:border-slate-600">
                 <span class="block text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">{% if is_ipsas %}Cost of Services{% else %}COGS{% endif %}</span>
                 <span class="block text-lg font-semibold font-mono text-slate-900 dark:text-white mt-1">{{ stats.cogs_spend | default(currency_zero) }}</span>
@@ -221,7 +221,7 @@
             <div class="h-48 flex items-center justify-center">
                 <canvas id="profitGaugeChart"></canvas>
             </div>
-            <div class="mt-4 grid grid-cols-2 gap-4 text-center">
+            <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4 text-center">
                 <div>
                     <span class="block text-xs text-slate-500 dark:text-slate-400">{% if is_ipsas %}Gross Result{% else %}Gross Margin{% endif %}</span>
                     <span class="block text-lg font-semibold font-mono text-slate-900 dark:text-white" id="grossMarginValue">--</span>
@@ -398,9 +398,9 @@
     <div class="divider-finance"></div>
 
     <!-- Quick Access Row -->
-    <div class="grid gap-6 lg:grid-cols-12">
+    <div class="grid gap-6 lg:grid-cols-3">
         <!-- Quick Actions -->
-        <div class="lg:col-span-4 stagger-in" style="animation-delay: 325ms;">
+        <div class="stagger-in" style="animation-delay: 325ms;">
             <div class="section-label">
                 <span class="section-label-text">Quick Actions</span>
             </div>
@@ -429,11 +429,11 @@
         </div>
 
         <!-- Reports Grid -->
-        <div class="lg:col-span-8 stagger-in" style="animation-delay: 350ms;">
+        <div class="lg:col-span-2 stagger-in" style="animation-delay: 350ms;">
             <div class="section-label">
                 <span class="section-label-text">Financial Reports</span>
             </div>
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 sm:grid-cols-4 gap-3">
                 <a href="/finance/reports/trial-balance" class="card card-hover p-4 text-center group">
                     <div class="text-slate-400 dark:text-slate-500 mb-2 group-hover:text-teal-500 transition-colors">
                         <svg class="h-8 w-8 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -747,15 +747,31 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Invoice Status Charts
     const invoiceStatus = chartData.invoice_status || {};
+    const arStatus = Array.isArray(invoiceStatus.ar_status) ? invoiceStatus.ar_status : [];
+    const apStatus = Array.isArray(invoiceStatus.ap_status) ? invoiceStatus.ap_status : [];
+
+    const statusPalette = (window.Charts && Charts.getStatusPalette)
+        ? Charts.getStatusPalette()
+        : [
+            colors.amber.solid,
+            colors.teal.solid,
+            colors.emerald.solid,
+            colors.rose.solid,
+            colors.violet.solid,
+            colors.blue.solid,
+        ];
 
     if (document.getElementById('arStatusChart')) {
+        const labels = arStatus.map((s) => s.status);
+        const data = arStatus.map((s) => s.count);
+        const colors = arStatus.map((_, idx) => statusPalette[idx % statusPalette.length]);
         createChart(document.getElementById('arStatusChart'), {
             type: 'doughnut',
             data: {
-                labels: ['Draft', 'Posted', 'Paid'],
+                labels,
                 datasets: [{
-                    data: [invoiceStatus.ar?.draft || 0, invoiceStatus.ar?.posted || 0, invoiceStatus.ar?.paid || 0],
-                    backgroundColor: [colors.amber.solid, colors.teal.solid, colors.emerald.solid],
+                    data,
+                    backgroundColor: colors,
                     borderWidth: 0,
                 }]
             },
@@ -769,13 +785,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     if (document.getElementById('apStatusChart')) {
+        const labels = apStatus.map((s) => s.status);
+        const data = apStatus.map((s) => s.count);
+        const colors = apStatus.map((_, idx) => statusPalette[idx % statusPalette.length]);
         createChart(document.getElementById('apStatusChart'), {
             type: 'doughnut',
             data: {
-                labels: ['Draft', 'Posted', 'Paid'],
+                labels,
                 datasets: [{
-                    data: [invoiceStatus.ap?.draft || 0, invoiceStatus.ap?.posted || 0, invoiceStatus.ap?.paid || 0],
-                    backgroundColor: [colors.amber.solid, colors.rose.solid, colors.emerald.solid],
+                    data,
+                    backgroundColor: colors,
                     borderWidth: 0,
                 }]
             },

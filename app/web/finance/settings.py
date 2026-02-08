@@ -18,13 +18,12 @@ from sqlalchemy.orm import Session
 from app.services.finance.settings_web import settings_web_service
 from app.templates import templates
 from app.web.deps import (
+    WebAuthContext,
+    base_context,
     get_async_db,
     get_db,
     require_finance_access,
-    WebAuthContext,
-    base_context,
 )
-
 
 router = APIRouter(prefix="/settings", tags=["finance-settings"])
 

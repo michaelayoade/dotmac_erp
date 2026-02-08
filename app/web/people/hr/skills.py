@@ -1,19 +1,16 @@
 """Skills Catalog routes."""
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.models.people.hr import SkillCategory
-from app.services.people.hr import SkillService
 from app.services.common import coerce_uuid
+from app.services.people.hr import SkillService
 from app.templates import templates
-from app.web.deps import base_context, get_db, require_hr_access, WebAuthContext
+from app.web.deps import WebAuthContext, base_context, get_db, require_hr_access
 
 from ._common import _parse_bool
-
 
 router = APIRouter()
 
@@ -26,10 +23,10 @@ router = APIRouter()
 @router.get("/skills", response_class=HTMLResponse)
 def list_skills(
     request: Request,
-    category: Optional[str] = None,
-    search: Optional[str] = None,
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    category: str | None = None,
+    search: str | None = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -79,8 +76,8 @@ def create_skill(
     request: Request,
     skill_name: str = Form(...),
     category: str = Form(...),
-    description: Optional[str] = Form(None),
-    is_language: Optional[str] = Form(None),
+    description: str | None = Form(None),
+    is_language: str | None = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -151,9 +148,9 @@ def update_skill(
     skill_id: str,
     skill_name: str = Form(...),
     category: str = Form(...),
-    description: Optional[str] = Form(None),
-    is_language: Optional[str] = Form(None),
-    is_active: Optional[str] = Form(None),
+    description: str | None = Form(None),
+    is_language: str | None = Form(None),
+    is_active: str | None = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):

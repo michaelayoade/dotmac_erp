@@ -9,16 +9,22 @@ login pages redirect to the SSO provider for authentication.
 """
 
 import logging
+from datetime import UTC
+from typing import TYPE_CHECKING
 from urllib.parse import urlencode, urlparse
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
+
 from app.config import settings
 from app.db import SessionLocal, get_auth_db_session
+from app.net import get_request_host, get_request_scheme
 from app.services.auth_flow import AuthFlow, hash_session_token
 from app.templates import templates
-from app.web.deps import WebAuthContext, brand_context
+from app.web.deps import WebAuthContext, brand_context, org_brand_context
 
 logger = logging.getLogger(__name__)
 
@@ -106,19 +112,61 @@ class AuthWebService:
 
         # Build redirect URL back to this app
         # Use the current request's URL as the base for the redirect
-        scheme = request.url.scheme
-        host = request.url.netloc
+        scheme = get_request_scheme(request)
+        host = get_request_host(request) or request.url.netloc
         redirect_url = f"{scheme}://{host}{next_url}"
 
         # Build SSO provider login URL with redirect parameter
         params = urlencode({"next": redirect_url})
         return f"{settings.sso_provider_url}/login?{params}"
 
+    def _get_brand_for_login(
+        self,
+        db: "Session | None",
+        org_slug: str = "",
+    ) -> dict:
+        """Get brand context for login pages.
+
+        For single-tenant deployments (1 org), auto-detect the org branding.
+        For multi-tenant, support ?org=<slug> query param.
+        Falls back to system defaults.
+        """
+        if not db:
+            return brand_context()
+
+        try:
+            from sqlalchemy import func, select
+
+            from app.models.finance.core_org.organization import Organization
+
+            if org_slug:
+                # Look up by slug
+                stmt = select(Organization.organization_id).where(
+                    Organization.slug == org_slug,
+                )
+                org_id = db.scalar(stmt)
+                if org_id:
+                    return org_brand_context(db, org_id)
+            else:
+                # Auto-detect: if exactly 1 org exists, use its branding
+                count = db.scalar(select(func.count(Organization.organization_id)))
+                if count == 1:
+                    org_id = db.scalar(select(Organization.organization_id))
+                    if org_id:
+                        return org_brand_context(db, org_id)
+        except Exception:
+            logger.debug("Could not fetch org branding for login", exc_info=True)
+
+        return brand_context()
+
     def login_response(
         self,
         request: Request,
         next_url: str,
         auth: WebAuthContext,
+        *,
+        db: "Session | None" = None,
+        org_slug: str = "",
     ) -> HTMLResponse | RedirectResponse:
         # Sanitize redirect URL to prevent open redirect attacks
         safe_next_url = _sanitize_redirect_url(next_url, request, default="/")
@@ -131,12 +179,14 @@ class AuthWebService:
         if sso_login_url:
             return RedirectResponse(url=sso_login_url, status_code=302)
 
+        brand = self._get_brand_for_login(db, org_slug)
+
         return templates.TemplateResponse(
             request,
             "login.html",
             {
                 "title": "Login",
-                "brand": brand_context(),
+                "brand": brand,
                 "next": safe_next_url,
             },
         )
@@ -146,6 +196,8 @@ class AuthWebService:
         request: Request,
         next_url: str,
         auth: WebAuthContext,
+        *,
+        db: "Session | None" = None,
     ) -> HTMLResponse | RedirectResponse:
         # Sanitize redirect URL to prevent open redirect attacks
         safe_next_url = _sanitize_redirect_url(next_url, request, default="/admin")
@@ -158,12 +210,14 @@ class AuthWebService:
         if sso_login_url:
             return RedirectResponse(url=sso_login_url, status_code=302)
 
+        brand = self._get_brand_for_login(db)
+
         return templates.TemplateResponse(
             request,
             "admin_login.html",
             {
                 "title": "Admin Login",
-                "brand": brand_context(),
+                "brand": brand,
                 "next": safe_next_url,
                 "is_authenticated": auth.is_authenticated,
                 "has_admin_role": "admin" in auth.roles
@@ -216,7 +270,7 @@ class AuthWebService:
 
         For SSO clients, revokes in the shared auth database.
         """
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         from app.models.auth import Session as AuthSession
         from app.models.auth import SessionStatus
@@ -236,7 +290,7 @@ class AuthWebService:
                 )
                 if session:
                     session.status = SessionStatus.revoked
-                    session.revoked_at = datetime.now(timezone.utc)
+                    session.revoked_at = datetime.now(UTC)
                     auth_db.commit()
                     logger.info("SSO session revoked: %s", session.id)
             except Exception as e:
@@ -255,7 +309,7 @@ class AuthWebService:
                 )
                 if session:
                     session.status = SessionStatus.revoked
-                    session.revoked_at = datetime.now(timezone.utc)
+                    session.revoked_at = datetime.now(UTC)
                     db.commit()
                     logger.info("Session revoked: %s", session.id)
             except Exception as e:

@@ -8,7 +8,7 @@ by ensuring data changes go through proper review.
 
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Index, Text, func, text
@@ -109,25 +109,25 @@ class EmployeeInfoChangeRequest(Base):
     )
 
     # Request metadata
-    requester_notes: Mapped[Optional[str]] = mapped_column(
+    requester_notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Notes from employee explaining the change",
     )
 
     # Approval metadata
-    reviewer_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    reviewer_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id", ondelete="SET NULL"),
         nullable=True,
         comment="Person who reviewed (approved/rejected) the request",
     )
-    reviewer_notes: Mapped[Optional[str]] = mapped_column(
+    reviewer_notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Notes from reviewer",
     )
-    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+    reviewed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -138,12 +138,12 @@ class EmployeeInfoChangeRequest(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
     )
-    expires_at: Mapped[Optional[datetime]] = mapped_column(
+    expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="When the request expires if not actioned",
@@ -166,11 +166,11 @@ class EmployeeInfoChangeRequest(Base):
             return False
         if self.expires_at:
             # Normalize both to UTC for comparison
-            now_utc = datetime.now(timezone.utc)
+            now_utc = datetime.now(UTC)
             expires_utc = (
-                self.expires_at.replace(tzinfo=timezone.utc)
+                self.expires_at.replace(tzinfo=UTC)
                 if self.expires_at.tzinfo is None
-                else self.expires_at.astimezone(timezone.utc)
+                else self.expires_at.astimezone(UTC)
             )
             if now_utc > expires_utc:
                 return False

@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 
+{% from "components/macros.html" import empty_state %}
 {% block page_title %}Recruitment Overview{% endblock %}
 
 {% block breadcrumbs %}
@@ -189,7 +190,7 @@
                     'WITHDRAWN': 'bg-amber-500',
                     'OFFER_DECLINED': 'bg-orange-500'
                 } %}
-                <div class="{{ colors.get(s.status, 'bg-slate-400') }} transition-all" style="width: {{ s.percentage }}%" title="{{ s.status }}: {{ s.count }}"></div>
+                <div class="{{ colors.get(s.status, 'bg-slate-400') }} transition-all" style="width: {{ s.percentage }}%" title="{{ s.status | replace('_', ' ') | title }}: {{ s.count }}"></div>
                 {% endfor %}
             </div>
             <div class="flex flex-wrap items-center justify-center gap-4 mt-4">
@@ -224,7 +225,7 @@
         <div class="border-b border-slate-200 dark:border-slate-700 px-5 py-4">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Top Positions by Applicants</h2>
         </div>
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
@@ -250,6 +251,12 @@
                                     <div class="h-full bg-gradient-to-r from-violet-500 to-purple-500 rounded-full" style="width: {{ bar_width }}%"></div>
                                 </div>
                             </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No report found", "There are no report to display.") }}
                         </td>
                     </tr>
                     {% endfor %}

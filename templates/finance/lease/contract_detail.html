@@ -1,5 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}Lease Details{% endblock %}
 
 {% block breadcrumbs %}
@@ -34,7 +35,7 @@
                 <p class="text-sm text-slate-500">{{ contract.lessor_name }}</p>
             </div>
             <div class="flex items-center gap-3">
-                <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">{{ contract.status | replace('_', ' ') | title }}</span>
+                {{ status_badge(contract.status) }}
                 <div class="text-right">
                     <p class="text-xs uppercase tracking-wide text-slate-500">Base Payment</p>
                     <p class="text-lg font-semibold text-slate-900 dark:text-white">{{ contract.base_payment_amount }}</p>

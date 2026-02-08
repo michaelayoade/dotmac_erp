@@ -15,6 +15,7 @@ Create Date: 2026-02-02 12:00:00.000000
 """
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "20260202_add_phase1_performance_indexes"

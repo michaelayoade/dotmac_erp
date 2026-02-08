@@ -28,7 +28,7 @@
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {{ stats_card("Total Returns", total_count | default(returns | length if returns else 0), icon="document", color="slate") }}
         {{ stats_card("Draft", draft_count | default(0), icon="edit", color="amber") }}
-        {{ stats_card("Submitted", submitted_count | default(0), icon="upload", color="blue") }}
+        {{ stats_card("Prepared", prepared_count | default(0), icon="upload", color="blue") }}
         {{ stats_card("Filed", filed_count | default(0), icon="check-circle", color="emerald") }}
     </div>
 
@@ -38,23 +38,33 @@
             {# Return Type Filter #}
             <select name="return_type" class="form-select">
                 <option value="">All Types</option>
-                <option value="VAT" {{ 'selected' if return_type == 'VAT' else '' }}>VAT Return</option>
-                <option value="WHT" {{ 'selected' if return_type == 'WHT' else '' }}>WHT Return</option>
-                <option value="CIT" {{ 'selected' if return_type == 'CIT' else '' }}>CIT Return</option>
+                {% for rt in return_types %}
+                <option value="{{ rt.value }}" {{ 'selected' if return_type == rt.value else '' }}>
+                    {{ rt.value | replace('_', ' ') | title }} Return
+                </option>
+                {% endfor %}
             </select>
 
             {# Status Filter #}
             <select name="status" class="form-select">
                 <option value="">All Status</option>
                 <option value="DRAFT" {{ 'selected' if status == 'DRAFT' else '' }}>Draft</option>
-                <option value="SUBMITTED" {{ 'selected' if status == 'SUBMITTED' else '' }}>Submitted</option>
+                <option value="PREPARED" {{ 'selected' if status == 'PREPARED' else '' }}>Prepared</option>
+                <option value="REVIEWED" {{ 'selected' if status == 'REVIEWED' else '' }}>Reviewed</option>
                 <option value="FILED" {{ 'selected' if status == 'FILED' else '' }}>Filed</option>
-                <option value="PAID" {{ 'selected' if status == 'PAID' else '' }}>Paid</option>
+                <option value="AMENDED" {{ 'selected' if status == 'AMENDED' else '' }}>Amended</option>
             </select>
 
             {# Period Filter #}
-            <input type="month" name="period" value="{{ period | default('', true) }}"
-                   class="form-input" placeholder="Tax Period">
+            <select name="period_id" class="form-select">
+                <option value="">All Periods</option>
+                {% for period in periods %}
+                <option value="{{ period.period_id }}"
+                        {{ 'selected' if period_id and period_id == period.period_id|string else '' }}>
+                    {{ period.period_name }} ({{ period.start_date }} - {{ period.end_date }})
+                </option>
+                {% endfor %}
+            </select>
 
             {# Actions #}
             <button type="submit" class="btn btn-primary">
@@ -64,7 +74,7 @@
                 Filter
             </button>
 
-            {% if return_type or status or period %}
+            {% if return_type or status or period_id %}
             <a href="/finance/tax/returns" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
                 Clear
             </a>
@@ -103,7 +113,7 @@
                                 {{ tax_return.return_type }}
                             </span>
                         </td>
-                        <td class="text-sm text-slate-600 dark:text-slate-400">{{ tax_return.tax_period_id }}</td>
+                        <td class="text-sm text-slate-600 dark:text-slate-400">{{ tax_return.period_name | default(tax_return.tax_period_id) }}</td>
                         <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ tax_return.final_amount | default("₦0.00") }}</td>
                         <td class="text-center">
                             {{ status_badge(tax_return.status | lower | default('draft'), 'sm') }}
@@ -119,7 +129,7 @@
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
                                     </svg>
                                 </a>
-                                {% if tax_return.status in ['DRAFT', 'draft'] %}
+                                {% if tax_return.status in ['DRAFT', 'PREPARED', 'draft', 'prepared'] %}
                                 <a href="/finance/tax/returns/{{ tax_return.return_id }}/edit"
                                    class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
                                    title="Edit return" aria-label="Edit return">
@@ -154,7 +164,7 @@
             total_pages=total_pages | default(1),
             total_count=total_count | default(returns | length if returns else 0),
             limit=limit | default(50),
-            filters={"return_type": return_type, "status": status, "period": period}
+            filters={"return_type": return_type, "status": status, "period_id": period_id}
         ) }}
     </div>
 </div>

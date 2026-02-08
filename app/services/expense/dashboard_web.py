@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from fastapi import Request
@@ -46,7 +46,7 @@ class ExpenseDashboardService:
     def dashboard_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
         period: str = "month",
     ) -> HTMLResponse:
@@ -91,7 +91,7 @@ class ExpenseDashboardService:
     def claims_dashboard_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
         period: str = "month",
     ) -> HTMLResponse:
@@ -138,8 +138,8 @@ class ExpenseDashboardService:
         )
 
     def _get_claims_stats(
-        self, db: Session, org_id: UUID, start_date: Optional[date], currency: str
-    ) -> Dict[str, Any]:
+        self, db: Session, org_id: UUID, start_date: date | None, currency: str
+    ) -> dict[str, Any]:
         """Get claims-specific statistics."""
         today = date.today()
         month_start = today.replace(day=1)
@@ -285,8 +285,8 @@ class ExpenseDashboardService:
         }
 
     def _get_claims_chart_data(
-        self, db: Session, org_id: UUID, start_date: Optional[date]
-    ) -> Dict[str, Any]:
+        self, db: Session, org_id: UUID, start_date: date | None
+    ) -> dict[str, Any]:
         """Get chart data for the claims dashboard."""
         return {
             "claims_trend": self._get_claims_trend(db, org_id),
@@ -301,7 +301,7 @@ class ExpenseDashboardService:
             "monthly_amounts": self._get_monthly_amounts(db, org_id),
         }
 
-    def _get_claims_trend(self, db: Session, org_id: UUID) -> List[Dict[str, Any]]:
+    def _get_claims_trend(self, db: Session, org_id: UUID) -> list[dict[str, Any]]:
         """Get monthly claims trend (submitted vs paid counts)."""
         today = date.today()
         trend = []
@@ -351,7 +351,7 @@ class ExpenseDashboardService:
 
         return trend
 
-    def _get_monthly_amounts(self, db: Session, org_id: UUID) -> List[Dict[str, Any]]:
+    def _get_monthly_amounts(self, db: Session, org_id: UUID) -> list[dict[str, Any]]:
         """Get monthly claimed vs paid amounts."""
         today = date.today()
         amounts = []
@@ -399,7 +399,7 @@ class ExpenseDashboardService:
 
     def _get_recent_claims_detailed(
         self, db: Session, org_id: UUID, limit: int = 8, currency: str = "NGN"
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get recent claims with more details for the claims dashboard."""
         results = db.execute(
             select(ExpenseClaim, Person)
@@ -431,8 +431,8 @@ class ExpenseDashboardService:
         return claims
 
     def _get_dashboard_stats(
-        self, db: Session, org_id: UUID, start_date: Optional[date], currency: str
-    ) -> Dict[str, Any]:
+        self, db: Session, org_id: UUID, start_date: date | None, currency: str
+    ) -> dict[str, Any]:
         """Get aggregate statistics for the dashboard."""
         today = date.today()
 
@@ -657,8 +657,8 @@ class ExpenseDashboardService:
         }
 
     def _get_chart_data(
-        self, db: Session, org_id: UUID, start_date: Optional[date]
-    ) -> Dict[str, Any]:
+        self, db: Session, org_id: UUID, start_date: date | None
+    ) -> dict[str, Any]:
         """Get chart data for the dashboard."""
         chart_data = {}
 
@@ -685,7 +685,7 @@ class ExpenseDashboardService:
 
         return chart_data
 
-    def _get_expense_trend(self, db: Session, org_id: UUID) -> List[Dict[str, Any]]:
+    def _get_expense_trend(self, db: Session, org_id: UUID) -> list[dict[str, Any]]:
         """Get monthly expense totals for the last 6 months."""
         today = date.today()
         trend = []
@@ -732,8 +732,8 @@ class ExpenseDashboardService:
         return trend
 
     def _get_category_distribution(
-        self, db: Session, org_id: UUID, start_date: Optional[date]
-    ) -> List[Dict[str, Any]]:
+        self, db: Session, org_id: UUID, start_date: date | None
+    ) -> list[dict[str, Any]]:
         """Get expense amount by category."""
         base_filter = [
             ExpenseClaimItem.organization_id == org_id,
@@ -759,8 +759,8 @@ class ExpenseDashboardService:
         return [{"category": name, "amount": float(amount)} for name, amount in results]
 
     def _get_top_spenders(
-        self, db: Session, org_id: UUID, start_date: Optional[date]
-    ) -> List[Dict[str, Any]]:
+        self, db: Session, org_id: UUID, start_date: date | None
+    ) -> list[dict[str, Any]]:
         """Get top employees by expense amount."""
         base_filter = [ExpenseClaim.organization_id == org_id]
         if start_date:
@@ -786,8 +786,8 @@ class ExpenseDashboardService:
         ]
 
     def _get_status_breakdown(
-        self, db: Session, org_id: UUID, start_date: Optional[date]
-    ) -> List[Dict[str, Any]]:
+        self, db: Session, org_id: UUID, start_date: date | None
+    ) -> list[dict[str, Any]]:
         """Get claim count by status."""
         base_filter = [ExpenseClaim.organization_id == org_id]
         if start_date:
@@ -818,8 +818,8 @@ class ExpenseDashboardService:
         ]
 
     def _get_department_spending(
-        self, db: Session, org_id: UUID, start_date: Optional[date]
-    ) -> List[Dict[str, Any]]:
+        self, db: Session, org_id: UUID, start_date: date | None
+    ) -> list[dict[str, Any]]:
         """Get expense amount by department."""
         base_filter = [ExpenseClaim.organization_id == org_id]
         if start_date:
@@ -844,7 +844,7 @@ class ExpenseDashboardService:
 
     def _get_recent_claims(
         self, db: Session, org_id: UUID, limit: int = 5, currency: str = "NGN"
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get most recent expense claims."""
         results = db.execute(
             select(ExpenseClaim, Person)

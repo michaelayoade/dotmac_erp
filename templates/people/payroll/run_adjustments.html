@@ -43,11 +43,11 @@
     </div>
     {% endif %}
 
-    <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/adjustments" class="card p-6 space-y-5">
+    <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/adjustments" class="card p-6 space-y-6">
         {{ request.state.csrf_form | safe }}
 
         <div>
-            <label for="component_id" class="form-label">Component</label>
+            <label for="component_id" class="form-label">Component <span class="text-rose-500">*</span></label>
             <select name="component_id" id="component_id" class="form-select w-full" required>
                 <option value="">Select component</option>
                 {% for comp in components %}
@@ -60,7 +60,7 @@
         </div>
 
         <div>
-            <label for="amount" class="form-label">Amount (per employee)</label>
+            <label for="amount" class="form-label">Amount (per employee) <span class="text-rose-500">*</span></label>
             <div class="relative">
                 <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">&#x20A6;</span>
                 <input type="number" name="amount" id="amount" class="form-input w-full pl-8"
@@ -72,7 +72,7 @@
             Adjustments apply only to draft slips. Once submitted or approved, adjustments are locked.
         </div>
 
-        <div class="flex justify-end gap-3">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/people/payroll/runs/{{ entry.entry_id }}" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 Apply Adjustment

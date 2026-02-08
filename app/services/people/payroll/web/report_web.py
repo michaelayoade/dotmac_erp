@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse
@@ -21,6 +21,8 @@ from app.services.common import coerce_uuid
 from app.services.people.payroll.payroll_service import PayrollService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
+
+from .base import parse_date
 
 logger = logging.getLogger(__name__)
 
@@ -42,9 +44,6 @@ class MonthSummaryRow(TypedDict):
     total_deductions: Decimal
 
 
-from .base import parse_date
-
-
 class ReportWebService:
     """Service for payroll report web views."""
 
@@ -53,8 +52,8 @@ class ReportWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        year: Optional[int] = None,
-        month: Optional[int] = None,
+        year: int | None = None,
+        month: int | None = None,
     ) -> HTMLResponse:
         """Render payroll summary report."""
         org_id = coerce_uuid(auth.organization_id)
@@ -94,8 +93,8 @@ class ReportWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        year: Optional[int] = None,
-        month: Optional[int] = None,
+        year: int | None = None,
+        month: int | None = None,
     ) -> HTMLResponse:
         """Render payroll by department report."""
         org_id = coerce_uuid(auth.organization_id)
@@ -204,8 +203,8 @@ class ReportWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        year: Optional[int] = None,
-        month: Optional[int] = None,
+        year: int | None = None,
+        month: int | None = None,
     ) -> HTMLResponse:
         """Render tax summary report."""
         org_id = coerce_uuid(auth.organization_id)
@@ -299,8 +298,8 @@ class ReportWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        year: Optional[int] = None,
-        months: Optional[int] = 12,
+        year: int | None = None,
+        months: int | None = 12,
     ) -> HTMLResponse:
         """Render payroll trends report."""
         org_id = coerce_uuid(auth.organization_id)

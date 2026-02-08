@@ -8,8 +8,7 @@ due to process crashes or network failures.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import and_
@@ -43,8 +42,8 @@ class SagaRecoveryService:
     @staticmethod
     def find_stuck_sagas(
         db: Session,
-        organization_id: Optional[UUID] = None,
-        threshold_minutes: Optional[int] = None,
+        organization_id: UUID | None = None,
+        threshold_minutes: int | None = None,
     ) -> list[SagaExecution]:
         """
         Find sagas that appear to be stuck.
@@ -61,7 +60,7 @@ class SagaRecoveryService:
             List of stuck sagas
         """
         threshold = threshold_minutes or SagaRecoveryService.STUCK_THRESHOLD_MINUTES
-        cutoff_time = datetime.now(timezone.utc) - timedelta(minutes=threshold)
+        cutoff_time = datetime.now(UTC) - timedelta(minutes=threshold)
 
         query = db.query(SagaExecution).filter(
             and_(
@@ -175,7 +174,7 @@ class SagaRecoveryService:
 
         saga.status = SagaStatus.FAILED
         saga.error_message = reason
-        saga.completed_at = datetime.now(timezone.utc)
+        saga.completed_at = datetime.now(UTC)
 
         db.commit()
         db.refresh(saga)
@@ -187,7 +186,7 @@ class SagaRecoveryService:
     @staticmethod
     def get_saga_health_summary(
         db: Session,
-        organization_id: Optional[UUID] = None,
+        organization_id: UUID | None = None,
     ) -> dict:
         """
         Get health summary of sagas.
@@ -306,7 +305,7 @@ class SagaRecoveryService:
         Returns:
             Number of deleted sagas
         """
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days_to_keep)
+        cutoff_date = datetime.now(UTC) - timedelta(days=days_to_keep)
 
         # Get IDs to delete
         saga_ids = (

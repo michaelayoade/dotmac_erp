@@ -8,7 +8,7 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Date,
@@ -31,8 +31,8 @@ from app.db import Base
 
 if TYPE_CHECKING:
     from app.models.people.hr.employee import Employee
-    from app.models.people.payroll.loan_type import LoanType
     from app.models.people.payroll.loan_repayment import LoanRepayment
+    from app.models.people.payroll.loan_type import LoanType
 
 
 class LoanStatus(str, enum.Enum):
@@ -165,20 +165,20 @@ class EmployeeLoan(Base):
         nullable=False,
         default=date.today,
     )
-    approval_date: Mapped[Optional[date]] = mapped_column(
+    approval_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    disbursement_date: Mapped[Optional[date]] = mapped_column(
+    disbursement_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    first_repayment_date: Mapped[Optional[date]] = mapped_column(
+    first_repayment_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="Date of first scheduled repayment",
     )
-    completion_date: Mapped[Optional[date]] = mapped_column(
+    completion_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="Date when loan was fully repaid",
@@ -191,35 +191,35 @@ class EmployeeLoan(Base):
     )
 
     # Approval workflow
-    approved_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,
     )
-    rejection_reason: Mapped[Optional[str]] = mapped_column(
+    rejection_reason: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Disbursement tracking
-    disbursement_reference: Mapped[Optional[str]] = mapped_column(
+    disbursement_reference: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Payment reference for disbursement",
     )
-    disbursed_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    disbursed_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,
     )
 
     # Notes
-    purpose: Mapped[Optional[str]] = mapped_column(
+    purpose: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Purpose of the loan",
     )
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -230,12 +230,12 @@ class EmployeeLoan(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
     )
-    created_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,

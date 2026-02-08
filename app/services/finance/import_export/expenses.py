@@ -7,7 +7,7 @@ Imports expense entries from CSV data into the expense system.
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -54,15 +54,15 @@ class ExpenseImporter(BaseImporter[ExpenseEntry]):
         db: Session,
         config: ImportConfig,
         default_expense_account_id: UUID,
-        default_payment_account_id: Optional[UUID] = None,
+        default_payment_account_id: UUID | None = None,
     ):
         super().__init__(db, config)
         self.default_expense_account_id = default_expense_account_id
         self.default_payment_account_id = default_payment_account_id
-        self._account_cache: Dict[str, UUID] = {}
+        self._account_cache: dict[str, UUID] = {}
         self._expense_counter = 0
 
-    def get_field_mappings(self) -> List[FieldMapping]:
+    def get_field_mappings(self) -> list[FieldMapping]:
         """Define flexible field mappings supporting various CSV formats."""
         return [
             # Reference
@@ -144,7 +144,7 @@ class ExpenseImporter(BaseImporter[ExpenseEntry]):
             FieldMapping("Notes", "notes", required=False),
         ]
 
-    def get_unique_key(self, row: Dict[str, Any]) -> str:
+    def get_unique_key(self, row: dict[str, Any]) -> str:
         """Unique key is expense number."""
         return (
             row.get("Expense Number")
@@ -153,7 +153,7 @@ class ExpenseImporter(BaseImporter[ExpenseEntry]):
             or ""
         ).strip()
 
-    def check_duplicate(self, row: Dict[str, Any]) -> Optional[ExpenseEntry]:
+    def check_duplicate(self, row: dict[str, Any]) -> ExpenseEntry | None:
         """Check if expense already exists."""
         expense_number = self.get_unique_key(row)
         if not expense_number:
@@ -168,7 +168,7 @@ class ExpenseImporter(BaseImporter[ExpenseEntry]):
 
         return existing
 
-    def validate_row(self, row: Dict[str, Any], row_num: int) -> bool:
+    def validate_row(self, row: dict[str, Any], row_num: int) -> bool:
         """Validate row data."""
         is_valid = super().validate_row(row, row_num)
 
@@ -189,7 +189,7 @@ class ExpenseImporter(BaseImporter[ExpenseEntry]):
 
         return is_valid
 
-    def create_entity(self, row: Dict[str, Any]) -> ExpenseEntry:
+    def create_entity(self, row: dict[str, Any]) -> ExpenseEntry:
         """Create a new expense entry from transformed row data."""
         # Get expense number
         expense_number = (
@@ -296,9 +296,9 @@ class ExpenseImporter(BaseImporter[ExpenseEntry]):
 
     def _get_account_id(
         self,
-        account_name: Optional[str],
-        account_code: Optional[str],
-        default_id: Optional[UUID],
+        account_name: str | None,
+        account_code: str | None,
+        default_id: UUID | None,
     ) -> UUID:
         """Get account ID by name or code."""
         if account_code:

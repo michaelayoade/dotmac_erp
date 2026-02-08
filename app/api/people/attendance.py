@@ -4,10 +4,9 @@ Attendance Management API Router.
 Thin API wrapper for Attendance Management endpoints. All business logic is in services.
 """
 
-from datetime import date, datetime
-from typing import Optional
 import csv
 import io
+from datetime import date, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Response, status
@@ -18,34 +17,34 @@ from app.db import SessionLocal
 from app.models.people.attendance import AttendanceRequestStatus
 from app.models.people.attendance.attendance import AttendanceStatus
 from app.schemas.people.attendance import (
-    # Shift Type
-    ShiftTypeCreate,
-    ShiftTypeUpdate,
-    ShiftTypeRead,
-    ShiftTypeListResponse,
-    # Shift Assignments
-    ShiftAssignmentCreate,
-    ShiftAssignmentUpdate,
-    ShiftAssignmentRead,
-    ShiftAssignmentListResponse,
     # Attendance
     AttendanceCreate,
-    AttendanceUpdate,
-    AttendanceRead,
     AttendanceListResponse,
-    CheckInRequest,
-    CheckOutRequest,
+    AttendanceRead,
     AttendanceRecordCheckIn,
     AttendanceRecordCheckOut,
-    BulkAttendanceCreate,
-    AttendanceRequestCreate,
-    AttendanceRequestUpdate,
-    AttendanceRequestRead,
-    AttendanceRequestListResponse,
     AttendanceRequestBulkAction,
+    AttendanceRequestCreate,
+    AttendanceRequestListResponse,
+    AttendanceRequestRead,
+    AttendanceRequestUpdate,
+    AttendanceUpdate,
+    BulkAttendanceCreate,
+    CheckInRequest,
+    CheckOutRequest,
+    # Shift Assignments
+    ShiftAssignmentCreate,
+    ShiftAssignmentListResponse,
+    ShiftAssignmentRead,
+    ShiftAssignmentUpdate,
+    # Shift Type
+    ShiftTypeCreate,
+    ShiftTypeListResponse,
+    ShiftTypeRead,
+    ShiftTypeUpdate,
 )
-from app.services.people.attendance import AttendanceService
 from app.services.common import PaginationParams
+from app.services.people.attendance import AttendanceService
 
 router = APIRouter(
     prefix="/attendance",
@@ -83,8 +82,8 @@ def csv_response(rows: list[list[str]], filename: str) -> Response:
 @router.get("/shift-types", response_model=ShiftTypeListResponse)
 def list_shift_types(
     organization_id: UUID = Depends(require_organization_id),
-    search: Optional[str] = None,
-    is_active: Optional[bool] = None,
+    search: str | None = None,
+    is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -184,10 +183,10 @@ def delete_shift_type(
 @router.get("/shift-assignments", response_model=ShiftAssignmentListResponse)
 def list_shift_assignments(
     organization_id: UUID = Depends(require_organization_id),
-    employee_id: Optional[UUID] = None,
-    shift_type_id: Optional[UUID] = None,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
+    employee_id: UUID | None = None,
+    shift_type_id: UUID | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -293,10 +292,10 @@ def delete_shift_assignment(
 @router.get("/records", response_model=AttendanceListResponse)
 def list_attendance(
     organization_id: UUID = Depends(require_organization_id),
-    employee_id: Optional[UUID] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
-    status: Optional[str] = None,
+    employee_id: UUID | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
+    status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -512,10 +511,10 @@ def bulk_mark_attendance(
 @router.get("/requests", response_model=AttendanceRequestListResponse)
 def list_attendance_requests(
     organization_id: UUID = Depends(require_organization_id),
-    employee_id: Optional[UUID] = None,
-    status: Optional[AttendanceRequestStatus] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    employee_id: UUID | None = None,
+    status: AttendanceRequestStatus | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -677,9 +676,9 @@ def bulk_reject_attendance_requests(
 @router.get("/summary")
 def attendance_summary(
     organization_id: UUID = Depends(require_organization_id),
-    employee_id: Optional[UUID] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    employee_id: UUID | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     db: Session = Depends(get_db),
 ):
     """Get attendance summary counts."""
@@ -695,10 +694,10 @@ def attendance_summary(
 @router.get("/export")
 def export_attendance(
     organization_id: UUID = Depends(require_organization_id),
-    employee_id: Optional[UUID] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
-    status: Optional[str] = None,
+    employee_id: UUID | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
+    status: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Export attendance records to CSV."""

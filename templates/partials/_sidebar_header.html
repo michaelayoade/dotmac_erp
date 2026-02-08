@@ -3,7 +3,14 @@
      :class="sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-4'">
     <a href="{{ brand_href }}" class="flex min-w-0 flex-1 items-center gap-3" x-show="!sidebarCollapsed" x-cloak>
         {% if brand_logo_url %}
-        <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo" class="h-9 w-9 rounded-lg object-cover shadow-sm" />
+            {% if brand_logo_dark_url %}
+            {# Light/dark logo pair #}
+            <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo" class="h-9 w-auto max-w-[140px] flex-shrink-0 object-contain shadow-sm dark:hidden" />
+            <img src="{{ brand_logo_dark_url }}" alt="{{ brand_name }} logo" class="h-9 w-auto max-w-[140px] flex-shrink-0 object-contain shadow-sm hidden dark:block" />
+            {% else %}
+            {# Single logo for both modes #}
+            <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo" class="h-9 w-auto max-w-[140px] flex-shrink-0 object-contain shadow-sm" />
+            {% endif %}
         {% else %}
         <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br {{ module_logo_bg }} text-xs font-semibold uppercase text-white shadow-lg {{ module_logo_shadow }}">
             {{ brand_mark }}
@@ -25,7 +32,7 @@
             class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br {{ module_logo_bg }} text-xs font-semibold uppercase text-white shadow-lg {{ module_logo_shadow }} hover:opacity-90 transition-opacity"
             aria-label="Expand sidebar" title="Expand sidebar">
         {% if brand_logo_url %}
-        <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo" class="h-9 w-9 rounded-lg object-cover" />
+        <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo" class="h-9 w-9 rounded-lg object-contain bg-white/80 p-1 shadow-sm dark:bg-slate-900/60" />
         {% else %}
         {{ brand_mark }}
         {% endif %}

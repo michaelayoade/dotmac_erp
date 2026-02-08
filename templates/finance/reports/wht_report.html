@@ -1,5 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
+{% from "components/macros.html" import empty_state %}
 {% block page_title %}Withholding tax report{% endblock %}
 
 {% block breadcrumbs %}
@@ -48,7 +49,7 @@
                 </div>
                 <div>
                     <p class="text-xs uppercase tracking-wide text-slate-500">WHT withheld</p>
-                    <p class="mt-1 text-xl font-bold text-amber-600 dark:text-amber-400">{{ report.wht_withheld_from_suppliers|format_currency }}</p>
+                    <p class="font-mono tabular-nums mt-1 text-xl font-bold text-amber-600 dark:text-amber-400">{{ report.wht_withheld_from_suppliers|format_currency }}</p>
                 </div>
             </div>
             <p class="mt-3 text-xs text-slate-500">{{ report.wht_withheld_count }} supplier payments</p>
@@ -64,7 +65,7 @@
                 </div>
                 <div>
                     <p class="text-xs uppercase tracking-wide text-slate-500">WHT deducted</p>
-                    <p class="mt-1 text-xl font-bold text-purple-600 dark:text-purple-400">{{ report.wht_deducted_by_customers|format_currency }}</p>
+                    <p class="font-mono tabular-nums mt-1 text-xl font-bold text-purple-600 dark:text-purple-400">{{ report.wht_deducted_by_customers|format_currency }}</p>
                 </div>
             </div>
             <p class="mt-3 text-xs text-slate-500">{{ report.wht_deducted_count }} customer receipts</p>
@@ -80,7 +81,7 @@
                 </div>
                 <div>
                     <p class="text-xs uppercase tracking-wide text-slate-500">Net WHT position</p>
-                    <p class="mt-1 text-xl font-bold {% if report.net_wht_payable >= 0 %}text-red-600 dark:text-red-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">
+                    <p class="font-mono tabular-nums mt-1 text-xl font-bold {% if report.net_wht_payable >= 0 %}text-red-600 dark:text-red-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">
                         {{ report.net_wht_payable|format_currency }}
                     </p>
                 </div>
@@ -96,16 +97,16 @@
         <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Breakdown by WHT rate</h2>
         </div>
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="w-full">
                 <thead>
                     <tr class="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500 dark:border-slate-700">
-                        <th scope="col" class="px-6 py-3">WHT Code</th>
-                        <th scope="col" class="px-6 py-3">Rate</th>
-                        <th scope="col" class="px-6 py-3">Source</th>
-                        <th scope="col" class="px-6 py-3 text-right">Base Amount</th>
-                        <th scope="col" class="px-6 py-3 text-right">WHT Amount</th>
-                        <th scope="col" class="px-6 py-3 text-right">Count</th>
+                        <th scope="col" class="px-6 py-3 text-xs font-semibold uppercase tracking-wider">WHT Code</th>
+                        <th scope="col" class="px-6 py-3 text-xs font-semibold uppercase tracking-wider">Rate</th>
+                        <th scope="col" class="px-6 py-3 text-xs font-semibold uppercase tracking-wider">Source</th>
+                        <th scope="col" class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider">Base Amount</th>
+                        <th scope="col" class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider">WHT Amount</th>
+                        <th scope="col" class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider">Count</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
@@ -129,10 +130,10 @@
                             </span>
                             {% endif %}
                         </td>
-                        <td class="px-6 py-4 text-right text-sm text-slate-600 dark:text-slate-400">
+                        <td class="font-mono tabular-nums px-6 py-4 text-right text-sm text-slate-600 dark:text-slate-400">
                             {{ item.base_amount|format_currency }}
                         </td>
-                        <td class="px-6 py-4 text-right text-sm font-medium {% if item.source_module == 'AP' %}text-amber-600 dark:text-amber-400{% else %}text-purple-600 dark:text-purple-400{% endif %}">
+                        <td class="font-mono tabular-nums px-6 py-4 text-right text-sm font-medium {% if item.source_module == 'AP' %}text-amber-600 dark:text-amber-400{% else %}text-purple-600 dark:text-purple-400{% endif %}">
                             {{ item.tax_amount|format_currency }}
                         </td>
                         <td class="px-6 py-4 text-right text-sm text-slate-600 dark:text-slate-400">
@@ -157,17 +158,17 @@
         <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
             <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Transaction Details</h2>
         </div>
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="w-full">
                 <thead>
                     <tr class="border-b border-slate-200 text-left text-xs uppercase tracking-wider text-slate-500 dark:border-slate-700">
-                        <th scope="col" class="px-6 py-3">Date</th>
-                        <th scope="col" class="px-6 py-3">Reference</th>
-                        <th scope="col" class="px-6 py-3">Counterparty</th>
-                        <th scope="col" class="px-6 py-3">Tax ID</th>
-                        <th scope="col" class="px-6 py-3">WHT Code</th>
-                        <th scope="col" class="px-6 py-3 text-right">Base</th>
-                        <th scope="col" class="px-6 py-3 text-right">WHT</th>
+                        <th scope="col" class="px-6 py-3 text-xs font-semibold uppercase tracking-wider">Date</th>
+                        <th scope="col" class="px-6 py-3 text-xs font-semibold uppercase tracking-wider">Reference</th>
+                        <th scope="col" class="px-6 py-3 text-xs font-semibold uppercase tracking-wider">Counterparty</th>
+                        <th scope="col" class="px-6 py-3 text-xs font-semibold uppercase tracking-wider">Tax ID</th>
+                        <th scope="col" class="px-6 py-3 text-xs font-semibold uppercase tracking-wider">WHT Code</th>
+                        <th scope="col" class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider">Base</th>
+                        <th scope="col" class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider">WHT</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
@@ -181,11 +182,17 @@
                             <span class="text-sm text-slate-600 dark:text-slate-400">{{ txn.tax_code }}</span>
                             <span class="text-xs text-slate-400">({{ txn.rate }}%)</span>
                         </td>
-                        <td class="px-6 py-3 text-right text-sm text-slate-600 dark:text-slate-400">
+                        <td class="font-mono tabular-nums px-6 py-3 text-right text-sm text-slate-600 dark:text-slate-400">
                             {{ txn.base_amount|format_currency }}
                         </td>
-                        <td class="px-6 py-3 text-right text-sm font-medium text-amber-600 dark:text-amber-400">
+                        <td class="font-mono tabular-nums px-6 py-3 text-right text-sm font-medium text-amber-600 dark:text-amber-400">
                             {{ txn.tax_amount|format_currency }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No report found", "There are no report to display.") }}
                         </td>
                     </tr>
                     {% endfor %}

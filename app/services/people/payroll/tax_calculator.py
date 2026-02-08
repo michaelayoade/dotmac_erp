@@ -24,7 +24,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Optional, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 from uuid import UUID
 
 logger = logging.getLogger(__name__)
@@ -62,7 +62,7 @@ class TaxResult:
     is_tax_exempt: bool = False
 
     # Employee reference
-    employee_id: Optional[UUID] = None
+    employee_id: UUID | None = None
 
     @property
     def total_monthly_deductions(self) -> Decimal:
@@ -107,8 +107,8 @@ class TaxCalculator(Protocol):
         organization_id: UUID,
         gross_monthly: Decimal,
         basic_monthly: Decimal,
-        employee_id: Optional[UUID] = None,
-        as_of_date: Optional[date] = None,
+        employee_id: UUID | None = None,
+        as_of_date: date | None = None,
         **kwargs,
     ) -> TaxResult:
         """
@@ -148,8 +148,8 @@ class ZeroTaxCalculator:
         organization_id: UUID,
         gross_monthly: Decimal,
         basic_monthly: Decimal,
-        employee_id: Optional[UUID] = None,
-        as_of_date: Optional[date] = None,
+        employee_id: UUID | None = None,
+        as_of_date: date | None = None,
         **kwargs,
     ) -> TaxResult:
         """Return zero tax result."""
@@ -209,8 +209,8 @@ class FixedTaxCalculator:
         organization_id: UUID,
         gross_monthly: Decimal,
         basic_monthly: Decimal,
-        employee_id: Optional[UUID] = None,
-        as_of_date: Optional[date] = None,
+        employee_id: UUID | None = None,
+        as_of_date: date | None = None,
         **kwargs,
     ) -> TaxResult:
         """Return fixed tax amounts."""
@@ -261,8 +261,8 @@ class PercentageTaxCalculator:
         organization_id: UUID,
         gross_monthly: Decimal,
         basic_monthly: Decimal,
-        employee_id: Optional[UUID] = None,
-        as_of_date: Optional[date] = None,
+        employee_id: UUID | None = None,
+        as_of_date: date | None = None,
         **kwargs,
     ) -> TaxResult:
         """Calculate tax as percentage of gross."""

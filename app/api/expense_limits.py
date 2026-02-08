@@ -9,7 +9,6 @@ API endpoints for:
 """
 
 from datetime import date
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -24,28 +23,28 @@ from app.models.expense import (
     LimitScopeType,
 )
 from app.schemas.expense import (
-    # Limit Rules
-    ExpenseLimitRuleCreate,
-    ExpenseLimitRuleUpdate,
-    ExpenseLimitRuleRead,
-    ExpenseLimitRuleListResponse,
-    ExpenseLimitRuleBrief,
-    # Approver Limits
-    ExpenseApproverLimitCreate,
-    ExpenseApproverLimitUpdate,
-    ExpenseApproverLimitRead,
-    ExpenseApproverLimitListResponse,
-    # Evaluations
-    ExpenseLimitEvaluationRead,
-    ExpenseLimitEvaluationListResponse,
+    EligibleApprover,
+    EmployeeUsageSummary,
     # Usage
     EvaluateLimitRequest,
     EvaluateLimitResponse,
-    EligibleApprover,
-    EmployeeUsageSummary,
+    # Approver Limits
+    ExpenseApproverLimitCreate,
+    ExpenseApproverLimitListResponse,
+    ExpenseApproverLimitRead,
+    ExpenseApproverLimitUpdate,
+    ExpenseLimitEvaluationListResponse,
+    # Evaluations
+    ExpenseLimitEvaluationRead,
+    ExpenseLimitRuleBrief,
+    # Limit Rules
+    ExpenseLimitRuleCreate,
+    ExpenseLimitRuleListResponse,
+    ExpenseLimitRuleRead,
+    ExpenseLimitRuleUpdate,
 )
-from app.services.expense import ExpenseLimitService, ExpenseService
 from app.services.common import PaginationParams
+from app.services.expense import ExpenseLimitService, ExpenseService
 
 router = APIRouter(
     prefix="/expense-limits",
@@ -62,7 +61,7 @@ def get_db():
         db.close()
 
 
-def parse_scope_type(value: Optional[str]) -> Optional[LimitScopeType]:
+def parse_scope_type(value: str | None) -> LimitScopeType | None:
     """Parse scope type string to enum."""
     if not value:
         return None
@@ -75,7 +74,7 @@ def parse_scope_type(value: Optional[str]) -> Optional[LimitScopeType]:
         )
 
 
-def parse_period_type(value: Optional[str]) -> Optional[LimitPeriodType]:
+def parse_period_type(value: str | None) -> LimitPeriodType | None:
     """Parse period type string to enum."""
     if not value:
         return None
@@ -88,7 +87,7 @@ def parse_period_type(value: Optional[str]) -> Optional[LimitPeriodType]:
         )
 
 
-def parse_result_type(value: Optional[str]) -> Optional[LimitResultType]:
+def parse_result_type(value: str | None) -> LimitResultType | None:
     """Parse result type string to enum."""
     if not value:
         return None
@@ -108,9 +107,9 @@ def parse_result_type(value: Optional[str]) -> Optional[LimitResultType]:
 
 @router.get("/rules", response_model=ExpenseLimitRuleListResponse)
 def list_limit_rules(
-    scope_type: Optional[str] = Query(None, description="Filter by scope type"),
-    is_active: Optional[bool] = Query(None, description="Filter by active status"),
-    search: Optional[str] = Query(None, description="Search by code or name"),
+    scope_type: str | None = Query(None, description="Filter by scope type"),
+    is_active: bool | None = Query(None, description="Filter by active status"),
+    search: str | None = Query(None, description="Search by code or name"),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     org_id: UUID = Depends(require_organization_id),
@@ -259,8 +258,8 @@ def delete_limit_rule(
 
 @router.get("/approvers", response_model=ExpenseApproverLimitListResponse)
 def list_approver_limits(
-    scope_type: Optional[str] = Query(None, description="Filter by scope type"),
-    is_active: Optional[bool] = Query(None, description="Filter by active status"),
+    scope_type: str | None = Query(None, description="Filter by scope type"),
+    is_active: bool | None = Query(None, description="Filter by active status"),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     org_id: UUID = Depends(require_organization_id),
@@ -385,11 +384,11 @@ def delete_approver_limit(
 
 @router.get("/evaluations", response_model=ExpenseLimitEvaluationListResponse)
 def list_evaluations(
-    claim_id: Optional[UUID] = Query(None, description="Filter by claim ID"),
-    rule_id: Optional[UUID] = Query(None, description="Filter by rule ID"),
-    result: Optional[str] = Query(None, description="Filter by result type"),
-    from_date: Optional[date] = Query(None, description="From date"),
-    to_date: Optional[date] = Query(None, description="To date"),
+    claim_id: UUID | None = Query(None, description="Filter by claim ID"),
+    rule_id: UUID | None = Query(None, description="Filter by rule ID"),
+    result: str | None = Query(None, description="Filter by result type"),
+    from_date: date | None = Query(None, description="From date"),
+    to_date: date | None = Query(None, description="To date"),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     org_id: UUID = Depends(require_organization_id),

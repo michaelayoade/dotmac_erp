@@ -8,8 +8,9 @@ This migration adds the credit_hold column to the ar.customer table.
 The model already has this field but the database was missing it.
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "add_customer_credit_hold"

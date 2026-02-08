@@ -7,11 +7,12 @@ in accordance with IFRS 15.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
-from typing import Any, List, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -40,11 +41,11 @@ class PerformanceObligationInput:
     ssp_determination_method: str
     revenue_account_id: UUID
     is_distinct: bool = True
-    over_time_method: Optional[str] = None
-    progress_measure: Optional[str] = None
-    expected_completion_date: Optional[date] = None
-    contract_asset_account_id: Optional[UUID] = None
-    contract_liability_account_id: Optional[UUID] = None
+    over_time_method: str | None = None
+    progress_measure: str | None = None
+    expected_completion_date: date | None = None
+    contract_asset_account_id: UUID | None = None
+    contract_liability_account_id: UUID | None = None
 
 
 @dataclass
@@ -57,15 +58,15 @@ class ContractInput:
     start_date: date
     currency_code: str
     obligations: list[PerformanceObligationInput] = field(default_factory=list)
-    end_date: Optional[date] = None
-    total_contract_value: Optional[Decimal] = None
+    end_date: date | None = None
+    total_contract_value: Decimal | None = None
     is_enforceable: bool = True
     has_commercial_substance: bool = True
     collectability_assessment: str = "PROBABLE"
     significant_financing: bool = False
-    financing_rate: Optional[Decimal] = None
-    variable_consideration: Optional[dict[str, Any]] = None
-    noncash_consideration: Optional[dict[str, Any]] = None
+    financing_rate: Decimal | None = None
+    variable_consideration: dict[str, Any] | None = None
+    noncash_consideration: dict[str, Any] | None = None
 
 
 @dataclass
@@ -75,7 +76,7 @@ class ProgressUpdateInput:
     obligation_id: UUID
     event_date: date
     progress_percentage: Decimal
-    measurement_details: Optional[dict[str, Any]] = None
+    measurement_details: dict[str, Any] | None = None
 
 
 class ContractService(ListResponseMixin):
@@ -568,9 +569,9 @@ class ContractService(ListResponseMixin):
         organization_id: UUID,
         contract_id: UUID,
         modification_date: date,
-        new_transaction_price: Optional[Decimal] = None,
+        new_transaction_price: Decimal | None = None,
         modification_type: str = "PROSPECTIVE",
-        modification_details: Optional[dict[str, Any]] = None,
+        modification_details: dict[str, Any] | None = None,
     ) -> Contract:
         """
         Record a contract modification per IFRS 15.
@@ -772,20 +773,31 @@ class ContractService(ListResponseMixin):
         return contract
 
     @staticmethod
-    def get(db: Session, contract_id: str) -> Optional[Contract]:
+    def get(
+        db: Session,
+        contract_id: str,
+        organization_id: UUID | None = None,
+    ) -> Contract | None:
         """Get a contract by ID."""
-        return (
+        contract = (
             db.query(Contract)
             .filter(Contract.contract_id == coerce_uuid(contract_id))
             .first()
         )
+        if not contract:
+            return None
+        if organization_id is not None and contract.organization_id != coerce_uuid(
+            organization_id
+        ):
+            return None
+        return contract
 
     @staticmethod
     def get_by_number(
         db: Session,
         organization_id: UUID,
         contract_number: str,
-    ) -> Optional[Contract]:
+    ) -> Contract | None:
         """Get a contract by number."""
         return (
             db.query(Contract)
@@ -800,7 +812,7 @@ class ContractService(ListResponseMixin):
     def get_obligations(
         db: Session,
         contract_id: str,
-    ) -> List[PerformanceObligation]:
+    ) -> builtins.list[PerformanceObligation]:
         """Get all performance obligations for a contract."""
         return (
             db.query(PerformanceObligation)
@@ -813,7 +825,7 @@ class ContractService(ListResponseMixin):
     def get_recognition_events(
         db: Session,
         obligation_id: str,
-    ) -> List[RevenueRecognitionEvent]:
+    ) -> builtins.list[RevenueRecognitionEvent]:
         """Get all recognition events for an obligation."""
         return (
             db.query(RevenueRecognitionEvent)
@@ -825,15 +837,15 @@ class ContractService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        customer_id: Optional[str] = None,
-        status: Optional[ContractStatus] = None,
-        contract_type: Optional[ContractType] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
+        organization_id: str | None = None,
+        customer_id: str | None = None,
+        status: ContractStatus | None = None,
+        contract_type: ContractType | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[Contract]:
+    ) -> builtins.list[Contract]:
         """
         List contracts with filters.
 

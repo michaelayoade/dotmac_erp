@@ -4,15 +4,12 @@ Tax Web Routes.
 HTML template routes for tax periods, returns, and reporting.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.tax.web import tax_web_service
-from app.web.deps import get_db, require_finance_access, WebAuthContext
-
+from app.web.deps import WebAuthContext, get_db, require_finance_access
 
 router = APIRouter(prefix="/tax", tags=["tax-web"])
 
@@ -21,7 +18,7 @@ router = APIRouter(prefix="/tax", tags=["tax-web"])
 def list_jurisdictions(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    country_code: Optional[str] = None,
+    country_code: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -35,9 +32,9 @@ def list_jurisdictions(
 def list_tax_codes(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    tax_type: Optional[str] = None,
-    jurisdiction_id: Optional[str] = None,
-    is_active: Optional[str] = None,
+    tax_type: str | None = None,
+    jurisdiction_id: str | None = None,
+    is_active: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -118,10 +115,10 @@ def toggle_tax_code(
 def list_tax_periods(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    jurisdiction_id: Optional[str] = None,
-    frequency: Optional[str] = None,
-    status: Optional[str] = None,
-    year: Optional[int] = None,
+    jurisdiction_id: str | None = None,
+    frequency: str | None = None,
+    status: str | None = None,
+    year: int | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -142,7 +139,7 @@ def list_tax_periods(
 def overdue_periods(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    as_of_date: Optional[str] = None,
+    as_of_date: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Overdue tax periods page."""
@@ -153,14 +150,15 @@ def overdue_periods(
 def list_tax_returns(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    period_id: Optional[str] = None,
-    status: Optional[str] = None,
+    period_id: str | None = None,
+    return_type: str | None = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
     """Tax returns list page."""
     return tax_web_service.list_tax_returns_response(
-        request, auth, period_id, status, page, db
+        request, auth, period_id, return_type, status, page, db
     )
 
 
@@ -174,6 +172,16 @@ def new_return_form(
     return tax_web_service.new_return_form_response(request, auth, db)
 
 
+@router.post("/returns/new", response_class=HTMLResponse)
+async def create_return(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Create a new tax return."""
+    return await tax_web_service.create_return_response(request, auth, db)
+
+
 @router.get("/returns/{return_id}", response_class=HTMLResponse)
 def view_tax_return(
     request: Request,
@@ -185,11 +193,33 @@ def view_tax_return(
     return tax_web_service.view_tax_return_response(request, auth, return_id, db)
 
 
+@router.get("/returns/{return_id}/edit", response_class=HTMLResponse)
+def edit_return_form(
+    request: Request,
+    return_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Edit tax return form page."""
+    return tax_web_service.edit_return_form_response(request, auth, return_id, db)
+
+
+@router.post("/returns/{return_id}/edit", response_class=HTMLResponse)
+async def update_return(
+    request: Request,
+    return_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Update a tax return."""
+    return await tax_web_service.update_return_response(request, auth, return_id, db)
+
+
 @router.get("/deferred", response_class=HTMLResponse)
 def deferred_tax_summary(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    as_of_date: Optional[str] = None,
+    as_of_date: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Deferred tax summary page."""
@@ -200,10 +230,10 @@ def deferred_tax_summary(
 def vat_register(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    transaction_type: Optional[str] = None,
-    tax_code_id: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    transaction_type: str | None = None,
+    tax_code_id: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -224,8 +254,8 @@ def vat_register(
 def tax_liability_summary(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     group_by: str = Query(default="month"),
     db: Session = Depends(get_db),
 ):
@@ -305,8 +335,8 @@ def file_return(
 @router.get("/reports/by-type", response_class=HTMLResponse)
 def tax_summary_by_type(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -319,8 +349,8 @@ def tax_summary_by_type(
 @router.get("/reports/wht", response_class=HTMLResponse)
 def wht_report(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     include_details: bool = True,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from datetime import date
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -63,9 +62,9 @@ class LifecycleService:
         self,
         org_id: UUID,
         *,
-        employee_id: Optional[UUID] = None,
-        status: Optional[BoardingStatus] = None,
-        pagination: Optional[PaginationParams] = None,
+        employee_id: UUID | None = None,
+        status: BoardingStatus | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[EmployeeOnboarding]:
         query = select(EmployeeOnboarding).where(
             EmployeeOnboarding.organization_id == org_id
@@ -120,14 +119,14 @@ class LifecycleService:
         org_id: UUID,
         *,
         employee_id: UUID,
-        job_applicant_id: Optional[UUID] = None,
-        job_offer_id: Optional[UUID] = None,
-        date_of_joining: Optional[date] = None,
-        department_id: Optional[UUID] = None,
-        designation_id: Optional[UUID] = None,
-        template_name: Optional[str] = None,
-        notes: Optional[str] = None,
-        activities: Optional[list[dict]] = None,
+        job_applicant_id: UUID | None = None,
+        job_offer_id: UUID | None = None,
+        date_of_joining: date | None = None,
+        department_id: UUID | None = None,
+        designation_id: UUID | None = None,
+        template_name: str | None = None,
+        notes: str | None = None,
+        activities: list[dict] | None = None,
     ) -> EmployeeOnboarding:
         self._get_employee(org_id, employee_id)
         onboarding = EmployeeOnboarding(
@@ -221,7 +220,7 @@ class LifecycleService:
         completed: bool = True,
     ) -> EmployeeOnboardingActivity:
         """Mark an onboarding activity as complete or incomplete."""
-        onboarding = self.get_onboarding(org_id, onboarding_id)
+        self.get_onboarding(org_id, onboarding_id)
         activity = self.db.scalar(
             select(EmployeeOnboardingActivity).where(
                 EmployeeOnboardingActivity.activity_id == activity_id,
@@ -263,9 +262,9 @@ class LifecycleService:
         self,
         org_id: UUID,
         *,
-        employee_id: Optional[UUID] = None,
-        status: Optional[BoardingStatus] = None,
-        pagination: Optional[PaginationParams] = None,
+        employee_id: UUID | None = None,
+        status: BoardingStatus | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[EmployeeSeparation]:
         query = select(EmployeeSeparation).where(
             EmployeeSeparation.organization_id == org_id
@@ -320,16 +319,16 @@ class LifecycleService:
         org_id: UUID,
         *,
         employee_id: UUID,
-        separation_type: Optional[SeparationType] = None,
-        resignation_letter_date: Optional[date] = None,
-        separation_date: Optional[date] = None,
-        department_id: Optional[UUID] = None,
-        designation_id: Optional[UUID] = None,
-        reason_for_leaving: Optional[str] = None,
-        exit_interview: Optional[str] = None,
-        template_name: Optional[str] = None,
-        notes: Optional[str] = None,
-        activities: Optional[list[dict]] = None,
+        separation_type: SeparationType | None = None,
+        resignation_letter_date: date | None = None,
+        separation_date: date | None = None,
+        department_id: UUID | None = None,
+        designation_id: UUID | None = None,
+        reason_for_leaving: str | None = None,
+        exit_interview: str | None = None,
+        template_name: str | None = None,
+        notes: str | None = None,
+        activities: list[dict] | None = None,
     ) -> EmployeeSeparation:
         self._get_employee(org_id, employee_id)
         separation = EmployeeSeparation(
@@ -424,8 +423,8 @@ class LifecycleService:
         self,
         org_id: UUID,
         *,
-        employee_id: Optional[UUID] = None,
-        pagination: Optional[PaginationParams] = None,
+        employee_id: UUID | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[EmployeePromotion]:
         query = select(EmployeePromotion).where(
             EmployeePromotion.organization_id == org_id
@@ -476,8 +475,8 @@ class LifecycleService:
         *,
         employee_id: UUID,
         promotion_date: date,
-        notes: Optional[str] = None,
-        details: Optional[list[dict]] = None,
+        notes: str | None = None,
+        details: list[dict] | None = None,
     ) -> EmployeePromotion:
         self._get_employee(org_id, employee_id)
         promotion = EmployeePromotion(
@@ -541,8 +540,8 @@ class LifecycleService:
         self,
         org_id: UUID,
         *,
-        employee_id: Optional[UUID] = None,
-        pagination: Optional[PaginationParams] = None,
+        employee_id: UUID | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[EmployeeTransfer]:
         query = select(EmployeeTransfer).where(
             EmployeeTransfer.organization_id == org_id
@@ -591,8 +590,8 @@ class LifecycleService:
         *,
         employee_id: UUID,
         transfer_date: date,
-        notes: Optional[str] = None,
-        details: Optional[list[dict]] = None,
+        notes: str | None = None,
+        details: list[dict] | None = None,
     ) -> EmployeeTransfer:
         self._get_employee(org_id, employee_id)
         transfer = EmployeeTransfer(

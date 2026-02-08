@@ -82,6 +82,7 @@
         </span>
         <div class="flex items-center gap-2">
             <form method="post" action="/projects/{{ project.project_code }}/time/bulk-bill" id="bulkBillForm">
+                {{ request.state.csrf_form | safe }}
                 <input type="hidden" name="entry_ids" :value="selectedEntries.join(',')">
                 <button type="submit" class="inline-flex items-center gap-2 rounded-lg bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700 transition-colors">
                     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -102,7 +103,7 @@
         <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
             <thead class="bg-slate-50 dark:bg-slate-800/50">
                 <tr>
-                    <th scope="col" class="px-4 py-3 text-left">
+                    <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider">
                         <input type="checkbox" x-model="selectAll"
                                @change="selectedEntries = selectAll ? [{% for entry in entries %}'{{ entry.entry_id }}'{% if not loop.last %},{% endif %}{% endfor %}] : []"
                                class="rounded border-slate-300 text-amber-600 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700">
@@ -172,12 +173,14 @@
                                class="text-xs text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 font-medium">Edit</a>
                             {% if status_val == 'NOT_BILLED' %}
                             <form method="post" action="/projects/{{ project.project_code }}/time/{{ entry.entry_id }}/bill" class="inline">
+                                {{ request.state.csrf_form | safe }}
                                 <button type="submit" class="text-xs text-green-600 hover:text-green-700 font-medium">Bill</button>
                             </form>
                             {% endif %}
                             {% if status_val != 'BILLED' %}
                             <form method="post" action="/projects/{{ project.project_code }}/time/{{ entry.entry_id }}/delete"
                                   onsubmit="return confirm('Delete this time entry?');" class="inline">
+                                {{ request.state.csrf_form | safe }}
                                 <button type="submit" class="text-xs text-rose-600 hover:text-rose-700 font-medium">Delete</button>
                             </form>
                             {% endif %}

@@ -9,14 +9,9 @@ Pydantic schemas for Scheduling APIs including:
 """
 
 from datetime import date, datetime, time
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-
-
-# Valid day codes for work_days
-VALID_DAY_CODES = {"MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"}
 
 from app.models.people.scheduling import (
     RotationType,
@@ -24,6 +19,8 @@ from app.models.people.scheduling import (
     SwapRequestStatus,
 )
 
+# Valid day codes for work_days
+VALID_DAY_CODES = {"MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"}
 
 # =============================================================================
 # Shift Pattern Schemas
@@ -35,20 +32,20 @@ class ShiftPatternBase(BaseModel):
 
     pattern_code: str = Field(max_length=30)
     pattern_name: str = Field(max_length=100)
-    description: Optional[str] = None
+    description: str | None = None
     rotation_type: RotationType = RotationType.DAY_ONLY
     cycle_weeks: int = Field(default=1, ge=1, le=4)
-    work_days: List[str] = Field(
+    work_days: list[str] = Field(
         default=["MON", "TUE", "WED", "THU", "FRI"],
         description="Days of the week: MON, TUE, WED, THU, FRI, SAT, SUN",
     )
     day_shift_type_id: UUID
-    night_shift_type_id: Optional[UUID] = None
+    night_shift_type_id: UUID | None = None
     is_active: bool = True
 
     @field_validator("work_days")
     @classmethod
-    def validate_work_days(cls, v: List[str]) -> List[str]:
+    def validate_work_days(cls, v: list[str]) -> list[str]:
         """Validate that work_days contains only valid day codes."""
         if not v:
             raise ValueError("work_days cannot be empty")
@@ -70,19 +67,19 @@ class ShiftPatternCreate(ShiftPatternBase):
 class ShiftPatternUpdate(BaseModel):
     """Update shift pattern request."""
 
-    pattern_code: Optional[str] = Field(default=None, max_length=30)
-    pattern_name: Optional[str] = Field(default=None, max_length=100)
-    description: Optional[str] = None
-    rotation_type: Optional[RotationType] = None
-    cycle_weeks: Optional[int] = Field(default=None, ge=1, le=4)
-    work_days: Optional[List[str]] = None
-    day_shift_type_id: Optional[UUID] = None
-    night_shift_type_id: Optional[UUID] = None
-    is_active: Optional[bool] = None
+    pattern_code: str | None = Field(default=None, max_length=30)
+    pattern_name: str | None = Field(default=None, max_length=100)
+    description: str | None = None
+    rotation_type: RotationType | None = None
+    cycle_weeks: int | None = Field(default=None, ge=1, le=4)
+    work_days: list[str] | None = None
+    day_shift_type_id: UUID | None = None
+    night_shift_type_id: UUID | None = None
+    is_active: bool | None = None
 
     @field_validator("work_days")
     @classmethod
-    def validate_work_days(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+    def validate_work_days(cls, v: list[str] | None) -> list[str] | None:
         """Validate that work_days contains only valid day codes when provided."""
         if v is None:
             return v
@@ -117,16 +114,16 @@ class ShiftPatternRead(ShiftPatternBase):
     shift_pattern_id: UUID
     organization_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
-    day_shift_type: Optional[ShiftTypeBrief] = None
-    night_shift_type: Optional[ShiftTypeBrief] = None
+    day_shift_type: ShiftTypeBrief | None = None
+    night_shift_type: ShiftTypeBrief | None = None
 
 
 class ShiftPatternListResponse(BaseModel):
     """Paginated shift pattern list response."""
 
-    items: List[ShiftPatternRead]
+    items: list[ShiftPatternRead]
     total: int
     offset: int
     limit: int
@@ -161,7 +158,7 @@ class PatternAssignmentBase(BaseModel):
         description="Week offset for staggered rotations (0-3)",
     )
     effective_from: date
-    effective_to: Optional[date] = None
+    effective_to: date | None = None
     is_active: bool = True
 
 
@@ -174,22 +171,22 @@ class PatternAssignmentCreate(PatternAssignmentBase):
 class PatternAssignmentBulkCreate(BaseModel):
     """Bulk create pattern assignments."""
 
-    employee_ids: List[UUID]
+    employee_ids: list[UUID]
     department_id: UUID
     shift_pattern_id: UUID
     rotation_week_offset: int = 0
     effective_from: date
-    effective_to: Optional[date] = None
+    effective_to: date | None = None
 
 
 class PatternAssignmentUpdate(BaseModel):
     """Update pattern assignment request."""
 
-    shift_pattern_id: Optional[UUID] = None
-    rotation_week_offset: Optional[int] = Field(default=None, ge=0, le=3)
-    effective_from: Optional[date] = None
-    effective_to: Optional[date] = None
-    is_active: Optional[bool] = None
+    shift_pattern_id: UUID | None = None
+    rotation_week_offset: int | None = Field(default=None, ge=0, le=3)
+    effective_from: date | None = None
+    effective_to: date | None = None
+    is_active: bool | None = None
 
 
 class EmployeeBrief(BaseModel):
@@ -223,20 +220,20 @@ class PatternAssignmentRead(BaseModel):
     shift_pattern_id: UUID
     rotation_week_offset: int
     effective_from: date
-    effective_to: Optional[date] = None
+    effective_to: date | None = None
     is_active: bool
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
-    employee: Optional[EmployeeBrief] = None
-    department: Optional[DepartmentBrief] = None
-    shift_pattern: Optional[ShiftPatternBrief] = None
+    employee: EmployeeBrief | None = None
+    department: DepartmentBrief | None = None
+    shift_pattern: ShiftPatternBrief | None = None
 
 
 class PatternAssignmentListResponse(BaseModel):
     """Paginated pattern assignment list response."""
 
-    items: List[PatternAssignmentRead]
+    items: list[PatternAssignmentRead]
     total: int
     offset: int
     limit: int
@@ -254,7 +251,7 @@ class ShiftScheduleBase(BaseModel):
     department_id: UUID
     shift_date: date
     shift_type_id: UUID
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class ShiftScheduleCreate(ShiftScheduleBase):
@@ -266,8 +263,8 @@ class ShiftScheduleCreate(ShiftScheduleBase):
 class ShiftScheduleUpdate(BaseModel):
     """Update shift schedule request."""
 
-    shift_type_id: Optional[UUID] = None
-    notes: Optional[str] = None
+    shift_type_id: UUID | None = None
+    notes: str | None = None
 
 
 class ScheduleGenerateRequest(BaseModel):
@@ -305,20 +302,20 @@ class ShiftScheduleRead(BaseModel):
     shift_type_id: UUID
     schedule_month: str
     status: ScheduleStatus
-    notes: Optional[str] = None
+    notes: str | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    published_at: Optional[datetime] = None
+    updated_at: datetime | None = None
+    published_at: datetime | None = None
 
-    employee: Optional[EmployeeBrief] = None
-    department: Optional[DepartmentBrief] = None
-    shift_type: Optional[ShiftTypeBrief] = None
+    employee: EmployeeBrief | None = None
+    department: DepartmentBrief | None = None
+    shift_type: ShiftTypeBrief | None = None
 
 
 class ShiftScheduleListResponse(BaseModel):
     """Paginated shift schedule list response."""
 
-    items: List[ShiftScheduleRead]
+    items: list[ShiftScheduleRead]
     total: int
     offset: int
     limit: int
@@ -329,7 +326,7 @@ class ScheduleCalendarDay(BaseModel):
 
     date: date
     day_name: str
-    schedules: List[ShiftScheduleRead]
+    schedules: list[ShiftScheduleRead]
 
 
 class ScheduleCalendarResponse(BaseModel):
@@ -337,7 +334,7 @@ class ScheduleCalendarResponse(BaseModel):
 
     year_month: str
     department_id: UUID
-    days: List[ScheduleCalendarDay]
+    days: list[ScheduleCalendarDay]
     status: ScheduleStatus  # Overall status for the month
 
 
@@ -361,7 +358,7 @@ class SwapRequestBase(BaseModel):
 
     requester_schedule_id: UUID
     target_schedule_id: UUID
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class SwapRequestCreate(SwapRequestBase):
@@ -373,7 +370,7 @@ class SwapRequestCreate(SwapRequestBase):
 class SwapRequestReview(BaseModel):
     """Manager review of swap request."""
 
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class SwapRequestRead(BaseModel):
@@ -388,24 +385,24 @@ class SwapRequestRead(BaseModel):
     requester_id: UUID
     target_employee_id: UUID
     status: SwapRequestStatus
-    reason: Optional[str] = None
-    target_accepted_at: Optional[datetime] = None
-    reviewed_by_id: Optional[UUID] = None
-    reviewed_at: Optional[datetime] = None
-    review_notes: Optional[str] = None
+    reason: str | None = None
+    target_accepted_at: datetime | None = None
+    reviewed_by_id: UUID | None = None
+    reviewed_at: datetime | None = None
+    review_notes: str | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
-    requester: Optional[EmployeeBrief] = None
-    target_employee: Optional[EmployeeBrief] = None
-    requester_schedule: Optional[ShiftScheduleRead] = None
-    target_schedule: Optional[ShiftScheduleRead] = None
+    requester: EmployeeBrief | None = None
+    target_employee: EmployeeBrief | None = None
+    requester_schedule: ShiftScheduleRead | None = None
+    target_schedule: ShiftScheduleRead | None = None
 
 
 class SwapRequestListResponse(BaseModel):
     """Paginated swap request list response."""
 
-    items: List[SwapRequestRead]
+    items: list[SwapRequestRead]
     total: int
     offset: int
     limit: int

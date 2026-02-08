@@ -2,7 +2,6 @@
 Requisition API Endpoints.
 """
 
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -29,11 +28,11 @@ def get_db():
         db.close()
 
 
-@router.get("", response_model=List[RequisitionResponse])
+@router.get("", response_model=list[RequisitionResponse])
 def list_requisitions(
     organization_id: UUID = Depends(require_organization_id),
-    status_filter: Optional[str] = Query(None, alias="status"),
-    urgency_filter: Optional[str] = Query(None, alias="urgency"),
+    status_filter: str | None = Query(None, alias="status"),
+    urgency_filter: str | None = Query(None, alias="urgency"),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     db: Session = Depends(get_db),

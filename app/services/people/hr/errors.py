@@ -103,7 +103,7 @@ class EmployeeNotFoundError(NotFoundError):
     """Raised when an employee is not found."""
 
     def __init__(
-        self, employee_id: "uuid.UUID | None" = None, message: str | None = None
+        self, employee_id: uuid.UUID | None = None, message: str | None = None
     ) -> None:
         if message is None:
             message = (
@@ -162,7 +162,7 @@ class DepartmentNotFoundError(NotFoundError):
     """Raised when a department is not found."""
 
     def __init__(
-        self, department_id: "uuid.UUID | None" = None, message: str | None = None
+        self, department_id: uuid.UUID | None = None, message: str | None = None
     ) -> None:
         if message is None:
             message = (
@@ -178,7 +178,7 @@ class LocationNotFoundError(NotFoundError):
     """Raised when a location is not found."""
 
     def __init__(
-        self, location_id: "uuid.UUID | None" = None, message: str | None = None
+        self, location_id: uuid.UUID | None = None, message: str | None = None
     ) -> None:
         if message is None:
             message = (
@@ -194,7 +194,7 @@ class DesignationNotFoundError(NotFoundError):
     """Raised when a designation is not found."""
 
     def __init__(
-        self, designation_id: "uuid.UUID | None" = None, message: str | None = None
+        self, designation_id: uuid.UUID | None = None, message: str | None = None
     ) -> None:
         if message is None:
             message = (
@@ -210,7 +210,7 @@ class EmploymentTypeNotFoundError(NotFoundError):
     """Raised when an employment type is not found."""
 
     def __init__(
-        self, employment_type_id: "uuid.UUID | None" = None, message: str | None = None
+        self, employment_type_id: uuid.UUID | None = None, message: str | None = None
     ) -> None:
         if message is None:
             message = (
@@ -226,7 +226,7 @@ class EmployeeGradeNotFoundError(NotFoundError):
     """Raised when an employee grade is not found."""
 
     def __init__(
-        self, grade_id: "uuid.UUID | None" = None, message: str | None = None
+        self, grade_id: uuid.UUID | None = None, message: str | None = None
     ) -> None:
         if message is None:
             message = (
@@ -921,7 +921,7 @@ class ChecklistTemplateNotFoundError(NotFoundError):
     """Raised when checklist template is not found."""
 
     def __init__(
-        self, template_id: "uuid.UUID | None" = None, message: str | None = None
+        self, template_id: uuid.UUID | None = None, message: str | None = None
     ) -> None:
         if message is None:
             message = (
@@ -937,7 +937,7 @@ class ActivityNotFoundError(NotFoundError):
     """Raised when onboarding activity is not found."""
 
     def __init__(
-        self, activity_id: "uuid.UUID | None" = None, message: str | None = None
+        self, activity_id: uuid.UUID | None = None, message: str | None = None
     ) -> None:
         if message is None:
             message = (

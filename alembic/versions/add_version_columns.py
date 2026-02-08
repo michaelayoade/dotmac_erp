@@ -11,9 +11,9 @@ This migration adds version columns to key tables for optimistic locking:
 - audit.approval_request
 """
 
-from alembic import op
 import sqlalchemy as sa
 
+from alembic import op
 
 revision = "add_version_columns"
 down_revision = "add_saga_execution_tables"

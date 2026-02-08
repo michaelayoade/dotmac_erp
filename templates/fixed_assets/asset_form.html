@@ -27,7 +27,8 @@
         </p>
     </div>
 
-    <form method="post" action="/fixed-assets/assets/new" class="space-y-8">
+    <form method="post" action="/fixed-assets/assets/new" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
         <div id="form-result">
             {% if error %}
             <div class="mb-6 p-4 rounded-xl bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800">
@@ -161,7 +162,7 @@
             </div>
         </div>
 
-        <div class="flex items-center justify-end gap-3">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/fixed-assets/assets" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">Create Asset</button>
         </div>

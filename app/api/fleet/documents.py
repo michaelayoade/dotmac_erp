@@ -4,7 +4,6 @@ Document API Endpoints.
 REST API for vehicle document management.
 """
 
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -37,8 +36,8 @@ def get_db():
 @router.get("", response_model=DocumentListResponse)
 def list_documents(
     organization_id: UUID = Depends(require_organization_id),
-    vehicle_id: Optional[UUID] = None,
-    document_type: Optional[str] = None,
+    vehicle_id: UUID | None = None,
+    document_type: str | None = None,
     expired_only: bool = False,
     expiring_soon: bool = False,
     offset: int = Query(0, ge=0),

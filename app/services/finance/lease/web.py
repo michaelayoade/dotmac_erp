@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -32,7 +31,7 @@ from app.services.formatters import format_date as _format_date
 logger = logging.getLogger(__name__)
 
 
-def _parse_status(value: Optional[str]) -> Optional[LeaseStatus]:
+def _parse_status(value: str | None) -> LeaseStatus | None:
     if not value:
         return None
     try:
@@ -44,7 +43,7 @@ def _parse_status(value: Optional[str]) -> Optional[LeaseStatus]:
             return None
 
 
-def _parse_classification(value: Optional[str]) -> Optional[LeaseClassification]:
+def _parse_classification(value: str | None) -> LeaseClassification | None:
     if not value:
         return None
     try:
@@ -233,9 +232,9 @@ class LeaseWebService:
     def list_contracts_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        status: Optional[str],
-        lease_type: Optional[str],
+        search: str | None,
+        status: str | None,
+        lease_type: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:

@@ -6,18 +6,16 @@ while still testing the service logic.
 """
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
 
+from app.models.inventory.inventory_transaction import TransactionType
 
 # ============ Mock Enums ============
-
 from app.models.inventory.item import CostingMethod, ItemType
-from app.models.inventory.inventory_transaction import TransactionType
 
 MockItemType = ItemType
 MockCostingMethod = CostingMethod
@@ -36,13 +34,13 @@ class MockItemCategory:
         organization_id: uuid.UUID = None,
         category_code: str = "CAT-001",
         category_name: str = "General Inventory",
-        description: Optional[str] = None,
-        parent_category_id: Optional[uuid.UUID] = None,
+        description: str | None = None,
+        parent_category_id: uuid.UUID | None = None,
         inventory_account_id: uuid.UUID = None,
         cogs_account_id: uuid.UUID = None,
         revenue_account_id: uuid.UUID = None,
         inventory_adjustment_account_id: uuid.UUID = None,
-        purchase_variance_account_id: Optional[uuid.UUID] = None,
+        purchase_variance_account_id: uuid.UUID | None = None,
         is_active: bool = True,
         created_at: datetime = None,
         updated_at: datetime = None,
@@ -61,7 +59,7 @@ class MockItemCategory:
         )
         self.purchase_variance_account_id = purchase_variance_account_id
         self.is_active = is_active
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
 
 
@@ -74,38 +72,38 @@ class MockItem:
         organization_id: uuid.UUID = None,
         item_code: str = "ITEM-001",
         item_name: str = "Test Item",
-        description: Optional[str] = None,
+        description: str | None = None,
         item_type: ItemType = ItemType.INVENTORY,
         category_id: uuid.UUID = None,
         base_uom: str = "EACH",
-        purchase_uom: Optional[str] = "EACH",
-        sales_uom: Optional[str] = "EACH",
+        purchase_uom: str | None = "EACH",
+        sales_uom: str | None = "EACH",
         costing_method: CostingMethod = CostingMethod.WEIGHTED_AVERAGE,
-        standard_cost: Optional[Decimal] = None,
-        last_purchase_cost: Optional[Decimal] = None,
-        average_cost: Optional[Decimal] = None,
+        standard_cost: Decimal | None = None,
+        last_purchase_cost: Decimal | None = None,
+        average_cost: Decimal | None = None,
         currency_code: str = "USD",
-        list_price: Optional[Decimal] = None,
+        list_price: Decimal | None = None,
         track_inventory: bool = True,
         track_lots: bool = False,
         track_serial_numbers: bool = False,
-        reorder_point: Optional[Decimal] = None,
-        reorder_quantity: Optional[Decimal] = None,
-        minimum_stock: Optional[Decimal] = None,
-        maximum_stock: Optional[Decimal] = None,
-        lead_time_days: Optional[int] = None,
-        weight: Optional[Decimal] = None,
-        weight_uom: Optional[str] = None,
-        volume: Optional[Decimal] = None,
-        volume_uom: Optional[str] = None,
-        barcode: Optional[str] = None,
-        manufacturer_part_number: Optional[str] = None,
-        tax_code_id: Optional[uuid.UUID] = None,
+        reorder_point: Decimal | None = None,
+        reorder_quantity: Decimal | None = None,
+        minimum_stock: Decimal | None = None,
+        maximum_stock: Decimal | None = None,
+        lead_time_days: int | None = None,
+        weight: Decimal | None = None,
+        weight_uom: str | None = None,
+        volume: Decimal | None = None,
+        volume_uom: str | None = None,
+        barcode: str | None = None,
+        manufacturer_part_number: str | None = None,
+        tax_code_id: uuid.UUID | None = None,
         is_taxable: bool = True,
-        inventory_account_id: Optional[uuid.UUID] = None,
-        cogs_account_id: Optional[uuid.UUID] = None,
-        revenue_account_id: Optional[uuid.UUID] = None,
-        default_supplier_id: Optional[uuid.UUID] = None,
+        inventory_account_id: uuid.UUID | None = None,
+        cogs_account_id: uuid.UUID | None = None,
+        revenue_account_id: uuid.UUID | None = None,
+        default_supplier_id: uuid.UUID | None = None,
         is_active: bool = True,
         is_purchaseable: bool = True,
         is_saleable: bool = True,
@@ -151,7 +149,7 @@ class MockItem:
         self.is_active = is_active
         self.is_purchaseable = is_purchaseable
         self.is_saleable = is_saleable
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
 
 
@@ -164,17 +162,17 @@ class MockWarehouse:
         organization_id: uuid.UUID = None,
         warehouse_code: str = "WH-001",
         warehouse_name: str = "Main Warehouse",
-        description: Optional[str] = None,
-        location_id: Optional[uuid.UUID] = None,
-        address: Optional[dict] = None,
-        contact_name: Optional[str] = None,
-        contact_phone: Optional[str] = None,
-        contact_email: Optional[str] = None,
+        description: str | None = None,
+        location_id: uuid.UUID | None = None,
+        address: dict | None = None,
+        contact_name: str | None = None,
+        contact_phone: str | None = None,
+        contact_email: str | None = None,
         is_receiving: bool = True,
         is_shipping: bool = True,
         is_consignment: bool = False,
         is_transit: bool = False,
-        cost_center_id: Optional[uuid.UUID] = None,
+        cost_center_id: uuid.UUID | None = None,
         is_active: bool = True,
         created_at: datetime = None,
         updated_at: datetime = None,
@@ -195,7 +193,7 @@ class MockWarehouse:
         self.is_transit = is_transit
         self.cost_center_id = cost_center_id
         self.is_active = is_active
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
 
 
@@ -211,31 +209,31 @@ class MockInventoryTransaction:
         fiscal_period_id: uuid.UUID = None,
         item_id: uuid.UUID = None,
         warehouse_id: uuid.UUID = None,
-        location_id: Optional[uuid.UUID] = None,
-        lot_id: Optional[uuid.UUID] = None,
-        to_warehouse_id: Optional[uuid.UUID] = None,
-        to_location_id: Optional[uuid.UUID] = None,
+        location_id: uuid.UUID | None = None,
+        lot_id: uuid.UUID | None = None,
+        to_warehouse_id: uuid.UUID | None = None,
+        to_location_id: uuid.UUID | None = None,
         quantity: Decimal = Decimal("10.00"),
         uom: str = "EACH",
         unit_cost: Decimal = Decimal("100.00"),
         total_cost: Decimal = Decimal("1000.00"),
         cost_variance: Decimal = Decimal("0"),
         currency_code: str = "USD",
-        reference: Optional[str] = None,
-        source_document_type: Optional[str] = None,
-        source_document_id: Optional[uuid.UUID] = None,
-        source_document_line_id: Optional[uuid.UUID] = None,
-        reason_code: Optional[str] = None,
+        reference: str | None = None,
+        source_document_type: str | None = None,
+        source_document_id: uuid.UUID | None = None,
+        source_document_line_id: uuid.UUID | None = None,
+        reason_code: str | None = None,
         quantity_before: Decimal = Decimal("0"),
         quantity_after: Decimal = Decimal("0"),
-        journal_entry_id: Optional[uuid.UUID] = None,
-        created_by_user_id: Optional[uuid.UUID] = None,
+        journal_entry_id: uuid.UUID | None = None,
+        created_by_user_id: uuid.UUID | None = None,
         created_at: datetime = None,
     ):
         self.transaction_id = transaction_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
         self.transaction_type = transaction_type
-        self.transaction_date = transaction_date or datetime.now(timezone.utc)
+        self.transaction_date = transaction_date or datetime.now(UTC)
         self.fiscal_period_id = fiscal_period_id or uuid.uuid4()
         self.item_id = item_id or uuid.uuid4()
         self.warehouse_id = warehouse_id or uuid.uuid4()
@@ -258,7 +256,7 @@ class MockInventoryTransaction:
         self.quantity_after = quantity_after
         self.journal_entry_id = journal_entry_id
         self.created_by_user_id = created_by_user_id or uuid.uuid4()
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
 
 
 class MockInventoryLot:
@@ -269,27 +267,27 @@ class MockInventoryLot:
         lot_id: uuid.UUID = None,
         organization_id: uuid.UUID = None,
         item_id: uuid.UUID = None,
-        warehouse_id: Optional[uuid.UUID] = None,
+        warehouse_id: uuid.UUID | None = None,
         lot_number: str = "LOT-001",
-        expiry_date: Optional[date] = None,
-        manufacture_date: Optional[date] = None,
+        expiry_date: date | None = None,
+        manufacture_date: date | None = None,
         received_date: date = None,
-        supplier_id: Optional[uuid.UUID] = None,
-        supplier_lot_number: Optional[str] = None,
-        purchase_order_id: Optional[uuid.UUID] = None,
+        supplier_id: uuid.UUID | None = None,
+        supplier_lot_number: str | None = None,
+        purchase_order_id: uuid.UUID | None = None,
         unit_cost: Decimal = Decimal("10.00"),
         initial_quantity: Decimal = Decimal("100.00"),
         quantity_on_hand: Decimal = Decimal("100.00"),
         quantity_allocated: Decimal = Decimal("0"),
-        quantity_available: Optional[Decimal] = None,
-        allocation_reference: Optional[str] = None,
+        quantity_available: Decimal | None = None,
+        allocation_reference: str | None = None,
         is_active: bool = True,
         is_quarantined: bool = False,
-        quarantine_reason: Optional[str] = None,
-        certificate_of_analysis: Optional[str] = None,
-        qc_status: Optional[str] = None,
+        quarantine_reason: str | None = None,
+        certificate_of_analysis: str | None = None,
+        qc_status: str | None = None,
         created_at: datetime = None,
-        updated_at: Optional[datetime] = None,
+        updated_at: datetime | None = None,
     ):
         self.lot_id = lot_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -317,7 +315,7 @@ class MockInventoryLot:
         self.quarantine_reason = quarantine_reason
         self.certificate_of_analysis = certificate_of_analysis
         self.qc_status = qc_status
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
 
 
@@ -352,7 +350,7 @@ class MockInventoryValuation:
         self.carrying_amount = carrying_amount
         self.write_down_amount = write_down_amount
         self.currency_code = currency_code
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
 
 
 # ============ Fixtures ============

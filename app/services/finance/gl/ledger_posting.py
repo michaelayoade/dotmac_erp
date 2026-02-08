@@ -7,12 +7,12 @@ All ledger postings MUST go through this service.
 
 from __future__ import annotations
 
+import builtins
 import logging
 import uuid as uuid_lib
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -39,20 +39,20 @@ class PostingEntry:
     account_id: UUID
     debit_amount: Decimal = Decimal("0")
     credit_amount: Decimal = Decimal("0")
-    description: Optional[str] = None
+    description: str | None = None
     # Functional currency amounts (required)
     debit_amount_functional: Decimal = Decimal("0")
     credit_amount_functional: Decimal = Decimal("0")
     # Optional multi-currency
-    original_currency_code: Optional[str] = None
-    original_debit_amount: Optional[Decimal] = None
-    original_credit_amount: Optional[Decimal] = None
-    exchange_rate: Optional[Decimal] = None
+    original_currency_code: str | None = None
+    original_debit_amount: Decimal | None = None
+    original_credit_amount: Decimal | None = None
+    exchange_rate: Decimal | None = None
     # Dimensions
-    business_unit_id: Optional[UUID] = None
-    cost_center_id: Optional[UUID] = None
-    project_id: Optional[UUID] = None
-    segment_id: Optional[UUID] = None
+    business_unit_id: UUID | None = None
+    cost_center_id: UUID | None = None
+    project_id: UUID | None = None
+    segment_id: UUID | None = None
 
 
 @dataclass
@@ -65,10 +65,10 @@ class PostingRequest:
     idempotency_key: str
     source_module: str
     entries: list[PostingEntry] = field(default_factory=list)
-    correlation_id: Optional[str] = None
-    posted_by_user_id: Optional[UUID] = None
+    correlation_id: str | None = None
+    posted_by_user_id: UUID | None = None
     allow_adjustment_period: bool = False
-    reopen_session_id: Optional[UUID] = None
+    reopen_session_id: UUID | None = None
 
 
 @dataclass
@@ -76,15 +76,15 @@ class PostingResult:
     """Result of a posting operation."""
 
     success: bool
-    batch_id: Optional[UUID] = None
+    batch_id: UUID | None = None
     posted_lines: int = 0
     total_debit: Decimal = Decimal("0")
     total_credit: Decimal = Decimal("0")
     message: str = ""
-    correlation_id: Optional[str] = None
+    correlation_id: str | None = None
 
     @property
-    def posting_batch_id(self) -> Optional[UUID]:
+    def posting_batch_id(self) -> UUID | None:
         return self.batch_id
 
 
@@ -93,8 +93,8 @@ class PostEntryResult:
     """Result of post_entry operation (for API compatibility)."""
 
     success: bool
-    entry_id: Optional[UUID] = None
-    entry_number: Optional[str] = None
+    entry_id: UUID | None = None
+    entry_number: str | None = None
     message: str = ""
 
 
@@ -226,7 +226,7 @@ class LedgerPostingService(ListResponseMixin):
         db.flush()  # Get batch_id
 
         # 9. Get period for year
-        period = db.get(FiscalPeriod, fiscal_period_id)
+        db.get(FiscalPeriod, fiscal_period_id)
         posting_year = request.posting_date.year
 
         # 10. Create posted_ledger_line records
@@ -239,7 +239,7 @@ class LedgerPostingService(ListResponseMixin):
         accounts = db.query(Account).filter(Account.account_id.in_(account_ids)).all()
         account_map = {a.account_id: a.account_code for a in accounts}
 
-        for i, entry in enumerate(entries):
+        for _i, entry in enumerate(entries):
             ledger_line = PostedLedgerLine(
                 posting_year=posting_year,
                 organization_id=org_id,
@@ -284,12 +284,12 @@ class LedgerPostingService(ListResponseMixin):
         # 11. Update batch status
         batch.posted_entries = len(posted_lines)
         batch.status = BatchStatus.POSTED
-        batch.completed_at = datetime.now(timezone.utc)
+        batch.completed_at = datetime.now(UTC)
 
         # 12. Update journal status
         journal.status = JournalStatus.POSTED
         journal.posting_batch_id = batch.batch_id
-        journal.posted_at = datetime.now(timezone.utc)
+        journal.posted_at = datetime.now(UTC)
         journal.posted_by_user_id = (
             coerce_uuid(request.posted_by_user_id)
             if request.posted_by_user_id
@@ -395,7 +395,7 @@ class LedgerPostingService(ListResponseMixin):
         line_count: int,
         total_debit: Decimal,
         total_credit: Decimal,
-        correlation_id: Optional[str],
+        correlation_id: str | None,
     ) -> None:
         """Publish ledger.posting.completed event."""
         OutboxPublisher.publish_event(
@@ -447,15 +447,15 @@ class LedgerPostingService(ListResponseMixin):
     def get_ledger_lines(
         db: Session,
         organization_id: UUID,
-        journal_entry_id: Optional[UUID] = None,
-        posting_batch_id: Optional[UUID] = None,
-        account_id: Optional[UUID] = None,
-        fiscal_period_id: Optional[UUID] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
+        journal_entry_id: UUID | None = None,
+        posting_batch_id: UUID | None = None,
+        account_id: UUID | None = None,
+        fiscal_period_id: UUID | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[PostedLedgerLine]:
+    ) -> builtins.list[PostedLedgerLine]:
         """
         Get posted ledger lines.
 
@@ -510,12 +510,12 @@ class LedgerPostingService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        status: Optional[BatchStatus] = None,
-        source_module: Optional[str] = None,
+        organization_id: str | None = None,
+        status: BatchStatus | None = None,
+        source_module: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[PostingBatch]:
+    ) -> builtins.list[PostingBatch]:
         """
         List posting batches.
 

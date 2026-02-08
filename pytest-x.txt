@@ -20,7 +20,7 @@ ______ ERROR at setup of TestCreateSupplier.test_create_supplier_success _______
     def sample_supplier_input():
         """Create sample supplier input."""
         from app.models.finance.ap.supplier import SupplierType
-    
+
 >       return SupplierInput(
             supplier_code="SUP-001",
             supplier_type=SupplierType.VENDOR,

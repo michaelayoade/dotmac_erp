@@ -6,7 +6,6 @@ import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     DateTime,
@@ -67,14 +66,12 @@ class ApprovalRequest(Base):
     # Document reference
     document_type: Mapped[str] = mapped_column(String(50), nullable=False)
     document_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    document_reference: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True
-    )
-    document_amount: Mapped[Optional[Decimal]] = mapped_column(
+    document_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    document_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
-    document_currency_code: Mapped[Optional[str]] = mapped_column(
+    document_currency_code: Mapped[str | None] = mapped_column(
         String(3),
         nullable=True,
     )
@@ -99,17 +96,17 @@ class ApprovalRequest(Base):
     )
 
     # Completion
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    final_approver_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    final_approver_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    correlation_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Relationships
     workflow: Mapped["ApprovalWorkflow"] = relationship(
@@ -124,5 +121,5 @@ class ApprovalRequest(Base):
 
 
 # Forward references
-from app.models.finance.audit.approval_workflow import ApprovalWorkflow  # noqa: E402
 from app.models.finance.audit.approval_decision import ApprovalDecision  # noqa: E402
+from app.models.finance.audit.approval_workflow import ApprovalWorkflow  # noqa: E402

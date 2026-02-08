@@ -7,7 +7,6 @@ Syncs ERPNext data to staging tables for validation before production import.
 import logging
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -60,7 +59,7 @@ class StagingSyncOrchestrator:
         db: Session,
         client: ERPNextClient,
         organization_id: uuid.UUID,
-        user_id: Optional[uuid.UUID] = None,
+        user_id: uuid.UUID | None = None,
     ):
         self.db = db
         self.client = client
@@ -76,7 +75,7 @@ class StagingSyncOrchestrator:
 
     def sync_to_staging(
         self,
-        entity_types: Optional[list[str]] = None,
+        entity_types: list[str] | None = None,
         clear_existing: bool = True,
     ) -> StagingSyncBatch:
         """

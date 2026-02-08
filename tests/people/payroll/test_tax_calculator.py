@@ -14,19 +14,18 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from app.services.people.payroll.paye_calculator import (
+    PAYEBreakdown,
+    PAYECalculator,
+)
 from app.services.people.payroll.tax_calculator import (
+    FixedTaxCalculator,
+    PercentageTaxCalculator,
     TaxCalculator,
     TaxResult,
     ZeroTaxCalculator,
-    FixedTaxCalculator,
-    PercentageTaxCalculator,
     is_tax_calculator,
 )
-from app.services.people.payroll.paye_calculator import (
-    PAYECalculator,
-    PAYEBreakdown,
-)
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -6,13 +6,11 @@ Schemas for PM Time Entry API endpoints.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Dict, List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.pm import BillingStatus
-
 
 # =============================================================================
 # Time Entry Schemas
@@ -23,11 +21,11 @@ class TimeEntryBase(BaseModel):
     """Base time entry schema."""
 
     project_id: UUID
-    task_id: Optional[UUID] = None
+    task_id: UUID | None = None
     employee_id: UUID
     entry_date: date
     hours: Decimal = Field(gt=0, le=24)
-    description: Optional[str] = None
+    description: str | None = None
     is_billable: bool = True
 
 
@@ -40,11 +38,11 @@ class TimeEntryCreate(TimeEntryBase):
 class TimeEntryUpdate(BaseModel):
     """Update time entry request."""
 
-    task_id: Optional[UUID] = None
-    entry_date: Optional[date] = None
-    hours: Optional[Decimal] = Field(default=None, gt=0, le=24)
-    description: Optional[str] = None
-    is_billable: Optional[bool] = None
+    task_id: UUID | None = None
+    entry_date: date | None = None
+    hours: Decimal | None = Field(default=None, gt=0, le=24)
+    description: str | None = None
+    is_billable: bool | None = None
 
 
 class TimeEntryRead(TimeEntryBase):
@@ -56,7 +54,7 @@ class TimeEntryRead(TimeEntryBase):
     organization_id: UUID
     billing_status: BillingStatus = BillingStatus.NOT_BILLED
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class TimeEntryWithDetails(TimeEntryRead):
@@ -64,15 +62,15 @@ class TimeEntryWithDetails(TimeEntryRead):
 
     model_config = ConfigDict(from_attributes=True)
 
-    project_name: Optional[str] = None
-    task_name: Optional[str] = None
-    employee_name: Optional[str] = None
+    project_name: str | None = None
+    task_name: str | None = None
+    employee_name: str | None = None
 
 
 class TimeEntryListResponse(BaseModel):
     """Paginated time entry list response."""
 
-    items: List[TimeEntryWithDetails]
+    items: list[TimeEntryWithDetails]
     total: int
     offset: int
     limit: int
@@ -87,7 +85,7 @@ class TimesheetDay(BaseModel):
     """Time entries for a single day."""
 
     date: date
-    entries: List[TimeEntryWithDetails]
+    entries: list[TimeEntryWithDetails]
     total_hours: Decimal = Decimal("0.00")
 
 
@@ -98,7 +96,7 @@ class TimesheetWeek(BaseModel):
     employee_name: str
     week_start: date
     week_end: date
-    days: List[TimesheetDay]
+    days: list[TimesheetDay]
     total_hours: Decimal = Decimal("0.00")
     billable_hours: Decimal = Decimal("0.00")
 
@@ -118,8 +116,8 @@ class ProjectTimeSummary(BaseModel):
     non_billable_hours: Decimal = Decimal("0.00")
     billed_hours: Decimal = Decimal("0.00")
     unbilled_hours: Decimal = Decimal("0.00")
-    hours_by_employee: Dict[str, Decimal] = {}
-    hours_by_task: Dict[str, Decimal] = {}
+    hours_by_employee: dict[str, Decimal] = {}
+    hours_by_task: dict[str, Decimal] = {}
 
 
 class EmployeeTimeSummary(BaseModel):
@@ -131,4 +129,4 @@ class EmployeeTimeSummary(BaseModel):
     period_end: date
     total_hours: Decimal = Decimal("0.00")
     billable_hours: Decimal = Decimal("0.00")
-    hours_by_project: Dict[str, Decimal] = {}
+    hours_by_project: dict[str, Decimal] = {}

@@ -7,7 +7,7 @@ Syncs Task DocType to pm.task table with hierarchy support.
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -45,7 +45,7 @@ class TaskSyncService(BaseSyncService[Task]):
         self.mapping = TaskMapping()
         self._project_cache: dict[str, uuid.UUID] = {}
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         """
         Fetch Task records from ERPNext.
 
@@ -77,8 +77,7 @@ class TaskSyncService(BaseSyncService[Task]):
             "modified",
         ]
 
-        for record in client.get_all_documents("Task", filters=filters, fields=fields):
-            yield record
+        yield from client.get_all_documents("Task", filters=filters, fields=fields)
 
     def transform_record(self, record: dict[str, Any]) -> dict[str, Any]:
         """Transform ERPNext Task to DotMac task format."""
@@ -144,7 +143,7 @@ class TaskSyncService(BaseSyncService[Task]):
         """Get the task ID."""
         return entity.task_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[Task]:
+    def find_existing_entity(self, source_name: str) -> Task | None:
         """Find existing Task by sync record."""
         sync_entity = self.get_sync_entity(source_name)
         if not sync_entity or not sync_entity.target_id:
@@ -154,9 +153,7 @@ class TaskSyncService(BaseSyncService[Task]):
             select(Task).where(Task.task_id == sync_entity.target_id)
         ).scalar_one_or_none()
 
-    def _resolve_project_id(
-        self, project_source_name: Optional[str]
-    ) -> Optional[uuid.UUID]:
+    def _resolve_project_id(self, project_source_name: str | None) -> uuid.UUID | None:
         """Resolve DotMac project_id from ERPNext project name."""
         if not project_source_name:
             return None
@@ -180,7 +177,7 @@ class TaskSyncService(BaseSyncService[Task]):
 
         return result
 
-    def _resolve_task_id(self, task_source_name: Optional[str]) -> Optional[uuid.UUID]:
+    def _resolve_task_id(self, task_source_name: str | None) -> uuid.UUID | None:
         """Resolve DotMac task_id from ERPNext task name."""
         if not task_source_name:
             return None

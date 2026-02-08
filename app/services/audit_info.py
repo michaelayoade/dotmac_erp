@@ -7,7 +7,7 @@ Used by both API and web routes across all modules.
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Protocol, TypeVar
+from typing import Any, Protocol, TypeVar
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 class HasAuditFields(Protocol):
     """Protocol for models with audit fields."""
 
-    created_by_user_id: Optional[UUID]
-    created_at: Optional[datetime]
-    updated_by_user_id: Optional[UUID]
-    updated_at: Optional[datetime]
+    created_by_user_id: UUID | None
+    created_at: datetime | None
+    updated_by_user_id: UUID | None
+    updated_at: datetime | None
 
 
 T = TypeVar("T", bound=HasAuditFields)
@@ -45,9 +45,9 @@ class AuditInfoService:
 
     def __init__(self, db: Session):
         self.db = db
-        self._user_cache: Dict[UUID, str] = {}
+        self._user_cache: dict[UUID, str] = {}
 
-    def get_user_name(self, user_id: Optional[UUID]) -> Optional[str]:
+    def get_user_name(self, user_id: UUID | None) -> str | None:
         """Get display name for a single user ID."""
         if not user_id:
             return None
@@ -62,7 +62,7 @@ class AuditInfoService:
             return name
         return None
 
-    def get_user_names_batch(self, user_ids: List[UUID]) -> Dict[UUID, str]:
+    def get_user_names_batch(self, user_ids: list[UUID]) -> dict[UUID, str]:
         """
         Fetch display names for multiple user IDs in a single query.
 
@@ -85,7 +85,7 @@ class AuditInfoService:
             if (name := self._user_cache.get(uid)) is not None
         }
 
-    def get_creator_names(self, entities: List[T]) -> Dict[UUID, str]:
+    def get_creator_names(self, entities: list[T]) -> dict[UUID, str]:
         """
         Get creator names for a list of entities with created_by_user_id.
 
@@ -98,7 +98,7 @@ class AuditInfoService:
         ]
         return self.get_user_names_batch(creator_ids)
 
-    def get_audit_info(self, entity: T) -> Dict[str, Any]:
+    def get_audit_info(self, entity: T) -> dict[str, Any]:
         """
         Get formatted audit info for a single entity.
 
@@ -122,7 +122,7 @@ class AuditInfoService:
             "updated_by_name": updated_by_name,
         }
 
-    def enrich_with_audit_info(self, entities: List[T]) -> List[Dict[str, Any]]:
+    def enrich_with_audit_info(self, entities: list[T]) -> list[dict[str, Any]]:
         """
         Enrich a list of entities with audit information.
 
@@ -162,7 +162,7 @@ class AuditInfoService:
         return person.email or "Unknown"
 
     @staticmethod
-    def format_audit_date(dt: Optional[datetime], include_time: bool = False) -> str:
+    def format_audit_date(dt: datetime | None, include_time: bool = False) -> str:
         """Format datetime for display."""
         if not dt:
             return "-"

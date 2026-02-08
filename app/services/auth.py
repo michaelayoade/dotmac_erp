@@ -3,13 +3,13 @@ import logging
 import os
 import secrets
 import time
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, TypeVar
 
 import redis
 from fastapi import HTTPException, Request
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Query, Session
 
 from app.models.auth import (
     ApiKey,
@@ -41,10 +41,12 @@ from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
 
+T = TypeVar("T")
+
 
 def _apply_ordering(
-    query: Any, order_by: str, order_dir: str, allowed_columns: dict[str, Any]
-) -> Any:
+    query: Query[T], order_by: str, order_dir: str, allowed_columns: dict[str, Any]
+) -> Query[T]:
     if order_by not in allowed_columns:
         raise HTTPException(
             status_code=400,
@@ -56,7 +58,7 @@ def _apply_ordering(
     return query.order_by(column.asc())
 
 
-def _apply_pagination(query: Any, limit: int, offset: int) -> Any:
+def _apply_pagination(query: Query[T], limit: int, offset: int) -> Query[T]:
     return query.limit(limit).offset(offset)
 
 
@@ -420,7 +422,7 @@ class Sessions(ListResponseMixin):
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
         session.status = SessionStatus.revoked
-        session.revoked_at = datetime.now(timezone.utc)
+        session.revoked_at = datetime.now(UTC)
         db.commit()
 
 
@@ -540,7 +542,7 @@ class ApiKeys(ListResponseMixin):
         if not api_key:
             raise HTTPException(status_code=404, detail="API key not found")
         api_key.is_active = False
-        api_key.revoked_at = datetime.now(timezone.utc)
+        api_key.revoked_at = datetime.now(UTC)
         db.commit()
 
     @staticmethod

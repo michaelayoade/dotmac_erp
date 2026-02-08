@@ -9,7 +9,7 @@ variable substitution from entity context.
 import logging
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Dict, Optional
+from typing import Any
 
 from jinja2 import TemplateSyntaxError, Undefined
 from jinja2.sandbox import SandboxedEnvironment
@@ -27,11 +27,11 @@ _env = SandboxedEnvironment(
 def _build_template_context(
     entity_type: str,
     entity_id: Any,
-    old_values: Optional[Dict[str, Any]] = None,
-    new_values: Optional[Dict[str, Any]] = None,
+    old_values: dict[str, Any] | None = None,
+    new_values: dict[str, Any] | None = None,
     user_id: Any = None,
-    extra: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Build the variable context available to templates.
 
     Variables exposed:
@@ -41,7 +41,7 @@ def _build_template_context(
         today, now — current date/datetime strings
         Any keys from *extra*
     """
-    ctx: Dict[str, Any] = {
+    ctx: dict[str, Any] = {
         "entity_type": str(entity_type),
         "entity_id": str(entity_id) if entity_id else "",
         "old": _stringify_values(old_values or {}),
@@ -55,9 +55,9 @@ def _build_template_context(
     return ctx
 
 
-def _stringify_values(values: Dict[str, Any]) -> Dict[str, str]:
+def _stringify_values(values: dict[str, Any]) -> dict[str, str]:
     """Convert all values to strings for safe template rendering."""
-    result: Dict[str, str] = {}
+    result: dict[str, str] = {}
     for k, v in values.items():
         if v is None:
             result[k] = ""
@@ -74,10 +74,10 @@ def render_template(
     template_string: str,
     entity_type: str,
     entity_id: Any,
-    old_values: Optional[Dict[str, Any]] = None,
-    new_values: Optional[Dict[str, Any]] = None,
+    old_values: dict[str, Any] | None = None,
+    new_values: dict[str, Any] | None = None,
     user_id: Any = None,
-    extra: Optional[Dict[str, Any]] = None,
+    extra: dict[str, Any] | None = None,
 ) -> str:
     """Render a Jinja2 template string in a sandboxed environment.
 

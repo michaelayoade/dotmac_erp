@@ -15,10 +15,9 @@ from app.models.scheduler import ScheduleType
 from app.services.scheduler import (
     ScheduledTasks,
     _validate_schedule_type,
-    refresh_schedule,
     enqueue_task,
+    refresh_schedule,
 )
-
 
 # ============ TestValidateScheduleType ============
 
@@ -72,7 +71,7 @@ class TestScheduledTasksCreate:
             mock_task = MagicMock()
             MockTask.return_value = mock_task
 
-            result = ScheduledTasks.create(mock_db, payload)
+            ScheduledTasks.create(mock_db, payload)
 
             mock_db.add.assert_called_once_with(mock_task)
             mock_db.commit.assert_called_once()
@@ -195,7 +194,7 @@ class TestScheduledTasksList:
         mock_query.offset.return_value = mock_query
         mock_query.all.return_value = [mock_scheduled_task]
 
-        result = ScheduledTasks.list(
+        ScheduledTasks.list(
             mock_db,
             enabled=True,
             order_by="name",
@@ -216,7 +215,7 @@ class TestScheduledTasksList:
         mock_query.offset.return_value = mock_query
         mock_query.all.return_value = []
 
-        result = ScheduledTasks.list(
+        ScheduledTasks.list(
             mock_db,
             enabled=False,
             order_by="name",
@@ -338,7 +337,7 @@ class TestScheduledTasksUpdate:
         payload = MagicMock()
         payload.model_dump.return_value = {"interval_seconds": 600}
 
-        result = ScheduledTasks.update(mock_db, str(mock_scheduled_task.id), payload)
+        ScheduledTasks.update(mock_db, str(mock_scheduled_task.id), payload)
 
         assert mock_scheduled_task.interval_seconds == 600
         mock_db.commit.assert_called_once()
@@ -349,7 +348,7 @@ class TestScheduledTasksUpdate:
         payload = MagicMock()
         payload.model_dump.return_value = {"enabled": False}
 
-        result = ScheduledTasks.update(mock_db, str(mock_scheduled_task.id), payload)
+        ScheduledTasks.update(mock_db, str(mock_scheduled_task.id), payload)
 
         assert mock_scheduled_task.enabled is False
 
@@ -359,7 +358,7 @@ class TestScheduledTasksUpdate:
         payload = MagicMock()
         payload.model_dump.return_value = {"schedule_type": "interval"}
 
-        result = ScheduledTasks.update(mock_db, str(mock_scheduled_task.id), payload)
+        ScheduledTasks.update(mock_db, str(mock_scheduled_task.id), payload)
 
         assert mock_scheduled_task.schedule_type == ScheduleType.interval
 

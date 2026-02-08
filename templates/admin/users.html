@@ -68,7 +68,7 @@
     <!-- Users Table -->
     <div id="results-container">
     <div id="users-table-container" class="admin-card overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="w-full">
                 <thead class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
                     <tr>
@@ -190,6 +190,7 @@
                                     </svg>
                                 </button>
                                 <form x-ref="deleteForm{{ loop.index }}" action="/admin/users/{{ user.id }}/delete" method="POST" class="hidden">
+                                    {{ request.state.csrf_form | safe }}
                                 </form>
                             </div>
                         </td>

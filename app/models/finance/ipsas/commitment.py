@@ -6,7 +6,6 @@ Encumbrance/commitment lifecycle tracking for budget control.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Date,
@@ -72,12 +71,12 @@ class Commitment(Base):
     )
 
     # Budget linkage
-    appropriation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    appropriation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("ipsas.appropriation.appropriation_id"),
         nullable=True,
     )
-    allotment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    allotment_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("ipsas.allotment.allotment_id"),
         nullable=True,
@@ -105,15 +104,15 @@ class Commitment(Base):
         ForeignKey("gl.account.account_id"),
         nullable=False,
     )
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    business_unit_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    business_unit_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -148,12 +147,12 @@ class Commitment(Base):
     )
 
     # Journal references
-    commitment_journal_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    commitment_journal_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="Encumbrance journal entry",
     )
-    obligation_journal_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    obligation_journal_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="Obligation journal entry",
@@ -161,8 +160,8 @@ class Commitment(Base):
 
     # Dates
     commitment_date: Mapped[date] = mapped_column(Date, nullable=False)
-    obligation_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    expenditure_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    obligation_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    expenditure_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Audit
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(
@@ -174,7 +173,7 @@ class Commitment(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -220,7 +219,7 @@ class CommitmentLine(Base):
     )
 
     # Description
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Amounts
     committed_amount: Mapped[Decimal] = mapped_column(
@@ -234,8 +233,8 @@ class CommitmentLine(Base):
     )
 
     # Source line (polymorphic)
-    source_line_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    source_line_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    source_line_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    source_line_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )

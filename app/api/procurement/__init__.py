@@ -14,7 +14,6 @@ REST API endpoints for:
 from fastapi import APIRouter, Depends
 
 from app.api.deps import require_tenant_permission
-
 from app.api.procurement.contracts import router as contracts_router
 from app.api.procurement.evaluations import router as evaluations_router
 from app.api.procurement.plans import router as plans_router

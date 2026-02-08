@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 
+{% from "components/macros.html" import status_badge, empty_state %}
 {% block page_title %}Late/Early Report{% endblock %}
 
 {% block breadcrumbs %}
@@ -95,13 +96,11 @@
             <div class="flex items-center gap-2">
                 <div class="h-3 w-3 rounded-full bg-amber-500"></div>
                 <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Late Arrivals</h2>
-                <span class="ml-2 inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                    {{ report.total_late }}
-                </span>
+                {{ status_badge(report.total_late, size="sm") }}
             </div>
         </div>
         {% if report.late_entries %}
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
@@ -133,6 +132,12 @@
                             </span>
                         </td>
                     </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No report found", "There are no report to display.") }}
+                        </td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -155,13 +160,11 @@
             <div class="flex items-center gap-2">
                 <div class="h-3 w-3 rounded-full bg-rose-500"></div>
                 <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Early Departures</h2>
-                <span class="ml-2 inline-flex items-center rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-medium text-rose-800 dark:bg-rose-900/30 dark:text-rose-300">
-                    {{ report.total_early }}
-                </span>
+                {{ status_badge(report.total_early, size="sm") }}
             </div>
         </div>
         {% if report.early_exits %}
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
@@ -191,6 +194,12 @@
                                 </svg>
                                 {{ record.check_out or '-' }}
                             </span>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No report found", "There are no report to display.") }}
                         </td>
                     </tr>
                     {% endfor %}

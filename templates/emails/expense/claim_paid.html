@@ -1,0 +1,38 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Expense Claim Paid{% endblock %}
+{% block content %}
+<p style="margin: 0 0 16px 0;">Hi {{ first_name }},</p>
+
+<div style="margin: 0 0 20px 0; padding: 16px; background-color: #ecfdf5; border-left: 4px solid #059669; border-radius: 4px;">
+  <p style="margin: 0; color: #065f46; font-weight: 600; font-size: 16px;">Your expense claim has been paid</p>
+</div>
+
+<table role="presentation" style="width: 100%; border-collapse: collapse; margin: 20px 0; background: #f8fafc; border-radius: 6px;">
+  <tr>
+    <td style="padding: 12px 16px; color: #64748b; width: 45%;">Claim Number</td>
+    <td style="padding: 12px 16px; font-weight: 600;">{{ claim_number }}</td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 16px; color: #64748b; border-top: 1px solid #e2e8f0;">Amount Paid</td>
+    <td style="padding: 12px 16px; font-weight: 600; color: #059669; border-top: 1px solid #e2e8f0;">{{ currency }} {{ amount }}</td>
+  </tr>
+  {% if payment_reference %}
+  <tr>
+    <td style="padding: 12px 16px; color: #64748b; border-top: 1px solid #e2e8f0;">Payment Reference</td>
+    <td style="padding: 12px 16px; font-weight: 600; border-top: 1px solid #e2e8f0;">{{ payment_reference }}</td>
+  </tr>
+  {% endif %}
+  {% if payment_date %}
+  <tr>
+    <td style="padding: 12px 16px; color: #64748b; border-top: 1px solid #e2e8f0;">Payment Date</td>
+    <td style="padding: 12px 16px; font-weight: 600; border-top: 1px solid #e2e8f0;">{{ payment_date }}</td>
+  </tr>
+  {% endif %}
+</table>
+
+<p style="margin: 0 0 20px 0;">The reimbursement has been processed. Please allow time for the payment to reflect in your account.</p>
+
+<p>
+  <a href="{{ claim_url }}" style="display: inline-block; padding: 12px 24px; background-color: #059669; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600;">View Details</a>
+</p>
+{% endblock %}

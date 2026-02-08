@@ -1,4 +1,5 @@
 {% extends "admin/base_admin.html" %}
+{% from "components/macros.html" import status_badge %}
 {% from "components/macros.html" import live_search %}
 
 {% block page_title %}Audit Logs{% endblock %}
@@ -28,7 +29,7 @@
 
     <div id="results-container">
     <div id="audit-table-container" class="admin-card overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="w-full">
                 <thead class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
                     <tr>
@@ -50,20 +51,16 @@
                         </td>
                         <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ event.action }}</td>
                         <td class="px-6 py-4">
-                            <p class="text-sm text-slate-600 dark:text-slate-400">{{ event.entity_type }}</p>
+                            <p class="text-sm text-slate-600 dark:text-slate-400">{{ event.entity_type | replace('_', ' ') | title }}</p>
                             {% if event.entity_id %}
                             <p class="text-xs text-slate-500 dark:text-slate-500 font-mono">{{ event.entity_id }}</p>
                             {% endif %}
                         </td>
                         <td class="px-6 py-4">
                             {% if event.is_success %}
-                            <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                                {{ event.status_code }}
-                            </span>
+                            {{ status_badge(event.status_code, size="sm") }}
                             {% else %}
-                            <span class="inline-flex items-center gap-1.5 rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                                {{ event.status_code }}
-                            </span>
+                            {{ status_badge(event.status_code, size="sm") }}
                             {% endif %}
                         </td>
                         <td class="px-6 py-4">

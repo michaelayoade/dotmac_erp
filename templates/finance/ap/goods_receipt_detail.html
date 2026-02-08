@@ -39,6 +39,7 @@
         <div class="flex flex-wrap items-center gap-3">
             {% if receipt.status == 'RECEIVED' %}
             <form action="/finance/ap/goods-receipts/{{ receipt.receipt_id }}/inspect" method="POST" class="inline">
+                {{ request.state.csrf_form | safe }}
                 <button type="submit" class="btn btn-ghost">
                     <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -47,6 +48,7 @@
                 </button>
             </form>
             <form action="/finance/ap/goods-receipts/{{ receipt.receipt_id }}/accept" method="POST" class="inline">
+                {{ request.state.csrf_form | safe }}
                 <button type="submit" class="btn btn-primary">
                     <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
@@ -56,6 +58,7 @@
             </form>
             {% elif receipt.status == 'INSPECTING' %}
             <form action="/finance/ap/goods-receipts/{{ receipt.receipt_id }}/accept" method="POST" class="inline">
+                {{ request.state.csrf_form | safe }}
                 <button type="submit" class="btn btn-primary">
                     <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
@@ -92,7 +95,7 @@
     {% endif %}
 
     <!-- Quick Stats -->
-    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4 stagger-in" style="animation-delay: 50ms;">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:grid-cols-4 stagger-in" style="animation-delay: 50ms;">
         <div class="card p-4">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Receipt Date</p>
             <p class="mt-1 text-lg font-semibold text-slate-900 dark:text-white">{{ receipt.receipt_date }}</p>

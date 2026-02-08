@@ -7,7 +7,7 @@ Tracks vehicle documents: insurance, registration, permits, etc.
 import uuid
 from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Date, ForeignKey, Index, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import UUID
@@ -63,7 +63,7 @@ class VehicleDocument(Base, FleetBaseMixin, AuditMixin):
     document_type: Mapped[DocumentType] = mapped_column(
         nullable=False,
     )
-    document_number: Mapped[Optional[str]] = mapped_column(
+    document_number: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Policy number, certificate number, etc.",
@@ -74,43 +74,43 @@ class VehicleDocument(Base, FleetBaseMixin, AuditMixin):
     )
 
     # Validity period
-    issue_date: Mapped[Optional[date]] = mapped_column(
+    issue_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    expiry_date: Mapped[Optional[date]] = mapped_column(
+    expiry_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
 
     # Insurance-specific fields
-    provider_name: Mapped[Optional[str]] = mapped_column(
+    provider_name: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Insurance company or issuing authority",
     )
-    policy_number: Mapped[Optional[str]] = mapped_column(
+    policy_number: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
     )
-    coverage_amount: Mapped[Optional[Decimal]] = mapped_column(
+    coverage_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(18, 2),
         nullable=True,
         comment="Insurance coverage limit",
     )
-    premium_amount: Mapped[Optional[Decimal]] = mapped_column(
+    premium_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(18, 2),
         nullable=True,
         comment="Premium paid",
     )
 
     # File attachment
-    file_path: Mapped[Optional[str]] = mapped_column(
+    file_path: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
         comment="Path to uploaded document file",
     )
-    file_name: Mapped[Optional[str]] = mapped_column(
+    file_name: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
     )
@@ -130,7 +130,7 @@ class VehicleDocument(Base, FleetBaseMixin, AuditMixin):
     )
 
     # Notes
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -157,7 +157,7 @@ class VehicleDocument(Base, FleetBaseMixin, AuditMixin):
         return 0 < days_until <= self.reminder_days_before
 
     @property
-    def days_until_expiry(self) -> Optional[int]:
+    def days_until_expiry(self) -> int | None:
         """Get days until expiry (negative if expired)."""
         if not self.expiry_date:
             return None

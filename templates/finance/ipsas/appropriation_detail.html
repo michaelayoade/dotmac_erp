@@ -1,5 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}{{ appropriation.appropriation_name }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -21,13 +22,13 @@
                 <div class="flex items-center gap-3">
                     <h2 class="text-xl font-semibold text-slate-900 dark:text-white font-display">{{ appropriation.appropriation_name }}</h2>
                     {% if appropriation.status.value == 'ACTIVE' or appropriation.status.value == 'APPROVED' %}
-                    <span class="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">{{ appropriation.status.value | replace('_', ' ') | title }}</span>
+                    {{ status_badge(appropriation.status.value, size="sm") }}
                     {% elif appropriation.status.value == 'DRAFT' %}
                     <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">Draft</span>
                     {% elif appropriation.status.value == 'SUBMITTED' %}
                     <span class="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Submitted</span>
                     {% else %}
-                    <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-400">{{ appropriation.status.value | replace('_', ' ') | title }}</span>
+                    {{ status_badge(appropriation.status.value, size="sm") }}
                     {% endif %}
                 </div>
                 <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">
@@ -99,15 +100,15 @@
         <div class="border-b border-slate-200 p-6 dark:border-slate-700">
             <h3 class="text-sm font-medium text-slate-900 dark:text-white">Allotments</h3>
         </div>
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="w-full text-sm">
                 <thead>
                     <tr class="border-b border-slate-200 dark:border-slate-700">
-                        <th scope="col" class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Code</th>
-                        <th scope="col" class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Name</th>
-                        <th scope="col" class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Period</th>
-                        <th scope="col" class="px-6 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Status</th>
-                        <th scope="col" class="px-6 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Amount</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Code</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Name</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Period</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
+                        <th scope="col" class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Amount</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
@@ -120,7 +121,7 @@
                             {% if allot.status.value == 'ACTIVE' %}
                             <span class="inline-flex rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Active</span>
                             {% else %}
-                            <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-400">{{ allot.status.value | replace('_', ' ') | title }}</span>
+                            {{ status_badge(allot.status.value, size="sm") }}
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 text-right font-mono text-slate-900 dark:text-white">{{ "{:,.2f}".format(allot.allotted_amount) }}</td>

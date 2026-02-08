@@ -7,9 +7,10 @@ Adapted from DotMac People for the unified ERP platform.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timedelta, timezone
+from collections.abc import Sequence
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Optional, Sequence, TypedDict
+from typing import TYPE_CHECKING, TypedDict
 from uuid import UUID
 
 from sqlalchemy import and_, case, delete, func, or_, select
@@ -156,26 +157,21 @@ class LeaveService:
     """
 
     def _next_application_number(self, org_id: UUID) -> str:
-        """Generate the next leave application number."""
-        year = date.today().year
-        prefix = f"LV-{year}-"
-        count = (
-            self.db.scalar(
-                select(func.count())
-                .select_from(LeaveApplication)
-                .where(
-                    LeaveApplication.organization_id == org_id,
-                    LeaveApplication.application_number.like(f"{prefix}%"),
-                )
-            )
-            or 0
+        """Generate the next leave application number.
+
+        Delegates to SyncNumberingService for race-condition-safe generation.
+        """
+        from app.models.finance.core_config.numbering_sequence import SequenceType
+        from app.services.finance.common.numbering import SyncNumberingService
+
+        return SyncNumberingService(self.db).generate_next_number(
+            org_id, SequenceType.LEAVE_APPLICATION
         )
-        return f"{prefix}{count + 1:05d}"
 
     def __init__(
         self,
         db: Session,
-        ctx: Optional["WebAuthContext"] = None,
+        ctx: WebAuthContext | None = None,
     ) -> None:
         self.db = db
         self.ctx = ctx
@@ -200,9 +196,9 @@ class LeaveService:
         self,
         org_id: UUID,
         *,
-        is_active: Optional[bool] = None,
-        search: Optional[str] = None,
-        pagination: Optional[PaginationParams] = None,
+        is_active: bool | None = None,
+        search: str | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[LeaveType]:
         """List leave types for an organization."""
         query = select(LeaveType).where(LeaveType.organization_id == org_id)
@@ -257,21 +253,21 @@ class LeaveService:
         leave_type_code: str,
         leave_type_name: str,
         allocation_policy: LeaveTypePolicy = LeaveTypePolicy.ANNUAL,
-        max_days_per_year: Optional[Decimal] = None,
-        max_continuous_days: Optional[int] = None,
+        max_days_per_year: Decimal | None = None,
+        max_continuous_days: int | None = None,
         allow_carry_forward: bool = False,
-        max_carry_forward_days: Optional[Decimal] = None,
-        carry_forward_expiry_months: Optional[int] = None,
+        max_carry_forward_days: Decimal | None = None,
+        carry_forward_expiry_months: int | None = None,
         allow_encashment: bool = False,
-        encashment_threshold_days: Optional[Decimal] = None,
+        encashment_threshold_days: Decimal | None = None,
         is_lwp: bool = False,
         is_optional: bool = False,
         is_compensatory: bool = False,
         include_holidays: bool = False,
         applicable_after_days: int = 0,
-        max_optional_leaves: Optional[int] = None,
+        max_optional_leaves: int | None = None,
         is_active: bool = True,
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> LeaveType:
         """Create a new leave type."""
         leave_type = LeaveType(
@@ -330,9 +326,9 @@ class LeaveService:
         self,
         org_id: UUID,
         *,
-        year: Optional[int] = None,
-        is_active: Optional[bool] = None,
-        pagination: Optional[PaginationParams] = None,
+        year: int | None = None,
+        is_active: bool | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[HolidayList]:
         """List holiday lists for an organization."""
         query = select(HolidayList).where(HolidayList.organization_id == org_id)
@@ -388,14 +384,14 @@ class LeaveService:
         *,
         list_code: str,
         list_name: str,
-        year: Optional[int] = None,
+        year: int | None = None,
         from_date: date,
         to_date: date,
-        description: Optional[str] = None,
-        weekly_off: Optional[str] = None,
-        is_default: Optional[bool] = None,
-        is_active: Optional[bool] = None,
-        holidays: Optional[List[dict]] = None,
+        description: str | None = None,
+        weekly_off: str | None = None,
+        is_default: bool | None = None,
+        is_active: bool | None = None,
+        holidays: list[dict] | None = None,
     ) -> HolidayList:
         """Create a new holiday list with holidays."""
         holiday_list_data = {
@@ -438,7 +434,7 @@ class LeaveService:
         self,
         org_id: UUID,
         holiday_list_id: UUID,
-        holidays: Optional[List[dict]] = None,
+        holidays: list[dict] | None = None,
         **kwargs,
     ) -> HolidayList:
         """Update a holiday list."""
@@ -484,11 +480,11 @@ class LeaveService:
         *,
         holiday_date: date,
         holiday_name: str,
-        description: Optional[str] = None,
+        description: str | None = None,
         is_optional: bool = False,
     ) -> Holiday:
         """Add a holiday to a holiday list."""
-        holiday_list = self.get_holiday_list(org_id, holiday_list_id)
+        self.get_holiday_list(org_id, holiday_list_id)
 
         holiday = Holiday(
             holiday_list_id=holiday_list_id,
@@ -530,7 +526,7 @@ class LeaveService:
         self,
         org_id: UUID,
         check_date: date,
-        holiday_list_id: Optional[UUID] = None,
+        holiday_list_id: UUID | None = None,
     ) -> bool:
         """Check if a date is a holiday."""
         query = (
@@ -555,11 +551,11 @@ class LeaveService:
         self,
         org_id: UUID,
         *,
-        employee_id: Optional[UUID] = None,
-        leave_type_id: Optional[UUID] = None,
-        year: Optional[int] = None,
-        is_active: Optional[bool] = None,
-        pagination: Optional[PaginationParams] = None,
+        employee_id: UUID | None = None,
+        leave_type_id: UUID | None = None,
+        year: int | None = None,
+        is_active: bool | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[LeaveAllocation]:
         """List leave allocations."""
         query = select(LeaveAllocation).where(LeaveAllocation.organization_id == org_id)
@@ -624,7 +620,7 @@ class LeaveService:
         to_date: date,
         new_leaves_allocated: Decimal,
         carry_forward_leaves: Decimal = Decimal("0"),
-        notes: Optional[str] = None,
+        notes: str | None = None,
     ) -> LeaveAllocation:
         """Create a leave allocation for an employee."""
         # Verify leave type exists
@@ -671,7 +667,7 @@ class LeaveService:
         to_date: date,
         new_leaves_allocated: Decimal,
         carry_forward_leaves: Decimal = Decimal("0"),
-        notes: Optional[str] = None,
+        notes: str | None = None,
     ) -> dict:
         """Bulk create leave allocations for employees."""
         success_count = 0
@@ -751,7 +747,7 @@ class LeaveService:
         org_id: UUID,
         employee_id: UUID,
         leave_type_id: UUID,
-        as_of_date: Optional[date] = None,
+        as_of_date: date | None = None,
     ) -> Decimal:
         """Get employee's leave balance for a leave type."""
         check_date = as_of_date or date.today()
@@ -781,8 +777,8 @@ class LeaveService:
         self,
         org_id: UUID,
         employee_id: UUID,
-        as_of_date: Optional[date] = None,
-    ) -> List[dict]:
+        as_of_date: date | None = None,
+    ) -> list[dict]:
         """Get all leave balances for an employee."""
         check_date = as_of_date or date.today()
 
@@ -838,12 +834,12 @@ class LeaveService:
         self,
         org_id: UUID,
         *,
-        employee_id: Optional[UUID] = None,
-        leave_type_id: Optional[UUID] = None,
-        status: Optional[LeaveApplicationStatus] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
-        pagination: Optional[PaginationParams] = None,
+        employee_id: UUID | None = None,
+        leave_type_id: UUID | None = None,
+        status: LeaveApplicationStatus | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[LeaveApplication]:
         """List leave applications."""
         query = select(LeaveApplication).where(
@@ -892,8 +888,8 @@ class LeaveService:
         org_id: UUID,
         *,
         employee_ids: Sequence[UUID],
-        status: Optional[LeaveApplicationStatus] = None,
-        pagination: Optional[PaginationParams] = None,
+        status: LeaveApplicationStatus | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[LeaveApplication]:
         """List leave applications for a set of employees."""
         if not employee_ids:
@@ -949,7 +945,7 @@ class LeaveService:
         *,
         half_day: bool = False,
         include_holidays: bool = False,
-        holiday_list_id: Optional[UUID] = None,
+        holiday_list_id: UUID | None = None,
     ) -> Decimal:
         """Calculate the number of leave days between two dates."""
         if from_date > to_date:
@@ -983,10 +979,10 @@ class LeaveService:
         from_date: date,
         to_date: date,
         half_day: bool = False,
-        half_day_date: Optional[date] = None,
-        reason: Optional[str] = None,
-        holiday_list_id: Optional[UUID] = None,
-        leave_approver_id: Optional[UUID] = None,
+        half_day_date: date | None = None,
+        reason: str | None = None,
+        holiday_list_id: UUID | None = None,
+        leave_approver_id: UUID | None = None,
     ) -> LeaveApplication:
         """Create a new leave application."""
         # Verify leave type
@@ -1093,8 +1089,8 @@ class LeaveService:
         org_id: UUID,
         application_id: UUID,
         *,
-        approver_id: Optional[UUID] = None,
-        notes: Optional[str] = None,
+        approver_id: UUID | None = None,
+        notes: str | None = None,
     ) -> LeaveApplication:
         """Approve a leave application."""
         application = self.get_application(org_id, application_id)
@@ -1157,8 +1153,8 @@ class LeaveService:
         org_id: UUID,
         application_ids: list[UUID],
         *,
-        approver_id: Optional[UUID] = None,
-        notes: Optional[str] = None,
+        approver_id: UUID | None = None,
+        notes: str | None = None,
     ) -> dict:
         """Bulk approve leave applications."""
         updated = 0
@@ -1180,7 +1176,7 @@ class LeaveService:
         org_id: UUID,
         application_id: UUID,
         *,
-        approver_id: Optional[UUID] = None,
+        approver_id: UUID | None = None,
         reason: str,
     ) -> LeaveApplication:
         """Reject a leave application."""
@@ -1190,7 +1186,7 @@ class LeaveService:
 
         application.status = LeaveApplicationStatus.REJECTED
         application.approved_by_id = approver_id
-        application.approved_at = datetime.now(timezone.utc)
+        application.approved_at = datetime.now(UTC)
         application.rejection_reason = reason
 
         self.db.flush()
@@ -1232,8 +1228,8 @@ class LeaveService:
         org_id: UUID,
         application_ids: list[UUID],
         *,
-        approver_id: Optional[UUID] = None,
-        reason: Optional[str] = None,
+        approver_id: UUID | None = None,
+        reason: str | None = None,
     ) -> dict:
         """Bulk reject leave applications."""
         updated = 0
@@ -1255,7 +1251,7 @@ class LeaveService:
         org_id: UUID,
         application_id: UUID,
         *,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> LeaveApplication:
         """Cancel a leave application."""
         application = self.get_application(org_id, application_id)
@@ -1339,9 +1335,6 @@ class LeaveService:
 
         # Track if dates changed for recalculation
         dates_changed = False
-        old_from = application.from_date
-        old_to = application.to_date
-        old_half_day = application.half_day
 
         for key, value in kwargs.items():
             if value is not None and hasattr(application, key):
@@ -1450,8 +1443,8 @@ class LeaveService:
         self,
         org_id: UUID,
         *,
-        department_id: Optional[UUID] = None,
-        year: Optional[int] = None,
+        department_id: UUID | None = None,
+        year: int | None = None,
     ) -> dict:
         """
         Get leave balance report by employee.
@@ -1545,8 +1538,8 @@ class LeaveService:
         self,
         org_id: UUID,
         *,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ) -> dict:
         """
         Get leave usage report by leave type.
@@ -1622,9 +1615,9 @@ class LeaveService:
         self,
         org_id: UUID,
         *,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-        department_id: Optional[UUID] = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        department_id: UUID | None = None,
     ) -> dict:
         """
         Get leave calendar data.

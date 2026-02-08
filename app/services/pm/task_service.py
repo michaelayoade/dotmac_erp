@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import date
-from typing import TYPE_CHECKING, Dict, List, Optional, Set
+from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
@@ -51,7 +51,7 @@ class TaskService:
         self,
         db: Session,
         organization_id: uuid.UUID,
-        principal: Optional["Principal"] = None,
+        principal: Principal | None = None,
     ) -> None:
         self.db = db
         self.organization_id = organization_id
@@ -61,7 +61,7 @@ class TaskService:
     # Read Operations
     # =========================================================================
 
-    def get_task(self, task_id: uuid.UUID) -> Optional[Task]:
+    def get_task(self, task_id: uuid.UUID) -> Task | None:
         """Fetch a single task by ID."""
         stmt = (
             select(Task)
@@ -87,13 +87,13 @@ class TaskService:
 
     def list_tasks(
         self,
-        project_id: Optional[uuid.UUID] = None,
-        status: Optional[TaskStatus] = None,
-        priority: Optional[TaskPriority] = None,
-        assigned_to_id: Optional[uuid.UUID] = None,
-        parent_task_id: Optional[uuid.UUID] = None,
+        project_id: uuid.UUID | None = None,
+        status: TaskStatus | None = None,
+        priority: TaskPriority | None = None,
+        assigned_to_id: uuid.UUID | None = None,
+        parent_task_id: uuid.UUID | None = None,
         include_subtasks: bool = True,
-        params: Optional[PaginationParams] = None,
+        params: PaginationParams | None = None,
     ) -> PaginatedResult[Task]:
         """List tasks with filtering and pagination."""
         stmt = (
@@ -125,7 +125,7 @@ class TaskService:
 
         return paginate(self.db, stmt, params)
 
-    def get_subtasks(self, task_id: uuid.UUID) -> List[Task]:
+    def get_subtasks(self, task_id: uuid.UUID) -> list[Task]:
         """Get all subtasks of a task."""
         stmt = (
             select(Task)
@@ -138,7 +138,7 @@ class TaskService:
         )
         return list(self.db.scalars(stmt).all())
 
-    def get_project_tasks(self, project_id: uuid.UUID) -> List[Task]:
+    def get_project_tasks(self, project_id: uuid.UUID) -> list[Task]:
         """Get all tasks for a project (for Gantt chart, etc.)."""
         stmt = (
             select(Task)
@@ -155,7 +155,7 @@ class TaskService:
         )
         return list(self.db.scalars(stmt).all())
 
-    def get_overdue_tasks(self, project_id: Optional[uuid.UUID] = None) -> List[Task]:
+    def get_overdue_tasks(self, project_id: uuid.UUID | None = None) -> list[Task]:
         """Get tasks that are past due date and not completed."""
         stmt = (
             select(Task)
@@ -175,7 +175,7 @@ class TaskService:
     # Write Operations
     # =========================================================================
 
-    def create_task(self, data: Dict) -> Task:
+    def create_task(self, data: dict) -> Task:
         """
         Create a new task.
 
@@ -208,7 +208,7 @@ class TaskService:
         self.db.flush()
         return task
 
-    def update_task(self, task_id: uuid.UUID, data: Dict) -> Task:
+    def update_task(self, task_id: uuid.UUID, data: dict) -> Task:
         """
         Update an existing task.
 
@@ -267,7 +267,7 @@ class TaskService:
 
         return True
 
-    def move_task(self, task_id: uuid.UUID, new_parent_id: Optional[uuid.UUID]) -> Task:
+    def move_task(self, task_id: uuid.UUID, new_parent_id: uuid.UUID | None) -> Task:
         """Move a task to a new parent (or make it top-level)."""
         task = self.get_task_or_raise(task_id)
 
@@ -350,7 +350,7 @@ class TaskService:
 
         return task
 
-    def assign_task(self, task_id: uuid.UUID, employee_id: Optional[uuid.UUID]) -> Task:
+    def assign_task(self, task_id: uuid.UUID, employee_id: uuid.UUID | None) -> Task:
         """Assign task to an employee (or unassign if None)."""
         task = self.get_task_or_raise(task_id)
         task.assigned_to_id = employee_id
@@ -417,7 +417,7 @@ class TaskService:
         self.db.delete(dep)
         return True
 
-    def get_dependencies(self, task_id: uuid.UUID) -> List[TaskDependency]:
+    def get_dependencies(self, task_id: uuid.UUID) -> list[TaskDependency]:
         """Get all dependencies of a task (tasks this task depends on)."""
         stmt = (
             select(TaskDependency)
@@ -426,7 +426,7 @@ class TaskService:
         )
         return list(self.db.scalars(stmt).all())
 
-    def get_dependents(self, task_id: uuid.UUID) -> List[TaskDependency]:
+    def get_dependents(self, task_id: uuid.UUID) -> list[TaskDependency]:
         """Get all tasks that depend on this task."""
         stmt = (
             select(TaskDependency)
@@ -440,8 +440,8 @@ class TaskService:
     # =========================================================================
 
     def get_task_counts_by_status(
-        self, project_id: Optional[uuid.UUID] = None
-    ) -> Dict[TaskStatus, int]:
+        self, project_id: uuid.UUID | None = None
+    ) -> dict[TaskStatus, int]:
         """Get count of tasks grouped by status."""
         stmt = (
             select(Task.status, func.count(Task.task_id))
@@ -458,8 +458,8 @@ class TaskService:
         return {status: count for status, count in results}
 
     def get_task_counts_by_priority(
-        self, project_id: Optional[uuid.UUID] = None
-    ) -> Dict[TaskPriority, int]:
+        self, project_id: uuid.UUID | None = None
+    ) -> dict[TaskPriority, int]:
         """Get count of tasks grouped by priority."""
         stmt = (
             select(Task.priority, func.count(Task.task_id))
@@ -481,7 +481,7 @@ class TaskService:
 
     def _would_create_cycle(self, task_id: uuid.UUID, new_parent_id: uuid.UUID) -> bool:
         """Check if moving task under new_parent would create a cycle."""
-        current: Optional[uuid.UUID] = new_parent_id
+        current: uuid.UUID | None = new_parent_id
         while current:
             if current == task_id:
                 return True
@@ -495,7 +495,7 @@ class TaskService:
         self, task_id: uuid.UUID, depends_on_id: uuid.UUID
     ) -> bool:
         """Check if adding this dependency would create a cycle."""
-        visited: Set[uuid.UUID] = set()
+        visited: set[uuid.UUID] = set()
         to_visit = [depends_on_id]
 
         while to_visit:

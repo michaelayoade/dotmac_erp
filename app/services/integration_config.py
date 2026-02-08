@@ -8,8 +8,7 @@ Supports both encrypted storage and OpenBao/Vault references.
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import select
@@ -119,7 +118,7 @@ class IntegrationConfigService:
         organization_id: uuid.UUID,
         integration_type: IntegrationType,
         active_only: bool = True,
-    ) -> Optional[IntegrationConfig]:
+    ) -> IntegrationConfig | None:
         """Get integration config for an organization."""
         query = select(IntegrationConfig).where(
             IntegrationConfig.organization_id == organization_id,
@@ -134,7 +133,7 @@ class IntegrationConfigService:
         self,
         organization_id: uuid.UUID,
         integration_type: IntegrationType,
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """
         Get decrypted credentials for an integration.
 
@@ -159,8 +158,8 @@ class IntegrationConfigService:
         base_url: str,
         api_key: str,
         api_secret: str,
-        company: Optional[str] = None,
-        user_id: Optional[uuid.UUID] = None,
+        company: str | None = None,
+        user_id: uuid.UUID | None = None,
         encrypt: bool = True,
     ) -> IntegrationConfig:
         """
@@ -207,11 +206,11 @@ class IntegrationConfigService:
         self,
         organization_id: uuid.UUID,
         integration_type: IntegrationType,
-        api_key: Optional[str] = None,
-        api_secret: Optional[str] = None,
-        base_url: Optional[str] = None,
-        company: Optional[str] = None,
-    ) -> Optional[IntegrationConfig]:
+        api_key: str | None = None,
+        api_secret: str | None = None,
+        base_url: str | None = None,
+        company: str | None = None,
+    ) -> IntegrationConfig | None:
         """Update credentials for an existing config."""
         config = self.get_config(organization_id, integration_type)
         if not config:
@@ -226,7 +225,7 @@ class IntegrationConfigService:
         if company is not None:
             config.company = company
 
-        config.updated_at = datetime.now(timezone.utc)
+        config.updated_at = datetime.now(UTC)
         self.db.flush()
 
         return config
@@ -235,7 +234,7 @@ class IntegrationConfigService:
         self,
         organization_id: uuid.UUID,
         integration_type: IntegrationType,
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Verify connection to the external system.
 
@@ -250,7 +249,7 @@ class IntegrationConfigService:
 
         return False, f"Verification not implemented for {integration_type}"
 
-    def _verify_erpnext(self, creds: dict) -> tuple[bool, Optional[str]]:
+    def _verify_erpnext(self, creds: dict) -> tuple[bool, str | None]:
         """Verify ERPNext connection."""
         from app.services.erpnext.client import (
             ERPNextClient,
@@ -267,7 +266,7 @@ class IntegrationConfigService:
 
         try:
             with ERPNextClient(config) as client:
-                result = client.test_connection()
+                client.test_connection()
                 # Update last_verified_at
                 return True, None
         except ERPNextError as e:
@@ -283,7 +282,7 @@ class IntegrationConfigService:
         """Mark integration as verified."""
         config = self.get_config(organization_id, integration_type)
         if config:
-            config.last_verified_at = datetime.now(timezone.utc)
+            config.last_verified_at = datetime.now(UTC)
             self.db.flush()
 
     def deactivate(

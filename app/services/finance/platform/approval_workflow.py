@@ -7,11 +7,12 @@ and segregation of duties enforcement.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, List, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -62,9 +63,9 @@ class ApprovalWorkflowService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         document_type: str,
-        document_amount: Optional[Decimal] = None,
-        currency_code: Optional[str] = None,
-    ) -> Optional[UUID]:
+        document_amount: Decimal | None = None,
+        currency_code: str | None = None,
+    ) -> UUID | None:
         """
         Check if a workflow is required and return its ID.
 
@@ -124,7 +125,7 @@ class ApprovalWorkflowService(ListResponseMixin):
                             currency_code,
                             workflow.threshold_currency_code,
                             "SPOT",
-                            datetime.now(timezone.utc).date(),
+                            datetime.now(UTC).date(),
                         )
                         amount_to_compare = conversion.converted_amount
 
@@ -142,10 +143,10 @@ class ApprovalWorkflowService(ListResponseMixin):
         document_type: str,
         document_id: UUID,
         document_reference: str,
-        document_amount: Optional[Decimal],
-        document_currency_code: Optional[str],
+        document_amount: Decimal | None,
+        document_currency_code: str | None,
         requested_by_user_id: UUID,
-        correlation_id: Optional[str] = None,
+        correlation_id: str | None = None,
     ) -> UUID:
         """
         Submit a document for approval.
@@ -211,10 +212,10 @@ class ApprovalWorkflowService(ListResponseMixin):
         db: Session,
         request_id: UUID,
         approver_user_id: UUID,
-        comments: Optional[str] = None,
-        ip_address: Optional[str] = None,
+        comments: str | None = None,
+        ip_address: str | None = None,
         mfa_verified: bool = False,
-        delegated_from_user_id: Optional[UUID] = None,
+        delegated_from_user_id: UUID | None = None,
     ) -> ApprovalStatus:
         """
         Approve an approval request.
@@ -325,7 +326,7 @@ class ApprovalWorkflowService(ListResponseMixin):
             if request.current_level >= len(approval_levels):
                 # Final approval
                 request.status = ApprovalRequestStatus.APPROVED
-                request.completed_at = datetime.now(timezone.utc)
+                request.completed_at = datetime.now(UTC)
                 request.final_approver_user_id = approver_id
             else:
                 # Move to next level
@@ -342,7 +343,7 @@ class ApprovalWorkflowService(ListResponseMixin):
         request_id: UUID,
         rejector_user_id: UUID,
         comments: str,
-        ip_address: Optional[str] = None,
+        ip_address: str | None = None,
     ) -> ApprovalStatus:
         """
         Reject an approval request.
@@ -394,7 +395,7 @@ class ApprovalWorkflowService(ListResponseMixin):
 
         # Update request status
         request.status = ApprovalRequestStatus.REJECTED
-        request.completed_at = datetime.now(timezone.utc)
+        request.completed_at = datetime.now(UTC)
         request.notes = comments
 
         db.commit()
@@ -407,7 +408,7 @@ class ApprovalWorkflowService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         approver_user_id: UUID,
-        document_type: Optional[str] = None,
+        document_type: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
@@ -573,7 +574,7 @@ class ApprovalWorkflowService(ListResponseMixin):
             )
 
         request.status = ApprovalRequestStatus.CANCELLED
-        request.completed_at = datetime.now(timezone.utc)
+        request.completed_at = datetime.now(UTC)
         request.notes = f"Cancelled: {reason}"
 
         db.commit()
@@ -586,7 +587,7 @@ class ApprovalWorkflowService(ListResponseMixin):
         db: Session,
         request: ApprovalRequest,
         approver_user_id: UUID,
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         approver_id = coerce_uuid(approver_user_id)
         workflow = request.workflow
         approval_levels = workflow.approval_levels
@@ -638,7 +639,7 @@ class ApprovalWorkflowService(ListResponseMixin):
         db: Session,
         approver_user_id: UUID,
         level_config: dict[str, Any],
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         approver_type = level_config.get("approver_type")
         approver_id = level_config.get("approver_id")
 
@@ -724,12 +725,12 @@ class ApprovalWorkflowService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        document_type: Optional[str] = None,
-        status: Optional[ApprovalRequestStatus] = None,
+        organization_id: str | None = None,
+        document_type: str | None = None,
+        status: ApprovalRequestStatus | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[ApprovalRequest]:
+    ) -> builtins.list[ApprovalRequest]:
         """
         List approval requests (for ListResponseMixin compatibility).
 
@@ -763,12 +764,12 @@ class ApprovalWorkflowService(ListResponseMixin):
     @staticmethod
     def list_workflows(
         db: Session,
-        organization_id: Optional[str] = None,
-        document_type: Optional[str] = None,
-        is_active: Optional[bool] = True,
+        organization_id: str | None = None,
+        document_type: str | None = None,
+        is_active: bool | None = True,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[ApprovalWorkflow]:
+    ) -> builtins.list[ApprovalWorkflow]:
         """
         List approval workflows.
 

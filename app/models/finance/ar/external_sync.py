@@ -7,7 +7,6 @@ Tracks mappings between external system IDs and ERP entity IDs.
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import DateTime, Enum, Index, String, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -97,7 +96,7 @@ class ExternalSync(Base):
     )
 
     # Sync metadata
-    external_updated_at: Mapped[Optional[datetime]] = mapped_column(
+    external_updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="Last update time in external system (for incremental sync)",
@@ -108,7 +107,7 @@ class ExternalSync(Base):
         server_default=func.now(),
         comment="When this record was last synced",
     )
-    sync_hash: Mapped[Optional[str]] = mapped_column(
+    sync_hash: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,
         comment="Hash of synced data (for change detection)",

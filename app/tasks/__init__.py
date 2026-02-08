@@ -1,56 +1,51 @@
-from app.tasks.sync import (
-    run_full_erpnext_sync,
-    run_incremental_erpnext_sync,
-    sync_single_entity_type,
-    scheduled_hr_sync,
-    scheduled_expense_sync,
-    push_expense_claim_to_erpnext,
-)
-
-from app.tasks.expense import (
-    refresh_period_usage_cache,
-    process_expense_approval_reminders,
-    post_approved_expense,
-    post_cash_advance_disbursement,
-    settle_cash_advance_with_claim,
-    calculate_expense_analytics,
-    poll_stuck_expense_transfers,
-)
-
-from app.tasks.hr import (
-    process_probation_ending_notifications,
-    process_contract_expiry_notifications,
-    process_work_anniversary_notifications,
-    process_birthday_notifications,
-    process_performance_review_reminders,
-    process_certification_expiry_notifications,
-    calculate_hr_analytics,
-)
-
-from app.tasks.performance import (
-    process_cycle_phase_transitions,
-    generate_cycle_appraisals,
-    calculate_cycle_progress,
-    check_upcoming_deadlines,
-    sync_all_cycle_progress,
-    activate_cycle,
-    complete_cycle,
-)
-
-from app.tasks.finance import (
-    sync_paystack_transactions,
-)
-
 # Register additional task modules used via .delay()
 from app.tasks.audit import log_audit_event
-from app.tasks.payroll import (
-    send_payslip_email,
-    process_payroll_entry_notifications,
-)
-from app.tasks.email import send_email_async
 from app.tasks.automation import (
     execute_workflow_action,
     process_scheduled_workflow_rules,
+)
+from app.tasks.email import send_email_async
+from app.tasks.expense import (
+    calculate_expense_analytics,
+    poll_stuck_expense_transfers,
+    post_approved_expense,
+    post_cash_advance_disbursement,
+    process_expense_approval_reminders,
+    refresh_period_usage_cache,
+    settle_cash_advance_with_claim,
+)
+from app.tasks.finance import (
+    sync_paystack_transactions,
+)
+from app.tasks.hr import (
+    calculate_hr_analytics,
+    process_birthday_notifications,
+    process_certification_expiry_notifications,
+    process_contract_expiry_notifications,
+    process_performance_review_reminders,
+    process_probation_ending_notifications,
+    process_work_anniversary_notifications,
+)
+from app.tasks.payroll import (
+    process_payroll_entry_notifications,
+    send_payslip_email,
+)
+from app.tasks.performance import (
+    activate_cycle,
+    calculate_cycle_progress,
+    check_upcoming_deadlines,
+    complete_cycle,
+    generate_cycle_appraisals,
+    process_cycle_phase_transitions,
+    sync_all_cycle_progress,
+)
+from app.tasks.sync import (
+    push_expense_claim_to_erpnext,
+    run_full_erpnext_sync,
+    run_incremental_erpnext_sync,
+    scheduled_expense_sync,
+    scheduled_hr_sync,
+    sync_single_entity_type,
 )
 
 __all__ = [

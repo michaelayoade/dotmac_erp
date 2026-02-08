@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 from uuid import UUID
 
+from fastapi import Response
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus
@@ -33,6 +34,8 @@ class ARInvoiceBulkService(BulkActionService[Invoice]):
     model = Invoice
     id_field = "invoice_id"
     org_field = "organization_id"
+    search_fields = ["invoice_number", "customer_name", "reference"]
+    date_field = "invoice_date"
 
     # Fields to export in CSV
     export_fields = [
@@ -48,6 +51,39 @@ class ARInvoiceBulkService(BulkActionService[Invoice]):
         ("balance_due", "Balance Due"),
         ("status", "Status"),
     ]
+
+    async def export_all(
+        self,
+        search: str = "",
+        status: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        extra_filters: dict[str, object] | None = None,
+        format: str = "csv",
+    ) -> Response:
+        """
+        Export all invoices matching filters to CSV.
+
+        Uses the shared query builder to match list-page filtering.
+        """
+        from app.services.finance.ar.invoice_query import build_invoice_query
+
+        customer_id = ""
+        if extra_filters:
+            customer_id = str(extra_filters.get("customer_id") or "")
+
+        query = build_invoice_query(
+            db=self.db,
+            organization_id=str(self.organization_id),
+            search=search,
+            customer_id=customer_id or None,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+        entities = query.all()
+        return self._build_csv(entities)
 
     def can_delete(self, entity: Invoice) -> tuple[bool, str]:
         """
@@ -93,8 +129,9 @@ class ARInvoiceBulkService(BulkActionService[Invoice]):
         if field_name == "balance_due":
             return str(entity.balance_due)
         if field_name == "customer_name":
-            # This would need a join - for now return empty or customer_id
-            return str(entity.customer_id) if entity.customer_id else ""
+            if entity.customer:
+                return entity.customer.trading_name or entity.customer.legal_name or ""
+            return ""
 
         return str(super()._get_export_value(entity, field_name))
 

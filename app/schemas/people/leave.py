@@ -10,13 +10,11 @@ Pydantic schemas for Leave APIs including:
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.people.leave import LeaveTypePolicy, LeaveApplicationStatus
-
+from app.models.people.leave import LeaveApplicationStatus, LeaveTypePolicy
 
 # =============================================================================
 # Leave Type Schemas
@@ -28,21 +26,21 @@ class LeaveTypeBase(BaseModel):
 
     leave_type_code: str = Field(max_length=30)
     leave_type_name: str = Field(max_length=100)
-    description: Optional[str] = None
+    description: str | None = None
     allocation_policy: LeaveTypePolicy = LeaveTypePolicy.ANNUAL
-    max_days_per_year: Optional[Decimal] = None
-    max_continuous_days: Optional[int] = None
+    max_days_per_year: Decimal | None = None
+    max_continuous_days: int | None = None
     allow_carry_forward: bool = False
-    max_carry_forward_days: Optional[Decimal] = None
-    carry_forward_expiry_months: Optional[int] = None
+    max_carry_forward_days: Decimal | None = None
+    carry_forward_expiry_months: int | None = None
     allow_encashment: bool = False
-    encashment_threshold_days: Optional[Decimal] = None
+    encashment_threshold_days: Decimal | None = None
     is_lwp: bool = False
     is_compensatory: bool = False
     include_holidays: bool = False
     applicable_after_days: int = 0
     is_optional: bool = False
-    max_optional_leaves: Optional[int] = None
+    max_optional_leaves: int | None = None
     is_active: bool = True
 
 
@@ -55,24 +53,24 @@ class LeaveTypeCreate(LeaveTypeBase):
 class LeaveTypeUpdate(BaseModel):
     """Update leave type request."""
 
-    leave_type_code: Optional[str] = Field(default=None, max_length=30)
-    leave_type_name: Optional[str] = Field(default=None, max_length=100)
-    description: Optional[str] = None
-    allocation_policy: Optional[LeaveTypePolicy] = None
-    max_days_per_year: Optional[Decimal] = None
-    max_continuous_days: Optional[int] = None
-    allow_carry_forward: Optional[bool] = None
-    max_carry_forward_days: Optional[Decimal] = None
-    carry_forward_expiry_months: Optional[int] = None
-    allow_encashment: Optional[bool] = None
-    encashment_threshold_days: Optional[Decimal] = None
-    is_lwp: Optional[bool] = None
-    is_compensatory: Optional[bool] = None
-    include_holidays: Optional[bool] = None
-    applicable_after_days: Optional[int] = None
-    is_optional: Optional[bool] = None
-    max_optional_leaves: Optional[int] = None
-    is_active: Optional[bool] = None
+    leave_type_code: str | None = Field(default=None, max_length=30)
+    leave_type_name: str | None = Field(default=None, max_length=100)
+    description: str | None = None
+    allocation_policy: LeaveTypePolicy | None = None
+    max_days_per_year: Decimal | None = None
+    max_continuous_days: int | None = None
+    allow_carry_forward: bool | None = None
+    max_carry_forward_days: Decimal | None = None
+    carry_forward_expiry_months: int | None = None
+    allow_encashment: bool | None = None
+    encashment_threshold_days: Decimal | None = None
+    is_lwp: bool | None = None
+    is_compensatory: bool | None = None
+    include_holidays: bool | None = None
+    applicable_after_days: int | None = None
+    is_optional: bool | None = None
+    max_optional_leaves: int | None = None
+    is_active: bool | None = None
 
 
 class LeaveTypeRead(LeaveTypeBase):
@@ -83,13 +81,13 @@ class LeaveTypeRead(LeaveTypeBase):
     leave_type_id: UUID
     organization_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class LeaveTypeListResponse(BaseModel):
     """Paginated leave type list response."""
 
-    items: List[LeaveTypeRead]
+    items: list[LeaveTypeRead]
     total: int
     offset: int
     limit: int
@@ -105,7 +103,7 @@ class HolidayBase(BaseModel):
 
     holiday_date: date
     holiday_name: str = Field(max_length=100)
-    description: Optional[str] = Field(default=None, max_length=255)
+    description: str | None = Field(default=None, max_length=255)
     is_public_holiday: bool = True
     is_optional: bool = False
 
@@ -130,7 +128,7 @@ class HolidayListBase(BaseModel):
 
     list_code: str = Field(max_length=30)
     list_name: str = Field(max_length=100)
-    description: Optional[str] = None
+    description: str | None = None
     year: int
     from_date: date
     to_date: date
@@ -142,21 +140,21 @@ class HolidayListBase(BaseModel):
 class HolidayListCreate(HolidayListBase):
     """Create holiday list request."""
 
-    holidays: List[HolidayCreate] = []
+    holidays: list[HolidayCreate] = []
 
 
 class HolidayListUpdate(BaseModel):
     """Update holiday list request."""
 
-    list_code: Optional[str] = Field(default=None, max_length=30)
-    list_name: Optional[str] = Field(default=None, max_length=100)
-    description: Optional[str] = None
-    year: Optional[int] = None
-    from_date: Optional[date] = None
-    to_date: Optional[date] = None
-    weekly_off: Optional[str] = None
-    is_default: Optional[bool] = None
-    is_active: Optional[bool] = None
+    list_code: str | None = Field(default=None, max_length=30)
+    list_name: str | None = Field(default=None, max_length=100)
+    description: str | None = None
+    year: int | None = None
+    from_date: date | None = None
+    to_date: date | None = None
+    weekly_off: str | None = None
+    is_default: bool | None = None
+    is_active: bool | None = None
 
 
 class HolidayListRead(HolidayListBase):
@@ -167,9 +165,9 @@ class HolidayListRead(HolidayListBase):
     holiday_list_id: UUID
     organization_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
-    holidays: List[HolidayRead] = []
+    holidays: list[HolidayRead] = []
 
 
 class HolidayListSummary(BaseModel):
@@ -199,7 +197,7 @@ class LeaveAllocationBase(BaseModel):
     to_date: date
     new_leaves_allocated: Decimal = Decimal("0")
     carry_forward_leaves: Decimal = Decimal("0")
-    notes: Optional[str] = None
+    notes: str | None = None
     is_active: bool = True
 
 
@@ -212,12 +210,12 @@ class LeaveAllocationCreate(LeaveAllocationBase):
 class LeaveAllocationUpdate(BaseModel):
     """Update leave allocation request."""
 
-    from_date: Optional[date] = None
-    to_date: Optional[date] = None
-    new_leaves_allocated: Optional[Decimal] = None
-    carry_forward_leaves: Optional[Decimal] = None
-    notes: Optional[str] = None
-    is_active: Optional[bool] = None
+    from_date: date | None = None
+    to_date: date | None = None
+    new_leaves_allocated: Decimal | None = None
+    carry_forward_leaves: Decimal | None = None
+    notes: str | None = None
+    is_active: bool | None = None
 
 
 class LeaveTypeBrief(BaseModel):
@@ -248,18 +246,18 @@ class LeaveAllocationRead(BaseModel):
     leaves_used: Decimal
     leaves_encashed: Decimal
     leaves_expired: Decimal
-    notes: Optional[str] = None
+    notes: str | None = None
     is_active: bool
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
-    leave_type: Optional[LeaveTypeBrief] = None
+    leave_type: LeaveTypeBrief | None = None
 
 
 class LeaveAllocationListResponse(BaseModel):
     """Paginated leave allocation list response."""
 
-    items: List[LeaveAllocationRead]
+    items: list[LeaveAllocationRead]
     total: int
     offset: int
     limit: int
@@ -268,13 +266,13 @@ class LeaveAllocationListResponse(BaseModel):
 class BulkLeaveAllocationCreate(BaseModel):
     """Bulk create leave allocations."""
 
-    employee_ids: List[UUID]
+    employee_ids: list[UUID]
     leave_type_id: UUID
     from_date: date
     to_date: date
     new_leaves_allocated: Decimal = Decimal("0")
     carry_forward_leaves: Decimal = Decimal("0")
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class BulkLeaveAllocationResult(BaseModel):
@@ -282,7 +280,7 @@ class BulkLeaveAllocationResult(BaseModel):
 
     success_count: int
     failed_count: int
-    errors: List[dict] = []
+    errors: list[dict] = []
 
 
 class LeaveBalanceSummary(BaseModel):
@@ -309,31 +307,31 @@ class LeaveApplicationBase(BaseModel):
     from_date: date
     to_date: date
     half_day: bool = False
-    half_day_date: Optional[date] = None
+    half_day_date: date | None = None
     total_leave_days: Decimal
-    reason: Optional[str] = None
-    contact_during_leave: Optional[str] = Field(default=None, max_length=100)
-    address_during_leave: Optional[str] = None
+    reason: str | None = None
+    contact_during_leave: str | None = Field(default=None, max_length=100)
+    address_during_leave: str | None = None
 
 
 class LeaveApplicationCreate(LeaveApplicationBase):
     """Create leave application request."""
 
-    leave_approver_id: Optional[UUID] = None
+    leave_approver_id: UUID | None = None
 
 
 class LeaveApplicationUpdate(BaseModel):
     """Update leave application request."""
 
-    from_date: Optional[date] = None
-    to_date: Optional[date] = None
-    half_day: Optional[bool] = None
-    half_day_date: Optional[date] = None
-    total_leave_days: Optional[Decimal] = None
-    reason: Optional[str] = None
-    contact_during_leave: Optional[str] = Field(default=None, max_length=100)
-    address_during_leave: Optional[str] = None
-    leave_approver_id: Optional[UUID] = None
+    from_date: date | None = None
+    to_date: date | None = None
+    half_day: bool | None = None
+    half_day_date: date | None = None
+    total_leave_days: Decimal | None = None
+    reason: str | None = None
+    contact_during_leave: str | None = Field(default=None, max_length=100)
+    address_during_leave: str | None = None
+    leave_approver_id: UUID | None = None
 
 
 class EmployeeBrief(BaseModel):
@@ -358,29 +356,29 @@ class LeaveApplicationRead(BaseModel):
     from_date: date
     to_date: date
     half_day: bool
-    half_day_date: Optional[date] = None
+    half_day_date: date | None = None
     total_leave_days: Decimal
-    reason: Optional[str] = None
-    contact_during_leave: Optional[str] = None
-    address_during_leave: Optional[str] = None
+    reason: str | None = None
+    contact_during_leave: str | None = None
+    address_during_leave: str | None = None
     status: LeaveApplicationStatus
-    leave_approver_id: Optional[UUID] = None
-    approved_by_id: Optional[UUID] = None
-    approved_at: Optional[datetime] = None
-    rejection_reason: Optional[str] = None
+    leave_approver_id: UUID | None = None
+    approved_by_id: UUID | None = None
+    approved_at: datetime | None = None
+    rejection_reason: str | None = None
     is_posted_to_payroll: bool
-    salary_slip_id: Optional[UUID] = None
+    salary_slip_id: UUID | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
-    leave_type: Optional[LeaveTypeBrief] = None
-    employee: Optional[EmployeeBrief] = None
+    leave_type: LeaveTypeBrief | None = None
+    employee: EmployeeBrief | None = None
 
 
 class LeaveApplicationListResponse(BaseModel):
     """Paginated leave application list response."""
 
-    items: List[LeaveApplicationRead]
+    items: list[LeaveApplicationRead]
     total: int
     offset: int
     limit: int
@@ -389,15 +387,15 @@ class LeaveApplicationListResponse(BaseModel):
 class LeaveApplicationBulkAction(BaseModel):
     """Bulk approve/reject leave applications."""
 
-    application_ids: List[UUID]
-    reason: Optional[str] = None
+    application_ids: list[UUID]
+    reason: str | None = None
 
 
 class LeaveApprovalRequest(BaseModel):
     """Approve/reject leave application request."""
 
     action: str = Field(description="APPROVE or REJECT")
-    rejection_reason: Optional[str] = None
+    rejection_reason: str | None = None
 
 
 class LeaveSubmitRequest(BaseModel):
@@ -409,7 +407,7 @@ class LeaveSubmitRequest(BaseModel):
 class LeaveCancelRequest(BaseModel):
     """Cancel leave application request."""
 
-    reason: Optional[str] = None
+    reason: str | None = None
 
 
 class LeaveStats(BaseModel):

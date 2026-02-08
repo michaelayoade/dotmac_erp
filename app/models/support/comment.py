@@ -10,12 +10,12 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Enum,
     ForeignKey,
     String,
     Text,
-    Boolean,
     func,
     text,
 )
@@ -25,9 +25,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
 if TYPE_CHECKING:
-    from app.models.support.ticket import Ticket
-    from app.models.support.attachment import TicketAttachment
     from app.models.person import Person
+    from app.models.support.attachment import TicketAttachment
+    from app.models.support.ticket import Ticket
 
 
 class CommentType(str, enum.Enum):
@@ -82,26 +82,26 @@ class TicketComment(Base):
     )
 
     # For system comments - what action occurred
-    action: Mapped[Optional[str]] = mapped_column(
+    action: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Action type for system comments (status_change, assigned, etc.)",
     )
 
     # For system comments - old and new values
-    old_value: Mapped[Optional[str]] = mapped_column(
+    old_value: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
         comment="Previous value for change tracking",
     )
-    new_value: Mapped[Optional[str]] = mapped_column(
+    new_value: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
         comment="New value for change tracking",
     )
 
     # Author
-    author_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    author_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,
@@ -129,7 +129,7 @@ class TicketComment(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -161,9 +161,9 @@ class TicketComment(Base):
         ticket_id: uuid.UUID,
         action: str,
         content: str,
-        old_value: Optional[str] = None,
-        new_value: Optional[str] = None,
-        author_id: Optional[uuid.UUID] = None,
+        old_value: str | None = None,
+        new_value: str | None = None,
+        author_id: uuid.UUID | None = None,
     ) -> "TicketComment":
         """Create a system-generated activity log entry."""
         return cls(

@@ -6,7 +6,7 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -77,26 +77,22 @@ class Customer(Base):
 
     # Identity
     legal_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    trading_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    tax_identification_number: Mapped[Optional[str]] = mapped_column(
+    trading_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    tax_identification_number: Mapped[str | None] = mapped_column(
         String(50), nullable=True
     )
-    vat_category: Mapped[Optional[str]] = mapped_column(
+    vat_category: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="VAT class/category for the customer",
     )
-    registration_number: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True
-    )
+    registration_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Credit
-    credit_limit: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(20, 6), nullable=True
-    )
+    credit_limit: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), nullable=True)
     credit_terms_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
     credit_hold: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    payment_terms_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    payment_terms_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -107,18 +103,18 @@ class Customer(Base):
         nullable=False,
         default=settings.default_functional_currency_code,
     )
-    price_list_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    price_list_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
     ar_control_account_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         nullable=False,
     )
-    default_revenue_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    default_revenue_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    default_tax_code_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    default_tax_code_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("tax.tax_code.tax_code_id"),
         nullable=True,
@@ -126,11 +122,11 @@ class Customer(Base):
     )
 
     # Relationships
-    sales_rep_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    sales_rep_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    customer_group_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    customer_group_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -146,10 +142,8 @@ class Customer(Base):
     is_related_party: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
-    related_party_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    related_party_relationship: Mapped[Optional[str]] = mapped_column(
-        Text, nullable=True
-    )
+    related_party_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    related_party_relationship: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Withholding Tax (WHT) Configuration
     # When true, this customer deducts WHT when paying invoices
@@ -159,33 +153,29 @@ class Customer(Base):
         default=False,
         comment="Customer deducts WHT on payments to us",
     )
-    default_wht_code_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    default_wht_code_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="Default WHT rate for this customer",
     )
-    wht_exemption_certificate: Mapped[Optional[str]] = mapped_column(
+    wht_exemption_certificate: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="WHT exemption certificate number",
     )
-    wht_exemption_expiry: Mapped[Optional[date]] = mapped_column(
+    wht_exemption_expiry: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="When WHT exemption expires",
     )
 
     # Contact & Address (JSONB for flexibility)
-    billing_address: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    billing_address: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    shipping_address: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, nullable=True
     )
-    shipping_address: Mapped[Optional[dict[str, Any]]] = mapped_column(
-        JSONB, nullable=True
-    )
-    primary_contact: Mapped[Optional[dict[str, Any]]] = mapped_column(
-        JSONB, nullable=True
-    )
-    bank_details: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    primary_contact: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    bank_details: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Encrypted/masked",
@@ -194,7 +184,7 @@ class Customer(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Audit fields
-    created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="User who created/imported this customer",
@@ -204,12 +194,12 @@ class Customer(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    updated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="User who last updated this customer",
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

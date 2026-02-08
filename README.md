@@ -335,6 +335,9 @@ pytest --cov=app --cov-report=html
 # Run E2E tests (requires running server)
 python scripts/setup_e2e_user.py
 pytest tests/e2e/ -v
+
+# Run integration tests (PostgreSQL required)
+pytest -m integration tests/integration/ -p no:conftest
 ```
 
 ## Scripts

@@ -4,7 +4,7 @@ Tests for IdempotencyService.
 
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -24,14 +24,17 @@ def patch_idempotency_service():
         mock_record.endpoint = MockColumn()
         mock_record.expires_at = MockColumn()
         mock_record.record_id = MockColumn()
-        with patch(
-            "app.services.finance.platform.idempotency.and_", return_value=MagicMock()
-        ):
-            with patch(
+        with (
+            patch(
+                "app.services.finance.platform.idempotency.and_",
+                return_value=MagicMock(),
+            ),
+            patch(
                 "app.services.finance.platform.idempotency.coerce_uuid",
                 side_effect=lambda x: x,
-            ):
-                yield mock_record
+            ),
+        ):
+            yield mock_record
 
 
 class TestIdempotencyService:
@@ -71,7 +74,7 @@ class TestIdempotencyService:
         self, service, mock_db_session, organization_id
     ):
         """Existing valid keys should return the record."""
-        future_expiry = datetime.now(timezone.utc) + timedelta(hours=12)
+        future_expiry = datetime.now(UTC) + timedelta(hours=12)
         mock_record = MockIdempotencyRecord(
             organization_id=organization_id,
             idempotency_key="existing-key",
@@ -101,7 +104,7 @@ class TestIdempotencyService:
         self, service, mock_db_session, organization_id
     ):
         """Same key with different request hash should raise 409 Conflict."""
-        future_expiry = datetime.now(timezone.utc) + timedelta(hours=12)
+        future_expiry = datetime.now(UTC) + timedelta(hours=12)
         mock_record = MockIdempotencyRecord(
             organization_id=organization_id,
             idempotency_key="conflict-key",
@@ -130,7 +133,7 @@ class TestIdempotencyService:
         self, service, mock_db_session, organization_id
     ):
         """Expired records should be deleted and return None."""
-        past_expiry = datetime.now(timezone.utc) - timedelta(hours=1)
+        past_expiry = datetime.now(UTC) - timedelta(hours=1)
         mock_record = MockIdempotencyRecord(
             organization_id=organization_id,
             idempotency_key="expired-key",
@@ -165,7 +168,7 @@ class TestIdempotencyService:
             mock_instance = MagicMock()
             MockRecord.return_value = mock_instance
 
-            result = service.store_response(
+            service.store_response(
                 mock_db_session,
                 organization_id=organization_id,
                 idempotency_key="new-key",
@@ -184,7 +187,7 @@ class TestIdempotencyService:
         self, service, mock_db_session, organization_id
     ):
         """get_cached_response should return (status, body) tuple."""
-        future_expiry = datetime.now(timezone.utc) + timedelta(hours=12)
+        future_expiry = datetime.now(UTC) + timedelta(hours=12)
         mock_record = MockIdempotencyRecord(
             organization_id=organization_id,
             idempotency_key="cached-key",
@@ -236,11 +239,11 @@ class TestIdempotencyService:
         mock_result.rowcount = 1
         mock_db_session.execute.return_value = mock_result
 
-        with patch_idempotency_service():
-            with patch(
-                "app.services.finance.platform.idempotency.delete"
-            ) as mock_delete:
-                result = service.cleanup_expired(mock_db_session, batch_size=100)
+        with (
+            patch_idempotency_service(),
+            patch("app.services.finance.platform.idempotency.delete"),
+        ):
+            result = service.cleanup_expired(mock_db_session, batch_size=100)
 
         assert result == 1
         mock_db_session.commit.assert_called_once()

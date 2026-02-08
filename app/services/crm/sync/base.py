@@ -8,9 +8,10 @@ Follows the same pattern as ERPNext sync but adapted for CRM API.
 import logging
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Generator
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Generator, Generic, Optional, TypeVar
+from typing import Any, Generic, TypeVar
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -98,7 +99,7 @@ class BaseCRMSyncService(ABC, Generic[T]):
         self,
         db: Session,
         organization_id: uuid.UUID,
-        user_id: Optional[uuid.UUID] = None,
+        user_id: uuid.UUID | None = None,
     ):
         self.db = db
         self.organization_id = organization_id
@@ -109,7 +110,7 @@ class BaseCRMSyncService(ABC, Generic[T]):
     def fetch_records(
         self,
         client: CRMClient,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
     ) -> Generator[dict[str, Any], None, None]:
         """
         Fetch records from CRM.
@@ -176,7 +177,7 @@ class BaseCRMSyncService(ABC, Generic[T]):
         """
         return str(record.get("id", ""))
 
-    def get_source_modified(self, record: dict[str, Any]) -> Optional[datetime]:
+    def get_source_modified(self, record: dict[str, Any]) -> datetime | None:
         """
         Get modification timestamp from CRM record.
 
@@ -196,7 +197,7 @@ class BaseCRMSyncService(ABC, Generic[T]):
     # Sync Entity Management
     # =========================================================================
 
-    def get_sync_entity(self, source_id: str) -> Optional[SyncEntity]:
+    def get_sync_entity(self, source_id: str) -> SyncEntity | None:
         """
         Get existing sync entity record.
 
@@ -221,7 +222,7 @@ class BaseCRMSyncService(ABC, Generic[T]):
     def create_sync_entity(
         self,
         source_id: str,
-        source_modified: Optional[datetime] = None,
+        source_modified: datetime | None = None,
     ) -> SyncEntity:
         """Create a new sync entity record."""
         sync_entity = SyncEntity(
@@ -237,7 +238,7 @@ class BaseCRMSyncService(ABC, Generic[T]):
         self._sync_entity_cache[source_id] = sync_entity
         return sync_entity
 
-    def get_existing_entity(self, sync_entity: SyncEntity) -> Optional[T]:
+    def get_existing_entity(self, sync_entity: SyncEntity) -> T | None:
         """
         Get existing ERP entity from sync record.
 
@@ -249,7 +250,7 @@ class BaseCRMSyncService(ABC, Generic[T]):
         # with proper entity class reference
         return None
 
-    def get_last_sync_time(self) -> Optional[datetime]:
+    def get_last_sync_time(self) -> datetime | None:
         """
         Get the most recent successful sync time for this entity type.
 
@@ -366,6 +367,21 @@ class BaseCRMSyncService(ABC, Generic[T]):
         sync_entity = self.get_sync_entity(source_id)
 
         if sync_entity is None:
+            # Check if push-based sync (CRMSyncMapping) already created this entity
+            # to prevent duplicate creation across the two sync systems
+            existing_id = self._check_push_sync_mapping(source_id)
+            if existing_id is not None:
+                sync_entity = self.create_sync_entity(source_id, source_modified)
+                sync_entity.mark_synced(existing_id)
+                result.skipped_count += 1
+                logger.debug(
+                    "Skipped %s %s: already exists via push sync (local_id=%s)",
+                    self.source_entity_type,
+                    source_id,
+                    existing_id,
+                )
+                return
+
             # New record - create
             sync_entity = self.create_sync_entity(source_id, source_modified)
 
@@ -464,6 +480,41 @@ class BaseCRMSyncService(ABC, Generic[T]):
             result.add_error(source_id, str(e))
 
         return result
+
+    # =========================================================================
+    # Push-Sync Cross-Check
+    # =========================================================================
+
+    # Map pull-based source_entity_type to push-based CRMEntityType values
+    _ENTITY_TYPE_TO_CRM: dict[str, str] = {
+        "project": "PROJECT",
+        "ticket": "TICKET",
+        "work_order": "WORK_ORDER",
+    }
+
+    def _check_push_sync_mapping(self, source_id: str) -> uuid.UUID | None:
+        """
+        Check if the push-based sync system (CRMSyncMapping) already created
+        a local entity for this CRM source_id.
+
+        Returns the local_entity_id if found, None otherwise.
+        """
+        from app.models.sync.dotmac_crm_sync import CRMSyncMapping
+
+        crm_type = self._ENTITY_TYPE_TO_CRM.get(self.source_entity_type)
+        if not crm_type:
+            return None
+
+        mapping = self.db.scalar(
+            select(CRMSyncMapping).where(
+                CRMSyncMapping.organization_id == self.organization_id,
+                CRMSyncMapping.crm_entity_type == crm_type,
+                CRMSyncMapping.crm_id == source_id,
+            )
+        )
+        if mapping:
+            return mapping.local_entity_id
+        return None
 
     def _handle_deletion(self, source_id: str, result: SyncResult) -> None:
         """

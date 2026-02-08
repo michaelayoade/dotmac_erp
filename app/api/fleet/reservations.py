@@ -5,7 +5,6 @@ REST API for pool vehicle reservation management.
 """
 
 from datetime import datetime
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -50,11 +49,11 @@ def get_db():
 @router.get("", response_model=ReservationListResponse)
 def list_reservations(
     organization_id: UUID = Depends(require_organization_id),
-    vehicle_id: Optional[UUID] = None,
-    employee_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    from_date: Optional[datetime] = None,
-    to_date: Optional[datetime] = None,
+    vehicle_id: UUID | None = None,
+    employee_id: UUID | None = None,
+    status: str | None = None,
+    from_date: datetime | None = None,
+    to_date: datetime | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -80,7 +79,7 @@ def list_reservations(
     )
 
 
-@router.post("/available", response_model=List[VehicleBrief])
+@router.post("/available", response_model=list[VehicleBrief])
 def get_available_vehicles(
     data: AvailableVehiclesRequest,
     organization_id: UUID = Depends(require_organization_id),

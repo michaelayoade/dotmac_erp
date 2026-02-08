@@ -4,15 +4,12 @@ AR (Accounts Receivable) Web Routes.
 HTML template routes for Customers, Invoices, and Receipts.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.ar.web import ar_web_service
-from app.web.deps import get_db, require_finance_access, WebAuthContext
-
+from app.web.deps import WebAuthContext, get_db, require_finance_access
 
 router = APIRouter(prefix="/ar", tags=["ar-web"])
 
@@ -20,8 +17,8 @@ router = APIRouter(prefix="/ar", tags=["ar-web"])
 @router.get("/customers", response_class=HTMLResponse)
 def list_customers(
     request: Request,
-    search: Optional[str] = None,
-    status: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -40,6 +37,18 @@ def new_customer_form(
 ):
     """New customer form page."""
     return ar_web_service.customer_new_form_response(request, auth, db)
+
+
+@router.get("/customers/export")
+async def export_all_customers(
+    request: Request,
+    search: str = "",
+    status: str = "",
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Export all customers matching filters to CSV."""
+    return await ar_web_service.export_all_customers_response(auth, db, search, status)
 
 
 @router.get("/customers/{customer_id}", response_class=HTMLResponse)
@@ -144,11 +153,11 @@ async def bulk_deactivate_customers(
 @router.get("/invoices", response_class=HTMLResponse)
 def list_invoices(
     request: Request,
-    search: Optional[str] = None,
-    customer_id: Optional[str] = None,
-    status: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    search: str | None = None,
+    customer_id: str | None = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -185,6 +194,23 @@ async def create_invoice(
 ):
     """Handle AR invoice form submission."""
     return await ar_web_service.create_invoice_response(request, auth, db)
+
+
+@router.get("/invoices/export")
+async def export_all_invoices(
+    request: Request,
+    search: str = "",
+    status: str = "",
+    customer_id: str = "",
+    start_date: str = "",
+    end_date: str = "",
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Export all invoices matching filters to CSV."""
+    return await ar_web_service.export_all_invoices_response(
+        auth, db, search, status, start_date, end_date, customer_id
+    )
 
 
 @router.get("/invoices/{invoice_id}", response_class=HTMLResponse)
@@ -334,11 +360,11 @@ async def bulk_post_invoices(
 @router.get("/receipts", response_class=HTMLResponse)
 def list_receipts(
     request: Request,
-    search: Optional[str] = None,
-    customer_id: Optional[str] = None,
-    status: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    search: str | None = None,
+    customer_id: str | None = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -360,8 +386,8 @@ def list_receipts(
 @router.get("/receipts/new", response_class=HTMLResponse)
 def new_receipt_form(
     request: Request,
-    invoice_id: Optional[str] = None,
-    customer_id: Optional[str] = None,
+    invoice_id: str | None = None,
+    customer_id: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -372,6 +398,23 @@ def new_receipt_form(
         db,
         invoice_id=invoice_id,
         customer_id=customer_id,
+    )
+
+
+@router.get("/receipts/export")
+async def export_all_receipts(
+    request: Request,
+    search: str = "",
+    status: str = "",
+    customer_id: str = "",
+    start_date: str = "",
+    end_date: str = "",
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Export all receipts matching filters to CSV."""
+    return await ar_web_service.export_all_receipts_response(
+        auth, db, search, status, start_date, end_date, customer_id
     )
 
 
@@ -457,11 +500,11 @@ async def bulk_export_receipts(
 @router.get("/credit-notes", response_class=HTMLResponse)
 def list_credit_notes(
     request: Request,
-    search: Optional[str] = None,
-    customer_id: Optional[str] = None,
-    status: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    search: str | None = None,
+    customer_id: str | None = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -483,7 +526,7 @@ def list_credit_notes(
 @router.get("/credit-notes/new", response_class=HTMLResponse)
 def new_credit_note_form(
     request: Request,
-    invoice_id: Optional[str] = None,
+    invoice_id: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -598,8 +641,8 @@ def delete_credit_note(
 @router.get("/aging", response_class=HTMLResponse)
 def aging_report(
     request: Request,
-    as_of_date: Optional[str] = None,
-    customer_id: Optional[str] = None,
+    as_of_date: str | None = None,
+    customer_id: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -613,7 +656,7 @@ def aging_report(
 async def upload_invoice_attachment(
     invoice_id: str,
     file: UploadFile = File(...),
-    description: Optional[str] = None,
+    description: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -631,7 +674,7 @@ async def upload_invoice_attachment(
 async def upload_receipt_attachment(
     receipt_id: str,
     file: UploadFile = File(...),
-    description: Optional[str] = None,
+    description: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -649,7 +692,7 @@ async def upload_receipt_attachment(
 async def upload_credit_note_attachment(
     credit_note_id: str,
     file: UploadFile = File(...),
-    description: Optional[str] = None,
+    description: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -667,7 +710,7 @@ async def upload_credit_note_attachment(
 async def upload_customer_attachment(
     customer_id: str,
     file: UploadFile = File(...),
-    description: Optional[str] = None,
+    description: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):

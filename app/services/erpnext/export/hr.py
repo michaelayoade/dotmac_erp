@@ -8,7 +8,7 @@ need to sync back to ERPNext to maintain consistency.
 import logging
 import uuid
 from datetime import date, datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -89,7 +89,7 @@ class DepartmentExportService(BaseExportService[Department]):
     def get_entity_id(self, entity: Department) -> uuid.UUID:
         return entity.department_id
 
-    def get_erpnext_id(self, entity: Department) -> Optional[str]:
+    def get_erpnext_id(self, entity: Department) -> str | None:
         return entity.erpnext_id
 
     def set_erpnext_id(self, entity: Department, erpnext_id: str) -> None:
@@ -194,7 +194,7 @@ class EmployeeExportService(BaseExportService[Employee]):
     def get_entity_id(self, entity: Employee) -> uuid.UUID:
         return entity.employee_id
 
-    def get_erpnext_id(self, entity: Employee) -> Optional[str]:
+    def get_erpnext_id(self, entity: Employee) -> str | None:
         return entity.erpnext_id
 
     def set_erpnext_id(self, entity: Employee, erpnext_id: str) -> None:
@@ -202,6 +202,6 @@ class EmployeeExportService(BaseExportService[Employee]):
         entity.last_synced_at = datetime.utcnow()
 
 
-def _format_date(d: Optional[date]) -> Optional[str]:
+def _format_date(d: date | None) -> str | None:
     """Format date for ERPNext API (YYYY-MM-DD)."""
     return _base_format_date(d) or None

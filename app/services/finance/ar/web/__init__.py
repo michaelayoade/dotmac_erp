@@ -18,7 +18,7 @@ For backward compatibility, the original import path also works:
     from app.services.finance.ar.web import ar_web_service
 """
 
-from fastapi import Request, UploadFile
+from fastapi import Request
 from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -203,6 +203,23 @@ class ARWebService(  # type: ignore[misc]
         )
         return await service.bulk_export(req.ids, req.format)
 
+    async def export_all_customers_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        search: str = "",
+        status: str = "",
+    ):
+        """Export all customers matching filters to CSV."""
+        from app.services.finance.ar.bulk import get_customer_bulk_service
+
+        service = get_customer_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
+        return await service.export_all(search=search, status=status)
+
     async def bulk_activate_customers_response(
         self,
         request: Request,
@@ -279,6 +296,35 @@ class ARWebService(  # type: ignore[misc]
         )
         return await service.bulk_export(req.ids, req.format)
 
+    async def export_all_invoices_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        search: str = "",
+        status: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        customer_id: str = "",
+    ):
+        """Export all invoices matching filters to CSV."""
+        from app.services.finance.ar.invoice_bulk import get_ar_invoice_bulk_service
+
+        service = get_ar_invoice_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
+        extra: dict[str, object] | None = (
+            {"customer_id": customer_id} if customer_id else None
+        )
+        return await service.export_all(
+            search=search,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+            extra_filters=extra,
+        )
+
     async def bulk_approve_invoices_response(
         self,
         request: Request,
@@ -354,6 +400,35 @@ class ARWebService(  # type: ignore[misc]
             coerce_uuid(auth.user_id),
         )
         return await service.bulk_export(req.ids, req.format)
+
+    async def export_all_receipts_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        search: str = "",
+        status: str = "",
+        start_date: str = "",
+        end_date: str = "",
+        customer_id: str = "",
+    ):
+        """Export all receipts matching filters to CSV."""
+        from app.services.finance.ar.receipt_bulk import get_ar_receipt_bulk_service
+
+        service = get_ar_receipt_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
+        extra: dict[str, object] | None = (
+            {"customer_id": customer_id} if customer_id else None
+        )
+        return await service.export_all(
+            search=search,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+            extra_filters=extra,
+        )
 
 
 # Module-level singleton for backward compatibility

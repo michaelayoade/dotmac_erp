@@ -5,9 +5,10 @@ Revises: 20260124_sequence_types_ops
 Create Date: 2026-01-24
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
+
+from alembic import op
 
 revision = "20260124_expense_task_fk"
 down_revision = "20260124_sequence_types_ops"

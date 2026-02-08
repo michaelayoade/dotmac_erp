@@ -8,8 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
-from typing import Optional
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -32,7 +31,7 @@ class FiscalYearInput:
     start_date: date
     end_date: date
     is_adjustment_year: bool = False
-    retained_earnings_account_id: Optional[UUID] = None
+    retained_earnings_account_id: UUID | None = None
 
 
 class FiscalYearService(ListResponseMixin):
@@ -206,7 +205,7 @@ class FiscalYearService(ListResponseMixin):
             )
 
         year.is_closed = True
-        year.closed_at = datetime.now(timezone.utc)
+        year.closed_at = datetime.now(UTC)
         year.closed_by_user_id = user_id
 
         db.commit()
@@ -218,6 +217,7 @@ class FiscalYearService(ListResponseMixin):
     def get(
         db: Session,
         fiscal_year_id: str,
+        organization_id: UUID | None = None,
     ) -> FiscalYear:
         """
         Get a fiscal year by ID.
@@ -234,6 +234,10 @@ class FiscalYearService(ListResponseMixin):
         """
         year = db.get(FiscalYear, coerce_uuid(fiscal_year_id))
         if not year:
+            raise HTTPException(status_code=404, detail="Fiscal year not found")
+        if organization_id is not None and year.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Fiscal year not found")
         return year
 
@@ -274,8 +278,8 @@ class FiscalYearService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        is_closed: Optional[bool] = None,
+        organization_id: str | None = None,
+        is_closed: bool | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[FiscalYear]:

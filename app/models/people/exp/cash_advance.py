@@ -102,7 +102,7 @@ class CashAdvance(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         Numeric(12, 2),
         nullable=False,
     )
-    approved_amount: Mapped[Optional[Decimal]] = mapped_column(
+    approved_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
     )
@@ -124,34 +124,34 @@ class CashAdvance(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
     )
 
     # Dates
-    expected_settlement_date: Mapped[Optional[date]] = mapped_column(
+    expected_settlement_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    disbursed_on: Mapped[Optional[date]] = mapped_column(
+    disbursed_on: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    settled_on: Mapped[Optional[date]] = mapped_column(
+    settled_on: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
 
     # Cost allocation
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.cost_center.cost_center_id"),
         nullable=True,
     )
 
     # GL Integration
-    advance_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    advance_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,
         comment="Advance receivable account",
     )
-    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.journal_entry.journal_entry_id"),
         nullable=True,
@@ -165,33 +165,33 @@ class CashAdvance(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
     )
 
     # Approval
-    approver_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approver_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
     )
-    approved_on: Mapped[Optional[date]] = mapped_column(
+    approved_on: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    rejection_reason: Mapped[Optional[str]] = mapped_column(
+    rejection_reason: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Payment details
-    payment_mode: Mapped[Optional[str]] = mapped_column(
+    payment_mode: Mapped[str | None] = mapped_column(
         String(30),
         nullable=True,
         comment="BANK_TRANSFER, CASH, CHEQUE",
     )
-    payment_reference: Mapped[Optional[str]] = mapped_column(
+    payment_reference: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
 
     # Notes
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -201,7 +201,7 @@ class CashAdvance(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

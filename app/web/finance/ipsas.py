@@ -6,7 +6,6 @@ Commitments, Virements, and Budget Comparison.
 """
 
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Query, Request
@@ -28,8 +27,8 @@ router = APIRouter(prefix="/ipsas", tags=["ipsas-web"])
 @router.get("/funds", response_class=HTMLResponse)
 def list_funds(
     request: Request,
-    status: Optional[str] = None,
-    fund_type: Optional[str] = None,
+    status: str | None = None,
+    fund_type: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -80,9 +79,9 @@ def create_fund(
     fund_type: str = Form(...),
     effective_from: str = Form(...),
     description: str = Form(""),
-    is_restricted: Optional[str] = Form(None),
-    donor_name: Optional[str] = Form(None),
-    donor_reference: Optional[str] = Form(None),
+    is_restricted: str | None = Form(None),
+    donor_name: str | None = Form(None),
+    donor_reference: str | None = Form(None),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -116,9 +115,9 @@ def create_fund(
 @router.get("/appropriations", response_class=HTMLResponse)
 def list_appropriations(
     request: Request,
-    fiscal_year_id: Optional[str] = None,
-    fund_id: Optional[str] = None,
-    status: Optional[str] = None,
+    fiscal_year_id: str | None = None,
+    fund_id: str | None = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -147,9 +146,10 @@ def new_appropriation_form(
     db: Session = Depends(get_db),
 ):
     """Create appropriation form page."""
+    from sqlalchemy import select
+
     from app.models.finance.gl.fiscal_year import FiscalYear
     from app.models.finance.ipsas.fund import Fund
-    from sqlalchemy import select
 
     context = base_context(request, auth, "New Appropriation", "ipsas", db=db)
     funds = list(
@@ -184,11 +184,11 @@ def create_appropriation(
     approved_amount: str = Form(...),
     currency_code: str = Form("NGN"),
     effective_from: str = Form(...),
-    budget_id: Optional[str] = Form(None),
-    account_id: Optional[str] = Form(None),
-    cost_center_id: Optional[str] = Form(None),
-    business_unit_id: Optional[str] = Form(None),
-    appropriation_act_reference: Optional[str] = Form(None),
+    budget_id: str | None = Form(None),
+    account_id: str | None = Form(None),
+    cost_center_id: str | None = Form(None),
+    business_unit_id: str | None = Form(None),
+    appropriation_act_reference: str | None = Form(None),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -268,8 +268,8 @@ def approve_appropriation(
 @router.get("/commitments", response_class=HTMLResponse)
 def list_commitments(
     request: Request,
-    fund_id: Optional[str] = None,
-    status: Optional[str] = None,
+    fund_id: str | None = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -297,12 +297,13 @@ def new_commitment_form(
     db: Session = Depends(get_db),
 ):
     """Create commitment form page."""
+    from sqlalchemy import select
+
     from app.models.finance.gl.account import Account
-    from app.models.finance.gl.fiscal_year import FiscalYear
     from app.models.finance.gl.fiscal_period import FiscalPeriod
+    from app.models.finance.gl.fiscal_year import FiscalYear
     from app.models.finance.ipsas.appropriation import Appropriation
     from app.models.finance.ipsas.fund import Fund
-    from sqlalchemy import select
 
     context = base_context(request, auth, "New Commitment", "ipsas", db=db)
     org_id = auth.organization_id
@@ -363,7 +364,7 @@ def create_commitment(
     fiscal_period_id: str = Form(...),
     committed_amount: str = Form(...),
     currency_code: str = Form("NGN"),
-    appropriation_id: Optional[str] = Form(None),
+    appropriation_id: str | None = Form(None),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -416,8 +417,8 @@ def view_commitment(
 @router.get("/virements", response_class=HTMLResponse)
 def list_virements(
     request: Request,
-    fiscal_year_id: Optional[str] = None,
-    status: Optional[str] = None,
+    fiscal_year_id: str | None = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -445,8 +446,9 @@ def new_virement_form(
     db: Session = Depends(get_db),
 ):
     """Create virement form page."""
-    from app.models.finance.ipsas.appropriation import Appropriation
     from sqlalchemy import select
+
+    from app.models.finance.ipsas.appropriation import Appropriation
 
     context = base_context(request, auth, "New Virement", "ipsas", db=db)
     appropriations = list(
@@ -471,16 +473,15 @@ def create_virement(
     amount: str = Form(...),
     currency_code: str = Form("NGN"),
     justification: str = Form(...),
-    approval_authority: Optional[str] = Form(None),
+    approval_authority: str | None = Form(None),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
     """Create a virement (form submission)."""
-    from app.schemas.finance.ipsas import VirementCreate
-    from app.services.finance.ipsas.virement_service import VirementService
-
     # Resolve fiscal_year_id from the source appropriation
     from app.models.finance.ipsas.appropriation import Appropriation
+    from app.schemas.finance.ipsas import VirementCreate
+    from app.services.finance.ipsas.virement_service import VirementService
 
     from_approp = db.get(Appropriation, UUID(from_appropriation_id))
     fiscal_year_id = from_approp.fiscal_year_id if from_approp else None
@@ -571,8 +572,8 @@ def apply_virement(
 @router.get("/budget-comparison", response_class=HTMLResponse)
 def budget_comparison(
     request: Request,
-    fiscal_year_id: Optional[str] = None,
-    fund_id: Optional[str] = None,
+    fiscal_year_id: str | None = None,
+    fund_id: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -589,8 +590,9 @@ def budget_comparison(
         )
 
     # Load fiscal years for selector
-    from app.models.finance.gl.fiscal_year import FiscalYear
     from sqlalchemy import select
+
+    from app.models.finance.gl.fiscal_year import FiscalYear
 
     fiscal_years = list(
         db.scalars(
@@ -623,7 +625,7 @@ def budget_comparison(
 @router.get("/available-balance", response_class=HTMLResponse)
 def available_balance_dashboard(
     request: Request,
-    fund_id: Optional[str] = None,
+    fund_id: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):

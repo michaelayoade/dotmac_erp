@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Callable, Generic, List, Optional, TypeVar
+from datetime import UTC, datetime
+from typing import Any, Generic, TypeVar
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -34,7 +35,7 @@ class StepResult:
     success: bool
     output_data: dict[str, Any] = field(default_factory=dict)
     compensation_data: dict[str, Any] = field(default_factory=dict)
-    error: Optional[str] = None
+    error: str | None = None
 
 
 @dataclass
@@ -42,9 +43,9 @@ class SagaResult:
     """Result of saga execution."""
 
     success: bool
-    saga_id: Optional[UUID] = None
+    saga_id: UUID | None = None
     result: dict[str, Any] = field(default_factory=dict)
-    error: Optional[str] = None
+    error: str | None = None
     was_compensated: bool = False
 
 
@@ -57,9 +58,7 @@ class SagaStepDefinition(Generic[T]):
 
     name: str
     execute: Callable[[Session, dict[str, Any], dict[str, Any]], StepResult]
-    compensate: Optional[Callable[[Session, dict[str, Any], dict[str, Any]], bool]] = (
-        None
-    )
+    compensate: Callable[[Session, dict[str, Any], dict[str, Any]], bool] | None = None
     description: str = ""
 
 
@@ -98,7 +97,7 @@ class SagaOrchestrator(ABC):
         payload: dict[str, Any],
         idempotency_key: str,
         created_by_user_id: UUID,
-        correlation_id: Optional[str] = None,
+        correlation_id: str | None = None,
     ) -> SagaResult:
         """
         Execute the saga.
@@ -235,7 +234,7 @@ class SagaOrchestrator(ABC):
 
             # Mark step as executing
             step.status = StepStatus.EXECUTING
-            step.started_at = datetime.now(timezone.utc)
+            step.started_at = datetime.now(UTC)
             step.input_data = {"payload": saga.payload, "context": context}
             db.commit()
 
@@ -253,7 +252,7 @@ class SagaOrchestrator(ABC):
             if result.success:
                 # Step succeeded
                 step.status = StepStatus.COMPLETED
-                step.completed_at = datetime.now(timezone.utc)
+                step.completed_at = datetime.now(UTC)
                 step.output_data = result.output_data
                 step.compensation_data = result.compensation_data
 
@@ -267,7 +266,7 @@ class SagaOrchestrator(ABC):
             else:
                 # Step failed - start compensation
                 step.status = StepStatus.FAILED
-                step.completed_at = datetime.now(timezone.utc)
+                step.completed_at = datetime.now(UTC)
                 step.error_message = result.error
                 saga.error_message = f"Step '{step_def.name}' failed: {result.error}"
                 db.commit()
@@ -283,7 +282,7 @@ class SagaOrchestrator(ABC):
 
         # All steps completed
         saga.status = SagaStatus.COMPLETED
-        saga.completed_at = datetime.now(timezone.utc)
+        saga.completed_at = datetime.now(UTC)
         saga.result = self._build_result(saga.payload, context)
         db.commit()
 
@@ -322,7 +321,7 @@ class SagaOrchestrator(ABC):
             if step_def.compensate is None:
                 # No compensation defined (read-only step)
                 step.status = StepStatus.COMPENSATED
-                step.completed_at = datetime.now(timezone.utc)
+                step.completed_at = datetime.now(UTC)
                 db.commit()
                 continue
 
@@ -346,7 +345,7 @@ class SagaOrchestrator(ABC):
 
             if success:
                 step.status = StepStatus.COMPENSATED
-                step.completed_at = datetime.now(timezone.utc)
+                step.completed_at = datetime.now(UTC)
                 db.commit()
 
                 logger.info("Saga %s step %d compensated", saga.saga_id, i)
@@ -363,7 +362,7 @@ class SagaOrchestrator(ABC):
         else:
             saga.status = SagaStatus.COMPENSATED
 
-        saga.completed_at = datetime.now(timezone.utc)
+        saga.completed_at = datetime.now(UTC)
         db.commit()
 
         return SagaResult(
@@ -405,7 +404,7 @@ class SagaOrchestrator(ABC):
     def get_saga(
         db: Session,
         saga_id: UUID,
-    ) -> Optional[SagaExecution]:
+    ) -> SagaExecution | None:
         """Get a saga by ID."""
         return db.get(SagaExecution, coerce_uuid(saga_id))
 
@@ -413,7 +412,7 @@ class SagaOrchestrator(ABC):
     def get_saga_by_idempotency_key(
         db: Session,
         idempotency_key: str,
-    ) -> Optional[SagaExecution]:
+    ) -> SagaExecution | None:
         """Get a saga by idempotency key."""
         return (
             db.query(SagaExecution)
@@ -424,12 +423,12 @@ class SagaOrchestrator(ABC):
     @staticmethod
     def list_sagas(
         db: Session,
-        organization_id: Optional[UUID] = None,
-        saga_type: Optional[str] = None,
-        status: Optional[SagaStatus] = None,
+        organization_id: UUID | None = None,
+        saga_type: str | None = None,
+        status: SagaStatus | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[SagaExecution]:
+    ) -> list[SagaExecution]:
         """List sagas with optional filters."""
         query = db.query(SagaExecution)
 

@@ -12,7 +12,6 @@ Includes multi-tier caching:
 from __future__ import annotations
 
 import logging
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -232,7 +231,7 @@ class OrgContextService:
     def get_organization(
         db: Session,
         organization_id: UUID | str,
-    ) -> Optional[Organization]:
+    ) -> Organization | None:
         """
         Get organization entity.
 

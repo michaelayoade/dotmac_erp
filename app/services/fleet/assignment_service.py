@@ -6,7 +6,6 @@ Handles assigning vehicles to employees and departments.
 
 import logging
 from datetime import date
-from typing import List, Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -38,7 +37,7 @@ class AssignmentService:
         self.db = db
         self.organization_id = organization_id
 
-    def get_by_id(self, assignment_id: UUID) -> Optional[VehicleAssignment]:
+    def get_by_id(self, assignment_id: UUID) -> VehicleAssignment | None:
         """Get assignment by ID."""
         return self.db.get(VehicleAssignment, assignment_id)
 
@@ -49,7 +48,7 @@ class AssignmentService:
             raise NotFoundError(f"Assignment {assignment_id} not found")
         return assignment
 
-    def get_active_assignment(self, vehicle_id: UUID) -> Optional[VehicleAssignment]:
+    def get_active_assignment(self, vehicle_id: UUID) -> VehicleAssignment | None:
         """Get the current active assignment for a vehicle."""
         stmt = select(VehicleAssignment).where(
             VehicleAssignment.organization_id == self.organization_id,
@@ -61,11 +60,11 @@ class AssignmentService:
     def list_assignments(
         self,
         *,
-        vehicle_id: Optional[UUID] = None,
-        employee_id: Optional[UUID] = None,
-        department_id: Optional[UUID] = None,
+        vehicle_id: UUID | None = None,
+        employee_id: UUID | None = None,
+        department_id: UUID | None = None,
         active_only: bool = False,
-        params: Optional[PaginationParams] = None,
+        params: PaginationParams | None = None,
     ) -> PaginatedResult[VehicleAssignment]:
         """List assignments with filtering."""
         stmt = (
@@ -92,7 +91,7 @@ class AssignmentService:
 
         return paginate(self.db, stmt, params)
 
-    def get_employee_vehicles(self, employee_id: UUID) -> List[Vehicle]:
+    def get_employee_vehicles(self, employee_id: UUID) -> list[Vehicle]:
         """Get all vehicles currently assigned to an employee."""
         stmt = (
             select(Vehicle)
@@ -199,9 +198,9 @@ class AssignmentService:
     def transfer_vehicle(
         self,
         vehicle_id: UUID,
-        to_employee_id: Optional[UUID] = None,
-        to_department_id: Optional[UUID] = None,
-        reason: Optional[str] = None,
+        to_employee_id: UUID | None = None,
+        to_department_id: UUID | None = None,
+        reason: str | None = None,
     ) -> VehicleAssignment:
         """Transfer a vehicle to a new employee or department."""
         vehicle = self.db.get(Vehicle, vehicle_id)

@@ -6,22 +6,20 @@ Pydantic schemas for Banking APIs.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.config import settings
 from app.models.finance.banking.bank_account import BankAccountStatus, BankAccountType
-from app.models.finance.banking.bank_statement import (
-    BankStatementStatus,
-    StatementLineType,
-)
 from app.models.finance.banking.bank_reconciliation import (
     ReconciliationMatchType,
     ReconciliationStatus,
 )
-
+from app.models.finance.banking.bank_statement import (
+    BankStatementStatus,
+    StatementLineType,
+)
 
 # =============================================================================
 # Bank Account
@@ -39,17 +37,17 @@ class BankAccountBase(BaseModel):
         default=settings.default_functional_currency_code, max_length=3
     )
     account_type: BankAccountType = BankAccountType.checking
-    bank_code: Optional[str] = Field(default=None, max_length=20)
-    branch_code: Optional[str] = Field(default=None, max_length=20)
-    branch_name: Optional[str] = Field(default=None, max_length=200)
-    iban: Optional[str] = Field(default=None, max_length=50)
-    contact_name: Optional[str] = Field(default=None, max_length=200)
-    contact_phone: Optional[str] = Field(default=None, max_length=50)
-    contact_email: Optional[str] = Field(default=None, max_length=200)
-    notes: Optional[str] = None
+    bank_code: str | None = Field(default=None, max_length=20)
+    branch_code: str | None = Field(default=None, max_length=20)
+    branch_name: str | None = Field(default=None, max_length=200)
+    iban: str | None = Field(default=None, max_length=50)
+    contact_name: str | None = Field(default=None, max_length=200)
+    contact_phone: str | None = Field(default=None, max_length=50)
+    contact_email: str | None = Field(default=None, max_length=200)
+    notes: str | None = None
     is_primary: bool = False
     allow_overdraft: bool = False
-    overdraft_limit: Optional[Decimal] = None
+    overdraft_limit: Decimal | None = None
 
 
 class BankAccountCreate(BankAccountBase):
@@ -61,21 +59,21 @@ class BankAccountCreate(BankAccountBase):
 class BankAccountUpdate(BaseModel):
     """Update bank account request."""
 
-    bank_name: Optional[str] = Field(default=None, max_length=200)
-    account_name: Optional[str] = Field(default=None, max_length=200)
-    gl_account_id: Optional[UUID] = None
-    account_type: Optional[BankAccountType] = None
-    bank_code: Optional[str] = Field(default=None, max_length=20)
-    branch_code: Optional[str] = Field(default=None, max_length=20)
-    branch_name: Optional[str] = Field(default=None, max_length=200)
-    iban: Optional[str] = Field(default=None, max_length=50)
-    contact_name: Optional[str] = Field(default=None, max_length=200)
-    contact_phone: Optional[str] = Field(default=None, max_length=50)
-    contact_email: Optional[str] = Field(default=None, max_length=200)
-    notes: Optional[str] = None
-    is_primary: Optional[bool] = None
-    allow_overdraft: Optional[bool] = None
-    overdraft_limit: Optional[Decimal] = None
+    bank_name: str | None = Field(default=None, max_length=200)
+    account_name: str | None = Field(default=None, max_length=200)
+    gl_account_id: UUID | None = None
+    account_type: BankAccountType | None = None
+    bank_code: str | None = Field(default=None, max_length=20)
+    branch_code: str | None = Field(default=None, max_length=20)
+    branch_name: str | None = Field(default=None, max_length=200)
+    iban: str | None = Field(default=None, max_length=50)
+    contact_name: str | None = Field(default=None, max_length=200)
+    contact_phone: str | None = Field(default=None, max_length=50)
+    contact_email: str | None = Field(default=None, max_length=200)
+    notes: str | None = None
+    is_primary: bool | None = None
+    allow_overdraft: bool | None = None
+    overdraft_limit: Decimal | None = None
 
 
 class BankAccountRead(BankAccountBase):
@@ -86,12 +84,12 @@ class BankAccountRead(BankAccountBase):
     bank_account_id: UUID
     organization_id: UUID
     status: BankAccountStatus
-    last_statement_balance: Optional[Decimal] = None
-    last_statement_date: Optional[datetime] = None
-    last_reconciled_date: Optional[datetime] = None
-    last_reconciled_balance: Optional[Decimal] = None
+    last_statement_balance: Decimal | None = None
+    last_statement_date: datetime | None = None
+    last_reconciled_date: datetime | None = None
+    last_reconciled_balance: Decimal | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class BankAccountStatusUpdate(BaseModel):
@@ -110,19 +108,52 @@ class StatementLineCreate(BaseModel):
 
     line_number: int
     transaction_date: date
-    transaction_type: StatementLineType
-    amount: Decimal = Field(ge=0)
-    description: Optional[str] = Field(default=None, max_length=500)
-    reference: Optional[str] = Field(default=None, max_length=100)
-    payee_payer: Optional[str] = Field(default=None, max_length=200)
-    bank_reference: Optional[str] = Field(default=None, max_length=100)
-    check_number: Optional[str] = Field(default=None, max_length=20)
-    bank_category: Optional[str] = Field(default=None, max_length=100)
-    bank_code: Optional[str] = Field(default=None, max_length=20)
-    value_date: Optional[date] = None
-    running_balance: Optional[Decimal] = None
-    transaction_id: Optional[str] = Field(default=None, max_length=100)
-    raw_data: Optional[Dict] = None
+    transaction_type: StatementLineType | None = None
+    amount: Decimal | None = Field(default=None, ge=0)
+    debit: Decimal | None = Field(default=None, ge=0)
+    credit: Decimal | None = Field(default=None, ge=0)
+    description: str | None = Field(default=None, max_length=500)
+    reference: str | None = Field(default=None, max_length=100)
+    payee_payer: str | None = Field(default=None, max_length=200)
+    bank_reference: str | None = Field(default=None, max_length=100)
+    check_number: str | None = Field(default=None, max_length=20)
+    bank_category: str | None = Field(default=None, max_length=100)
+    bank_code: str | None = Field(default=None, max_length=20)
+    value_date: date | None = None
+    running_balance: Decimal | None = None
+    transaction_id: str | None = Field(default=None, max_length=100)
+    raw_data: dict | None = None
+
+    @model_validator(mode="after")
+    def _validate_amount_fields(self) -> "StatementLineCreate":
+        has_type = self.transaction_type is not None
+        has_amount = self.amount is not None
+        debit_value = self.debit or Decimal("0")
+        credit_value = self.credit or Decimal("0")
+        has_debit = debit_value > 0
+        has_credit = credit_value > 0
+        has_debit_credit = self.debit is not None or self.credit is not None
+
+        if has_type:
+            if not has_amount:
+                raise ValueError("amount is required when transaction_type is provided")
+            if has_debit or has_credit:
+                raise ValueError(
+                    "Provide either transaction_type+amount or debit/credit, not both"
+                )
+            return self
+
+        if has_amount:
+            raise ValueError(
+                "transaction_type is required when amount is provided without debit/credit"
+            )
+
+        if not has_debit_credit or not (has_debit or has_credit):
+            raise ValueError("Provide either transaction_type+amount or debit/credit")
+        if has_debit and has_credit:
+            raise ValueError("Only one of debit or credit can be greater than 0")
+
+        return self
 
 
 class BankStatementImport(BaseModel):
@@ -135,9 +166,9 @@ class BankStatementImport(BaseModel):
     period_end: date
     opening_balance: Decimal
     closing_balance: Decimal
-    lines: List[StatementLineCreate]
-    import_source: Optional[str] = Field(default=None, max_length=50)
-    import_filename: Optional[str] = Field(default=None, max_length=255)
+    lines: list[StatementLineCreate]
+    import_source: str | None = Field(default=None, max_length=50)
+    import_filename: str | None = Field(default=None, max_length=255)
 
 
 class StatementLineRead(BaseModel):
@@ -148,21 +179,21 @@ class StatementLineRead(BaseModel):
     line_id: UUID
     statement_id: UUID
     line_number: int
-    transaction_id: Optional[str] = None
+    transaction_id: str | None = None
     transaction_date: date
-    value_date: Optional[date] = None
+    value_date: date | None = None
     transaction_type: StatementLineType
     amount: Decimal
-    running_balance: Optional[Decimal] = None
-    description: Optional[str] = None
-    reference: Optional[str] = None
-    payee_payer: Optional[str] = None
-    bank_reference: Optional[str] = None
-    check_number: Optional[str] = None
-    bank_category: Optional[str] = None
+    running_balance: Decimal | None = None
+    description: str | None = None
+    reference: str | None = None
+    payee_payer: str | None = None
+    bank_reference: str | None = None
+    check_number: str | None = None
+    bank_category: str | None = None
     is_matched: bool
-    matched_at: Optional[datetime] = None
-    matched_journal_line_id: Optional[UUID] = None
+    matched_at: datetime | None = None
+    matched_journal_line_id: UUID | None = None
     created_at: datetime
 
 
@@ -184,8 +215,8 @@ class BankStatementRead(BaseModel):
     total_debits: Decimal
     currency_code: str
     status: BankStatementStatus
-    import_source: Optional[str] = None
-    import_filename: Optional[str] = None
+    import_source: str | None = None
+    import_filename: str | None = None
     imported_at: datetime
     total_lines: int
     matched_lines: int
@@ -196,7 +227,7 @@ class BankStatementRead(BaseModel):
 class BankStatementWithLines(BankStatementRead):
     """Bank statement with lines response."""
 
-    lines: List[StatementLineRead] = []
+    lines: list[StatementLineRead] = []
 
 
 class StatementImportResult(BaseModel):
@@ -205,8 +236,8 @@ class StatementImportResult(BaseModel):
     statement: BankStatementRead
     lines_imported: int
     lines_skipped: int
-    errors: List[str] = []
-    warnings: List[str] = []
+    errors: list[str] = []
+    warnings: list[str] = []
 
 
 class StatementSummary(BaseModel):
@@ -233,7 +264,7 @@ class ReconciliationCreate(BaseModel):
     period_end: date
     statement_opening_balance: Decimal
     statement_closing_balance: Decimal
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class ReconciliationMatchCreate(BaseModel):
@@ -242,7 +273,7 @@ class ReconciliationMatchCreate(BaseModel):
     statement_line_id: UUID
     journal_line_id: UUID
     match_type: ReconciliationMatchType = ReconciliationMatchType.manual
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class ReconciliationAdjustmentCreate(BaseModel):
@@ -252,7 +283,7 @@ class ReconciliationAdjustmentCreate(BaseModel):
     amount: Decimal
     description: str = Field(max_length=500)
     adjustment_type: str = Field(max_length=50)
-    adjustment_account_id: Optional[UUID] = None
+    adjustment_account_id: UUID | None = None
 
 
 class ReconciliationOutstandingCreate(BaseModel):
@@ -262,8 +293,8 @@ class ReconciliationOutstandingCreate(BaseModel):
     amount: Decimal = Field(ge=0)
     description: str = Field(max_length=500)
     outstanding_type: str = Field(pattern="^(deposit|payment)$")
-    reference: Optional[str] = Field(default=None, max_length=100)
-    journal_line_id: Optional[UUID] = None
+    reference: str | None = Field(default=None, max_length=100)
+    journal_line_id: UUID | None = None
 
 
 class ReconciliationLineRead(BaseModel):
@@ -274,21 +305,21 @@ class ReconciliationLineRead(BaseModel):
     line_id: UUID
     reconciliation_id: UUID
     match_type: ReconciliationMatchType
-    statement_line_id: Optional[UUID] = None
-    journal_line_id: Optional[UUID] = None
+    statement_line_id: UUID | None = None
+    journal_line_id: UUID | None = None
     transaction_date: date
-    description: Optional[str] = None
-    reference: Optional[str] = None
-    statement_amount: Optional[Decimal] = None
-    gl_amount: Optional[Decimal] = None
-    difference: Optional[Decimal] = None
+    description: str | None = None
+    reference: str | None = None
+    statement_amount: Decimal | None = None
+    gl_amount: Decimal | None = None
+    difference: Decimal | None = None
     is_adjustment: bool
-    adjustment_type: Optional[str] = None
+    adjustment_type: str | None = None
     is_outstanding: bool
-    outstanding_type: Optional[str] = None
-    match_confidence: Optional[Decimal] = None
+    outstanding_type: str | None = None
+    match_confidence: Decimal | None = None
     is_cleared: bool
-    notes: Optional[str] = None
+    notes: str | None = None
     created_at: datetime
 
 
@@ -318,22 +349,22 @@ class BankReconciliationRead(BaseModel):
     outstanding_payments: Decimal
     currency_code: str
     status: ReconciliationStatus
-    prepared_by: Optional[UUID] = None
-    prepared_at: Optional[datetime] = None
-    reviewed_by: Optional[UUID] = None
-    reviewed_at: Optional[datetime] = None
-    approved_by: Optional[UUID] = None
-    approved_at: Optional[datetime] = None
-    notes: Optional[str] = None
-    review_notes: Optional[str] = None
+    prepared_by: UUID | None = None
+    prepared_at: datetime | None = None
+    reviewed_by: UUID | None = None
+    reviewed_at: datetime | None = None
+    approved_by: UUID | None = None
+    approved_at: datetime | None = None
+    notes: str | None = None
+    review_notes: str | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class BankReconciliationWithLines(BankReconciliationRead):
     """Bank reconciliation with lines response."""
 
-    lines: List[ReconciliationLineRead] = []
+    lines: list[ReconciliationLineRead] = []
 
 
 class AutoMatchRequest(BaseModel):
@@ -349,13 +380,13 @@ class AutoMatchResult(BaseModel):
     matches_created: int
     unmatched_statement_lines: int
     unmatched_gl_lines: int
-    match_details: List[Dict] = []
+    match_details: list[dict] = []
 
 
 class ReconciliationApproval(BaseModel):
     """Reconciliation approval request."""
 
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class ReconciliationRejection(BaseModel):
@@ -379,7 +410,7 @@ class ReconciliationReportSection(BaseModel):
 
     count: int
     total: Decimal
-    items: List[ReconciliationLineRead] = []
+    items: list[ReconciliationLineRead] = []
 
 
 class ReconciliationReport(BaseModel):

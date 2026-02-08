@@ -4,15 +4,12 @@ Banking Web Routes.
 HTML template routes for Bank Accounts, Statements, and Reconciliations.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.banking.web import banking_web_service
-from app.web.deps import get_db, require_finance_access, WebAuthContext
-
+from app.web.deps import WebAuthContext, get_db, require_finance_access
 
 router = APIRouter(prefix="/banking", tags=["banking-web"])
 
@@ -20,8 +17,8 @@ router = APIRouter(prefix="/banking", tags=["banking-web"])
 @router.get("/accounts", response_class=HTMLResponse)
 def list_bank_accounts(
     request: Request,
-    search: Optional[str] = None,
-    status: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -67,10 +64,10 @@ def edit_bank_account_form(
 @router.get("/statements", response_class=HTMLResponse)
 def list_statements(
     request: Request,
-    account_id: Optional[str] = None,
-    status: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    account_id: str | None = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -98,35 +95,35 @@ def import_statement_form(
     return banking_web_service.statement_import_form_response(request, auth, db)
 
 
+@router.post("/statements/import", response_class=HTMLResponse)
+async def import_statement_submit(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Handle bank statement import submission."""
+    return await banking_web_service.statement_import_submit_response(request, auth, db)
+
+
 @router.get("/statements/sample-csv")
 def download_sample_csv(
     _auth: WebAuthContext = Depends(require_finance_access),
+    format: str = Query(default="type"),
 ):
     """Download a sample CSV template for bank statement import."""
-    import io
+    from io import BytesIO
 
     from fastapi.responses import StreamingResponse
 
-    header = (
-        "transaction_date,transaction_type,amount,description,"
-        "reference,payee_payer,check_number,value_date,running_balance\n"
-    )
-    rows = [
-        "2026-01-15,credit,50000.00,Salary deposit from ABC Corp,TRF-001,ABC Corp Ltd,,2026-01-15,50000.00\n",
-        "2026-01-16,debit,2500.00,Office rent payment,CHQ-4521,Landlord Properties,4521,2026-01-16,47500.00\n",
-        "2026-01-17,debit,150.75,ATM withdrawal - Lekki,ATM-889,,,,47349.25\n",
-        "2026-01-18,credit,12000.00,Customer payment - Invoice INV-0042,TRF-002,XYZ Trading,,2026-01-18,59349.25\n",
-        "2026-01-20,debit,8500.00,Vendor payment - PO-0015,TRF-003,Office Supplies Ltd,,2026-01-20,50849.25\n",
-    ]
-    content = header + "".join(rows)
-    buf = io.BytesIO(content.encode("utf-8"))
+    from app.services.finance.banking import bank_statement_service
+
+    content, filename = bank_statement_service.build_sample_csv(format)
+    buf = BytesIO(content)
 
     return StreamingResponse(
         buf,
         media_type="text/csv",
-        headers={
-            "Content-Disposition": 'attachment; filename="bank_statement_sample.csv"'
-        },
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -143,13 +140,55 @@ def view_statement(
     )
 
 
+@router.post("/statements/{statement_id}/apply-rules")
+async def apply_rules(
+    request: Request,
+    statement_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Apply categorization rules to statement lines."""
+    await request.form()  # consume form body for CSRF validation
+    return banking_web_service.apply_rules_response(request, auth, db, statement_id)
+
+
+@router.post("/statements/{statement_id}/lines/{line_id}/accept")
+async def accept_suggestion(
+    request: Request,
+    statement_id: str,
+    line_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Accept a categorization suggestion for a statement line."""
+    await request.form()  # consume form body for CSRF validation
+    return banking_web_service.accept_suggestion_response(
+        request, auth, db, statement_id, line_id
+    )
+
+
+@router.post("/statements/{statement_id}/lines/{line_id}/reject")
+async def reject_suggestion(
+    request: Request,
+    statement_id: str,
+    line_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Reject a categorization suggestion for a statement line."""
+    await request.form()  # consume form body for CSRF validation
+    return banking_web_service.reject_suggestion_response(
+        request, auth, db, statement_id, line_id
+    )
+
+
 @router.get("/reconciliations", response_class=HTMLResponse)
 def list_reconciliations(
     request: Request,
-    account_id: Optional[str] = None,
-    status: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    account_id: str | None = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -170,7 +209,7 @@ def list_reconciliations(
 @router.get("/reconciliations/new", response_class=HTMLResponse)
 def new_reconciliation_form(
     request: Request,
-    account_id: Optional[str] = None,
+    account_id: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -212,8 +251,8 @@ def reconciliation_report(
 @router.get("/payees", response_class=HTMLResponse)
 def list_payees(
     request: Request,
-    search: Optional[str] = None,
-    payee_type: Optional[str] = None,
+    search: str | None = None,
+    payee_type: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -248,7 +287,7 @@ def view_payee(
 @router.get("/rules", response_class=HTMLResponse)
 def list_transaction_rules(
     request: Request,
-    rule_type: Optional[str] = None,
+    rule_type: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -267,6 +306,18 @@ def new_rule_form(
     return banking_web_service.rule_new_form_response(request, auth, db)
 
 
+@router.post("/rules/new")
+async def create_rule(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Create a new transaction rule."""
+    form = await request.form()
+    form_data = dict(form)
+    return banking_web_service.create_rule_response(request, auth, db, form_data)
+
+
 @router.get("/rules/{rule_id}", response_class=HTMLResponse)
 def view_rule(
     request: Request,
@@ -276,3 +327,18 @@ def view_rule(
 ):
     """Transaction rule detail/edit page."""
     return banking_web_service.rule_detail_response(request, auth, db, rule_id)
+
+
+@router.post("/rules/{rule_id}/edit")
+async def update_rule(
+    request: Request,
+    rule_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Update an existing transaction rule."""
+    form = await request.form()
+    form_data = dict(form)
+    return banking_web_service.update_rule_response(
+        request, auth, db, rule_id, form_data
+    )

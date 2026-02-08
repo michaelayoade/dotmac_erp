@@ -1,4 +1,5 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import status_badge, empty_state %}
 {% from "components/macros.html" import stats_card, empty_state, progress_bar, section_card %}
 
 {% block page_title %}Expense summary{% endblock %}
@@ -66,7 +67,7 @@
             </div>
             <!-- Quick Stats -->
             <div class="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
-                <div class="grid grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <p class="text-xs text-slate-500 dark:text-slate-400">Categories</p>
                         <p class="text-lg font-semibold text-slate-900 dark:text-white">{{ expense_items|length }}</p>
@@ -131,7 +132,7 @@
                 <span class="text-xs text-slate-500 dark:text-slate-400">{{ expense_items|length }} account{{ 's' if expense_items|length != 1 else '' }}</span>
             </div>
             {% if expense_items %}
-            <div class="overflow-x-auto">
+            <div class="table-container">
                 <table class="w-full text-sm">
                     <thead>
                         <tr class="border-b-2 border-slate-200 dark:border-slate-700">
@@ -149,9 +150,7 @@
                             <td class="py-3 px-3 font-mono text-xs text-slate-500 dark:text-slate-400">{{ expense.account_code }}</td>
                             <td class="py-3 px-3 text-slate-900 dark:text-white font-medium">{{ expense.account_name }}</td>
                             <td class="py-3 px-3">
-                                <span class="inline-flex px-2 py-0.5 text-xs rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                                    {{ expense.category }}
-                                </span>
+                                {{ status_badge(expense.category, size="sm") }}
                             </td>
                             <td class="py-3 px-3 text-right font-mono text-slate-900 dark:text-white">{{ expense.amount }}</td>
                             <td class="py-3 px-3">
@@ -162,6 +161,12 @@
                                     </div>
                                     <span class="text-xs font-mono text-slate-500 dark:text-slate-400 w-10 text-right">{{ "%.1f"|format(percentage) }}%</span>
                                 </div>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="99" class="p-0">
+                                {{ empty_state("No expense_items found", "There are no expense_items to display.") }}
                             </td>
                         </tr>
                         {% endfor %}

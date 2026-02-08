@@ -4,16 +4,13 @@ FA (Fixed Assets) Web Routes.
 HTML template routes for Assets and Depreciation.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.fixed_assets.web import fa_web_service
 from app.templates import templates
-from app.web.deps import get_db, require_finance_access, WebAuthContext, base_context
-
+from app.web.deps import WebAuthContext, base_context, get_db, require_finance_access
 
 router = APIRouter(prefix="/fixed-assets", tags=["fa-web"])
 
@@ -27,9 +24,9 @@ router = APIRouter(prefix="/fixed-assets", tags=["fa-web"])
 def list_assets(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    search: Optional[str] = None,
-    category: Optional[str] = None,
-    status: Optional[str] = None,
+    search: str | None = None,
+    category: str | None = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -66,8 +63,8 @@ def create_asset(
     category_id: str = Form(...),
     acquisition_date: str = Form(...),
     acquisition_cost: str = Form(...),
-    currency_code: Optional[str] = Form(default=None),
-    description: Optional[str] = Form(default=None),
+    currency_code: str | None = Form(default=None),
+    description: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """Create a new fixed asset."""
@@ -82,6 +79,23 @@ def create_asset(
         description,
         db,
     )
+
+
+@router.get("/assets/export")
+async def export_all_assets(
+    request: Request,
+    search: str = "",
+    status: str = "",
+    category: str = "",
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Export all assets matching filters to CSV."""
+    from app.services.fixed_assets.bulk import get_asset_bulk_service
+
+    service = get_asset_bulk_service(db, auth.organization_id, auth.user_id)
+    extra = {"category_id": category} if category else None
+    return await service.export_all(search=search, status=status, extra_filters=extra)
 
 
 @router.get("/assets/{asset_id}", response_class=HTMLResponse)
@@ -196,7 +210,7 @@ async def bulk_export_assets(
 def list_categories(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    is_active: Optional[str] = None,
+    is_active: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -277,8 +291,8 @@ def toggle_category(
 def depreciation_schedule(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    asset_id: Optional[str] = None,
-    period: Optional[str] = None,
+    asset_id: str | None = None,
+    period: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Depreciation schedule page."""

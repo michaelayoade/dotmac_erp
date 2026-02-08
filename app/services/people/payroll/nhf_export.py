@@ -12,7 +12,6 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -59,7 +58,7 @@ class NHFExportService:
         organization_id: UUID,
         year: int,
         month: int,
-        entry_id: Optional[UUID] = None,
+        entry_id: UUID | None = None,
     ) -> NHFExportResult:
         """
         Generate NHF export for a period.
@@ -81,7 +80,7 @@ class NHFExportService:
         organization_id: UUID,
         year: int,
         month: int,
-        entry_id: Optional[UUID] = None,
+        entry_id: UUID | None = None,
     ) -> list[SalarySlip]:
         """Get salary slips for the period."""
         start_date = date(year, month, 1)

@@ -5,7 +5,7 @@ Payroll Web Service - Base utilities and common functions.
 from __future__ import annotations
 
 import logging
-from typing import Optional, cast
+from typing import cast
 from uuid import UUID
 
 from app.models.people.payroll.payroll_entry import PayrollEntryStatus
@@ -24,17 +24,17 @@ logger = logging.getLogger(__name__)
 DEFAULT_PAGE_SIZE = 20
 
 
-def parse_uuid(value: Optional[str]) -> Optional[UUID]:
+def parse_uuid(value: str | None) -> UUID | None:
     """Parse a string to UUID, returning None on failure."""
     if not value:
         return None
     try:
-        return cast(Optional[UUID], coerce_uuid(value))
+        return cast(UUID | None, coerce_uuid(value))
     except Exception:
         return None
 
 
-def parse_component_type(value: Optional[str]) -> Optional[SalaryComponentType]:
+def parse_component_type(value: str | None) -> SalaryComponentType | None:
     """Parse component type string to enum."""
     if not value:
         return None
@@ -44,7 +44,7 @@ def parse_component_type(value: Optional[str]) -> Optional[SalaryComponentType]:
         return None
 
 
-def parse_slip_status(value: Optional[str]) -> Optional[SalarySlipStatus]:
+def parse_slip_status(value: str | None) -> SalarySlipStatus | None:
     """Parse slip status string to enum."""
     if not value:
         return None
@@ -54,7 +54,7 @@ def parse_slip_status(value: Optional[str]) -> Optional[SalarySlipStatus]:
         return None
 
 
-def parse_payroll_frequency(value: Optional[str]) -> Optional[PayrollFrequency]:
+def parse_payroll_frequency(value: str | None) -> PayrollFrequency | None:
     """Parse payroll frequency string to enum."""
     if not value:
         return None
@@ -64,7 +64,7 @@ def parse_payroll_frequency(value: Optional[str]) -> Optional[PayrollFrequency]:
         return None
 
 
-def parse_entry_status(value: Optional[str]) -> Optional[PayrollEntryStatus]:
+def parse_entry_status(value: str | None) -> PayrollEntryStatus | None:
     """Parse payroll entry status string to enum."""
     if not value:
         return None

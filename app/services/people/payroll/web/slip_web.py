@@ -9,7 +9,7 @@ import io
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import quote
 
 from fastapi import Request
@@ -59,8 +59,8 @@ class SlipWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
-        status: Optional[str] = None,
+        search: str | None = None,
+        status: str | None = None,
         page: int = 1,
     ) -> HTMLResponse | RedirectResponse:
         """Render salary slips list page."""
@@ -122,8 +122,8 @@ class SlipWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
-        status: Optional[str] = None,
+        search: str | None = None,
+        status: str | None = None,
     ) -> Response:
         """Export salary slips to CSV."""
         org_id = coerce_uuid(auth.organization_id)
@@ -678,7 +678,7 @@ class SlipWebService:
         auth: WebAuthContext,
         db: Session,
         slip_id: str,
-        posting_date: Optional[str] = None,
+        posting_date: str | None = None,
     ) -> RedirectResponse:
         """Post salary slip to GL."""
         org_id = coerce_uuid(auth.organization_id)

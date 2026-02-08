@@ -25,6 +25,7 @@ from app.services.finance.banking.bank_reconciliation import (
 def _make_reconciliation(status=ReconciliationStatus.draft):
     recon = SimpleNamespace(
         reconciliation_id=uuid4(),
+        organization_id=uuid4(),
         bank_account_id=uuid4(),
         status=status,
         total_matched=Decimal("0"),
@@ -162,12 +163,14 @@ def test_add_match_happy_path():
         matched_by=None,
         matched_journal_line_id=None,
     )
+    stmt_line.statement = SimpleNamespace(organization_id=recon.organization_id)
     gl_line = SimpleNamespace(
         line_id=uuid4(),
         debit_amount=Decimal("50.00"),
         credit_amount=Decimal("0"),
         description="Payment REF",
     )
+    gl_line.journal_entry = SimpleNamespace(organization_id=recon.organization_id)
 
     db.get.side_effect = [recon, stmt_line, gl_line]
 
@@ -176,7 +179,13 @@ def test_add_match_happy_path():
         journal_line_id=gl_line.line_id,
         match_type=ReconciliationMatchType.manual,
     )
-    line = svc.add_match(db, recon.reconciliation_id, input_data, created_by=uuid4())
+    line = svc.add_match(
+        db,
+        recon.organization_id,
+        recon.reconciliation_id,
+        input_data,
+        created_by=uuid4(),
+    )
 
     assert isinstance(line, BankReconciliationLine)
     assert stmt_line.is_matched is True
@@ -191,6 +200,7 @@ def test_add_match_invalid_status():
     with pytest.raises(HTTPException) as excinfo:
         svc.add_match(
             db,
+            recon.organization_id,
             recon.reconciliation_id,
             ReconciliationMatchInput(
                 statement_line_id=uuid4(), journal_line_id=uuid4()
@@ -207,6 +217,7 @@ def test_add_adjustment_and_outstanding_items():
 
     adj = svc.add_adjustment(
         db,
+        recon.organization_id,
         recon.reconciliation_id,
         transaction_date=date(2024, 1, 5),
         amount=Decimal("20.00"),
@@ -218,6 +229,7 @@ def test_add_adjustment_and_outstanding_items():
 
     dep = svc.add_outstanding_item(
         db,
+        recon.organization_id,
         recon.reconciliation_id,
         transaction_date=date(2024, 1, 6),
         amount=Decimal("30.00"),
@@ -229,6 +241,7 @@ def test_add_adjustment_and_outstanding_items():
 
     pay = svc.add_outstanding_item(
         db,
+        recon.organization_id,
         recon.reconciliation_id,
         transaction_date=date(2024, 1, 7),
         amount=Decimal("15.00"),
@@ -308,7 +321,9 @@ def test_auto_match_exact_and_fuzzy():
 
     db.get.side_effect = _get
 
-    result = svc.auto_match(db, recon.reconciliation_id, tolerance=Decimal("0.02"))
+    result = svc.auto_match(
+        db, recon.organization_id, recon.reconciliation_id, tolerance=Decimal("0.02")
+    )
     assert result.matches_found == 2
     assert result.matches_created == 2
     assert result.unmatched_statement_lines == 0
@@ -357,16 +372,26 @@ def test_submit_approve_reject():
     )
     db.get.return_value = recon
 
-    submitted = svc.submit_for_review(db, recon.reconciliation_id)
+    submitted = svc.submit_for_review(
+        db, recon.organization_id, recon.reconciliation_id
+    )
     assert submitted.status == ReconciliationStatus.pending_review
 
     recon.status = ReconciliationStatus.pending_review
-    approved = svc.approve(db, recon.reconciliation_id, approved_by=uuid4())
+    approved = svc.approve(
+        db, recon.organization_id, recon.reconciliation_id, approved_by=uuid4()
+    )
     assert approved.status == ReconciliationStatus.approved
     assert approved.bank_account.last_reconciled_balance == Decimal("150.00")
 
     recon.status = ReconciliationStatus.pending_review
-    rejected = svc.reject(db, recon.reconciliation_id, rejected_by=uuid4(), notes="Fix")
+    rejected = svc.reject(
+        db,
+        recon.organization_id,
+        recon.reconciliation_id,
+        rejected_by=uuid4(),
+        notes="Fix",
+    )
     assert rejected.status == ReconciliationStatus.rejected
 
 

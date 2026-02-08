@@ -4,7 +4,6 @@ Employee Lifecycle API Router.
 Onboarding, separation, promotions, and transfers.
 """
 
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -15,21 +14,21 @@ from app.db import SessionLocal
 from app.models.people.hr.lifecycle import BoardingStatus
 from app.schemas.people.lifecycle import (
     OnboardingCreate,
+    OnboardingListResponse,
     OnboardingRead,
     OnboardingUpdate,
-    OnboardingListResponse,
-    SeparationCreate,
-    SeparationRead,
-    SeparationUpdate,
-    SeparationListResponse,
     PromotionCreate,
+    PromotionListResponse,
     PromotionRead,
     PromotionUpdate,
-    PromotionListResponse,
+    SeparationCreate,
+    SeparationListResponse,
+    SeparationRead,
+    SeparationUpdate,
     TransferCreate,
+    TransferListResponse,
     TransferRead,
     TransferUpdate,
-    TransferListResponse,
 )
 from app.services.common import PaginationParams
 from app.services.people.hr.lifecycle import LifecycleService
@@ -49,7 +48,7 @@ def get_db():
         db.close()
 
 
-def parse_enum(value: Optional[str], enum_type, field_name: str):
+def parse_enum(value: str | None, enum_type, field_name: str):
     if value is None:
         return None
     try:
@@ -68,8 +67,8 @@ def parse_enum(value: Optional[str], enum_type, field_name: str):
 @router.get("/onboardings", response_model=OnboardingListResponse)
 def list_onboardings(
     organization_id: UUID = Depends(require_organization_id),
-    employee_id: Optional[UUID] = None,
-    status: Optional[str] = None,
+    employee_id: UUID | None = None,
+    status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -175,8 +174,8 @@ def complete_onboarding(
 @router.get("/separations", response_model=SeparationListResponse)
 def list_separations(
     organization_id: UUID = Depends(require_organization_id),
-    employee_id: Optional[UUID] = None,
-    status: Optional[str] = None,
+    employee_id: UUID | None = None,
+    status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -284,7 +283,7 @@ def complete_separation(
 @router.get("/promotions", response_model=PromotionListResponse)
 def list_promotions(
     organization_id: UUID = Depends(require_organization_id),
-    employee_id: Optional[UUID] = None,
+    employee_id: UUID | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -359,7 +358,7 @@ def update_promotion(
 @router.get("/transfers", response_model=TransferListResponse)
 def list_transfers(
     organization_id: UUID = Depends(require_organization_id),
-    employee_id: Optional[UUID] = None,
+    employee_id: UUID | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),

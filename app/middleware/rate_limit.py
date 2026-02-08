@@ -11,13 +11,15 @@ import logging
 import os
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import Callable
 
 from fastapi import HTTPException, Request, status
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import JSONResponse, Response
+
+from app.net import get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -282,31 +284,11 @@ DEFAULT_RATE_LIMITS: dict[str, RateLimitConfig] = {
 # completed once per token, providing natural rate limiting.
 
 
-def _get_client_ip(request: Request) -> str:
-    """Extract client IP from request, considering proxies."""
-    # Check X-Forwarded-For header (set by reverse proxies)
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        # Take the first IP (original client)
-        return forwarded_for.split(",")[0].strip()
-
-    # Check X-Real-IP header (nginx)
-    real_ip = request.headers.get("x-real-ip")
-    if real_ip:
-        return real_ip.strip()
-
-    # Fall back to direct client IP
-    if request.client:
-        return request.client.host
-
-    return "unknown"
-
-
 def _make_rate_limit_key(request: Request, config: RateLimitConfig) -> str:
     """Generate a rate limit key for the request."""
     if config.key_func:
         return config.key_func(request)
-    return f"{_get_client_ip(request)}:{request.url.path}"
+    return f"{get_client_ip(request)}:{request.url.path}"
 
 
 async def rate_limit_middleware(
@@ -384,7 +366,7 @@ def check_rate_limit(
         HTTPException: With 429 status if rate limited
     """
     limiter = get_rate_limiter()
-    base_key = f"{_get_client_ip(request)}:{request.url.path}"
+    base_key = f"{get_client_ip(request)}:{request.url.path}"
     key = f"{base_key}:{key_suffix}" if key_suffix else base_key
 
     is_limited, remaining, retry_after = limiter.is_rate_limited(

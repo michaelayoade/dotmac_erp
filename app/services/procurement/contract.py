@@ -5,7 +5,6 @@ Business logic for procurement contract management.
 """
 
 import logging
-from typing import List, Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -29,7 +28,7 @@ class ContractService:
         self,
         organization_id: UUID,
         contract_id: UUID,
-    ) -> Optional[ProcurementContract]:
+    ) -> ProcurementContract | None:
         """Get a contract by ID."""
         stmt = select(ProcurementContract).where(
             ProcurementContract.organization_id == organization_id,
@@ -41,10 +40,11 @@ class ContractService:
         self,
         organization_id: UUID,
         *,
-        status: Optional[str] = None,
+        status: str | None = None,
+        search: str | None = None,
         offset: int = 0,
         limit: int = 25,
-    ) -> Tuple[List[ProcurementContract], int]:
+    ) -> tuple[list[ProcurementContract], int]:
         """List contracts with filters."""
         base = select(ProcurementContract).where(
             ProcurementContract.organization_id == organization_id,
@@ -58,6 +58,16 @@ class ContractService:
                 base = base.where(
                     ProcurementContract.status == status_enum,
                 )
+        if search:
+            from sqlalchemy import or_
+
+            term = f"%{search}%"
+            base = base.where(
+                or_(
+                    ProcurementContract.contract_number.ilike(term),
+                    ProcurementContract.title.ilike(term),
+                )
+            )
 
         total = self.db.scalar(select(func.count()).select_from(base.subquery()))
         items = list(
@@ -126,12 +136,12 @@ class ContractService:
         organization_id: UUID,
         contract_id: UUID,
         *,
-        user_id: Optional[UUID] = None,
-        fund_id: Optional[UUID] = None,
-        account_id: Optional[UUID] = None,
-        fiscal_year_id: Optional[UUID] = None,
-        fiscal_period_id: Optional[UUID] = None,
-        appropriation_id: Optional[UUID] = None,
+        user_id: UUID | None = None,
+        fund_id: UUID | None = None,
+        account_id: UUID | None = None,
+        fiscal_year_id: UUID | None = None,
+        fiscal_period_id: UUID | None = None,
+        appropriation_id: UUID | None = None,
     ) -> ProcurementContract:
         """Activate a contract.
 
@@ -180,7 +190,7 @@ class ContractService:
         account_id: UUID,
         fiscal_year_id: UUID,
         fiscal_period_id: UUID,
-        appropriation_id: Optional[UUID] = None,
+        appropriation_id: UUID | None = None,
     ) -> None:
         """Create an IPSAS commitment if the org has commitment control enabled."""
         from app.models.finance.core_org.organization import Organization

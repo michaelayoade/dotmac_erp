@@ -23,6 +23,7 @@
         </div>
         {% if application.status.value in ["DRAFT", "SUBMITTED", "APPROVED"] %}
         <form method="post" action="/people/self/leave/{{ application.application_id }}/cancel">
+            {{ request.state.csrf_form | safe }}
             <button type="submit" class="btn btn-secondary">Cancel Application</button>
         </form>
         {% endif %}

@@ -4,16 +4,14 @@ AP (Accounts Payable) Web Routes.
 HTML template routes for Suppliers, Invoices, and Payments.
 """
 
-from typing import Optional
+import logging
 
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.ap.web import ap_web_service
-from app.web.deps import get_db, require_finance_access, WebAuthContext
-
-import logging
+from app.web.deps import WebAuthContext, get_db, require_finance_access
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +22,8 @@ router = APIRouter(prefix="/ap", tags=["ap-web"])
 def list_suppliers(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    search: Optional[str] = None,
-    status: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, ge=10, le=500),
     db: Session = Depends(get_db),
@@ -50,6 +48,18 @@ def new_supplier_form(
 ):
     """New supplier form page."""
     return ap_web_service.supplier_new_form_response(request, auth, db)
+
+
+@router.get("/suppliers/export")
+async def export_all_suppliers(
+    request: Request,
+    search: str = "",
+    status: str = "",
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Export all suppliers matching filters to CSV."""
+    return await ap_web_service.export_all_suppliers_response(auth, db, search, status)
 
 
 @router.get("/suppliers/{supplier_id}", response_class=HTMLResponse)
@@ -155,11 +165,11 @@ async def bulk_deactivate_suppliers(
 def list_invoices(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    search: Optional[str] = None,
-    supplier_id: Optional[str] = None,
-    status: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    search: str | None = None,
+    supplier_id: str | None = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -180,8 +190,8 @@ def list_invoices(
 @router.get("/invoices/new", response_class=HTMLResponse)
 def new_invoice_form(
     request: Request,
-    supplier_id: Optional[str] = None,
-    po_id: Optional[str] = None,
+    supplier_id: str | None = None,
+    po_id: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -199,6 +209,23 @@ async def create_invoice(
 ):
     """Handle AP invoice form submission."""
     return await ap_web_service.create_invoice_response(request, auth, db)
+
+
+@router.get("/invoices/export")
+async def export_all_ap_invoices(
+    request: Request,
+    search: str = "",
+    status: str = "",
+    supplier_id: str = "",
+    start_date: str = "",
+    end_date: str = "",
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Export all AP invoices matching filters to CSV."""
+    return await ap_web_service.export_all_invoices_response(
+        auth, db, search, status, start_date, end_date, supplier_id
+    )
 
 
 @router.get("/invoices/{invoice_id}", response_class=HTMLResponse)
@@ -338,11 +365,11 @@ async def bulk_post_invoices(
 def list_payments(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    search: Optional[str] = None,
-    supplier_id: Optional[str] = None,
-    status: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    search: str | None = None,
+    supplier_id: str | None = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -368,6 +395,23 @@ def new_payment_form(
 ):
     """New AP payment form page."""
     return ap_web_service.payment_new_form_response(request, auth, db)
+
+
+@router.get("/payments/export")
+async def export_all_ap_payments(
+    request: Request,
+    search: str = "",
+    status: str = "",
+    supplier_id: str = "",
+    start_date: str = "",
+    end_date: str = "",
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Export all AP payments matching filters to CSV."""
+    return await ap_web_service.export_all_payments_response(
+        auth, db, search, status, start_date, end_date, supplier_id
+    )
 
 
 @router.get("/payments/{payment_id}", response_class=HTMLResponse)
@@ -486,7 +530,7 @@ async def bulk_export_payments(
 def list_payment_batches(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    status: Optional[str] = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -508,11 +552,11 @@ def new_payment_batch_form(
 def list_purchase_orders(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    search: Optional[str] = None,
-    supplier_id: Optional[str] = None,
-    status: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    search: str | None = None,
+    supplier_id: str | None = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -609,12 +653,12 @@ def cancel_purchase_order(
 def list_goods_receipts(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    search: Optional[str] = None,
-    supplier_id: Optional[str] = None,
-    po_id: Optional[str] = None,
-    status: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    search: str | None = None,
+    supplier_id: str | None = None,
+    po_id: str | None = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     page: int = Query(default=1, ge=1),
     db: Session = Depends(get_db),
 ):
@@ -637,7 +681,7 @@ def list_goods_receipts(
 def new_goods_receipt_form(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    po_id: Optional[str] = None,
+    po_id: str | None = None,
     db: Session = Depends(get_db),
 ):
     """New goods receipt form page."""
@@ -691,8 +735,8 @@ def accept_all(
 def aging_report(
     request: Request,
     auth: WebAuthContext = Depends(require_finance_access),
-    as_of_date: Optional[str] = None,
-    supplier_id: Optional[str] = None,
+    as_of_date: str | None = None,
+    supplier_id: str | None = None,
     db: Session = Depends(get_db),
 ):
     """AP aging report page."""
@@ -705,7 +749,7 @@ def aging_report(
 async def upload_invoice_attachment(
     invoice_id: str,
     file: UploadFile = File(...),
-    description: Optional[str] = None,
+    description: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -723,7 +767,7 @@ async def upload_invoice_attachment(
 async def upload_po_attachment(
     po_id: str,
     file: UploadFile = File(...),
-    description: Optional[str] = None,
+    description: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -741,7 +785,7 @@ async def upload_po_attachment(
 async def upload_goods_receipt_attachment(
     receipt_id: str,
     file: UploadFile = File(...),
-    description: Optional[str] = None,
+    description: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -759,7 +803,7 @@ async def upload_goods_receipt_attachment(
 async def upload_payment_attachment(
     payment_id: str,
     file: UploadFile = File(...),
-    description: Optional[str] = None,
+    description: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -777,7 +821,7 @@ async def upload_payment_attachment(
 async def upload_supplier_attachment(
     supplier_id: str,
     file: UploadFile = File(...),
-    description: Optional[str] = None,
+    description: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):

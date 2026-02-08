@@ -9,18 +9,18 @@ Tests cover:
 - Getter and list methods
 """
 
-import pytest
 from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+import pytest
 from fastapi import HTTPException
 
 from app.services.finance.ap.purchase_order import (
-    PurchaseOrderService,
-    PurchaseOrderInput,
     POLineInput,
+    PurchaseOrderInput,
+    PurchaseOrderService,
 )
 
 
@@ -294,7 +294,7 @@ class TestCreatePO:
             lines=lines,
         )
 
-        result = PurchaseOrderService.create_po(db, org_id, input_data, user_id)
+        PurchaseOrderService.create_po(db, org_id, input_data, user_id)
 
         # Subtotal: 500 + 250 = 750
         # Tax: 50 + 25 = 75

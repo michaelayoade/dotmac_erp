@@ -6,13 +6,11 @@ Schemas for PM Task API endpoints.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.pm import TaskPriority, TaskStatus
-
 
 # =============================================================================
 # Task Schemas
@@ -24,14 +22,14 @@ class TaskBase(BaseModel):
 
     task_code: str = Field(max_length=30)
     task_name: str = Field(max_length=200)
-    description: Optional[str] = None
+    description: str | None = None
     project_id: UUID
-    parent_task_id: Optional[UUID] = None
+    parent_task_id: UUID | None = None
     priority: TaskPriority = TaskPriority.MEDIUM
-    assigned_to_id: Optional[UUID] = None
-    start_date: Optional[date] = None
-    due_date: Optional[date] = None
-    estimated_hours: Optional[Decimal] = None
+    assigned_to_id: UUID | None = None
+    start_date: date | None = None
+    due_date: date | None = None
+    estimated_hours: Decimal | None = None
 
 
 class TaskCreate(TaskBase):
@@ -43,18 +41,18 @@ class TaskCreate(TaskBase):
 class TaskUpdate(BaseModel):
     """Update task request."""
 
-    task_code: Optional[str] = Field(default=None, max_length=30)
-    task_name: Optional[str] = Field(default=None, max_length=200)
-    description: Optional[str] = None
-    parent_task_id: Optional[UUID] = None
-    priority: Optional[TaskPriority] = None
-    status: Optional[TaskStatus] = None
-    assigned_to_id: Optional[UUID] = None
-    start_date: Optional[date] = None
-    due_date: Optional[date] = None
-    estimated_hours: Optional[Decimal] = None
-    actual_hours: Optional[Decimal] = None
-    progress_percent: Optional[int] = Field(default=None, ge=0, le=100)
+    task_code: str | None = Field(default=None, max_length=30)
+    task_name: str | None = Field(default=None, max_length=200)
+    description: str | None = None
+    parent_task_id: UUID | None = None
+    priority: TaskPriority | None = None
+    status: TaskStatus | None = None
+    assigned_to_id: UUID | None = None
+    start_date: date | None = None
+    due_date: date | None = None
+    estimated_hours: Decimal | None = None
+    actual_hours: Decimal | None = None
+    progress_percent: int | None = Field(default=None, ge=0, le=100)
 
 
 class TaskRead(TaskBase):
@@ -65,13 +63,13 @@ class TaskRead(TaskBase):
     task_id: UUID
     organization_id: UUID
     status: TaskStatus
-    actual_start_date: Optional[date] = None
-    actual_end_date: Optional[date] = None
+    actual_start_date: date | None = None
+    actual_end_date: date | None = None
     actual_hours: Decimal = Decimal("0.00")
     progress_percent: int = 0
     is_deleted: bool = False
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class TaskBrief(BaseModel):
@@ -84,7 +82,7 @@ class TaskBrief(BaseModel):
     task_name: str
     status: TaskStatus
     priority: TaskPriority
-    due_date: Optional[date] = None
+    due_date: date | None = None
     progress_percent: int = 0
 
 
@@ -93,9 +91,9 @@ class TaskWithDetails(TaskRead):
 
     model_config = ConfigDict(from_attributes=True)
 
-    project_name: Optional[str] = None
-    assigned_to_name: Optional[str] = None
-    parent_task_name: Optional[str] = None
+    project_name: str | None = None
+    assigned_to_name: str | None = None
+    parent_task_name: str | None = None
     subtask_count: int = 0
     dependency_count: int = 0
 
@@ -103,7 +101,7 @@ class TaskWithDetails(TaskRead):
 class TaskListResponse(BaseModel):
     """Paginated task list response."""
 
-    items: List[TaskRead]
+    items: list[TaskRead]
     total: int
     offset: int
     limit: int

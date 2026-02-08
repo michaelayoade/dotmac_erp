@@ -31,6 +31,7 @@
     <form method="post"
           action="{{ '/inventory/items/' ~ item.item_id ~ '/edit' if item else '/inventory/items/new' }}"
           class="space-y-8">
+        {{ request.state.csrf_form | safe }}
 
         <div id="form-result">
             {% if error %}

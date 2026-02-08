@@ -5,7 +5,6 @@ Thin API wrapper for HR Core endpoints. All business logic is in services.
 """
 
 import json
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -16,70 +15,70 @@ from app.db import SessionLocal
 from app.models.finance.core_org.location import LocationType
 from app.models.people.hr.checklist_template import ChecklistTemplateType
 from app.schemas.auth import UserCredentialRead
-from app.schemas.people.hr import (
-    # Department
-    DepartmentCreate,
-    DepartmentUpdate,
-    DepartmentRead,
-    DepartmentListResponse,
-    # Designation
-    DesignationCreate,
-    DesignationUpdate,
-    DesignationRead,
-    # Employment Type
-    EmploymentTypeCreate,
-    EmploymentTypeUpdate,
-    EmploymentTypeRead,
-    # Employee Grade
-    EmployeeGradeCreate,
-    EmployeeGradeUpdate,
-    EmployeeGradeRead,
-    # Employee
-    EmployeeCreate,
-    EmployeeUpdate,
-    EmployeeRead,
-    EmployeeListResponse,
-    EmployeeStatsRead,
-    EmployeeUserCredentialCreate,
-    EmployeeUserLink,
-    TerminationRequest,
-    ResignationRequest,
-    BulkUpdateRequest,
-    BulkDeleteRequest,
-    BulkOperationResponse,
-    LocationCreate,
-    LocationUpdate,
-    LocationRead,
-    LocationListResponse,
-)
 from app.schemas.people.checklist import (
     ChecklistTemplateCreate,
-    ChecklistTemplateUpdate,
-    ChecklistTemplateRead,
     ChecklistTemplateListResponse,
+    ChecklistTemplateRead,
+    ChecklistTemplateUpdate,
 )
-from app.services.people.hr import (
-    EmployeeService,
-    OrganizationService,
-    DepartmentCreateData,
-    DepartmentUpdateData,
-    DepartmentFilters,
-    DesignationCreateData,
-    DesignationUpdateData,
-    DesignationFilters,
-    EmploymentTypeCreateData,
-    EmploymentTypeUpdateData,
-    EmploymentTypeFilters,
-    EmployeeGradeCreateData,
-    EmployeeGradeUpdateData,
-    EmployeeGradeFilters,
-    EmployeeCreateData,
-    EmployeeUpdateData,
-    EmployeeFilters,
-    TerminationData,
-    BulkUpdateData,
+from app.schemas.people.hr import (
+    BulkDeleteRequest,
+    BulkOperationResponse,
+    BulkUpdateRequest,
+    # Department
+    DepartmentCreate,
+    DepartmentListResponse,
+    DepartmentRead,
+    DepartmentUpdate,
+    # Designation
+    DesignationCreate,
+    DesignationRead,
+    DesignationUpdate,
+    # Employee
+    EmployeeCreate,
+    # Employee Grade
+    EmployeeGradeCreate,
+    EmployeeGradeRead,
+    EmployeeGradeUpdate,
+    EmployeeListResponse,
+    EmployeeRead,
+    EmployeeStatsRead,
+    EmployeeUpdate,
+    EmployeeUserCredentialCreate,
+    EmployeeUserLink,
+    # Employment Type
+    EmploymentTypeCreate,
+    EmploymentTypeRead,
+    EmploymentTypeUpdate,
+    LocationCreate,
+    LocationListResponse,
+    LocationRead,
+    LocationUpdate,
+    ResignationRequest,
+    TerminationRequest,
 )
 from app.services.common import PaginationParams
+from app.services.people.hr import (
+    BulkUpdateData,
+    DepartmentCreateData,
+    DepartmentFilters,
+    DepartmentUpdateData,
+    DesignationCreateData,
+    DesignationFilters,
+    DesignationUpdateData,
+    EmployeeCreateData,
+    EmployeeFilters,
+    EmployeeGradeCreateData,
+    EmployeeGradeFilters,
+    EmployeeGradeUpdateData,
+    EmployeeService,
+    EmployeeUpdateData,
+    EmploymentTypeCreateData,
+    EmploymentTypeFilters,
+    EmploymentTypeUpdateData,
+    OrganizationService,
+    TerminationData,
+)
 from app.services.people.hr.checklist_templates import ChecklistTemplateService
 
 router = APIRouter(
@@ -97,7 +96,7 @@ def get_db():
         db.close()
 
 
-def parse_enum(value: Optional[str], enum_type, field_name: str):
+def parse_enum(value: str | None, enum_type, field_name: str):
     if value is None:
         return None
     try:
@@ -116,8 +115,8 @@ def parse_enum(value: Optional[str], enum_type, field_name: str):
 @router.get("/departments", response_model=DepartmentListResponse)
 def list_departments(
     organization_id: UUID = Depends(require_organization_id),
-    search: Optional[str] = None,
-    is_active: Optional[bool] = None,
+    search: str | None = None,
+    is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -210,7 +209,7 @@ def delete_department(
 @router.get("/designations")
 def list_designations(
     organization_id: UUID = Depends(require_organization_id),
-    search: Optional[str] = None,
+    search: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -237,8 +236,8 @@ def list_designations(
 @router.get("/locations", response_model=LocationListResponse)
 def list_locations(
     organization_id: UUID = Depends(require_organization_id),
-    search: Optional[str] = None,
-    is_active: Optional[bool] = None,
+    search: str | None = None,
+    is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -343,9 +342,9 @@ def delete_location(
 @router.get("/checklist-templates", response_model=ChecklistTemplateListResponse)
 def list_checklist_templates(
     organization_id: UUID = Depends(require_organization_id),
-    template_type: Optional[str] = None,
-    is_active: Optional[bool] = None,
-    search: Optional[str] = None,
+    template_type: str | None = None,
+    is_active: bool | None = None,
+    search: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -506,8 +505,8 @@ def delete_designation(
 @router.get("/employment-types")
 def list_employment_types(
     organization_id: UUID = Depends(require_organization_id),
-    search: Optional[str] = None,
-    is_active: Optional[bool] = None,
+    search: str | None = None,
+    is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -606,8 +605,8 @@ def delete_employment_type(
 @router.get("/grades")
 def list_employee_grades(
     organization_id: UUID = Depends(require_organization_id),
-    search: Optional[str] = None,
-    is_active: Optional[bool] = None,
+    search: str | None = None,
+    is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -704,11 +703,12 @@ def delete_employee_grade(
 @router.get("/employees", response_model=EmployeeListResponse)
 def list_employees(
     organization_id: UUID = Depends(require_organization_id),
-    search: Optional[str] = None,
-    status: Optional[str] = None,
-    department_id: Optional[UUID] = None,
-    designation_id: Optional[UUID] = None,
-    reports_to_id: Optional[UUID] = None,
+    search: str | None = None,
+    status: str | None = None,
+    department_id: UUID | None = None,
+    designation_id: UUID | None = None,
+    reports_to_id: UUID | None = None,
+    expense_approver_id: UUID | None = None,
     include_deleted: bool = False,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
@@ -722,6 +722,7 @@ def list_employees(
         department_id=department_id,
         designation_id=designation_id,
         reports_to_id=reports_to_id,
+        expense_approver_id=expense_approver_id,
         include_deleted=include_deleted,
     )
     result = svc.list_employees(filters, PaginationParams(offset=offset, limit=limit))
@@ -760,6 +761,7 @@ def create_employee(
         employment_type_id=payload.employment_type_id,
         grade_id=payload.grade_id,
         reports_to_id=payload.reports_to_id,
+        expense_approver_id=payload.expense_approver_id,
         assigned_location_id=payload.assigned_location_id,
         default_shift_type_id=payload.default_shift_type_id,
         date_of_joining=payload.date_of_joining,
@@ -805,6 +807,7 @@ def update_employee(
         employment_type_id=payload.employment_type_id,
         grade_id=payload.grade_id,
         reports_to_id=payload.reports_to_id,
+        expense_approver_id=payload.expense_approver_id,
         assigned_location_id=payload.assigned_location_id,
         default_shift_type_id=payload.default_shift_type_id,
         date_of_joining=payload.date_of_joining,

@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional, Set
 from uuid import UUID
 
 from sqlalchemy import select
@@ -57,12 +56,12 @@ class ValidationResult:
 
     is_valid: bool
     message: str
-    employee_status: Optional[EmployeeStatus] = None
-    employee_name: Optional[str] = None
+    employee_status: EmployeeStatus | None = None
+    employee_name: str | None = None
 
 
 # Define allowed statuses for each operation type
-OPERATION_ALLOWED_STATUSES: dict[OperationType, Set[EmployeeStatus]] = {
+OPERATION_ALLOWED_STATUSES: dict[OperationType, set[EmployeeStatus]] = {
     # Payroll - active and on-leave employees (on-leave still receive salary)
     OperationType.SALARY_SLIP: {EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE},
     OperationType.SALARY_ASSIGNMENT: {EmployeeStatus.ACTIVE, EmployeeStatus.DRAFT},
@@ -84,14 +83,14 @@ OPERATION_ALLOWED_STATUSES: dict[OperationType, Set[EmployeeStatus]] = {
 }
 
 # Statuses that indicate employment has ended
-TERMINATED_STATUSES: Set[EmployeeStatus] = {
+TERMINATED_STATUSES: set[EmployeeStatus] = {
     EmployeeStatus.RESIGNED,
     EmployeeStatus.TERMINATED,
     EmployeeStatus.RETIRED,
 }
 
 # Statuses that indicate employee is currently employed (even if not active)
-EMPLOYED_STATUSES: Set[EmployeeStatus] = {
+EMPLOYED_STATUSES: set[EmployeeStatus] = {
     EmployeeStatus.DRAFT,
     EmployeeStatus.ACTIVE,
     EmployeeStatus.ON_LEAVE,
@@ -130,7 +129,7 @@ class EmployeeStatusValidator:
     def __init__(self, db: Session):
         self.db = db
 
-    def get_employee(self, employee_id: UUID) -> Optional[Employee]:
+    def get_employee(self, employee_id: UUID) -> Employee | None:
         """Get employee by ID."""
         return self.db.get(Employee, employee_id)
 
@@ -289,7 +288,7 @@ class EmployeeStatusValidator:
     def filter_by_status(
         self,
         employee_ids: list[UUID],
-        allowed_statuses: Set[EmployeeStatus],
+        allowed_statuses: set[EmployeeStatus],
     ) -> list[UUID]:
         """
         Filter a list of employee IDs to only those with allowed statuses.

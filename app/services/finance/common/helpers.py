@@ -6,7 +6,8 @@ Provides reusable functions for entity validation, retrieval, and status managem
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional, Type, TypeVar, cast
+from collections.abc import Callable
+from typing import Any, TypeVar, cast
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -19,7 +20,7 @@ from app.services.common import coerce_uuid
 T = TypeVar("T")
 
 
-def get_model_pk_column(model_class: Type[T]) -> str:
+def get_model_pk_column(model_class: type[T]) -> str:
     """
     Get the primary key column name for a model.
 
@@ -40,7 +41,7 @@ def get_model_pk_column(model_class: Type[T]) -> str:
     return f"{name[0].lower()}{name[1:]}_id"
 
 
-def get_entity_display_name(model_class: Type[T]) -> str:
+def get_entity_display_name(model_class: type[T]) -> str:
     """
     Get a human-readable display name from a model class.
 
@@ -62,14 +63,14 @@ def get_entity_display_name(model_class: Type[T]) -> str:
 
 def validate_unique_code(
     db: Session,
-    model_class: Type[T],
+    model_class: type[T],
     org_id: UUID | str,
     code_value: str,
     code_field_name: str = "code",
-    entity_name: Optional[str] = None,
-    exclude_id: Optional[UUID | str] = None,
-    parent_id: Optional[UUID | str] = None,
-    parent_field_name: Optional[str] = None,
+    entity_name: str | None = None,
+    exclude_id: UUID | str | None = None,
+    parent_id: UUID | str | None = None,
+    parent_field_name: str | None = None,
 ) -> None:
     """
     Validate that a code is unique within an organization (and optionally within a parent entity).
@@ -131,12 +132,12 @@ def validate_unique_code(
 
 def get_org_scoped_entity(
     db: Session,
-    model_class: Type[T],
+    model_class: type[T],
     entity_id: UUID | str,
     org_id: UUID | str,
-    entity_name: Optional[str] = None,
+    entity_name: str | None = None,
     raise_on_missing: bool = True,
-) -> Optional[T]:
+) -> T | None:
     """
     Retrieve an entity by ID and validate it belongs to the specified organization.
 
@@ -171,13 +172,13 @@ def get_org_scoped_entity(
 
 def get_org_scoped_entity_by_field(
     db: Session,
-    model_class: Type[T],
+    model_class: type[T],
     org_id: UUID | str,
     field_name: str,
     field_value: Any,
-    entity_name: Optional[str] = None,
+    entity_name: str | None = None,
     raise_on_missing: bool = True,
-) -> Optional[T]:
+) -> T | None:
     """
     Retrieve an entity by a specific field value and validate organization scope.
 
@@ -221,13 +222,13 @@ def get_org_scoped_entity_by_field(
 
 def toggle_entity_status(
     db: Session,
-    model_class: Type[T],
+    model_class: type[T],
     entity_id: UUID | str,
     org_id: UUID | str,
     is_active: bool,
-    entity_name: Optional[str] = None,
+    entity_name: str | None = None,
     status_field: str = "is_active",
-    pre_check: Optional[Callable[[Session, T], None]] = None,
+    pre_check: Callable[[Session, T], None] | None = None,
 ) -> T:
     """
     Toggle the active status of an entity.
@@ -274,10 +275,10 @@ def toggle_entity_status(
 
 def activate_entity(
     db: Session,
-    model_class: Type[T],
+    model_class: type[T],
     entity_id: UUID | str,
     org_id: UUID | str,
-    entity_name: Optional[str] = None,
+    entity_name: str | None = None,
     status_field: str = "is_active",
 ) -> T:
     """
@@ -307,12 +308,12 @@ def activate_entity(
 
 def deactivate_entity(
     db: Session,
-    model_class: Type[T],
+    model_class: type[T],
     entity_id: UUID | str,
     org_id: UUID | str,
-    entity_name: Optional[str] = None,
+    entity_name: str | None = None,
     status_field: str = "is_active",
-    pre_check: Optional[Callable[[Session, T], None]] = None,
+    pre_check: Callable[[Session, T], None] | None = None,
 ) -> T:
     """
     Deactivate an entity with optional pre-check validation.

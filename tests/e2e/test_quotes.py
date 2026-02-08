@@ -122,7 +122,7 @@ class TestQuoteCreate:
         authenticated_page.goto(f"{base_url}/quotes/new")
         authenticated_page.wait_for_load_state("networkidle")
 
-        uid = unique_id()
+        unique_id()
 
         # Select customer
         customer = authenticated_page.locator(

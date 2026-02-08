@@ -13,7 +13,8 @@ from __future__ import annotations
 import json
 import logging
 import os
-from typing import Any, Callable, Optional, TypeVar, cast
+from collections.abc import Callable
+from typing import Any, TypeVar, cast
 from uuid import UUID
 
 import redis
@@ -24,10 +25,10 @@ T = TypeVar("T")
 
 
 # Global Redis client (lazy initialization)
-_REDIS_CLIENT: Optional[redis.Redis] = None
+_REDIS_CLIENT: redis.Redis | None = None
 
 
-def get_redis_client() -> Optional[redis.Redis]:
+def get_redis_client() -> redis.Redis | None:
     """
     Get or create the Redis client.
 
@@ -81,6 +82,7 @@ class CacheService:
     TTL_DASHBOARD_STATS = 60  # 1 minute
     TTL_DASHBOARD_BALANCES = 120  # 2 minutes
     TTL_DASHBOARD_TREND = 300  # 5 minutes
+    TTL_BRANDING = 3600  # 1 hour (branding rarely changes)
     TTL_DEFAULT = 300  # 5 minutes
 
     def __init__(self, prefix: str = "dotmac"):
@@ -91,10 +93,10 @@ class CacheService:
             prefix: Key prefix for namespacing (default: "dotmac")
         """
         self.prefix = prefix
-        self._client: Optional[redis.Redis] = None
+        self._client: redis.Redis | None = None
 
     @property
-    def client(self) -> Optional[redis.Redis]:
+    def client(self) -> redis.Redis | None:
         """Get Redis client (lazy initialization)."""
         if self._client is None:
             self._client = get_redis_client()
@@ -120,7 +122,7 @@ class CacheService:
         except (json.JSONDecodeError, TypeError):
             return value
 
-    def get(self, key: str, default: T = None) -> Optional[T]:
+    def get(self, key: str, default: T = None) -> T | None:
         """
         Get a value from cache.
 
@@ -150,7 +152,7 @@ class CacheService:
                 value_str = value_any
             else:
                 value_str = str(value_any)
-            return cast(Optional[T], self._deserialize(value_str))
+            return cast(T | None, self._deserialize(value_str))
 
         except redis.RedisError as e:
             logger.warning("Cache get error for %s: %s", key, e)
@@ -160,7 +162,7 @@ class CacheService:
         self,
         key: str,
         value: Any,
-        ttl_seconds: Optional[int] = None,
+        ttl_seconds: int | None = None,
     ) -> bool:
         """
         Set a value in cache.
@@ -247,7 +249,7 @@ class CacheService:
         self,
         key: str,
         compute_fn: Callable[[], T],
-        ttl_seconds: Optional[int] = None,
+        ttl_seconds: int | None = None,
     ) -> T:
         """
         Get from cache or compute and cache.
@@ -322,6 +324,10 @@ class CacheKeys:
     @staticmethod
     def dashboard_trend(org_id: UUID, year: int) -> str:
         return f"org:{org_id}:dashboard:trend:y{year}"
+
+    @staticmethod
+    def org_branding_css(org_id: UUID) -> str:
+        return f"org:{org_id}:branding:css"
 
 
 # Module-level singleton

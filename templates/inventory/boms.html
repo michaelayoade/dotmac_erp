@@ -112,18 +112,18 @@
     <!-- BOMs Table -->
     <div class="card overflow-hidden">
         {% if boms | default([]) | length > 0 %}
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="table-ledger">
                 <thead>
                     <tr>
                         <th scope="col">BOM Name</th>
                         <th scope="col">Finished Item</th>
                         <th scope="col">Type</th>
-                        <th scope="col" class="text-right">Qty</th>
-                        <th scope="col" class="text-right">Components</th>
-                        <th scope="col" class="text-right">Est. Cost</th>
+                        <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider">Qty</th>
+                        <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider">Components</th>
+                        <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider">Est. Cost</th>
                         <th scope="col">Status</th>
-                        <th scope="col" class="w-12"></th>
+                        <th scope="col" class="w-12 text-xs font-semibold uppercase tracking-wider"></th>
                     </tr>
                 </thead>
                 <tbody>

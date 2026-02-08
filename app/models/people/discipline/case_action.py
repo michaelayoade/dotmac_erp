@@ -16,8 +16,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db import Base
 
 if TYPE_CHECKING:
-    from app.models.people.hr.employee import Employee
     from app.models.people.discipline.case import DisciplinaryCase
+    from app.models.people.hr.employee import Employee
 
 
 class ActionType(str, enum.Enum):
@@ -70,7 +70,7 @@ class CaseAction(Base):
         Enum(ActionType, name="action_type", schema="hr"),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Details about the action",
@@ -83,14 +83,14 @@ class CaseAction(Base):
         default=date.today,
         comment="Date action takes effect",
     )
-    end_date: Mapped[Optional[date]] = mapped_column(
+    end_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="End date for temporary actions",
     )
 
     # For warnings
-    warning_expiry_date: Mapped[Optional[date]] = mapped_column(
+    warning_expiry_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="Date warning expires from record",
@@ -117,7 +117,7 @@ class CaseAction(Base):
     )
 
     # Issued by
-    issued_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    issued_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,

@@ -6,7 +6,7 @@ Represents teams that handle support tickets.
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     Boolean,
@@ -74,13 +74,13 @@ class SupportTeam(Base):
         nullable=False,
         comment="Display name for team",
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Team lead
-    lead_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    lead_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
@@ -101,11 +101,11 @@ class SupportTeam(Base):
     )
 
     # For SLA (optional)
-    default_response_hours: Mapped[Optional[int]] = mapped_column(
+    default_response_hours: Mapped[int | None] = mapped_column(
         nullable=True,
         comment="Default SLA response time in hours",
     )
-    default_resolution_hours: Mapped[Optional[int]] = mapped_column(
+    default_resolution_hours: Mapped[int | None] = mapped_column(
         nullable=True,
         comment="Default SLA resolution time in hours",
     )
@@ -116,7 +116,7 @@ class SupportTeam(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -131,12 +131,12 @@ class SupportTeam(Base):
         "Employee",
         foreign_keys=[lead_id],
     )
-    members: Mapped[List["SupportTeamMember"]] = relationship(
+    members: Mapped[list["SupportTeamMember"]] = relationship(
         "SupportTeamMember",
         back_populates="team",
         cascade="all, delete-orphan",
     )
-    tickets: Mapped[List["Ticket"]] = relationship(
+    tickets: Mapped[list["Ticket"]] = relationship(
         "Ticket",
         back_populates="team",
     )
@@ -185,7 +185,7 @@ class SupportTeamMember(Base):
     )
 
     # Role in team
-    role: Mapped[Optional[str]] = mapped_column(
+    role: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Role in team (e.g., member, senior, specialist)",

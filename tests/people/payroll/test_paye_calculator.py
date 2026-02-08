@@ -11,12 +11,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
+from app.models.people.payroll.tax_band import TaxBand
 from app.services.people.payroll.paye_calculator import (
     PAYECalculator,
 )
-from app.models.people.payroll.tax_band import TaxBand
-from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
-
 
 # ============ Fixtures ============
 
@@ -423,11 +422,11 @@ class TestPAYECalculator:
         """Test default statutory rates."""
         calculator = PAYECalculator(mock_db)
 
-        assert calculator.DEFAULT_PENSION_RATE == Decimal("0.08")
-        assert calculator.DEFAULT_NHF_RATE == Decimal("0.025")
-        assert calculator.DEFAULT_NHIS_RATE == Decimal("0")
-        assert calculator.RENT_RELIEF_RATE == Decimal("0.20")
-        assert calculator.RENT_RELIEF_MAX == Decimal("500000")
+        assert Decimal("0.08") == calculator.DEFAULT_PENSION_RATE
+        assert Decimal("0.025") == calculator.DEFAULT_NHF_RATE
+        assert Decimal("0") == calculator.DEFAULT_NHIS_RATE
+        assert Decimal("0.20") == calculator.RENT_RELIEF_RATE
+        assert Decimal("500000") == calculator.RENT_RELIEF_MAX
 
     def test_custom_statutory_rates(self, mock_db, org_id, nta_2025_bands):
         """Test custom statutory rates override defaults."""
@@ -630,7 +629,7 @@ class TestPAYEEdgeCases:
         mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = nta_2025_bands
 
         # Profile that expired in the past
-        expired_profile = EmployeeTaxProfile(
+        EmployeeTaxProfile(
             organization_id=org_id,
             employee_id=employee_id,
             effective_from=date(2025, 1, 1),

@@ -7,7 +7,7 @@ Calculates SLA metrics, breach detection, and reporting for support tickets.
 import logging
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -50,23 +50,23 @@ class TicketSLAStatus:
     # Response SLA
     response_target_hours: int
     response_due_at: datetime
-    first_response_at: Optional[datetime]
-    response_hours: Optional[float]  # Actual response time in hours
+    first_response_at: datetime | None
+    response_hours: float | None  # Actual response time in hours
     response_breached: bool
-    response_breach_hours: Optional[float]  # How many hours overdue
+    response_breach_hours: float | None  # How many hours overdue
 
     # Resolution SLA
     resolution_target_hours: int
     resolution_due_at: datetime
-    resolved_at: Optional[datetime]
-    resolution_hours: Optional[float]  # Actual resolution time in hours
+    resolved_at: datetime | None
+    resolution_hours: float | None  # Actual resolution time in hours
     resolution_breached: bool
-    resolution_breach_hours: Optional[float]  # How many hours overdue
+    resolution_breach_hours: float | None  # How many hours overdue
 
     # Metadata
-    category_name: Optional[str]
-    team_name: Optional[str]
-    assigned_to_name: Optional[str]
+    category_name: str | None
+    team_name: str | None
+    assigned_to_name: str | None
 
 
 @dataclass
@@ -83,23 +83,23 @@ class SLAMetrics:
     response_breached: int  # Tickets that breached response SLA
     response_pending: int  # Open tickets not yet responded
     response_compliance_pct: float  # Percentage meeting SLA
-    avg_response_hours: Optional[float]
+    avg_response_hours: float | None
 
     # Resolution SLA
     resolution_met: int
     resolution_breached: int
     resolution_pending: int  # Open tickets
     resolution_compliance_pct: float
-    avg_resolution_hours: Optional[float]
+    avg_resolution_hours: float | None
 
     # By priority breakdown
-    by_priority: Dict[str, Dict[str, Any]]
+    by_priority: dict[str, dict[str, Any]]
 
     # By team breakdown
-    by_team: Dict[str, Dict[str, Any]]
+    by_team: dict[str, dict[str, Any]]
 
     # By category breakdown
-    by_category: Dict[str, Dict[str, Any]]
+    by_category: dict[str, dict[str, Any]]
 
 
 @dataclass
@@ -108,9 +108,9 @@ class AgingBucket:
 
     label: str
     min_hours: int
-    max_hours: Optional[int]
+    max_hours: int | None
     count: int
-    tickets: List[Dict[str, Any]]
+    tickets: list[dict[str, Any]]
 
 
 class SLAService:
@@ -172,7 +172,7 @@ class SLAService:
         self,
         db: Session,
         ticket_id: UUID,
-    ) -> Optional[datetime]:
+    ) -> datetime | None:
         """
         Get the timestamp of the first response to a ticket.
 
@@ -315,7 +315,7 @@ class SLAService:
         breach_type: str = "all",  # 'response', 'resolution', 'all'
         include_resolved: bool = False,
         limit: int = 50,
-    ) -> List[TicketSLAStatus]:
+    ) -> list[TicketSLAStatus]:
         """
         Get tickets that have breached SLA.
 
@@ -358,12 +358,13 @@ class SLAService:
             sla_status = self.get_ticket_sla_status(db, ticket)
 
             is_breached = False
-            if breach_type == "response" and sla_status.response_breached:
-                is_breached = True
-            elif breach_type == "resolution" and sla_status.resolution_breached:
-                is_breached = True
-            elif breach_type == "all" and (
-                sla_status.response_breached or sla_status.resolution_breached
+            if (
+                breach_type == "response"
+                and sla_status.response_breached
+                or breach_type == "resolution"
+                and sla_status.resolution_breached
+                or breach_type == "all"
+                and (sla_status.response_breached or sla_status.resolution_breached)
             ):
                 is_breached = True
 
@@ -379,8 +380,8 @@ class SLAService:
         db: Session,
         organization_id: UUID,
         *,
-        status_filter: Optional[List[str]] = None,
-    ) -> List[AgingBucket]:
+        status_filter: list[str] | None = None,
+    ) -> list[AgingBucket]:
         """
         Get ticket aging report grouped by age buckets.
 
@@ -483,8 +484,8 @@ class SLAService:
         db: Session,
         organization_id: UUID,
         *,
-        date_from: Optional[date] = None,
-        date_to: Optional[date] = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
     ) -> SLAMetrics:
         """
         Calculate aggregated SLA metrics for a time period.
@@ -532,9 +533,9 @@ class SLAService:
         resolution_pending = 0
         resolution_times = []
 
-        by_priority: Dict[str, Dict[str, Any]] = {}
-        by_team: Dict[str, Dict[str, Any]] = {}
-        by_category: Dict[str, Dict[str, Any]] = {}
+        by_priority: dict[str, dict[str, Any]] = {}
+        by_team: dict[str, dict[str, Any]] = {}
+        by_category: dict[str, dict[str, Any]] = {}
 
         for ticket in tickets:
             sla_status = self.get_ticket_sla_status(db, ticket)
@@ -699,9 +700,9 @@ class SLAService:
         db: Session,
         organization_id: UUID,
         *,
-        date_from: Optional[date] = None,
-        date_to: Optional[date] = None,
-    ) -> List[Dict[str, Any]]:
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Get performance metrics per team.
 
@@ -750,9 +751,9 @@ class SLAService:
         db: Session,
         organization_id: UUID,
         *,
-        date_from: Optional[date] = None,
-        date_to: Optional[date] = None,
-    ) -> List[Dict[str, Any]]:
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Get performance metrics per category.
         """

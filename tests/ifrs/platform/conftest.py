@@ -6,13 +6,11 @@ while still testing the service logic.
 """
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
-
 
 # ============ Mock Column for SQLAlchemy Comparisons ============
 
@@ -89,7 +87,7 @@ class MockIdempotencyRecord:
         endpoint: str = "",
         request_hash: str = "",
         response_status: int = 200,
-        response_body: Optional[dict] = None,
+        response_body: dict | None = None,
         created_at: datetime = None,
         expires_at: datetime = None,
     ):
@@ -100,10 +98,8 @@ class MockIdempotencyRecord:
         self.request_hash = request_hash
         self.response_status = response_status
         self.response_body = response_body
-        self.created_at = created_at or datetime.now(timezone.utc)
-        self.expires_at = expires_at or (
-            datetime.now(timezone.utc) + timedelta(hours=24)
-        )
+        self.created_at = created_at or datetime.now(UTC)
+        self.expires_at = expires_at or (datetime.now(UTC) + timedelta(hours=24))
 
 
 class MockNumberingSequence:
@@ -114,13 +110,13 @@ class MockNumberingSequence:
         sequence_id: uuid.UUID = None,
         organization_id: uuid.UUID = None,
         sequence_type: str = "INVOICE",
-        prefix: Optional[str] = None,
-        suffix: Optional[str] = None,
+        prefix: str | None = None,
+        suffix: str | None = None,
         current_number: int = 0,
         min_digits: int = 6,
         fiscal_year_reset: bool = False,
-        fiscal_year_id: Optional[uuid.UUID] = None,
-        last_used_at: Optional[datetime] = None,
+        fiscal_year_id: uuid.UUID | None = None,
+        last_used_at: datetime | None = None,
         created_at: datetime = None,
     ):
         self.sequence_id = sequence_id or uuid.uuid4()
@@ -133,7 +129,7 @@ class MockNumberingSequence:
         self.fiscal_year_reset = fiscal_year_reset
         self.fiscal_year_id = fiscal_year_id
         self.last_used_at = last_used_at
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
 
 
 class MockExchangeRate:
@@ -148,8 +144,8 @@ class MockExchangeRate:
         rate_type_id: uuid.UUID = None,
         effective_date: date = None,
         exchange_rate: Decimal = Decimal("1.0"),
-        source: Optional[str] = None,
-        created_by_user_id: Optional[uuid.UUID] = None,
+        source: str | None = None,
+        created_by_user_id: uuid.UUID | None = None,
         created_at: datetime = None,
     ):
         self.exchange_rate_id = exchange_rate_id or uuid.uuid4()
@@ -161,7 +157,7 @@ class MockExchangeRate:
         self.exchange_rate = exchange_rate
         self.source = source
         self.created_by_user_id = created_by_user_id
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
 
     @property
     def inverse_rate(self) -> Decimal:
@@ -177,7 +173,7 @@ class MockExchangeRateType:
         organization_id: uuid.UUID = None,
         type_code: str = "SPOT",
         type_name: str = "Spot Rate",
-        description: Optional[str] = None,
+        description: str | None = None,
         is_default: bool = False,
         created_at: datetime = None,
     ):
@@ -187,7 +183,7 @@ class MockExchangeRateType:
         self.type_name = type_name
         self.description = description
         self.is_default = is_default
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
 
 
 class MockOrganization:
@@ -220,14 +216,14 @@ class MockSystemConfiguration:
     def __init__(
         self,
         config_id: uuid.UUID = None,
-        organization_id: Optional[uuid.UUID] = None,
+        organization_id: uuid.UUID | None = None,
         config_key: str = "",
         config_value: str = "",
         config_type: str = "STRING",
-        description: Optional[str] = None,
+        description: str | None = None,
         is_encrypted: bool = False,
         updated_at: datetime = None,
-        updated_by_user_id: Optional[uuid.UUID] = None,
+        updated_by_user_id: uuid.UUID | None = None,
     ):
         self.config_id = config_id or uuid.uuid4()
         self.organization_id = organization_id
@@ -236,7 +232,7 @@ class MockSystemConfiguration:
         self.config_type = config_type
         self.description = description
         self.is_encrypted = is_encrypted
-        self.updated_at = updated_at or datetime.now(timezone.utc)
+        self.updated_at = updated_at or datetime.now(UTC)
         self.updated_by_user_id = updated_by_user_id
 
 
@@ -254,14 +250,14 @@ class MockEventOutbox:
         producer_module: str = "",
         correlation_id: str = "",
         idempotency_key: str = "",
-        causation_id: Optional[uuid.UUID] = None,
+        causation_id: uuid.UUID | None = None,
         event_version: int = 1,
         status: str = "PENDING",
         retry_count: int = 0,
-        next_retry_at: Optional[datetime] = None,
-        last_error: Optional[str] = None,
+        next_retry_at: datetime | None = None,
+        last_error: str | None = None,
         occurred_at: datetime = None,
-        published_at: Optional[datetime] = None,
+        published_at: datetime | None = None,
         created_at: datetime = None,
     ):
         self.event_id = event_id or uuid.uuid4()
@@ -279,9 +275,9 @@ class MockEventOutbox:
         self.retry_count = retry_count
         self.next_retry_at = next_retry_at
         self.last_error = last_error
-        self.occurred_at = occurred_at or datetime.now(timezone.utc)
+        self.occurred_at = occurred_at or datetime.now(UTC)
         self.published_at = published_at
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
 
 
 # ============ Fixtures ============

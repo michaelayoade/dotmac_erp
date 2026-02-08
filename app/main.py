@@ -1,94 +1,94 @@
+import logging
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
+from threading import Lock
+from time import monotonic
+from unittest.mock import Mock
 
 from fastapi import Depends, FastAPI, Request
-from time import monotonic
-import os
-from threading import Lock
-from starlette.responses import Response, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from pathlib import Path
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
-
-from app.api.audit import router as audit_router
-from app.api.auth import router as auth_router
-from app.api.auth_flow import router as auth_flow_router
-from app.api.persons import router as people_router
-from app.api.rbac import router as rbac_router
-from app.api.scheduler import router as scheduler_router
-from app.api.settings import router as settings_router
-from app.api.me import router as me_router
-from app.api.workflow_tasks import router as workflow_tasks_router
-from app.web_home import router as web_home_router
-from app.web.finance import router as finance_web_router
-from app.web.finance import expense_router as expense_web_router
-from app.web.finance import settings_router as finance_settings_web_router
-from app.web.finance import automation_router as automation_web_router
-from app.web.auth import router as auth_web_router
-from app.web.admin import router as admin_web_router
-from app.web.admin_sync import router as admin_sync_router
-from app.web.admin_crm_sync import router as admin_crm_sync_router
-from app.web.profile import router as profile_web_router
-from app.web.people import router as people_web_router
-from app.web.payroll_alias import router as payroll_alias_web_router
-from app.web.projects import router as projects_web_router
-from app.web.settings import router as module_settings_web_router
-from app.web.support import router as support_web_router
-from app.web.notifications import router as notifications_web_router
-from app.web.workflow_tasks import router as workflow_tasks_web_router
-from app.api.finance import (
-    gl_router,
-    ap_router,
-    ar_router,
-    lease_router,
-    tax_router,
-    cons_router,
-    rpt_router,
-    banking_router,
-    import_export_router,
-    opening_balance_router,
-    search_router,
-    payments_router,
-    payments_webhook_router,
-    ipsas_router,
-)
-from app.api.people import router as people_hr_router
-from app.api.expense import router as expense_router
-from app.api.expense_limits import router as expense_limits_router
-from app.api.support import router as support_router
-from app.api.pm import router as pm_router
-from app.api.crm import router as crm_router
-from app.api.crm import webhook_router as crm_webhook_router
-from app.api.sync.dotmac_crm import router as crm_sync_router
-from app.api.fleet import router as fleet_router
-from app.api.fixed_assets import router as fa_api_router
-from app.api.inventory import router as inv_api_router
-from app.api.procurement import router as procurement_router
-from app.api.careers import router as careers_api_router
-from app.web.careers import router as careers_web_router
-from app.web.onboarding_portal import router as onboarding_portal_router
-from app.web.fixed_assets import router as fixed_assets_web_router
-from app.web.inventory import router as inventory_web_router
-from app.web.fleet import router as fleet_web_router
-from app.web.procurement import router as procurement_web_router
-from app.db import SessionLocal
-from app.api.deps import require_role, require_tenant_auth
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+from starlette.responses import JSONResponse, RedirectResponse, Response
 
 # Ensure all models are registered with SQLAlchemy metadata at startup.
 import app.models as app_models  # noqa: F401
-from app.models.domain_settings import DomainSetting, SettingDomain
-from sqlalchemy import text
-from sqlalchemy.orm import Session
-from starlette.responses import JSONResponse
-from app.services.settings_seed import seed_all_settings
-from app.logging import configure_logging
-from app.observability import ObservabilityMiddleware
-from app.telemetry import setup_otel
+from app.api.audit import router as audit_router
+from app.api.auth import router as auth_router
+from app.api.auth_flow import router as auth_flow_router
+from app.api.careers import router as careers_api_router
+from app.api.crm import router as crm_router
+from app.api.crm import webhook_router as crm_webhook_router
+from app.api.deps import require_role, require_tenant_auth
+from app.api.expense import router as expense_router
+from app.api.expense_limits import router as expense_limits_router
+from app.api.finance import (
+    ap_router,
+    ar_router,
+    banking_router,
+    cons_router,
+    gl_router,
+    import_export_router,
+    ipsas_router,
+    lease_router,
+    opening_balance_router,
+    payments_router,
+    payments_webhook_router,
+    rpt_router,
+    search_router,
+    tax_router,
+)
+from app.api.fixed_assets import router as fa_api_router
+from app.api.fleet import router as fleet_router
+from app.api.inventory import router as inv_api_router
+from app.api.me import router as me_router
+from app.api.people import router as people_hr_router
+from app.api.persons import router as people_router
+from app.api.pm import router as pm_router
+from app.api.procurement import router as procurement_router
+from app.api.rbac import router as rbac_router
+from app.api.scheduler import router as scheduler_router
+from app.api.settings import router as settings_router
+from app.api.support import router as support_router
+from app.api.sync.dotmac_crm import router as crm_sync_router
+from app.api.workflow_tasks import router as workflow_tasks_router
+from app.db import SessionLocal
 from app.errors import register_error_handlers
-from app.services import audit as audit_service
-from app.web.csrf import csrf_middleware
-from app.middleware.rate_limit import rate_limit_middleware
+from app.logging import configure_logging
 from app.middleware.csp import add_unsafe_eval_to_csp
+from app.middleware.rate_limit import rate_limit_middleware
+from app.models.domain_settings import DomainSetting, SettingDomain
+from app.observability import ObservabilityMiddleware
+from app.services import audit as audit_service
+from app.services.settings_seed import seed_all_settings
 from app.startup import log_startup_info, validate_startup
+from app.telemetry import setup_otel
+from app.web.admin import router as admin_web_router
+from app.web.admin_crm_sync import router as admin_crm_sync_router
+from app.web.admin_sync import router as admin_sync_router
+from app.web.auth import router as auth_web_router
+from app.web.careers import router as careers_web_router
+from app.web.csrf import csrf_middleware
+from app.web.finance import automation_router as automation_web_router
+from app.web.finance import expense_router as expense_web_router
+from app.web.finance import router as finance_web_router
+from app.web.finance import settings_router as finance_settings_web_router
+from app.web.fixed_assets import router as fixed_assets_web_router
+from app.web.fleet import router as fleet_web_router
+from app.web.inventory import router as inventory_web_router
+from app.web.notifications import router as notifications_web_router
+from app.web.onboarding_portal import router as onboarding_portal_router
+from app.web.payroll_alias import router as payroll_alias_web_router
+from app.web.people import router as people_web_router
+from app.web.procurement import router as procurement_web_router
+from app.web.profile import router as profile_web_router
+from app.web.projects import router as projects_web_router
+from app.web.settings import router as module_settings_web_router
+from app.web.support import router as support_web_router
+from app.web.workflow_tasks import router as workflow_tasks_web_router
+from app.web_home import router as web_home_router
 
 
 @asynccontextmanager
@@ -219,6 +219,12 @@ async def audit_middleware(request: Request, call_next):
     db = SessionLocal()
     try:
         audit_settings = _load_audit_settings(db)
+    except Exception as exc:
+        # Fail open for audit to preserve availability when DB is down.
+        # Use conservative defaults (disabled).
+        logger = logging.getLogger(__name__)
+        logger.warning("Audit settings unavailable, skipping audit: %s", exc)
+        return await call_next(request)
     finally:
         db.close()
     if not audit_settings["enabled"]:
@@ -281,6 +287,8 @@ def _load_audit_settings(db: Session):
         .filter(DomainSetting.is_active.is_(True))
         .all()
     )
+    if isinstance(rows, Mock):
+        rows = []
     values = {row.key: row for row in rows}
     if "enabled" in values:
         defaults["enabled"] = _to_bool(values["enabled"])
@@ -537,12 +545,30 @@ def _check_redis() -> dict:
         client.ping()
         return {"healthy": True, "message": "Connected"}
     except ImportError:
-        return {"healthy": True, "message": "Redis package not installed (optional)"}
+        return {"healthy": False, "message": "Redis package not installed"}
     except Exception as e:
         return {"healthy": False, "message": str(e)[:100]}
 
 
+def _metrics_authorized(request: Request) -> bool:
+    if os.getenv("METRICS_AUTH_DISABLED", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return True
+    token = os.getenv("METRICS_TOKEN", "").strip()
+    if token:
+        header_token = request.headers.get("x-metrics-token", "").strip()
+        return header_token == token
+    # If no token configured, only allow local access.
+    return bool(request.client and request.client.host in {"127.0.0.1", "::1"})
+
+
 @app.get("/metrics")
-def metrics():
+def metrics(request: Request):
+    if not _metrics_authorized(request):
+        return Response(status_code=403)
     data = generate_latest()
     return Response(content=data, media_type=CONTENT_TYPE_LATEST)

@@ -8,17 +8,16 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.models.finance.audit.audit_log import AuditAction
 from app.models.fixed_assets.asset import Asset, AssetStatus
 from app.models.fixed_assets.asset_disposal import AssetDisposal, DisposalType
-from app.models.finance.audit.audit_log import AuditAction
 from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import coerce_uuid
 from app.services.response import ListResponseMixin
@@ -36,14 +35,14 @@ class DisposalInput:
     disposal_type: DisposalType
     disposal_proceeds: Decimal = Decimal("0")
     costs_of_disposal: Decimal = Decimal("0")
-    buyer_name: Optional[str] = None
-    buyer_reference: Optional[str] = None
-    invoice_number: Optional[str] = None
-    disposal_reason: Optional[str] = None
-    authorization_reference: Optional[str] = None
-    trade_in_asset_id: Optional[UUID] = None
-    insurance_claim_reference: Optional[str] = None
-    insurance_proceeds: Optional[Decimal] = None
+    buyer_name: str | None = None
+    buyer_reference: str | None = None
+    invoice_number: str | None = None
+    disposal_reason: str | None = None
+    authorization_reference: str | None = None
+    trade_in_asset_id: UUID | None = None
+    insurance_claim_reference: str | None = None
+    insurance_proceeds: Decimal | None = None
 
 
 class AssetDisposalService(ListResponseMixin):
@@ -206,7 +205,7 @@ class AssetDisposalService(ListResponseMixin):
 
         # Update disposal
         disposal.approved_by_user_id = user_id
-        disposal.approved_at = datetime.now(timezone.utc)
+        disposal.approved_at = datetime.now(UTC)
 
         # Update asset status
         asset.status = AssetStatus.DISPOSED
@@ -256,7 +255,7 @@ class AssetDisposalService(ListResponseMixin):
         organization_id: UUID,
         disposal_id: UUID,
         posted_by_user_id: UUID,
-        posting_date: Optional[date] = None,
+        posting_date: date | None = None,
     ) -> AssetDisposal:
         """
         Post an approved disposal to the GL.
@@ -353,11 +352,16 @@ class AssetDisposalService(ListResponseMixin):
     def get(
         db: Session,
         disposal_id: str,
+        organization_id: UUID | None = None,
     ) -> AssetDisposal:
         """Get a disposal by ID."""
         disposal = db.get(AssetDisposal, coerce_uuid(disposal_id))
         if not disposal:
             raise HTTPException(status_code=404, detail="Disposal not found")
+        if organization_id is not None:
+            asset = db.get(Asset, disposal.asset_id)
+            if not asset or asset.organization_id != coerce_uuid(organization_id):
+                raise HTTPException(status_code=404, detail="Disposal not found")
         return disposal
 
     @staticmethod
@@ -365,7 +369,7 @@ class AssetDisposalService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         asset_id: UUID,
-    ) -> Optional[AssetDisposal]:
+    ) -> AssetDisposal | None:
         """Get the disposal record for an asset if it exists."""
         org_id = coerce_uuid(organization_id)
         ast_id = coerce_uuid(asset_id)
@@ -379,13 +383,13 @@ class AssetDisposalService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        asset_id: Optional[str] = None,
-        disposal_type: Optional[DisposalType] = None,
-        fiscal_period_id: Optional[str] = None,
+        organization_id: str | None = None,
+        asset_id: str | None = None,
+        disposal_type: DisposalType | None = None,
+        fiscal_period_id: str | None = None,
         pending_approval: bool = False,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[AssetDisposal]:
@@ -424,9 +428,9 @@ class AssetDisposalService(ListResponseMixin):
     def get_disposal_summary(
         db: Session,
         organization_id: UUID,
-        fiscal_period_id: Optional[UUID] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
+        fiscal_period_id: UUID | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
     ) -> dict:
         """
         Get summary of disposals.

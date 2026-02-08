@@ -6,18 +6,15 @@ Provides view-focused data and operations for AP supplier web routes.
 
 from __future__ import annotations
 
-import logging
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
-from fastapi import Request, UploadFile
+from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.ap.supplier_invoice import (
     SupplierInvoice,
@@ -37,7 +34,6 @@ from app.services.finance.ap.web.base import (
     get_accounts,
     invoice_status_label,
     logger,
-    parse_supplier_type,
     supplier_detail_view,
     supplier_form_view,
     supplier_list_view,
@@ -47,55 +43,28 @@ from app.services.finance.platform.currency_context import get_currency_context
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
-logger = logging.getLogger(__name__)
-
 
 class SupplierWebService:
     """Web service methods for AP suppliers."""
 
     @staticmethod
-    def build_supplier_input(form_data: dict) -> SupplierInput:
+    def build_supplier_input(
+        db: Session, form_data: dict, organization_id: UUID
+    ) -> SupplierInput:
         """Build SupplierInput from form data."""
-        return SupplierInput(
-            supplier_code=form_data.get("supplier_code", ""),
-            supplier_type=parse_supplier_type(form_data.get("supplier_type")),
-            supplier_name=form_data.get("supplier_name", ""),
-            trading_name=form_data.get("supplier_name"),
-            tax_id=form_data.get("tax_id"),
-            currency_code=form_data.get(
-                "currency_code",
-                settings.default_functional_currency_code,
-            ),
-            payment_terms_days=int(form_data.get("payment_terms_days", 30)),
-            default_payable_account_id=(
-                UUID(form_data["default_payable_account_id"])
-                if form_data.get("default_payable_account_id")
-                else UUID("00000000-0000-0000-0000-000000000001")
-            ),
-            default_expense_account_id=(
-                UUID(form_data["default_expense_account_id"])
-                if form_data.get("default_expense_account_id")
-                else None
-            ),
-            billing_address={
-                "address": form_data.get("billing_address", ""),
-            }
-            if form_data.get("billing_address")
-            else None,
-            primary_contact={
-                "email": form_data.get("email", ""),
-                "phone": form_data.get("phone", ""),
-            }
-            if form_data.get("email") or form_data.get("phone")
-            else None,
+        payload = dict(form_data)
+        return supplier_service.build_input_from_payload(
+            db=db,
+            organization_id=organization_id,
+            payload=payload,
         )
 
     @staticmethod
     def list_suppliers_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        status: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -107,26 +76,16 @@ class SupplierWebService:
             status,
             page,
         )
-        org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
+        org_id = coerce_uuid(organization_id)
+        from app.services.finance.ap.supplier_query import build_supplier_query
 
-        is_active = None
-        if status == "active":
-            is_active = True
-        elif status == "inactive":
-            is_active = False
-
-        query = db.query(Supplier).filter(Supplier.organization_id == org_id)
-        if is_active is not None:
-            query = query.filter(Supplier.is_active == is_active)
-        if search:
-            search_pattern = f"%{search}%"
-            query = query.filter(
-                (Supplier.supplier_code.ilike(search_pattern))
-                | (Supplier.legal_name.ilike(search_pattern))
-                | (Supplier.trading_name.ilike(search_pattern))
-                | (Supplier.tax_identification_number.ilike(search_pattern))
-            )
+        query = build_supplier_query(
+            db=db,
+            organization_id=organization_id,
+            search=search,
+            status=status,
+        )
 
         total_count = (
             query.with_entities(func.count(Supplier.supplier_id)).scalar() or 0
@@ -240,7 +199,7 @@ class SupplierWebService:
     def supplier_form_context(
         db: Session,
         organization_id: str,
-        supplier_id: Optional[str] = None,
+        supplier_id: str | None = None,
     ) -> dict:
         """Get context for supplier create/edit form."""
         logger.debug(
@@ -468,7 +427,7 @@ class SupplierWebService:
         db: Session,
         organization_id: str,
         supplier_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete a supplier. Returns error message or None on success."""
         logger.debug(
             "delete_supplier: org=%s supplier_id=%s", organization_id, supplier_id
@@ -476,47 +435,15 @@ class SupplierWebService:
         org_id = coerce_uuid(organization_id)
         sup_id = coerce_uuid(supplier_id)
 
-        supplier = db.get(Supplier, sup_id)
-        if not supplier or supplier.organization_id != org_id:
-            return "Supplier not found"
-
-        # Check for existing invoices
-        invoice_count = (
-            db.query(func.count(SupplierInvoice.invoice_id))
-            .filter(
-                SupplierInvoice.organization_id == org_id,
-                SupplierInvoice.supplier_id == sup_id,
-            )
-            .scalar()
-            or 0
-        )
-
-        if invoice_count > 0:
-            return f"Cannot delete supplier with {invoice_count} invoice(s). Deactivate instead."
-
-        # Check for existing payments
-        payment_count = (
-            db.query(func.count(SupplierPayment.payment_id))
-            .filter(
-                SupplierPayment.organization_id == org_id,
-                SupplierPayment.supplier_id == sup_id,
-            )
-            .scalar()
-            or 0
-        )
-
-        if payment_count > 0:
-            return f"Cannot delete supplier with {payment_count} payment(s). Deactivate instead."
-
         try:
-            db.delete(supplier)
-            db.commit()
+            supplier_service.delete_supplier(db, org_id, sup_id)
             logger.info(
                 "delete_supplier: deleted supplier %s for org %s", sup_id, org_id
             )
             return None
+        except HTTPException as exc:
+            return exc.detail
         except Exception as e:
-            db.rollback()
             logger.exception("delete_supplier: failed for org %s", org_id)
             return f"Failed to delete supplier: {str(e)}"
 
@@ -529,8 +456,8 @@ class SupplierWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        status: str | None,
         page: int,
         limit: int = 50,
     ) -> HTMLResponse:
@@ -609,7 +536,7 @@ class SupplierWebService:
         try:
             org_id = auth.organization_id
             assert org_id is not None
-            input_data = self.build_supplier_input(dict(form_data))
+            input_data = self.build_supplier_input(db, dict(form_data), org_id)
 
             supplier_service.create_supplier(
                 db=db,
@@ -645,7 +572,7 @@ class SupplierWebService:
         try:
             org_id = auth.organization_id
             assert org_id is not None
-            input_data = self.build_supplier_input(dict(form_data))
+            input_data = self.build_supplier_input(db, dict(form_data), org_id)
 
             supplier_service.update_supplier(
                 db=db,
@@ -701,7 +628,7 @@ class SupplierWebService:
         self,
         supplier_id: str,
         file: UploadFile,
-        description: Optional[str],
+        description: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:

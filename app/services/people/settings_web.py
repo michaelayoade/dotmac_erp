@@ -6,7 +6,7 @@ Provides context and update functions for HR/People settings UI pages.
 
 import logging
 import uuid
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -139,7 +139,7 @@ class PeopleSettingsWebService:
         db: AsyncSession,
         organization_id: uuid.UUID,
         data: dict[str, Any],
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Update HR settings."""
         # Update allowed HR fields
         allowed_fields = [

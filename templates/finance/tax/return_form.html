@@ -15,40 +15,62 @@
 {% block content %}
 <div class="max-w-3xl mx-auto space-y-6">
     <div class="rounded-xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-800/50">
-        <h2 class="text-xl font-semibold text-slate-900 dark:text-white">New Tax Return</h2>
+        <h2 class="text-xl font-semibold text-slate-900 dark:text-white">
+            {{ "Edit Tax Return" if is_edit else "New Tax Return" }}
+        </h2>
         <p class="mt-1 text-sm text-slate-500">Select an open period and return type.</p>
-        <form class="mt-6 space-y-6">
+
+        {% if error %}
+        <div class="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form class="mt-6 space-y-6" method="post" action="{{ form_action }}">
+            {{ request.state.csrf_form | safe }}
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
                     <label class="form-label">Tax Period</label>
-                    <select class="form-select form-input">
+                    {% if is_edit %}
+                    <input type="hidden" name="tax_period_id" value="{{ selected_period_id }}">
+                    <select class="form-select form-input" disabled>
+                    {% else %}
+                    <select class="form-select form-input" name="tax_period_id" required>
+                    {% endif %}
                         <option value="">Select period</option>
                         {% for period in periods %}
-                        <option value="{{ period.period_id }}">{{ period.period_name }} ({{ period.start_date }} - {{ period.end_date }})</option>
+                        <option value="{{ period.period_id }}"
+                                {% if selected_period_id and selected_period_id == period.period_id|string %}selected{% endif %}>
+                            {{ period.period_name }} ({{ period.start_date }} - {{ period.end_date }})
+                        </option>
                         {% endfor %}
                     </select>
                 </div>
                 <div>
                     <label class="form-label">Return Type</label>
-                    <select class="form-select form-input">
-                        <option value="VAT">VAT</option>
-                        <option value="GST">GST</option>
-                        <option value="SALES_TAX">Sales Tax</option>
-                        <option value="WITHHOLDING">Withholding</option>
-                        <option value="INCOME">Income</option>
-                        <option value="PAYROLL">Payroll</option>
+                    <select class="form-select form-input" name="return_type" required>
+                        <option value="">Select type</option>
+                        {% for rt in return_types %}
+                        <option value="{{ rt.value }}"
+                                {% if selected_return_type and selected_return_type == rt.value %}selected{% endif %}>
+                            {{ rt.value | replace('_', ' ') | title }}
+                        </option>
+                        {% endfor %}
                     </select>
                 </div>
                 <div>
                     <label class="form-label">Adjustments</label>
-                    <input type="text" class="form-input" placeholder="0.00">
+                    <input type="text" name="adjustments" class="form-input" placeholder="0.00"
+                           value="{{ adjustments | default('0', true) }}">
                 </div>
             </div>
             <div class="flex items-center justify-between">
-                <p class="text-xs text-slate-500">Submission wiring is handled via API in a later step.</p>
-                <button type="button" disabled
-                        class="rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-400">
-                    Prepare Return
+                <p class="text-xs text-slate-500">
+                    {% if is_edit %}Changes will recalculate totals and move the return to Prepared.{% endif %}
+                </p>
+                <button type="submit"
+                        class="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">
+                    {{ "Update Return" if is_edit else "Prepare Return" }}
                 </button>
             </div>
         </form>

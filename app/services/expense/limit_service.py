@@ -14,7 +14,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from sqlalchemy import and_, func, or_, select
@@ -89,11 +89,11 @@ class EvaluationResult:
 
     result: LimitResultType
     message: str
-    triggered_rule: Optional[ExpenseLimitRule] = None
+    triggered_rule: ExpenseLimitRule | None = None
     period_spent: Decimal = Decimal("0")
-    period_start: Optional[date] = None
-    period_end: Optional[date] = None
-    eligible_approvers: List["EligibleApprover"] = field(default_factory=list)
+    period_start: date | None = None
+    period_end: date | None = None
+    eligible_approvers: list[EligibleApprover] = field(default_factory=list)
 
 
 @dataclass
@@ -104,7 +104,7 @@ class EligibleApprover:
     employee_name: str
     max_approval_amount: Decimal
     is_direct_manager: bool = False
-    grade_rank: Optional[int] = None
+    grade_rank: int | None = None
 
 
 # =============================================================================
@@ -126,7 +126,7 @@ class ExpenseLimitService:
     def __init__(
         self,
         db: Session,
-        ctx: Optional["WebAuthContext"] = None,
+        ctx: WebAuthContext | None = None,
     ) -> None:
         self.db = db
         self.ctx = ctx
@@ -139,10 +139,10 @@ class ExpenseLimitService:
         self,
         org_id: UUID,
         *,
-        scope_type: Optional[LimitScopeType] = None,
-        is_active: Optional[bool] = None,
-        search: Optional[str] = None,
-        pagination: Optional[PaginationParams] = None,
+        scope_type: LimitScopeType | None = None,
+        is_active: bool | None = None,
+        search: str | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[ExpenseLimitRule]:
         """List expense limit rules."""
         query = select(ExpenseLimitRule).where(
@@ -206,15 +206,15 @@ class ExpenseLimitService:
         limit_amount: Decimal,
         action_type: LimitActionType,
         effective_from: date,
-        scope_id: Optional[UUID] = None,
-        custom_period_days: Optional[int] = None,
+        scope_id: UUID | None = None,
+        custom_period_days: int | None = None,
         currency_code: str = "NGN",
-        dimension_filters: Optional[dict] = None,
-        action_config: Optional[dict] = None,
+        dimension_filters: dict | None = None,
+        action_config: dict | None = None,
         priority: int = 100,
-        effective_to: Optional[date] = None,
+        effective_to: date | None = None,
         is_active: bool = True,
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> ExpenseLimitRule:
         """Create a new expense limit rule."""
         rule = ExpenseLimitRule(
@@ -271,9 +271,9 @@ class ExpenseLimitService:
         self,
         org_id: UUID,
         *,
-        scope_type: Optional[str] = None,
-        is_active: Optional[bool] = None,
-        pagination: Optional[PaginationParams] = None,
+        scope_type: str | None = None,
+        is_active: bool | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[ExpenseApproverLimit]:
         """List expense approver limits."""
         query = select(ExpenseApproverLimit).where(
@@ -325,11 +325,11 @@ class ExpenseLimitService:
         *,
         scope_type: str,
         max_approval_amount: Decimal,
-        scope_id: Optional[UUID] = None,
+        scope_id: UUID | None = None,
         currency_code: str = "NGN",
-        dimension_filters: Optional[dict] = None,
-        escalate_to_employee_id: Optional[UUID] = None,
-        escalate_to_grade_min_rank: Optional[int] = None,
+        dimension_filters: dict | None = None,
+        escalate_to_employee_id: UUID | None = None,
+        escalate_to_grade_min_rank: int | None = None,
         can_approve_own_expenses: bool = False,
         is_active: bool = True,
     ) -> ExpenseApproverLimit:
@@ -378,8 +378,8 @@ class ExpenseLimitService:
     # =========================================================================
 
     def get_period_bounds(
-        self, period_type: LimitPeriodType, reference_date: Optional[date] = None
-    ) -> Tuple[date, date]:
+        self, period_type: LimitPeriodType, reference_date: date | None = None
+    ) -> tuple[date, date]:
         """Calculate period start and end dates."""
         ref = reference_date or date.today()
 
@@ -427,9 +427,9 @@ class ExpenseLimitService:
         period_start: date,
         period_end: date,
         *,
-        category_ids: Optional[List[UUID]] = None,
-        cost_center_ids: Optional[List[UUID]] = None,
-    ) -> Tuple[Decimal, int]:
+        category_ids: list[UUID] | None = None,
+        cost_center_ids: list[UUID] | None = None,
+    ) -> tuple[Decimal, int]:
         """
         Calculate cumulative expense usage for an employee in a period.
 
@@ -469,8 +469,8 @@ class ExpenseLimitService:
         period_type: str,
         period_start: date,
         period_end: date,
-        dimension_type: Optional[str] = None,
-        dimension_id: Optional[UUID] = None,
+        dimension_type: str | None = None,
+        dimension_id: UUID | None = None,
     ) -> ExpensePeriodUsage:
         """Get or create a period usage cache entry."""
         usage = self.db.scalar(
@@ -531,9 +531,9 @@ class ExpenseLimitService:
     def get_applicable_rules(
         self,
         org_id: UUID,
-        employee: "Employee",
-        claim_date: Optional[date] = None,
-    ) -> List[ExpenseLimitRule]:
+        employee: Employee,
+        claim_date: date | None = None,
+    ) -> list[ExpenseLimitRule]:
         """
         Get all applicable limit rules for an employee.
 
@@ -669,7 +669,7 @@ class ExpenseLimitService:
             )
 
         # Track most restrictive result
-        most_restrictive: Optional[EvaluationResult] = None
+        most_restrictive: EvaluationResult | None = None
         result_priority = {
             LimitResultType.PASSED: 0,
             LimitResultType.WARNING: 1,
@@ -692,11 +692,9 @@ class ExpenseLimitService:
                         rule.increment_block_count()
 
             # Track most restrictive
-            if most_restrictive is None:
-                most_restrictive = rule_result
-            elif result_priority.get(rule_result.result, 0) > result_priority.get(
-                most_restrictive.result, 0
-            ):
+            if most_restrictive is None or result_priority.get(
+                rule_result.result, 0
+            ) > result_priority.get(most_restrictive.result, 0):
                 most_restrictive = rule_result
 
         final_result = most_restrictive or EvaluationResult(
@@ -746,7 +744,7 @@ class ExpenseLimitService:
         self,
         claim: ExpenseClaim,
         rule: ExpenseLimitRule,
-        employee: "Employee",
+        employee: Employee,
     ) -> EvaluationResult:
         """Evaluate a single rule against a claim."""
         claim_amount = claim.total_claimed_amount
@@ -798,8 +796,8 @@ class ExpenseLimitService:
         rule: ExpenseLimitRule,
         claim_amount: Decimal,
         period_spent: Decimal,
-        period_start: Optional[date] = None,
-        period_end: Optional[date] = None,
+        period_start: date | None = None,
+        period_end: date | None = None,
     ) -> EvaluationResult:
         """Create result for exceeded limit based on action type."""
         remaining = rule.limit_amount - period_spent
@@ -853,9 +851,9 @@ class ExpenseLimitService:
     def get_eligible_approvers(
         self,
         org_id: UUID,
-        employee: "Employee",
+        employee: Employee,
         amount: Decimal,
-    ) -> List[EligibleApprover]:
+    ) -> list[EligibleApprover]:
         """
         Find employees who can approve this amount.
 
@@ -933,8 +931,8 @@ class ExpenseLimitService:
         return eligible
 
     def _get_employee_approval_limit(
-        self, org_id: UUID, employee: "Employee"
-    ) -> Optional[Decimal]:
+        self, org_id: UUID, employee: Employee
+    ) -> Decimal | None:
         """Get the maximum approval amount for an employee."""
         # Check employee-specific limit
         emp_limit = self.db.scalar(
@@ -980,11 +978,12 @@ class ExpenseLimitService:
         self,
         org_id: UUID,
         limit: ExpenseApproverLimit,
-        requester: "Employee",
-    ) -> List["Employee"]:
+        requester: Employee,
+    ) -> list[Employee]:
         """Find employees who have this approver limit."""
         from app.models.people.hr.employee import Employee as EmployeeModel
         from app.models.people.hr.employee import EmployeeStatus
+        from app.models.rbac import PersonRole
 
         if limit.scope_type == "EMPLOYEE":
             if limit.scope_id:
@@ -1022,6 +1021,25 @@ class ExpenseLimitService:
                 )
             return []
 
+        elif limit.scope_type == "ROLE":
+            if limit.scope_id:
+                return list(
+                    self.db.scalars(
+                        select(EmployeeModel)
+                        .join(
+                            PersonRole,
+                            PersonRole.person_id == EmployeeModel.person_id,
+                        )
+                        .where(
+                            EmployeeModel.organization_id == org_id,
+                            EmployeeModel.status == EmployeeStatus.ACTIVE,
+                            PersonRole.role_id == limit.scope_id,
+                        )
+                        .limit(20)
+                    ).all()
+                )
+            return []
+
         return []
 
     # =========================================================================
@@ -1032,12 +1050,12 @@ class ExpenseLimitService:
         self,
         org_id: UUID,
         *,
-        claim_id: Optional[UUID] = None,
-        rule_id: Optional[UUID] = None,
-        result: Optional[LimitResultType] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
-        pagination: Optional[PaginationParams] = None,
+        claim_id: UUID | None = None,
+        rule_id: UUID | None = None,
+        result: LimitResultType | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[ExpenseLimitEvaluation]:
         """List expense limit evaluations."""
         query = (

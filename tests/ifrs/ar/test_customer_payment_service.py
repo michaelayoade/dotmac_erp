@@ -11,10 +11,10 @@ import pytest
 
 from tests.ifrs.ar.conftest import (
     MockCustomer,
-    MockInvoice,
     MockCustomerPayment,
-    MockPaymentAllocation,
+    MockInvoice,
     MockInvoiceStatus,
+    MockPaymentAllocation,
 )
 
 
@@ -41,13 +41,13 @@ class TestCreateCustomerPayment:
 
     def test_create_payment_success(self, mock_db, org_id, user_id):
         """Test successful payment creation."""
-        from app.services.finance.ar.customer_payment import (
-            CustomerPaymentService,
-            CustomerPaymentInput,
-            PaymentAllocationInput,
-        )
         from app.models.finance.ar.customer_payment import PaymentMethod
         from app.models.finance.ar.invoice import InvoiceStatus
+        from app.services.finance.ar.customer_payment import (
+            CustomerPaymentInput,
+            CustomerPaymentService,
+            PaymentAllocationInput,
+        )
 
         customer = MockCustomer(organization_id=org_id)
 
@@ -105,7 +105,7 @@ class TestCreateCustomerPayment:
                             "app.services.finance.ar.customer_payment.SequenceService.get_next_number",
                             return_value="RCP-0001",
                         ):
-                            result = CustomerPaymentService.create_payment(
+                            CustomerPaymentService.create_payment(
                                 mock_db, org_id, payment_input, user_id
                             )
 
@@ -115,11 +115,12 @@ class TestCreateCustomerPayment:
     def test_create_payment_invalid_customer_fails(self, mock_db, org_id, user_id):
         """Test that invalid customer fails validation."""
         from fastapi import HTTPException
-        from app.services.finance.ar.customer_payment import (
-            CustomerPaymentService,
-            CustomerPaymentInput,
-        )
+
         from app.models.finance.ar.customer_payment import PaymentMethod
+        from app.services.finance.ar.customer_payment import (
+            CustomerPaymentInput,
+            CustomerPaymentService,
+        )
 
         mock_db.get.return_value = None  # Customer not found
 
@@ -147,8 +148,8 @@ class TestPostPayment:
 
     def test_post_pending_payment(self, mock_db, org_id, user_id):
         """Test posting a pending payment."""
-        from app.services.finance.ar.customer_payment import CustomerPaymentService
         from app.models.finance.ar.customer_payment import PaymentStatus
+        from app.services.finance.ar.customer_payment import CustomerPaymentService
 
         customer = MockCustomer(organization_id=org_id)
 
@@ -210,8 +211,8 @@ class TestMarkBouncedPayment:
 
     def test_mark_bounced_pending_payment(self, mock_db, org_id):
         """Test marking a pending payment as bounced."""
-        from app.services.finance.ar.customer_payment import CustomerPaymentService
         from app.models.finance.ar.customer_payment import PaymentStatus
+        from app.services.finance.ar.customer_payment import CustomerPaymentService
 
         payment = MockCustomerPayment(
             organization_id=org_id,
@@ -230,8 +231,8 @@ class TestMarkBouncedPayment:
 
     def test_mark_bounced_cleared_payment(self, mock_db, org_id):
         """Test marking a cleared payment as bounced reverses allocations."""
-        from app.services.finance.ar.customer_payment import CustomerPaymentService
         from app.models.finance.ar.customer_payment import PaymentStatus
+        from app.services.finance.ar.customer_payment import CustomerPaymentService
 
         payment = MockCustomerPayment(
             organization_id=org_id,
@@ -284,8 +285,8 @@ class TestVoidCustomerPayment:
 
     def test_void_pending_payment(self, mock_db, org_id, user_id):
         """Test voiding a pending payment."""
-        from app.services.finance.ar.customer_payment import CustomerPaymentService
         from app.models.finance.ar.customer_payment import PaymentStatus
+        from app.services.finance.ar.customer_payment import CustomerPaymentService
 
         payment = MockCustomerPayment(
             organization_id=org_id,
@@ -304,8 +305,9 @@ class TestVoidCustomerPayment:
     def test_void_already_void_fails(self, mock_db, org_id, user_id):
         """Test that voiding already voided payment fails."""
         from fastapi import HTTPException
-        from app.services.finance.ar.customer_payment import CustomerPaymentService
+
         from app.models.finance.ar.customer_payment import PaymentStatus
+        from app.services.finance.ar.customer_payment import CustomerPaymentService
 
         payment = MockCustomerPayment(
             organization_id=org_id,
@@ -340,6 +342,7 @@ class TestGetCustomerPayment:
     def test_get_nonexistent_raises(self, mock_db):
         """Test getting non-existent payment raises exception."""
         from fastapi import HTTPException
+
         from app.services.finance.ar.customer_payment import CustomerPaymentService
 
         mock_db.get.return_value = None
@@ -356,8 +359,8 @@ class TestListCustomerPayments:
 
     def test_list_with_filters(self, mock_db, org_id):
         """Test listing payments with filters."""
-        from app.services.finance.ar.customer_payment import CustomerPaymentService
         from app.models.finance.ar.customer_payment import PaymentStatus
+        from app.services.finance.ar.customer_payment import CustomerPaymentService
 
         payments = [MockCustomerPayment(organization_id=org_id)]
         mock_query = MagicMock()

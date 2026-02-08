@@ -10,7 +10,6 @@ import logging
 import uuid
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -46,11 +45,11 @@ __all__ = [
 class DepartmentFilters:
     """Filters for listing departments."""
 
-    organization_id: Optional[uuid.UUID] = None
-    is_active: Optional[bool] = None
-    parent_department_id: Optional[uuid.UUID] = None
-    cost_center_id: Optional[uuid.UUID] = None
-    search: Optional[str] = None
+    organization_id: uuid.UUID | None = None
+    is_active: bool | None = None
+    parent_department_id: uuid.UUID | None = None
+    cost_center_id: uuid.UUID | None = None
+    search: str | None = None
 
 
 @dataclass
@@ -59,10 +58,10 @@ class DepartmentCreateData:
 
     department_code: str
     department_name: str
-    description: Optional[str] = None
-    parent_department_id: Optional[uuid.UUID] = None
-    cost_center_id: Optional[uuid.UUID] = None
-    head_id: Optional[uuid.UUID] = None
+    description: str | None = None
+    parent_department_id: uuid.UUID | None = None
+    cost_center_id: uuid.UUID | None = None
+    head_id: uuid.UUID | None = None
     is_active: bool = True
 
 
@@ -70,13 +69,13 @@ class DepartmentCreateData:
 class DepartmentUpdateData:
     """Data for updating a department (all fields optional)."""
 
-    department_code: Optional[str] = None
-    department_name: Optional[str] = None
-    description: Optional[str] = None
-    parent_department_id: Optional[uuid.UUID] = None
-    cost_center_id: Optional[uuid.UUID] = None
-    head_id: Optional[uuid.UUID] = None
-    is_active: Optional[bool] = None
+    department_code: str | None = None
+    department_name: str | None = None
+    description: str | None = None
+    parent_department_id: uuid.UUID | None = None
+    cost_center_id: uuid.UUID | None = None
+    head_id: uuid.UUID | None = None
+    is_active: bool | None = None
 
 
 @dataclass
@@ -86,12 +85,12 @@ class DepartmentNode:
     department_id: uuid.UUID
     department_code: str
     department_name: str
-    parent_department_id: Optional[uuid.UUID]
-    cost_center_id: Optional[uuid.UUID]
-    head_id: Optional[uuid.UUID]
-    head_name: Optional[str]
+    parent_department_id: uuid.UUID | None
+    cost_center_id: uuid.UUID | None
+    head_id: uuid.UUID | None
+    head_name: str | None
     is_active: bool
-    children: List["DepartmentNode"] = field(default_factory=list)
+    children: list[DepartmentNode] = field(default_factory=list)
 
 
 @dataclass
@@ -127,9 +126,9 @@ class DesignationHeadcount:
 class DesignationFilters:
     """Filters for listing designations."""
 
-    organization_id: Optional[uuid.UUID] = None
-    search: Optional[str] = None
-    is_active: Optional[bool] = None
+    organization_id: uuid.UUID | None = None
+    search: str | None = None
+    is_active: bool | None = None
 
 
 @dataclass
@@ -138,7 +137,7 @@ class DesignationCreateData:
 
     designation_code: str
     designation_name: str
-    description: Optional[str] = None
+    description: str | None = None
     is_active: bool = True
 
 
@@ -146,10 +145,10 @@ class DesignationCreateData:
 class DesignationUpdateData:
     """Data for updating a designation (all fields optional)."""
 
-    designation_code: Optional[str] = None
-    designation_name: Optional[str] = None
-    description: Optional[str] = None
-    is_active: Optional[bool] = None
+    designation_code: str | None = None
+    designation_name: str | None = None
+    description: str | None = None
+    is_active: bool | None = None
 
 
 # ==============================================================================
@@ -161,9 +160,9 @@ class DesignationUpdateData:
 class EmploymentTypeFilters:
     """Filters for listing employment types."""
 
-    organization_id: Optional[uuid.UUID] = None
-    search: Optional[str] = None
-    is_active: Optional[bool] = None
+    organization_id: uuid.UUID | None = None
+    search: str | None = None
+    is_active: bool | None = None
 
 
 @dataclass
@@ -172,7 +171,7 @@ class EmploymentTypeCreateData:
 
     type_code: str
     type_name: str
-    description: Optional[str] = None
+    description: str | None = None
     is_active: bool = True
 
 
@@ -180,10 +179,10 @@ class EmploymentTypeCreateData:
 class EmploymentTypeUpdateData:
     """Data for updating an employment type (all fields optional)."""
 
-    type_code: Optional[str] = None
-    type_name: Optional[str] = None
-    description: Optional[str] = None
-    is_active: Optional[bool] = None
+    type_code: str | None = None
+    type_name: str | None = None
+    description: str | None = None
+    is_active: bool | None = None
 
 
 # ==============================================================================
@@ -195,9 +194,9 @@ class EmploymentTypeUpdateData:
 class EmployeeGradeFilters:
     """Filters for listing employee grades."""
 
-    organization_id: Optional[uuid.UUID] = None
-    search: Optional[str] = None
-    is_active: Optional[bool] = None
+    organization_id: uuid.UUID | None = None
+    search: str | None = None
+    is_active: bool | None = None
 
 
 @dataclass
@@ -206,10 +205,10 @@ class EmployeeGradeCreateData:
 
     grade_code: str
     grade_name: str
-    description: Optional[str] = None
+    description: str | None = None
     rank: int = 0
-    min_salary: Optional[Decimal] = None
-    max_salary: Optional[Decimal] = None
+    min_salary: Decimal | None = None
+    max_salary: Decimal | None = None
     is_active: bool = True
 
 
@@ -217,10 +216,10 @@ class EmployeeGradeCreateData:
 class EmployeeGradeUpdateData:
     """Data for updating an employee grade (all fields optional)."""
 
-    grade_code: Optional[str] = None
-    grade_name: Optional[str] = None
-    description: Optional[str] = None
-    rank: Optional[int] = None
-    min_salary: Optional[Decimal] = None
-    max_salary: Optional[Decimal] = None
-    is_active: Optional[bool] = None
+    grade_code: str | None = None
+    grade_name: str | None = None
+    description: str | None = None
+    rank: int | None = None
+    min_salary: Decimal | None = None
+    max_salary: Decimal | None = None
+    is_active: bool | None = None

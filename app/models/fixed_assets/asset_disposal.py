@@ -6,7 +6,6 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Date,
@@ -94,32 +93,32 @@ class AssetDisposal(Base):
     )
 
     # Buyer/Recipient details
-    buyer_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    buyer_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    invoice_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    buyer_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    buyer_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    invoice_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Reason and documentation
-    disposal_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    authorization_reference: Mapped[Optional[str]] = mapped_column(
+    disposal_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    authorization_reference: Mapped[str | None] = mapped_column(
         String(100), nullable=True
     )
 
     # Trade-in details
-    trade_in_asset_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    trade_in_asset_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
 
     # Insurance claim details
-    insurance_claim_reference: Mapped[Optional[str]] = mapped_column(
+    insurance_claim_reference: Mapped[str | None] = mapped_column(
         String(100), nullable=True
     )
-    insurance_proceeds: Mapped[Optional[Decimal]] = mapped_column(
+    insurance_proceeds: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6), nullable=True
     )
 
     # Accounting
-    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -129,11 +128,11 @@ class AssetDisposal(Base):
         UUID(as_uuid=True),
         nullable=False,
     )
-    approved_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )

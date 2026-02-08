@@ -1,4 +1,5 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import status_badge %}
 {% from "components/macros.html" import empty_state %}
 
 {% block page_title %}AR Receipt{% endblock %}
@@ -30,6 +31,7 @@
     </a>
     <form method="POST" action="/finance/ar/receipts/{{ receipt.receipt_id }}/delete"
           onsubmit="return confirm('Are you sure you want to delete this receipt? This action cannot be undone.');">
+        {{ request.state.csrf_form | safe }}
         <button type="submit"
                 class="inline-flex items-center gap-2 rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 dark:border-red-600 dark:text-red-400 dark:hover:bg-red-900/20">
             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -71,7 +73,7 @@
                 <p class="text-sm text-slate-500">{{ receipt.customer_name | default("Customer") }}</p>
             </div>
             <div class="flex items-center gap-3">
-                <span class="inline-flex rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700 dark:bg-slate-700 dark:text-slate-400">{{ receipt.status }}</span>
+                {{ status_badge(receipt.status) }}
                 <div class="text-right">
                     <p class="text-xs uppercase tracking-wide text-slate-500">Amount</p>
                     <p class="text-lg font-semibold text-slate-900 dark:text-white">{{ receipt.amount }}</p>
@@ -85,7 +87,7 @@
             </div>
             <div>
                 <p class="text-xs uppercase tracking-wide text-slate-500">Payment Method</p>
-                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ receipt.payment_method }}</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ receipt.payment_method | replace('_', ' ') | title }}</p>
             </div>
             <div>
                 <p class="text-xs uppercase tracking-wide text-slate-500">Reference</p>

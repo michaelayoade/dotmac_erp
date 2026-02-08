@@ -4,17 +4,18 @@ Tests for TaxTransactionService.
 Tests CRUD operations, invoice line tax creation, and VAT register/liability reports.
 """
 
-import pytest
 from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
+import pytest
+
 from app.models.finance.tax.tax_transaction import TaxTransactionType
 from app.services.finance.tax.tax_transaction import (
-    TaxTransactionService,
-    TaxTransactionInput,
     TaxReturnSummary,
+    TaxTransactionInput,
+    TaxTransactionService,
 )
 
 
@@ -145,7 +146,7 @@ class TestCreateTransaction:
             functional_tax_amount=Decimal("200.00"),
         )
 
-        result = TaxTransactionService.create_transaction(mock_db, org_id, input_data)
+        TaxTransactionService.create_transaction(mock_db, org_id, input_data)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -223,7 +224,7 @@ class TestCreateFromInvoiceLine:
         with patch.object(TaxTransactionService, "create_transaction") as mock_create:
             mock_create.return_value = MockTaxTransaction()
 
-            result = TaxTransactionService.create_from_invoice_line(
+            TaxTransactionService.create_from_invoice_line(
                 db=mock_db,
                 organization_id=org_id,
                 fiscal_period_id=uuid4(),
@@ -258,7 +259,7 @@ class TestCreateFromInvoiceLine:
         with patch.object(TaxTransactionService, "create_transaction") as mock_create:
             mock_create.return_value = MockTaxTransaction()
 
-            result = TaxTransactionService.create_from_invoice_line(
+            TaxTransactionService.create_from_invoice_line(
                 db=mock_db,
                 organization_id=org_id,
                 fiscal_period_id=uuid4(),

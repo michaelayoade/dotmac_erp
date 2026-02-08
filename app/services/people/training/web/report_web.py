@@ -5,7 +5,6 @@ Training Web Service - Report methods.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 from uuid import UUID
 
 from fastapi import Request
@@ -29,8 +28,8 @@ class ReportWebService:
     def completion_report_context(
         db: Session,
         organization_id: UUID,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict:
         """Build context for completion report."""
         svc = TrainingService(db)
@@ -49,8 +48,8 @@ class ReportWebService:
     def by_department_report_context(
         db: Session,
         organization_id: UUID,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict:
         """Build context for by-department report."""
         svc = TrainingService(db)
@@ -69,8 +68,8 @@ class ReportWebService:
     def cost_analysis_report_context(
         db: Session,
         organization_id: UUID,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict:
         """Build context for cost analysis report."""
         svc = TrainingService(db)
@@ -89,8 +88,8 @@ class ReportWebService:
     def effectiveness_report_context(
         db: Session,
         organization_id: UUID,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> dict:
         """Build context for effectiveness report."""
         svc = TrainingService(db)
@@ -112,8 +111,8 @@ class ReportWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> HTMLResponse:
         """Render completion report page."""
         context = base_context(
@@ -133,8 +132,8 @@ class ReportWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> HTMLResponse:
         """Render by-department report page."""
         context = base_context(
@@ -154,8 +153,8 @@ class ReportWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> HTMLResponse:
         """Render cost analysis report page."""
         context = base_context(
@@ -175,8 +174,8 @@ class ReportWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
     ) -> HTMLResponse:
         """Render effectiveness report page."""
         context = base_context(

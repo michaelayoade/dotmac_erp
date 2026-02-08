@@ -5,12 +5,10 @@ Implements design principles from Document 07, 12, and 13.
 
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import DateTime, Numeric, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
-
 
 # Common type aliases for IFRS money precision
 MoneyType = Numeric(20, 6)
@@ -35,7 +33,7 @@ class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, onupdate=func.now()
     )
 
@@ -46,7 +44,7 @@ class EffectiveDateMixin:
     effective_from: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    effective_to: Mapped[Optional[datetime]] = mapped_column(
+    effective_to: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
@@ -57,22 +55,22 @@ class SoDTrackingMixin:
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), nullable=False
     )
-    submitted_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    submitted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    submitted_at: Mapped[Optional[datetime]] = mapped_column(
+    submitted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    approved_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    posted_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    posted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    posted_at: Mapped[Optional[datetime]] = mapped_column(
+    posted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
@@ -88,6 +86,6 @@ class OrganizationMixin:
 class CorrelationMixin:
     """Correlation ID tracking for distributed operations."""
 
-    correlation_id: Mapped[Optional[str]] = mapped_column(
+    correlation_id: Mapped[str | None] = mapped_column(
         String(100), nullable=True, index=True
     )

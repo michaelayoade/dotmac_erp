@@ -10,10 +10,10 @@ all users are properly scoped to a tenant/organization.
 Before running this migration, ensure all existing people have an organization_id set.
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "make_person_org_required"

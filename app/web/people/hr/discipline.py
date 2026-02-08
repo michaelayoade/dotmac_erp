@@ -6,7 +6,7 @@ Provides HTML template routes for discipline case management:
 - Case creation forms
 """
 
-from typing import Optional
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import (
@@ -20,12 +20,10 @@ from fastapi import (
     UploadFile,
 )
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from urllib.parse import quote
 from sqlalchemy.orm import Session
 
 from app.services.people.discipline.web import discipline_web_service
-from app.web.deps import get_db, require_hr_access, WebAuthContext
-
+from app.web.deps import WebAuthContext, get_db, require_hr_access
 
 router = APIRouter(prefix="/discipline", tags=["discipline-web"])
 
@@ -38,10 +36,10 @@ router = APIRouter(prefix="/discipline", tags=["discipline-web"])
 @router.get("", response_class=HTMLResponse)
 def list_cases(
     request: Request,
-    status: Optional[str] = None,
-    violation_type: Optional[str] = None,
-    severity: Optional[str] = None,
-    employee_id: Optional[str] = None,
+    status: str | None = None,
+    violation_type: str | None = None,
+    severity: str | None = None,
+    employee_id: str | None = None,
     include_closed: bool = False,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
@@ -95,20 +93,20 @@ def discipline_employee_search(
 @router.post("/new")
 def create_case(
     request: Request,
-    employee_id: Optional[str] = Form(None),
-    violation_type: Optional[str] = Form(None),
-    severity: Optional[str] = Form(None),
-    subject: Optional[str] = Form(None),
-    description: Optional[str] = Form(None),
-    incident_date: Optional[str] = Form(None),
-    reported_by_id: Optional[str] = Form(None),
+    employee_id: str | None = Form(None),
+    violation_type: str | None = Form(None),
+    severity: str | None = Form(None),
+    subject: str | None = Form(None),
+    description: str | None = Form(None),
+    incident_date: str | None = Form(None),
+    reported_by_id: str | None = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
     """Create a new disciplinary case."""
     form = getattr(request.state, "csrf_form", None)
-    employee_name: Optional[str] = None
-    reported_by_name: Optional[str] = None
+    employee_name: str | None = None
+    reported_by_name: str | None = None
     if form:
         # Prefer CSRF-parsed form data when available (middleware may consume body).
         employee_id = form.get("employee_id") or employee_id
@@ -199,8 +197,8 @@ def case_detail(
 def issue_query(
     request: Request,
     case_id: UUID,
-    query_text: Optional[str] = Form(None),
-    response_due_date: Optional[str] = Form(None),
+    query_text: str | None = Form(None),
+    response_due_date: str | None = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -229,9 +227,9 @@ def issue_query(
 def schedule_hearing(
     request: Request,
     case_id: UUID,
-    hearing_date: Optional[str] = Form(None),
-    hearing_location: Optional[str] = Form(None),
-    panel_chair_id: Optional[str] = Form(None),
+    hearing_date: str | None = Form(None),
+    hearing_location: str | None = Form(None),
+    panel_chair_id: str | None = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -262,7 +260,7 @@ def schedule_hearing(
 def record_hearing(
     request: Request,
     case_id: UUID,
-    hearing_notes: Optional[str] = Form(None),
+    hearing_notes: str | None = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -289,11 +287,11 @@ def record_hearing(
 def record_decision(
     request: Request,
     case_id: UUID,
-    decision_summary: Optional[str] = Form(None),
-    action_type: Optional[str] = Form(None),
-    action_description: Optional[str] = Form(None),
-    effective_date: Optional[str] = Form(None),
-    end_date: Optional[str] = Form(None),
+    decision_summary: str | None = Form(None),
+    action_type: str | None = Form(None),
+    action_description: str | None = Form(None),
+    effective_date: str | None = Form(None),
+    end_date: str | None = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -361,9 +359,9 @@ def withdraw_case(
 def add_witness(
     request: Request,
     case_id: UUID,
-    employee_id: Optional[str] = Form(None),
-    external_name: Optional[str] = Form(None),
-    external_contact: Optional[str] = Form(None),
+    employee_id: str | None = Form(None),
+    external_name: str | None = Form(None),
+    external_contact: str | None = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -410,17 +408,18 @@ def upload_document(
     case_id: UUID,
     file: UploadFile = File(...),
     document_type: str = Form(...),
-    title: Optional[str] = Form(None),
-    description: Optional[str] = Form(None),
+    title: str | None = Form(None),
+    description: str | None = Form(None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
     """Upload a document to a disciplinary case."""
     from fastapi.responses import RedirectResponse
+
+    from app.models.people.discipline import DocumentType as DocType
     from app.services.people.discipline.attachment_service import (
         DisciplineAttachmentService,
     )
-    from app.models.people.discipline import DocumentType as DocType
 
     # Parse document type
     try:
@@ -467,6 +466,7 @@ def download_document(
 ):
     """Download a document from a disciplinary case."""
     from fastapi.responses import FileResponse
+
     from app.services.people.discipline.attachment_service import (
         DisciplineAttachmentService,
     )
@@ -503,6 +503,7 @@ def delete_document(
 ):
     """Delete a document from a disciplinary case."""
     from fastapi.responses import RedirectResponse
+
     from app.services.people.discipline.attachment_service import (
         DisciplineAttachmentService,
     )

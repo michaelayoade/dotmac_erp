@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import logging
 import math
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 from datetime import tzinfo as dt_tzinfo
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -120,7 +120,7 @@ class AttendanceService:
     def __init__(
         self,
         db: Session,
-        ctx: Optional["WebAuthContext"] = None,
+        ctx: WebAuthContext | None = None,
     ) -> None:
         self.db = db
         self.ctx = ctx
@@ -185,7 +185,7 @@ class AttendanceService:
         self,
         org_id: UUID,
         employee_id: UUID,
-    ) -> Optional[Location]:
+    ) -> Location | None:
         return self.db.scalar(
             select(Location)
             .join(Employee, Employee.assigned_location_id == Location.location_id)
@@ -200,7 +200,7 @@ class AttendanceService:
     def _normalize_dt(value: datetime) -> datetime:
         """Ensure datetime is timezone-aware (default UTC)."""
         if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
+            return value.replace(tzinfo=UTC)
         return value
 
     def _org_timezone_name(self, org_id: UUID) -> str:
@@ -214,7 +214,7 @@ class AttendanceService:
         try:
             return ZoneInfo(tz_name)
         except Exception:
-            return timezone.utc
+            return UTC
 
     def get_org_tzinfo(self, org_id: UUID) -> dt_tzinfo:
         """Public accessor for org timezone info."""
@@ -232,17 +232,17 @@ class AttendanceService:
         return value
 
     @staticmethod
-    def _now_like(reference: Optional[datetime] = None) -> datetime:
+    def _now_like(reference: datetime | None = None) -> datetime:
         """Return timezone-aware now, using reference tz when available."""
         if reference and reference.tzinfo is not None:
             return datetime.now(tz=reference.tzinfo)
-        return datetime.now(tz=timezone.utc)
+        return datetime.now(tz=UTC)
 
     @staticmethod
     def _combine_date_time(
         day: date,
         clock: time,
-        tzinfo: Optional[dt_tzinfo],
+        tzinfo: dt_tzinfo | None,
     ) -> datetime:
         dt = datetime.combine(day, clock)
         if tzinfo is not None:
@@ -253,8 +253,8 @@ class AttendanceService:
         self,
         org_id: UUID,
         employee_id: UUID,
-        latitude: Optional[float],
-        longitude: Optional[float],
+        latitude: float | None,
+        longitude: float | None,
         *,
         action_label: str,
     ) -> None:
@@ -326,9 +326,9 @@ class AttendanceService:
         self,
         org_id: UUID,
         *,
-        search: Optional[str] = None,
-        is_active: Optional[bool] = None,
-        pagination: Optional[PaginationParams] = None,
+        search: str | None = None,
+        is_active: bool | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[ShiftType]:
         """List shift types for an organization."""
         query = select(ShiftType).where(ShiftType.organization_id == org_id)
@@ -384,16 +384,16 @@ class AttendanceService:
         shift_name: str,
         start_time: time,
         end_time: time,
-        working_hours: Optional[Decimal] = None,
+        working_hours: Decimal | None = None,
         late_entry_grace_period: int = 0,
         early_exit_grace_period: int = 0,
         enable_half_day: bool = True,
-        half_day_threshold_hours: Optional[Decimal] = None,
+        half_day_threshold_hours: Decimal | None = None,
         enable_overtime: bool = False,
-        overtime_threshold_hours: Optional[Decimal] = None,
+        overtime_threshold_hours: Decimal | None = None,
         break_duration_minutes: int = 60,
         is_active: bool = True,
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> ShiftType:
         """Create a new shift type."""
         # Calculate working hours if not provided
@@ -457,11 +457,11 @@ class AttendanceService:
         self,
         org_id: UUID,
         *,
-        employee_id: Optional[UUID] = None,
-        shift_type_id: Optional[UUID] = None,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-        pagination: Optional[PaginationParams] = None,
+        employee_id: UUID | None = None,
+        shift_type_id: UUID | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[ShiftAssignment]:
         """List shift assignments for an organization."""
         query = select(ShiftAssignment).where(ShiftAssignment.organization_id == org_id)
@@ -521,7 +521,7 @@ class AttendanceService:
         employee_id: UUID,
         shift_type_id: UUID,
         start_date: date,
-        end_date: Optional[date] = None,
+        end_date: date | None = None,
         is_active: bool = True,
     ) -> ShiftAssignment:
         """Create a shift assignment."""
@@ -573,11 +573,11 @@ class AttendanceService:
         self,
         org_id: UUID,
         *,
-        employee_id: Optional[UUID] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
-        status: Optional[AttendanceStatus] = None,
-        pagination: Optional[PaginationParams] = None,
+        employee_id: UUID | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        status: AttendanceStatus | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[Attendance]:
         """List attendance records."""
         query = select(Attendance).where(Attendance.organization_id == org_id)
@@ -633,7 +633,7 @@ class AttendanceService:
         org_id: UUID,
         employee_id: UUID,
         attendance_date: date,
-    ) -> Optional[Attendance]:
+    ) -> Attendance | None:
         """Get attendance for an employee on a specific date."""
         return self.db.scalar(
             select(Attendance).where(
@@ -650,15 +650,15 @@ class AttendanceService:
         employee_id: UUID,
         attendance_date: date,
         status: AttendanceStatus = AttendanceStatus.PRESENT,
-        shift_type_id: Optional[UUID] = None,
-        check_in: Optional[datetime] = None,
-        check_out: Optional[datetime] = None,
-        working_hours: Optional[Decimal] = None,
+        shift_type_id: UUID | None = None,
+        check_in: datetime | None = None,
+        check_out: datetime | None = None,
+        working_hours: Decimal | None = None,
         late_entry: bool = False,
         early_exit: bool = False,
-        remarks: Optional[str] = None,
+        remarks: str | None = None,
         marked_by: str = "MANUAL",
-        leave_application_id: Optional[UUID] = None,
+        leave_application_id: UUID | None = None,
     ) -> Attendance:
         """Create an attendance record."""
         # Check for duplicate
@@ -696,11 +696,11 @@ class AttendanceService:
         org_id: UUID,
         employee_id: UUID,
         *,
-        check_in_time: Optional[datetime] = None,
-        shift_type_id: Optional[UUID] = None,
-        notes: Optional[str] = None,
-        latitude: Optional[float] = None,
-        longitude: Optional[float] = None,
+        check_in_time: datetime | None = None,
+        shift_type_id: UUID | None = None,
+        notes: str | None = None,
+        latitude: float | None = None,
+        longitude: float | None = None,
     ) -> Attendance:
         """Record employee check-in."""
         now = (
@@ -759,10 +759,10 @@ class AttendanceService:
         org_id: UUID,
         employee_id: UUID,
         *,
-        check_out_time: Optional[datetime] = None,
-        notes: Optional[str] = None,
-        latitude: Optional[float] = None,
-        longitude: Optional[float] = None,
+        check_out_time: datetime | None = None,
+        notes: str | None = None,
+        latitude: float | None = None,
+        longitude: float | None = None,
     ) -> Attendance:
         """Record employee check-out."""
         now = (
@@ -818,8 +818,8 @@ class AttendanceService:
         org_id: UUID,
         attendance_id: UUID,
         *,
-        check_in_time: Optional[datetime] = None,
-        notes: Optional[str] = None,
+        check_in_time: datetime | None = None,
+        notes: str | None = None,
     ) -> Attendance:
         """Record check-in against an existing attendance record."""
         attendance = self.get_attendance(org_id, attendance_id)
@@ -861,8 +861,8 @@ class AttendanceService:
         org_id: UUID,
         attendance_id: UUID,
         *,
-        check_out_time: Optional[datetime] = None,
-        notes: Optional[str] = None,
+        check_out_time: datetime | None = None,
+        notes: str | None = None,
     ) -> Attendance:
         """Record check-out against an existing attendance record."""
         attendance = self.get_attendance(org_id, attendance_id)
@@ -913,11 +913,11 @@ class AttendanceService:
         org_id: UUID,
         *,
         attendance_date: date,
-        records: Optional[List[dict]] = None,
-        employee_ids: Optional[List[UUID]] = None,
+        records: list[dict] | None = None,
+        employee_ids: list[UUID] | None = None,
         status: AttendanceStatus = AttendanceStatus.PRESENT,
-        shift_type_id: Optional[UUID] = None,
-        remarks: Optional[str] = None,
+        shift_type_id: UUID | None = None,
+        remarks: str | None = None,
     ) -> dict:
         """Bulk mark attendance for multiple employees."""
         if records is None:
@@ -937,7 +937,7 @@ class AttendanceService:
 
         success_count = 0
         failed_count = 0
-        errors: List[dict] = []
+        errors: list[dict] = []
 
         for record in records:
             employee_id = record["employee_id"]
@@ -1029,11 +1029,11 @@ class AttendanceService:
         self,
         org_id: UUID,
         *,
-        employee_id: Optional[UUID] = None,
-        status: Optional[AttendanceRequestStatus] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
-        pagination: Optional[PaginationParams] = None,
+        employee_id: UUID | None = None,
+        status: AttendanceRequestStatus | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[AttendanceRequest]:
         """List attendance requests with filters."""
         query = select(AttendanceRequest).where(
@@ -1094,9 +1094,9 @@ class AttendanceService:
         from_date: date,
         to_date: date,
         half_day: bool = False,
-        half_day_date: Optional[date] = None,
-        reason: Optional[str] = None,
-        explanation: Optional[str] = None,
+        half_day_date: date | None = None,
+        reason: str | None = None,
+        explanation: str | None = None,
     ) -> AttendanceRequest:
         """Create a new attendance request."""
         if to_date < from_date:
@@ -1202,7 +1202,7 @@ class AttendanceService:
         self.db.flush()
 
     def bulk_approve_attendance_requests(
-        self, org_id: UUID, request_ids: List[UUID]
+        self, org_id: UUID, request_ids: list[UUID]
     ) -> dict:
         """Bulk approve attendance requests."""
         updated = 0
@@ -1215,7 +1215,7 @@ class AttendanceService:
         return {"updated": updated, "requested": len(request_ids)}
 
     def bulk_reject_attendance_requests(
-        self, org_id: UUID, request_ids: List[UUID]
+        self, org_id: UUID, request_ids: list[UUID]
     ) -> dict:
         """Bulk reject attendance requests."""
         updated = 0
@@ -1264,9 +1264,9 @@ class AttendanceService:
         self,
         org_id: UUID,
         *,
-        employee_id: Optional[UUID] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
+        employee_id: UUID | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
     ) -> dict:
         """Get attendance status summary for a date range."""
         query = select(Attendance).where(Attendance.organization_id == org_id)
@@ -1436,9 +1436,9 @@ class AttendanceService:
         self,
         org_id: UUID,
         *,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-        department_id: Optional[UUID] = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        department_id: UUID | None = None,
     ) -> dict:
         """
         Get comprehensive attendance summary report.
@@ -1516,9 +1516,9 @@ class AttendanceService:
         self,
         org_id: UUID,
         *,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-        department_id: Optional[UUID] = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        department_id: UUID | None = None,
     ) -> dict:
         """
         Get attendance breakdown by employee.
@@ -1612,9 +1612,9 @@ class AttendanceService:
         self,
         org_id: UUID,
         *,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-        department_id: Optional[UUID] = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        department_id: UUID | None = None,
     ) -> dict:
         """
         Get detailed late arrivals and early departures report.

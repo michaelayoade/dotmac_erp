@@ -13,9 +13,9 @@ Usage:
 
 import argparse
 import sys
-from pathlib import Path
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
+from pathlib import Path
 from uuid import UUID
 
 # Add project root to path
@@ -26,9 +26,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.models.people.payroll.salary_structure import SalaryStructure
 from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
-
+from app.models.people.payroll.salary_structure import SalaryStructure
 
 # Excel file path
 EXCEL_PATH = Path("/root/.dotmac/jan paye (2) (1).xlsx")

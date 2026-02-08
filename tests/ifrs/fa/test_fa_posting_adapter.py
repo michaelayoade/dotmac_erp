@@ -7,7 +7,6 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
-
 from tests.ifrs.fa.conftest import (
     MockAsset,
     MockAssetCategory,
@@ -38,8 +37,8 @@ class TestFAPostingAdapterDepreciation:
 
     def test_post_depreciation_run_wrong_status(self, mock_db, org_id, user_id):
         """Test posting depreciation run with wrong status fails."""
-        from app.services.fixed_assets.fa_posting_adapter import FAPostingAdapter
         from app.models.fixed_assets.depreciation_run import DepreciationRunStatus
+        from app.services.fixed_assets.fa_posting_adapter import FAPostingAdapter
 
         mock_run = MockDepreciationRun(
             organization_id=org_id,
@@ -61,8 +60,8 @@ class TestFAPostingAdapterDepreciation:
 
     def test_post_depreciation_run_no_schedules(self, mock_db, org_id, user_id):
         """Test posting depreciation run without schedules fails."""
-        from app.services.fixed_assets.fa_posting_adapter import FAPostingAdapter
         from app.models.fixed_assets.depreciation_run import DepreciationRunStatus
+        from app.services.fixed_assets.fa_posting_adapter import FAPostingAdapter
 
         mock_run = MockDepreciationRun(
             organization_id=org_id,
@@ -194,8 +193,8 @@ class TestFAPostingAdapterDepreciationSuccess:
 
     def test_post_depreciation_run_success(self, mock_db, org_id, user_id):
         """Test successful depreciation run posting."""
-        from app.services.fixed_assets.fa_posting_adapter import FAPostingAdapter
         from app.models.fixed_assets.depreciation_run import DepreciationRunStatus
+        from app.services.fixed_assets.fa_posting_adapter import FAPostingAdapter
 
         mock_run = MockDepreciationRun(organization_id=org_id)
         mock_run.status = DepreciationRunStatus.POSTING
@@ -247,8 +246,8 @@ class TestFAPostingAdapterDepreciationSuccess:
         self, mock_db, org_id, user_id
     ):
         """Test depreciation posting aggregates amounts by account."""
-        from app.services.fixed_assets.fa_posting_adapter import FAPostingAdapter
         from app.models.fixed_assets.depreciation_run import DepreciationRunStatus
+        from app.services.fixed_assets.fa_posting_adapter import FAPostingAdapter
 
         expense_account_1 = uuid.uuid4()
         accum_account_1 = uuid.uuid4()

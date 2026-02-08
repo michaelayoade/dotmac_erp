@@ -84,7 +84,7 @@ class EmailProfile(Base):
     )
 
     # Organization scope (NULL = system default)
-    organization_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.organization.organization_id", ondelete="CASCADE"),
         nullable=True,
@@ -97,7 +97,7 @@ class EmailProfile(Base):
         nullable=False,
         comment="Display name, e.g., 'Payroll Emails', 'Default'",
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -111,11 +111,11 @@ class EmailProfile(Base):
         Integer,
         default=587,
     )
-    smtp_username: Mapped[Optional[str]] = mapped_column(
+    smtp_username: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
     )
-    smtp_password: Mapped[Optional[str]] = mapped_column(
+    smtp_password: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
         comment="Encrypted password (use vault in production)",
@@ -138,7 +138,7 @@ class EmailProfile(Base):
         String(255),
         default="Dotmac ERP",
     )
-    reply_to: Mapped[Optional[str]] = mapped_column(
+    reply_to: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
     )
@@ -172,12 +172,12 @@ class EmailProfile(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
     )
-    created_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    created_by_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("people.id"),
         nullable=True,
@@ -259,7 +259,7 @@ class ModuleEmailRouting(Base):
     )
 
     # Profile link
-    email_profile_id: Mapped[uuid.UUID] = mapped_column(
+    email_profile_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("public.email_profile.profile_id", ondelete="CASCADE"),
         nullable=True,
@@ -276,7 +276,7 @@ class ModuleEmailRouting(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

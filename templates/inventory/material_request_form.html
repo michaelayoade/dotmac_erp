@@ -26,6 +26,7 @@
     {% endif %}
 
     <form method="post" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
         <!-- Header Info -->
         <div class="card p-6">
             <h3 class="font-semibold text-slate-900 dark:text-white mb-4">Request Details</h3>
@@ -144,6 +145,12 @@
                                         <option value="">Select item...</option>
                                         {% for inv_item in inventory_items %}
                                         <option value="{{ inv_item.item_id }}">{{ inv_item.item_code }} - {{ inv_item.item_name }}</option>
+                                        {% else %}
+                                        <tr>
+                                            <td colspan="99" class="p-0">
+                                                {{ empty_state("No inventory_items found", "There are no inventory_items to display.") }}
+                                            </td>
+                                        </tr>
                                         {% endfor %}
                                     </select>
                                 </td>
@@ -152,6 +159,12 @@
                                         <option value="">Default</option>
                                         {% for wh in warehouses %}
                                         <option value="{{ wh.warehouse_id }}">{{ wh.warehouse_name }}</option>
+                                        {% else %}
+                                        <tr>
+                                            <td colspan="99" class="p-0">
+                                                {{ empty_state("No warehouses found", "There are no warehouses to display.") }}
+                                            </td>
+                                        </tr>
                                         {% endfor %}
                                     </select>
                                 </td>
@@ -187,7 +200,7 @@
         </div>
 
         <!-- Actions -->
-        <div class="flex items-center justify-between">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/inventory/material-requests" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

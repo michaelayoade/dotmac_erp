@@ -14,13 +14,12 @@ from fastapi import HTTPException
 
 from app.models.inventory.price_list import PriceListType
 from app.services.inventory.price_list import (
-    PriceListService,
     PriceListInput,
     PriceListItemInput,
+    PriceListService,
     ResolvedPrice,
 )
 from tests.ifrs.inv.conftest import MockItem
-
 
 # ============ Mock Classes ============
 
@@ -198,7 +197,7 @@ class TestCreatePriceList:
             priority=10,
         )
 
-        result = PriceListService.create_price_list(mock_db, org_id, input)
+        PriceListService.create_price_list(mock_db, org_id, input)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -291,7 +290,7 @@ class TestUpdatePriceList:
         """Should update allowed fields successfully."""
         mock_db.get.return_value = mock_price_list
 
-        result = PriceListService.update_price_list(
+        PriceListService.update_price_list(
             mock_db,
             org_id,
             mock_price_list.price_list_id,

@@ -9,11 +9,10 @@ from __future__ import annotations
 import logging
 import uuid
 from decimal import Decimal
-from typing import TYPE_CHECKING, Dict, List, Optional, cast
+from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
-
 
 logger = logging.getLogger(__name__)
 
@@ -34,13 +33,13 @@ class ProjectExpenseService:
         self,
         db: Session,
         organization_id: uuid.UUID,
-        principal: Optional["Principal"] = None,
+        principal: Principal | None = None,
     ) -> None:
         self.db = db
         self.organization_id = organization_id
         self.principal = principal
 
-    def get_project_expenses(self, project_id: uuid.UUID) -> List[Dict]:
+    def get_project_expenses(self, project_id: uuid.UUID) -> list[dict]:
         """
         Get all expense claims linked to a project.
 
@@ -92,7 +91,7 @@ class ProjectExpenseService:
             )
         return result
 
-    def get_expense_summary(self, project_id: uuid.UUID) -> Dict:
+    def get_expense_summary(self, project_id: uuid.UUID) -> dict:
         """
         Get expense summary for a project.
 
@@ -164,7 +163,7 @@ class ProjectExpenseService:
             "expenses_by_category": expenses_by_category,
         }
 
-    def get_expense_by_category(self, project_id: uuid.UUID) -> Dict[str, Decimal]:
+    def get_expense_by_category(self, project_id: uuid.UUID) -> dict[str, Decimal]:
         """Get expenses grouped by category."""
         summary = self.get_expense_summary(project_id)
         return cast(dict[str, Decimal], summary.get("expenses_by_category", {}))

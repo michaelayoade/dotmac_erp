@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 duration: {{ task.duration or 1 }},
                 progress: {{ task.progress }},
                 parent: {% if task.parent %}"{{ task.parent }}"{% else %}0{% endif %},
-                type: "{{ task.type }}"
+                type: "{{ task.type | replace('_', ' ') | title }}"
             }{% if not loop.last %},{% endif %}
             {% endfor %}
         ],
@@ -55,9 +55,9 @@ document.addEventListener('DOMContentLoaded', function() {
             {% for link in gantt_data.links %}
             {
                 id: "{{ link.id }}",
-                source: "{{ link.source }}",
+                source: "{{ link.source | replace('_', ' ') | title }}",
                 target: "{{ link.target }}",
-                type: "{{ link.type }}"
+                type: "{{ link.type | replace('_', ' ') | title }}"
             }{% if not loop.last %},{% endif %}
             {% endfor %}
         ]

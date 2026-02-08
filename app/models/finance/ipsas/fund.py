@@ -56,7 +56,7 @@ class Fund(Base):
     # Identity
     fund_code: Mapped[str] = mapped_column(String(20), nullable=False)
     fund_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Classification
     fund_type: Mapped[FundType] = mapped_column(
@@ -71,18 +71,18 @@ class Fund(Base):
 
     # IPSAS net assets classification
     is_restricted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    restriction_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    restriction_description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Donor information (for donor/trust funds)
-    donor_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    donor_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    donor_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    donor_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Effective dates
     effective_from: Mapped[date] = mapped_column(Date, nullable=False)
-    effective_to: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Hierarchy
-    parent_fund_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    parent_fund_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("ipsas.fund.fund_id"),
         nullable=True,
@@ -98,7 +98,7 @@ class Fund(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

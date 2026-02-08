@@ -6,7 +6,6 @@ Handles comments, internal notes, and activity tracking for support tickets.
 
 import logging
 import uuid
-from typing import List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -25,7 +24,7 @@ class CommentService:
         ticket_id: uuid.UUID,
         include_internal: bool = True,
         include_deleted: bool = False,
-    ) -> List[TicketComment]:
+    ) -> list[TicketComment]:
         """
         List comments for a ticket.
 
@@ -54,7 +53,7 @@ class CommentService:
         self,
         db: Session,
         comment_id: uuid.UUID,
-    ) -> Optional[TicketComment]:
+    ) -> TicketComment | None:
         """Get a comment by ID."""
         return db.get(TicketComment, comment_id)
 
@@ -105,7 +104,7 @@ class CommentService:
         db: Session,
         comment_id: uuid.UUID,
         content: str,
-    ) -> Optional[TicketComment]:
+    ) -> TicketComment | None:
         """
         Update a comment's content.
 
@@ -169,9 +168,9 @@ class CommentService:
         ticket_id: uuid.UUID,
         action: str,
         description: str,
-        old_value: Optional[str] = None,
-        new_value: Optional[str] = None,
-        author_id: Optional[uuid.UUID] = None,
+        old_value: str | None = None,
+        new_value: str | None = None,
+        author_id: uuid.UUID | None = None,
     ) -> TicketComment:
         """
         Log a system activity on a ticket.
@@ -209,8 +208,8 @@ class CommentService:
         ticket_id: uuid.UUID,
         old_status: str,
         new_status: str,
-        author_id: Optional[uuid.UUID] = None,
-        notes: Optional[str] = None,
+        author_id: uuid.UUID | None = None,
+        notes: str | None = None,
     ) -> TicketComment:
         """Log a status change."""
         content = f"Status changed from {old_status} to {new_status}"
@@ -232,8 +231,8 @@ class CommentService:
         db: Session,
         ticket_id: uuid.UUID,
         assignee_name: str,
-        previous_assignee: Optional[str] = None,
-        author_id: Optional[uuid.UUID] = None,
+        previous_assignee: str | None = None,
+        author_id: uuid.UUID | None = None,
     ) -> TicketComment:
         """Log an assignment change."""
         if previous_assignee:
@@ -257,7 +256,7 @@ class CommentService:
         ticket_id: uuid.UUID,
         old_priority: str,
         new_priority: str,
-        author_id: Optional[uuid.UUID] = None,
+        author_id: uuid.UUID | None = None,
     ) -> TicketComment:
         """Log a priority change."""
         return self.log_activity(
@@ -274,9 +273,9 @@ class CommentService:
         self,
         db: Session,
         ticket_id: uuid.UUID,
-        old_category: Optional[str],
+        old_category: str | None,
         new_category: str,
-        author_id: Optional[uuid.UUID] = None,
+        author_id: uuid.UUID | None = None,
     ) -> TicketComment:
         """Log a category change."""
         if old_category:
@@ -298,9 +297,9 @@ class CommentService:
         self,
         db: Session,
         ticket_id: uuid.UUID,
-        old_team: Optional[str],
+        old_team: str | None,
         new_team: str,
-        author_id: Optional[uuid.UUID] = None,
+        author_id: uuid.UUID | None = None,
     ) -> TicketComment:
         """Log a team assignment change."""
         if old_team:
@@ -323,7 +322,7 @@ class CommentService:
         db: Session,
         ticket_id: uuid.UUID,
         limit: int = 50,
-    ) -> List[TicketComment]:
+    ) -> list[TicketComment]:
         """
         Get activity timeline for a ticket (all comment types).
 

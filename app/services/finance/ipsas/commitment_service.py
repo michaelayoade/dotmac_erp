@@ -8,7 +8,6 @@ OBLIGATED -> PARTIALLY_PAID -> EXPENDED.
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -27,12 +26,16 @@ class CommitmentService:
     def __init__(self, db: Session):
         self.db = db
 
+    def _commit_and_refresh(self, commitment: Commitment) -> None:
+        self.db.commit()
+        self.db.refresh(commitment)
+
     def list_for_org(
         self,
         organization_id: UUID,
         *,
-        fund_id: Optional[UUID] = None,
-        status: Optional[str] = None,
+        fund_id: UUID | None = None,
+        status: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[Commitment]:
@@ -50,7 +53,7 @@ class CommitmentService:
         return list(self.db.scalars(stmt).all())
 
     def get_or_404(
-        self, commitment_id: UUID, organization_id: Optional[UUID] = None
+        self, commitment_id: UUID, organization_id: UUID | None = None
     ) -> Commitment:
         """Get a commitment by ID or raise NotFoundError.
 
@@ -76,7 +79,7 @@ class CommitmentService:
         committed_amount: Decimal,
         currency_code: str,
         created_by_user_id: UUID,
-        appropriation_id: Optional[UUID] = None,
+        appropriation_id: UUID | None = None,
     ) -> Commitment:
         """Create a generic commitment (not tied to a specific source document)."""
         commitment = Commitment(
@@ -105,6 +108,7 @@ class CommitmentService:
             currency_code,
             committed_amount,
         )
+        self._commit_and_refresh(commitment)
         return commitment
 
     def create_commitment_from_po(
@@ -120,7 +124,7 @@ class CommitmentService:
         currency_code: str,
         created_by_user_id: UUID,
         commitment_number: str,
-        appropriation_id: Optional[UUID] = None,
+        appropriation_id: UUID | None = None,
     ) -> Commitment:
         """Create a commitment from a purchase order."""
         commitment = Commitment(
@@ -150,6 +154,7 @@ class CommitmentService:
             currency_code,
             amount,
         )
+        self._commit_and_refresh(commitment)
         return commitment
 
     def create_commitment_from_contract(
@@ -165,7 +170,7 @@ class CommitmentService:
         currency_code: str,
         created_by_user_id: UUID,
         commitment_number: str,
-        appropriation_id: Optional[UUID] = None,
+        appropriation_id: UUID | None = None,
     ) -> Commitment:
         """Create a commitment from a procurement contract."""
         commitment = Commitment(
@@ -195,6 +200,7 @@ class CommitmentService:
             currency_code,
             amount,
         )
+        self._commit_and_refresh(commitment)
         return commitment
 
     def record_obligation(
@@ -226,6 +232,7 @@ class CommitmentService:
         self.db.flush()
 
         logger.info("Recorded obligation %s on commitment %s", amount, commitment_id)
+        self._commit_and_refresh(commitment)
         return commitment
 
     def record_expenditure(
@@ -261,12 +268,13 @@ class CommitmentService:
 
         self.db.flush()
         logger.info("Recorded expenditure %s on commitment %s", amount, commitment_id)
+        self._commit_and_refresh(commitment)
         return commitment
 
     def cancel_commitment(
         self,
         commitment_id: UUID,
-        amount: Optional[Decimal] = None,
+        amount: Decimal | None = None,
     ) -> Commitment:
         """Cancel a commitment (full or partial)."""
         commitment = self.get_or_404(commitment_id)
@@ -305,6 +313,7 @@ class CommitmentService:
 
         self.db.flush()
         logger.info("Cancelled commitment %s (amount: %s)", commitment_id, amount)
+        self._commit_and_refresh(commitment)
         return commitment
 
     def count_for_org(self, organization_id: UUID) -> int:

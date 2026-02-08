@@ -5,13 +5,11 @@ Schemas for onboarding, separation, promotions, and transfers.
 """
 
 from datetime import date, datetime
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.people.hr.lifecycle import BoardingStatus, SeparationType
-
 
 # =============================================================================
 # Onboarding Schemas
@@ -22,9 +20,9 @@ class OnboardingActivityBase(BaseModel):
     """Base onboarding activity schema."""
 
     activity_name: str = Field(max_length=500)
-    assignee_role: Optional[str] = Field(default=None, max_length=100)
-    status: Optional[str] = Field(default=None, max_length=50)
-    completed_on: Optional[date] = None
+    assignee_role: str | None = Field(default=None, max_length=100)
+    status: str | None = Field(default=None, max_length=50)
+    completed_on: date | None = None
     sequence: int = 0
 
 
@@ -47,31 +45,31 @@ class OnboardingBase(BaseModel):
     """Base onboarding schema."""
 
     employee_id: UUID
-    job_applicant_id: Optional[UUID] = None
-    job_offer_id: Optional[UUID] = None
-    date_of_joining: Optional[date] = None
-    department_id: Optional[UUID] = None
-    designation_id: Optional[UUID] = None
-    template_name: Optional[str] = None
-    notes: Optional[str] = None
+    job_applicant_id: UUID | None = None
+    job_offer_id: UUID | None = None
+    date_of_joining: date | None = None
+    department_id: UUID | None = None
+    designation_id: UUID | None = None
+    template_name: str | None = None
+    notes: str | None = None
 
 
 class OnboardingCreate(OnboardingBase):
     """Create onboarding request."""
 
-    activities: List[OnboardingActivityCreate] = []
+    activities: list[OnboardingActivityCreate] = []
 
 
 class OnboardingUpdate(BaseModel):
     """Update onboarding request."""
 
-    date_of_joining: Optional[date] = None
-    department_id: Optional[UUID] = None
-    designation_id: Optional[UUID] = None
-    template_name: Optional[str] = None
-    notes: Optional[str] = None
-    status: Optional[BoardingStatus] = None
-    activities: Optional[List[OnboardingActivityCreate]] = None
+    date_of_joining: date | None = None
+    department_id: UUID | None = None
+    designation_id: UUID | None = None
+    template_name: str | None = None
+    notes: str | None = None
+    status: BoardingStatus | None = None
+    activities: list[OnboardingActivityCreate] | None = None
 
 
 class OnboardingRead(OnboardingBase):
@@ -83,14 +81,14 @@ class OnboardingRead(OnboardingBase):
     organization_id: UUID
     status: BoardingStatus
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    activities: List[OnboardingActivityRead] = []
+    updated_at: datetime | None = None
+    activities: list[OnboardingActivityRead] = []
 
 
 class OnboardingListResponse(BaseModel):
     """Paginated onboarding list response."""
 
-    items: List[OnboardingRead]
+    items: list[OnboardingRead]
     total: int
     offset: int
     limit: int
@@ -105,9 +103,9 @@ class SeparationActivityBase(BaseModel):
     """Base separation activity schema."""
 
     activity_name: str = Field(max_length=500)
-    assignee_role: Optional[str] = Field(default=None, max_length=100)
-    status: Optional[str] = Field(default=None, max_length=50)
-    completed_on: Optional[date] = None
+    assignee_role: str | None = Field(default=None, max_length=100)
+    status: str | None = Field(default=None, max_length=50)
+    completed_on: date | None = None
     sequence: int = 0
 
 
@@ -130,37 +128,37 @@ class SeparationBase(BaseModel):
     """Base separation schema."""
 
     employee_id: UUID
-    separation_type: Optional[SeparationType] = None
-    resignation_letter_date: Optional[date] = None
-    separation_date: Optional[date] = None
-    department_id: Optional[UUID] = None
-    designation_id: Optional[UUID] = None
-    reason_for_leaving: Optional[str] = None
-    exit_interview: Optional[str] = None
-    template_name: Optional[str] = None
-    notes: Optional[str] = None
+    separation_type: SeparationType | None = None
+    resignation_letter_date: date | None = None
+    separation_date: date | None = None
+    department_id: UUID | None = None
+    designation_id: UUID | None = None
+    reason_for_leaving: str | None = None
+    exit_interview: str | None = None
+    template_name: str | None = None
+    notes: str | None = None
 
 
 class SeparationCreate(SeparationBase):
     """Create separation request."""
 
-    activities: List[SeparationActivityCreate] = []
+    activities: list[SeparationActivityCreate] = []
 
 
 class SeparationUpdate(BaseModel):
     """Update separation request."""
 
-    separation_type: Optional[SeparationType] = None
-    resignation_letter_date: Optional[date] = None
-    separation_date: Optional[date] = None
-    department_id: Optional[UUID] = None
-    designation_id: Optional[UUID] = None
-    reason_for_leaving: Optional[str] = None
-    exit_interview: Optional[str] = None
-    template_name: Optional[str] = None
-    notes: Optional[str] = None
-    status: Optional[BoardingStatus] = None
-    activities: Optional[List[SeparationActivityCreate]] = None
+    separation_type: SeparationType | None = None
+    resignation_letter_date: date | None = None
+    separation_date: date | None = None
+    department_id: UUID | None = None
+    designation_id: UUID | None = None
+    reason_for_leaving: str | None = None
+    exit_interview: str | None = None
+    template_name: str | None = None
+    notes: str | None = None
+    status: BoardingStatus | None = None
+    activities: list[SeparationActivityCreate] | None = None
 
 
 class SeparationRead(SeparationBase):
@@ -172,14 +170,14 @@ class SeparationRead(SeparationBase):
     organization_id: UUID
     status: BoardingStatus
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    activities: List[SeparationActivityRead] = []
+    updated_at: datetime | None = None
+    activities: list[SeparationActivityRead] = []
 
 
 class SeparationListResponse(BaseModel):
     """Paginated separation list response."""
 
-    items: List[SeparationRead]
+    items: list[SeparationRead]
     total: int
     offset: int
     limit: int
@@ -194,8 +192,8 @@ class PromotionDetailBase(BaseModel):
     """Base promotion detail schema."""
 
     property_name: str = Field(max_length=100)
-    current_value: Optional[str] = Field(default=None, max_length=255)
-    new_value: Optional[str] = Field(default=None, max_length=255)
+    current_value: str | None = Field(default=None, max_length=255)
+    new_value: str | None = Field(default=None, max_length=255)
     sequence: int = 0
 
 
@@ -219,21 +217,21 @@ class PromotionBase(BaseModel):
 
     employee_id: UUID
     promotion_date: date
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class PromotionCreate(PromotionBase):
     """Create promotion request."""
 
-    details: List[PromotionDetailCreate] = []
+    details: list[PromotionDetailCreate] = []
 
 
 class PromotionUpdate(BaseModel):
     """Update promotion request."""
 
-    promotion_date: Optional[date] = None
-    notes: Optional[str] = None
-    details: Optional[List[PromotionDetailCreate]] = None
+    promotion_date: date | None = None
+    notes: str | None = None
+    details: list[PromotionDetailCreate] | None = None
 
 
 class PromotionRead(PromotionBase):
@@ -244,14 +242,14 @@ class PromotionRead(PromotionBase):
     promotion_id: UUID
     organization_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    details: List[PromotionDetailRead] = []
+    updated_at: datetime | None = None
+    details: list[PromotionDetailRead] = []
 
 
 class PromotionListResponse(BaseModel):
     """Paginated promotion list response."""
 
-    items: List[PromotionRead]
+    items: list[PromotionRead]
     total: int
     offset: int
     limit: int
@@ -266,8 +264,8 @@ class TransferDetailBase(BaseModel):
     """Base transfer detail schema."""
 
     property_name: str = Field(max_length=100)
-    current_value: Optional[str] = Field(default=None, max_length=255)
-    new_value: Optional[str] = Field(default=None, max_length=255)
+    current_value: str | None = Field(default=None, max_length=255)
+    new_value: str | None = Field(default=None, max_length=255)
     sequence: int = 0
 
 
@@ -291,21 +289,21 @@ class TransferBase(BaseModel):
 
     employee_id: UUID
     transfer_date: date
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class TransferCreate(TransferBase):
     """Create transfer request."""
 
-    details: List[TransferDetailCreate] = []
+    details: list[TransferDetailCreate] = []
 
 
 class TransferUpdate(BaseModel):
     """Update transfer request."""
 
-    transfer_date: Optional[date] = None
-    notes: Optional[str] = None
-    details: Optional[List[TransferDetailCreate]] = None
+    transfer_date: date | None = None
+    notes: str | None = None
+    details: list[TransferDetailCreate] | None = None
 
 
 class TransferRead(TransferBase):
@@ -316,14 +314,14 @@ class TransferRead(TransferBase):
     transfer_id: UUID
     organization_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    details: List[TransferDetailRead] = []
+    updated_at: datetime | None = None
+    details: list[TransferDetailRead] = []
 
 
 class TransferListResponse(BaseModel):
     """Paginated transfer list response."""
 
-    items: List[TransferRead]
+    items: list[TransferRead]
     total: int
     offset: int
     limit: int

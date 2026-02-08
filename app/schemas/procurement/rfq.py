@@ -4,7 +4,7 @@ RFQ Schemas.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -28,7 +28,7 @@ class RFQInvitationResponse(BaseModel):
     supplier_id: UUID
     invited_at: datetime
     responded: bool
-    response_date: Optional[datetime] = None
+    response_date: datetime | None = None
 
 
 class RFQCreate(BaseModel):
@@ -39,22 +39,22 @@ class RFQCreate(BaseModel):
     rfq_date: date
     closing_date: date
     procurement_method: ProcurementMethod = ProcurementMethod.OPEN_COMPETITIVE
-    requisition_id: Optional[UUID] = None
-    plan_item_id: Optional[UUID] = None
-    evaluation_criteria: Optional[List[Dict[str, Any]]] = None
-    terms_and_conditions: Optional[str] = None
-    estimated_value: Optional[Decimal] = None
+    requisition_id: UUID | None = None
+    plan_item_id: UUID | None = None
+    evaluation_criteria: list[dict[str, Any]] | None = None
+    terms_and_conditions: str | None = None
+    estimated_value: Decimal | None = None
     currency_code: str = Field(default="NGN", max_length=3)
 
 
 class RFQUpdate(BaseModel):
     """Schema for updating an RFQ."""
 
-    title: Optional[str] = Field(default=None, max_length=200)
-    closing_date: Optional[date] = None
-    evaluation_criteria: Optional[List[Dict[str, Any]]] = None
-    terms_and_conditions: Optional[str] = None
-    estimated_value: Optional[Decimal] = None
+    title: str | None = Field(default=None, max_length=200)
+    closing_date: date | None = None
+    evaluation_criteria: list[dict[str, Any]] | None = None
+    terms_and_conditions: str | None = None
+    estimated_value: Decimal | None = None
 
 
 class RFQResponse(BaseModel):
@@ -70,13 +70,13 @@ class RFQResponse(BaseModel):
     closing_date: date
     status: RFQStatus
     procurement_method: ProcurementMethod
-    requisition_id: Optional[UUID] = None
-    plan_item_id: Optional[UUID] = None
-    evaluation_criteria: Optional[List[Dict[str, Any]]] = None
-    terms_and_conditions: Optional[str] = None
-    estimated_value: Optional[Decimal] = None
+    requisition_id: UUID | None = None
+    plan_item_id: UUID | None = None
+    evaluation_criteria: list[dict[str, Any]] | None = None
+    terms_and_conditions: str | None = None
+    estimated_value: Decimal | None = None
     currency_code: str
     created_by_user_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    invitations: List[RFQInvitationResponse] = Field(default_factory=list)
+    updated_at: datetime | None = None
+    invitations: list[RFQInvitationResponse] = Field(default_factory=list)

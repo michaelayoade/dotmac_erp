@@ -6,10 +6,10 @@ Create Date: 2026-01-30
 
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
+from alembic import op
 
 revision = "20260130_add_pfa_directory"
 down_revision = "20260130_add_bank_directory"

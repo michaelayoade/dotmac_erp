@@ -2,7 +2,6 @@
 Procurement Plan API Endpoints.
 """
 
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -29,11 +28,11 @@ def get_db():
         db.close()
 
 
-@router.get("", response_model=List[ProcurementPlanResponse])
+@router.get("", response_model=list[ProcurementPlanResponse])
 def list_plans(
     organization_id: UUID = Depends(require_organization_id),
-    status_filter: Optional[str] = Query(None, alias="status"),
-    fiscal_year: Optional[str] = None,
+    status_filter: str | None = Query(None, alias="status"),
+    fiscal_year: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     db: Session = Depends(get_db),

@@ -26,7 +26,7 @@
                 <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Employee</h2>
             </div>
             <div class="p-6">
-                <label for="employee_id" class="form-label">Select Employee</label>
+                <label for="employee_id" class="form-label">Select Employee <span class="text-rose-500">*</span></label>
                 <select name="employee_id" id="employee_id" class="form-select w-full" required>
                     <option value="">-- Select Employee --</option>
                     {% for emp in employees %}
@@ -88,7 +88,7 @@
 
                 {% if not profile %}
                 <div>
-                    <label for="effective_from" class="form-label">Effective From</label>
+                    <label for="effective_from" class="form-label">Effective From <span class="text-rose-500">*</span></label>
                     <input type="date" name="effective_from" id="effective_from"
                         value="{{ today().isoformat() if not profile else '' }}"
                         class="form-input w-full"
@@ -149,7 +149,7 @@
                 <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">These deductions are subtracted from gross income before calculating taxable income</p>
             </div>
             <div class="p-6">
-                <div class="grid grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
                         <label for="pension_rate" class="form-label">Pension (%)</label>
                         <div class="relative">
@@ -226,7 +226,7 @@
         </div>
 
         {# Actions #}
-        <div class="flex items-center justify-end gap-3">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/people/payroll/tax/profiles" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

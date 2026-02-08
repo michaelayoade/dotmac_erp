@@ -1,5 +1,6 @@
 {% extends "modules/base_modules.html" %}
 
+{% from "components/macros.html" import empty_state %}
 {% block title %}{{ template.name }}{% endblock %}
 
 {% block page_title %}{{ template.name }}{% endblock %}
@@ -68,6 +69,12 @@
                             {% endif %}
                         {% endfor %}
                         {{ deps|join(', ') if deps|length > 0 else '—' }}
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="99" class="p-0">
+                        {{ empty_state("No tasks found", "There are no tasks to display.") }}
                     </td>
                 </tr>
                 {% endfor %}

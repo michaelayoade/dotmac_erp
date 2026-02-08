@@ -105,4 +105,6 @@ class SupplierInvoiceLineTax(Base):
 
 
 # Forward reference
-from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine  # noqa: E402
+from app.models.finance.ap.supplier_invoice_line import (  # noqa: E402
+    SupplierInvoiceLine,
+)

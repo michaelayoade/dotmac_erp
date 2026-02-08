@@ -6,13 +6,13 @@ Thin wrappers around self-service web service.
 
 from datetime import date
 from decimal import Decimal, InvalidOperation
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.services.common import coerce_uuid
 from app.services.people.self_service_web import self_service_web_service
 from app.web.deps import (
     WebAuthContext,
@@ -21,7 +21,6 @@ from app.web.deps import (
     require_self_service_expense_approver,
     require_self_service_leave_approver,
 )
-
 
 router = APIRouter(prefix="/self", tags=["people-self-service"])
 
@@ -32,7 +31,7 @@ def _safe_form_text(value: object | None, default: str = "") -> str:
     return default
 
 
-def _safe_form_float(value: object | None) -> Optional[float]:
+def _safe_form_float(value: object | None) -> float | None:
     if isinstance(value, (int, float)):
         return float(value)
     if isinstance(value, str):
@@ -46,7 +45,7 @@ def _safe_form_float(value: object | None) -> Optional[float]:
     return None
 
 
-def _coerce_iso_date(value: object | None, field_name: str) -> Optional[date]:
+def _coerce_iso_date(value: object | None, field_name: str) -> date | None:
     if isinstance(value, date):
         return value
     if isinstance(value, str) and value.strip():
@@ -70,7 +69,7 @@ def _coerce_iso_date(value: object | None, field_name: str) -> Optional[date]:
 @router.get("/attendance", response_class=HTMLResponse)
 def my_attendance(
     request: Request,
-    month: Optional[str] = Query(None, description="Month in YYYY-MM format"),
+    month: str | None = Query(None, description="Month in YYYY-MM format"),
     auth: WebAuthContext = Depends(require_self_service_access),
     db: Session = Depends(get_db),
 ):
@@ -153,8 +152,8 @@ def my_leave_detail(
 @router.get("/tax-info", response_class=HTMLResponse)
 def my_tax_info(
     request: Request,
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_self_service_access),
     db: Session = Depends(get_db),
 ):
@@ -232,11 +231,11 @@ async def apply_leave(
     request: Request,
     auth: WebAuthContext = Depends(require_self_service_access),
     db: Session = Depends(get_db),
-    leave_type_id: Optional[str] = Form(default=None),
-    from_date: Optional[date] = Form(default=None),
-    to_date: Optional[date] = Form(default=None),
-    half_day: Optional[str] = Form(default=None),
-    reason: Optional[str] = Form(default=None),
+    leave_type_id: str | None = Form(default=None),
+    from_date: date | None = Form(default=None),
+    to_date: date | None = Form(default=None),
+    half_day: str | None = Form(default=None),
+    reason: str | None = Form(default=None),
 ) -> RedirectResponse:
     """Submit a leave application for the current employee."""
     if leave_type_id is None or from_date is None or to_date is None:
@@ -314,7 +313,7 @@ async def apply_leave(
 @router.get("/payslips", response_class=HTMLResponse)
 def my_payslips(
     request: Request,
-    year: Optional[int] = Query(None, description="Filter by year"),
+    year: int | None = Query(None, description="Filter by year"),
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_self_service_access),
     db: Session = Depends(get_db),
@@ -394,6 +393,7 @@ async def create_expense_claim(
     recipient_bank_name = _safe_form_text(form.get("recipient_bank_name"))
     recipient_account_number = _safe_form_text(form.get("recipient_account_number"))
     recipient_name = _safe_form_text(form.get("recipient_name"))
+    requested_approver_id = _safe_form_text(form.get("requested_approver_id"))
     receipt_url = _safe_form_text(form.get("receipt_url"))
     receipt_number = _safe_form_text(form.get("receipt_number"))
     receipt_file = form.get("receipt_file")
@@ -412,6 +412,7 @@ async def create_expense_claim(
             claimed_amount,
             recipient_bank_code,
             recipient_account_number,
+            requested_approver_id,
         ]
     ):
         raise HTTPException(status_code=400, detail="Missing required fields")
@@ -435,6 +436,7 @@ async def create_expense_claim(
         recipient_bank_name=recipient_bank_name or None,
         recipient_account_number=recipient_account_number or None,
         recipient_name=recipient_name or None,
+        requested_approver_id=requested_approver_id or None,
         receipt_url=receipt_url or None,
         receipt_number=receipt_number or None,
         receipt_file=receipt_file,
@@ -481,9 +483,15 @@ async def update_expense_claim(
     recipient_bank_name = _safe_form_text(form.get("recipient_bank_name"))
     recipient_account_number = _safe_form_text(form.get("recipient_account_number"))
     recipient_name = _safe_form_text(form.get("recipient_name"))
-    if not recipient_bank_code or not recipient_account_number:
+    requested_approver_id = _safe_form_text(form.get("requested_approver_id"))
+    if (
+        not recipient_bank_code
+        or not recipient_account_number
+        or not requested_approver_id
+    ):
         raise HTTPException(
-            status_code=400, detail="Bank code and account number are required"
+            status_code=400,
+            detail="Bank code, account number, and expense approver are required",
         )
 
     # Extract optional project/ticket/task linkage
@@ -545,6 +553,9 @@ async def update_expense_claim(
         recipient_bank_name=recipient_bank_name or None,
         recipient_account_number=recipient_account_number or None,
         recipient_name=recipient_name or None,
+        requested_approver_id=coerce_uuid(requested_approver_id)
+        if requested_approver_id
+        else None,
         project_id=project_id,
         ticket_id=ticket_id,
         task_id=task_id,
@@ -573,7 +584,7 @@ async def submit_expense_claim(
 @router.get("/team/leave", response_class=HTMLResponse)
 def team_leave_requests(
     request: Request,
-    status: Optional[str] = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_self_service_leave_approver),
     db: Session = Depends(get_db),
@@ -607,7 +618,7 @@ def reject_team_leave(
     application_id: UUID,
     auth: WebAuthContext = Depends(require_self_service_leave_approver),
     db: Session = Depends(get_db),
-    reason: Optional[str] = Form(default=None),
+    reason: str | None = Form(default=None),
 ) -> RedirectResponse:
     """Reject a direct report leave request."""
     return self_service_web_service.team_leave_reject_response(
@@ -621,7 +632,7 @@ def reject_team_leave(
 @router.get("/team/expenses", response_class=HTMLResponse)
 def team_expense_requests(
     request: Request,
-    status: Optional[str] = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_self_service_expense_approver),
     db: Session = Depends(get_db),
@@ -655,7 +666,7 @@ def reject_team_expense(
     claim_id: UUID,
     auth: WebAuthContext = Depends(require_self_service_expense_approver),
     db: Session = Depends(get_db),
-    reason: Optional[str] = Form(default=None),
+    reason: str | None = Form(default=None),
 ) -> RedirectResponse:
     """Reject a direct report expense claim."""
     return self_service_web_service.team_expense_reject_response(

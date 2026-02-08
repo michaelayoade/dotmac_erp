@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}{{ applicant.full_name }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -171,7 +172,7 @@
                         <div class="text-slate-500 dark:text-slate-400 mb-1">Skills</div>
                         <div class="flex flex-wrap gap-1">
                             {% for skill in applicant.skills.split(',') %}
-                            <span class="inline-flex px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-400">{{ skill | trim }}</span>
+                            {{ status_badge(skill | trim, size="sm") }}
                             {% endfor %}
                         </div>
                     </div>
@@ -211,9 +212,7 @@
                             {% if interview.rating %}
                             <span class="text-sm text-slate-600 dark:text-slate-400">Rating: {{ interview.rating }}/5</span>
                             {% endif %}
-                            <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium {% if interview.status.value == 'COMPLETED' %}bg-emerald-50 text-emerald-700{% elif interview.status.value == 'SCHEDULED' %}bg-amber-50 text-amber-700{% else %}bg-slate-100 text-slate-700{% endif %}">
-                                {{ interview.status.value | title }}
-                            </span>
+                            {{ status_badge(interview.status.value, size="sm") }}
                         </div>
                     </div>
                     {% endfor %}
@@ -238,9 +237,7 @@
                             <div class="text-sm font-medium text-slate-900 dark:text-white">{{ offer.offer_number }}</div>
                             <div class="text-xs text-slate-500 dark:text-slate-400">{{ offer.offer_date.strftime('%d %b %Y') if offer.offer_date else '-' }} &bull; {{ "{:,.2f}".format(offer.base_salary) }} {{ offer.currency_code }}</div>
                         </div>
-                        <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium {% if offer.status.value == 'ACCEPTED' %}bg-emerald-50 text-emerald-700{% elif offer.status.value == 'EXTENDED' %}bg-amber-50 text-amber-700{% elif offer.status.value == 'DECLINED' %}bg-rose-50 text-rose-700{% else %}bg-slate-100 text-slate-700{% endif %}">
-                            {{ offer.status.value | title }}
-                        </span>
+                        {{ status_badge(offer.status.value, size="sm") }}
                     </div>
                     {% endfor %}
                 </div>

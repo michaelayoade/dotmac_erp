@@ -4,6 +4,7 @@ Workflow Service.
 Handles workflow rule evaluation and action execution.
 """
 
+import builtins
 import ipaddress
 import logging
 import os
@@ -12,7 +13,7 @@ import socket
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, cast
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -20,6 +21,7 @@ from fastapi import HTTPException
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
+from app.models.email_profile import EmailModule
 from app.models.finance.automation import (
     ActionType,
     ExecutionStatus,
@@ -35,9 +37,7 @@ _HEADER_NAME_PATTERN = re.compile(r"^[A-Za-z0-9-]+$")
 _ALLOWED_WEBHOOK_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 
 
-def _email_module_for_entity(entity_type: Optional[str]) -> "EmailModule":
-    from app.models.email_profile import EmailModule
-
+def _email_module_for_entity(entity_type: str | None) -> EmailModule:
     if not entity_type:
         return EmailModule.FINANCE
     entity = entity_type.upper()
@@ -238,14 +238,14 @@ class WorkflowRuleInput:
     entity_type: WorkflowEntityType
     trigger_event: TriggerEvent
     action_type: ActionType
-    trigger_conditions: Dict[str, Any]
-    action_config: Dict[str, Any]
-    description: Optional[str] = None
+    trigger_conditions: dict[str, Any]
+    action_config: dict[str, Any]
+    description: str | None = None
     priority: int = 100
     stop_on_match: bool = False
     execute_async: bool = True
-    cooldown_seconds: Optional[int] = None
-    schedule_config: Optional[Dict[str, Any]] = None
+    cooldown_seconds: int | None = None
+    schedule_config: dict[str, Any] | None = None
 
 
 @dataclass
@@ -255,13 +255,13 @@ class TriggerContext:
     entity_type: str
     entity_id: UUID
     event: TriggerEvent
-    organization_id: Optional[UUID] = None
-    old_values: Optional[Dict[str, Any]] = None
-    new_values: Optional[Dict[str, Any]] = None
-    changed_fields: Optional[List[str]] = None
-    user_id: Optional[UUID] = None
+    organization_id: UUID | None = None
+    old_values: dict[str, Any] | None = None
+    new_values: dict[str, Any] | None = None
+    changed_fields: list[str] | None = None
+    user_id: UUID | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialize for Celery task arguments."""
         return {
             "entity_type": self.entity_type,
@@ -277,7 +277,7 @@ class TriggerContext:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "TriggerContext":
+    def from_dict(cls, data: dict[str, Any]) -> "TriggerContext":
         """Deserialize from Celery task arguments."""
         return cls(
             entity_type=data["entity_type"],
@@ -298,8 +298,8 @@ class ActionResult:
     """Result of executing a workflow action."""
 
     success: bool
-    result: Optional[Dict[str, Any]] = None
-    error_message: Optional[str] = None
+    result: dict[str, Any] | None = None
+    error_message: str | None = None
 
 
 class WorkflowService:
@@ -354,20 +354,30 @@ class WorkflowService:
         db.flush()
         return rule
 
-    def get(self, db: Session, rule_id: UUID) -> Optional[WorkflowRule]:
+    def get(
+        self,
+        db: Session,
+        rule_id: UUID,
+        organization_id: UUID | None = None,
+    ) -> WorkflowRule | None:
         """Get a rule by ID."""
-        return db.get(WorkflowRule, rule_id)
+        rule = db.get(WorkflowRule, rule_id)
+        if not rule:
+            return None
+        if organization_id is not None and rule.organization_id != organization_id:
+            return None
+        return rule
 
     def list(
         self,
         db: Session,
         organization_id: UUID,
-        entity_type: Optional[WorkflowEntityType] = None,
-        trigger_event: Optional[TriggerEvent] = None,
-        is_active: Optional[bool] = True,
+        entity_type: WorkflowEntityType | None = None,
+        trigger_event: TriggerEvent | None = None,
+        is_active: bool | None = True,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[WorkflowRule]:
+    ) -> list[WorkflowRule]:
         """List workflow rules."""
         query = select(WorkflowRule).where(
             WorkflowRule.organization_id == organization_id
@@ -390,7 +400,7 @@ class WorkflowService:
         db: Session,
         organization_id: UUID,
         context: TriggerContext,
-    ) -> List[WorkflowRule]:
+    ) -> builtins.list[WorkflowRule]:
         """Get all rules that match a trigger context."""
         # Convert string entity type to enum
         try:
@@ -415,7 +425,7 @@ class WorkflowService:
 
     def _evaluate_conditions(
         self,
-        conditions: Dict[str, Any],
+        conditions: dict[str, Any],
         context: TriggerContext,
     ) -> bool:
         """Evaluate if conditions are met for a trigger context.
@@ -434,7 +444,7 @@ class WorkflowService:
 
     def _evaluate_condition_node(
         self,
-        node: Dict[str, Any],
+        node: dict[str, Any],
         context: TriggerContext,
     ) -> bool:
         """Recursively evaluate AND/OR condition groups.
@@ -501,7 +511,7 @@ class WorkflowService:
 
     def _evaluate_flat_conditions(
         self,
-        conditions: Dict[str, Any],
+        conditions: dict[str, Any],
         context: TriggerContext,
     ) -> bool:
         """Evaluate flat (non-compound) conditions — original format."""
@@ -697,7 +707,7 @@ class WorkflowService:
     def _action_send_email(
         self,
         db: Session,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         context: TriggerContext,
     ) -> ActionResult:
         """Send an email action with Jinja2 template rendering."""
@@ -768,7 +778,7 @@ class WorkflowService:
     def _action_send_notification(
         self,
         db: Session,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         context: TriggerContext,
     ) -> ActionResult:
         """Send in-app notification action."""
@@ -857,7 +867,7 @@ class WorkflowService:
     def _action_validate(
         self,
         db: Session,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         context: TriggerContext,
     ) -> ActionResult:
         """Validate action - check conditions and potentially block."""
@@ -892,7 +902,7 @@ class WorkflowService:
     def _action_update_field(
         self,
         db: Session,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         context: TriggerContext,
     ) -> ActionResult:
         """Update field action — loads the entity and sets a field value."""
@@ -948,7 +958,7 @@ class WorkflowService:
     def _action_create_task(
         self,
         db: Session,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         context: TriggerContext,
     ) -> ActionResult:
         """Create a project management task from workflow trigger."""
@@ -1037,7 +1047,7 @@ class WorkflowService:
     def _action_webhook(
         self,
         db: Session,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         context: TriggerContext,
     ) -> ActionResult:
         """Webhook action."""
@@ -1105,7 +1115,7 @@ class WorkflowService:
     def _action_block(
         self,
         db: Session,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         context: TriggerContext,
     ) -> ActionResult:
         """Block action - prevents the operation."""
@@ -1122,7 +1132,7 @@ class WorkflowService:
     def _action_trigger_rule(
         self,
         db: Session,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         context: TriggerContext,
         _depth: int = 0,
     ) -> ActionResult:
@@ -1264,14 +1274,14 @@ class WorkflowService:
         db: Session,
         organization_id: UUID,
         context: TriggerContext,
-    ) -> List[WorkflowExecution]:
+    ) -> builtins.list[WorkflowExecution]:
         """Trigger workflow evaluation for an event."""
         # Ensure context carries org_id for downstream action handlers
         if context.organization_id is None:
             context.organization_id = organization_id
 
         matching_rules = self.get_matching_rules(db, organization_id, context)
-        executions: List[WorkflowExecution] = []
+        executions: list[WorkflowExecution] = []
 
         # Cap number of rules evaluated per event
         if len(matching_rules) > self.MAX_RULES_PER_EVENT:
@@ -1340,7 +1350,7 @@ class WorkflowService:
         self,
         db: Session,
         rule_id: UUID,
-        updates: Dict[str, Any],
+        updates: dict[str, Any],
         updated_by: UUID,
     ) -> WorkflowRule:
         """Update a workflow rule, snapshotting the previous state."""
@@ -1363,7 +1373,7 @@ class WorkflowService:
         self,
         db: Session,
         rule: WorkflowRule,
-        changed_by: Optional[UUID] = None,
+        changed_by: UUID | None = None,
     ) -> None:
         """Create a version snapshot of the current rule state."""
         from app.models.finance.automation.workflow_rule_version import (
@@ -1412,8 +1422,8 @@ class WorkflowService:
         self,
         db: Session,
         rule_id: UUID,
-        sample_data: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        sample_data: dict[str, Any],
+    ) -> dict[str, Any]:
         """Test a rule against sample data without executing the action.
 
         Args:
@@ -1485,7 +1495,7 @@ class WorkflowService:
         rule_id: UUID,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[Any]:
+    ) -> builtins.list[Any]:
         """Get version history for a rule."""
         from app.models.finance.automation.workflow_rule_version import (
             WorkflowRuleVersion,
@@ -1503,13 +1513,13 @@ class WorkflowService:
     def get_executions(
         self,
         db: Session,
-        rule_id: Optional[UUID] = None,
-        entity_type: Optional[str] = None,
-        entity_id: Optional[UUID] = None,
-        status: Optional[ExecutionStatus] = None,
+        rule_id: UUID | None = None,
+        entity_type: str | None = None,
+        entity_id: UUID | None = None,
+        status: ExecutionStatus | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[WorkflowExecution]:
+    ) -> builtins.list[WorkflowExecution]:
         """Get workflow executions with filters."""
         query = select(WorkflowExecution)
 

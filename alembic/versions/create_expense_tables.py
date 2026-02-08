@@ -7,12 +7,14 @@ Create Date: 2025-01-20
 Phase 6: Expense Management tables with AP integration for People module.
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
+from typing import Union
+
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 from app.alembic_utils import ensure_enum
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "create_expense_tables"

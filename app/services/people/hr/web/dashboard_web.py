@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import logging
 from datetime import date, timedelta
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from fastapi import Request
@@ -41,7 +41,7 @@ class PeopleDashboardService:
     def dashboard_response(
         self,
         request: Request,
-        auth: "WebAuthContext",
+        auth: WebAuthContext,
         db: Session,
     ) -> HTMLResponse:
         """Render the People dashboard page."""
@@ -71,7 +71,7 @@ class PeopleDashboardService:
 
         return templates.TemplateResponse(request, "people/dashboard.html", context)
 
-    def _get_dashboard_stats(self, db: Session, org_id: UUID) -> Dict[str, Any]:
+    def _get_dashboard_stats(self, db: Session, org_id: UUID) -> dict[str, Any]:
         """Get aggregate statistics for the dashboard."""
         today = date.today()
         month_start = today.replace(day=1)
@@ -266,7 +266,7 @@ class PeopleDashboardService:
             "pending_offers": pending_offers,
         }
 
-    def _get_chart_data(self, db: Session, org_id: UUID) -> Dict[str, Any]:
+    def _get_chart_data(self, db: Session, org_id: UUID) -> dict[str, Any]:
         """Get chart data for the dashboard."""
         chart_data = {}
 
@@ -300,7 +300,7 @@ class PeopleDashboardService:
 
         return chart_data
 
-    def _get_headcount_trend(self, db: Session, org_id: UUID) -> List[Dict[str, Any]]:
+    def _get_headcount_trend(self, db: Session, org_id: UUID) -> list[dict[str, Any]]:
         """Get monthly headcount for the last 12 months."""
         today = date.today()
         trend = []
@@ -375,7 +375,7 @@ class PeopleDashboardService:
 
     def _get_department_distribution(
         self, db: Session, org_id: UUID
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get employee count by department."""
         results = db.execute(
             select(Department.department_name, func.count(Employee.employee_id))
@@ -394,7 +394,7 @@ class PeopleDashboardService:
 
         return [{"name": name, "count": count} for name, count in results]
 
-    def _get_status_breakdown(self, db: Session, org_id: UUID) -> List[Dict[str, Any]]:
+    def _get_status_breakdown(self, db: Session, org_id: UUID) -> list[dict[str, Any]]:
         """Get employee count by status."""
         results = db.execute(
             select(Employee.status, func.count(Employee.employee_id))
@@ -429,7 +429,7 @@ class PeopleDashboardService:
 
     def _get_tenure_distribution(
         self, db: Session, org_id: UUID
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get employee count by tenure range."""
         today = date.today()
         ranges = [
@@ -464,7 +464,7 @@ class PeopleDashboardService:
 
         return distribution
 
-    def _get_age_distribution(self, db: Session, org_id: UUID) -> List[Dict[str, Any]]:
+    def _get_age_distribution(self, db: Session, org_id: UUID) -> list[dict[str, Any]]:
         """Get employee count by age range."""
         today = date.today()
         ranges = [
@@ -502,7 +502,7 @@ class PeopleDashboardService:
 
         return distribution
 
-    def _get_payroll_trend(self, db: Session, org_id: UUID) -> List[Dict[str, Any]]:
+    def _get_payroll_trend(self, db: Session, org_id: UUID) -> list[dict[str, Any]]:
         """Get monthly payroll totals for the last 6 months."""
         today = date.today()
         trend = []
@@ -537,7 +537,7 @@ class PeopleDashboardService:
 
     def _get_recent_hires(
         self, db: Session, org_id: UUID, limit: int = 5
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get most recently hired employees."""
         results = db.execute(
             select(Employee, Person, Department)
@@ -573,7 +573,7 @@ class PeopleDashboardService:
 
     def _get_upcoming_birthdays(
         self, db: Session, org_id: UUID, days: int = 7
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get employees with birthdays in the next N days."""
         today = date.today()
 
@@ -606,7 +606,7 @@ class PeopleDashboardService:
 
     def _get_upcoming_anniversaries(
         self, db: Session, org_id: UUID
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get employees with work anniversaries this month."""
         today = date.today()
 
@@ -637,7 +637,7 @@ class PeopleDashboardService:
 
     def _get_gender_distribution(
         self, db: Session, org_id: UUID
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get employee count by gender."""
         from app.models.people.hr.employee import Gender
 
@@ -674,7 +674,7 @@ class PeopleDashboardService:
 
     def _get_employment_type_distribution(
         self, db: Session, org_id: UUID
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Get employee count by employment type."""
         results = db.execute(
             select(EmploymentType.type_name, func.count(Employee.employee_id))
@@ -697,7 +697,7 @@ class PeopleDashboardService:
             {"type": name or "Unspecified", "count": count} for name, count in results
         ]
 
-    def _get_pending_approvals(self, db: Session, org_id: UUID) -> Dict[str, Any]:
+    def _get_pending_approvals(self, db: Session, org_id: UUID) -> dict[str, Any]:
         """Get counts of items pending approval."""
         # Pending leave requests
         pending_leave = (
@@ -749,7 +749,7 @@ class PeopleDashboardService:
             "interviews": pending_interviews,
         }
 
-    def _get_alerts(self, db: Session, org_id: UUID) -> List[Dict[str, Any]]:
+    def _get_alerts(self, db: Session, org_id: UUID) -> list[dict[str, Any]]:
         """Get alerts and notifications for the dashboard."""
         alerts = []
         today = date.today()

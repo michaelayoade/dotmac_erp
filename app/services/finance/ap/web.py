@@ -9,17 +9,15 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
-from fastapi import Request, UploadFile
+from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, load_only
 
-from app.config import settings
 from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
 from app.models.finance.ap.goods_receipt import GoodsReceipt, ReceiptStatus
 from app.models.finance.ap.goods_receipt_line import GoodsReceiptLine
@@ -30,7 +28,6 @@ from app.models.finance.ap.supplier import Supplier, SupplierType
 from app.models.finance.ap.supplier_invoice import (
     SupplierInvoice,
     SupplierInvoiceStatus,
-    SupplierInvoiceType,
 )
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.finance.ap.supplier_payment import (
@@ -47,25 +44,15 @@ from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.services.audit_info import get_audit_service
 from app.services.common import coerce_uuid
 from app.services.finance.ap.ap_aging import ap_aging_service
-from app.services.finance.ap.goods_receipt import (
-    GoodsReceiptInput,
-    GRLineInput,
-    goods_receipt_service,
-)
+from app.services.finance.ap.goods_receipt import goods_receipt_service
 from app.services.finance.ap.payment_batch import payment_batch_service
-from app.services.finance.ap.purchase_order import (
-    POLineInput,
-    PurchaseOrderInput,
-    purchase_order_service,
-)
+from app.services.finance.ap.purchase_order import purchase_order_service
 from app.services.finance.ap.supplier import SupplierInput, supplier_service
 from app.services.finance.ap.supplier_invoice import (
-    InvoiceLineInput,
     SupplierInvoiceInput,
     supplier_invoice_service,
 )
 from app.services.finance.ap.supplier_payment import (
-    PaymentAllocationInput,
     SupplierPaymentInput,
     supplier_payment_service,
 )
@@ -79,7 +66,6 @@ from app.services.finance.common import (
 )
 from app.services.finance.common.attachment import AttachmentInput, attachment_service
 from app.services.finance.platform.currency_context import get_currency_context
-from app.services.finance.platform.org_context import org_context_service
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -92,7 +78,7 @@ _format_currency = format_currency
 _format_file_size = format_file_size
 
 
-def _parse_supplier_type(value: Optional[str]) -> SupplierType:
+def _parse_supplier_type(value: str | None) -> SupplierType:
     return parse_enum_safe(SupplierType, value, SupplierType.VENDOR)
 
 
@@ -264,9 +250,7 @@ def _invoice_line_view(line: SupplierInvoiceLine, currency_code: str) -> dict:
     }
 
 
-def _invoice_detail_view(
-    invoice: SupplierInvoice, supplier: Optional[Supplier]
-) -> dict:
+def _invoice_detail_view(invoice: SupplierInvoice, supplier: Supplier | None) -> dict:
     balance = invoice.total_amount - invoice.amount_paid
     today = date.today()
     return {
@@ -294,9 +278,7 @@ def _invoice_detail_view(
     }
 
 
-def _payment_detail_view(
-    payment: SupplierPayment, supplier: Optional[Supplier]
-) -> dict:
+def _payment_detail_view(payment: SupplierPayment, supplier: Supplier | None) -> dict:
     return {
         "payment_id": payment.payment_id,
         "payment_number": payment.payment_number,
@@ -313,7 +295,7 @@ def _payment_detail_view(
 
 def _allocation_view(
     allocation: APPaymentAllocation,
-    invoice: Optional[SupplierInvoice],
+    invoice: SupplierInvoice | None,
     currency_code: str,
 ) -> dict:
     return {
@@ -348,7 +330,7 @@ def _payment_status_label(status: APPaymentStatus) -> str:
     return str(status.value)
 
 
-def _parse_invoice_status(value: Optional[str]) -> Optional[SupplierInvoiceStatus]:
+def _parse_invoice_status(value: str | None) -> SupplierInvoiceStatus | None:
     if not value:
         return None
     status_map = {
@@ -363,7 +345,7 @@ def _parse_invoice_status(value: Optional[str]) -> Optional[SupplierInvoiceStatu
         return None
 
 
-def _parse_payment_status(value: Optional[str]) -> Optional[APPaymentStatus]:
+def _parse_payment_status(value: str | None) -> APPaymentStatus | None:
     if not value:
         return None
     status_map = {
@@ -382,7 +364,7 @@ def _get_accounts(
     db: Session,
     organization_id: UUID,
     ifrs_category: IFRSCategory,
-    subledger_type: Optional[str] = None,
+    subledger_type: str | None = None,
 ) -> list[Account]:
     query = (
         db.query(Account)
@@ -438,102 +420,33 @@ class APWebService:
     """View service for AP web routes."""
 
     @staticmethod
-    def build_supplier_input(form_data: dict) -> SupplierInput:
-        return SupplierInput(
-            supplier_code=form_data.get("supplier_code", ""),
-            supplier_type=_parse_supplier_type(form_data.get("supplier_type")),
-            legal_name=form_data.get("supplier_name", ""),
-            trading_name=form_data.get("supplier_name"),
-            tax_identification_number=form_data.get("tax_id"),
-            currency_code=form_data.get(
-                "currency_code",
-                settings.default_functional_currency_code,
-            ),
-            payment_terms_days=int(form_data.get("payment_terms_days", 30)),
-            ap_control_account_id=(
-                UUID(form_data["default_payable_account_id"])
-                if form_data.get("default_payable_account_id")
-                else UUID("00000000-0000-0000-0000-000000000001")
-            ),
-            default_expense_account_id=(
-                UUID(form_data["default_expense_account_id"])
-                if form_data.get("default_expense_account_id")
-                else None
-            ),
-            billing_address={
-                "address": form_data.get("billing_address", ""),
-            }
-            if form_data.get("billing_address")
-            else None,
-            primary_contact={
-                "email": form_data.get("email", ""),
-                "phone": form_data.get("phone", ""),
-            }
-            if form_data.get("email") or form_data.get("phone")
-            else None,
+    def build_supplier_input(
+        db: Session, form_data: dict, organization_id: UUID
+    ) -> SupplierInput:
+        payload = dict(form_data)
+        return supplier_service.build_input_from_payload(
+            db=db,
+            organization_id=organization_id,
+            payload=payload,
         )
 
     @staticmethod
-    def build_invoice_input(data: dict) -> SupplierInvoiceInput:
-        lines_data = data.get("lines", [])
-        if isinstance(lines_data, str):
-            lines_data = json.loads(lines_data)
-
-        lines = []
-        for line in lines_data:
-            if line.get("expense_account_id") and line.get("description"):
-                # Handle both new tax_code_ids array and legacy tax_code_id field
-                tax_code_ids = []
-                if line.get("tax_code_ids"):
-                    tax_code_ids = [
-                        UUID(tc_id) for tc_id in line["tax_code_ids"] if tc_id
-                    ]
-                legacy_tax_code_id = (
-                    UUID(line["tax_code_id"]) if line.get("tax_code_id") else None
-                )
-
-                lines.append(
-                    InvoiceLineInput(
-                        description=line.get("description", ""),
-                        quantity=Decimal(str(line.get("quantity", 1))),
-                        unit_price=Decimal(str(line.get("unit_price", 0))),
-                        expense_account_id=UUID(line["expense_account_id"])
-                        if line.get("expense_account_id")
-                        else None,
-                        tax_code_ids=tax_code_ids,
-                        tax_code_id=legacy_tax_code_id,
-                        cost_center_id=UUID(line["cost_center_id"])
-                        if line.get("cost_center_id")
-                        else None,
-                        project_id=UUID(line["project_id"])
-                        if line.get("project_id")
-                        else None,
-                    )
-                )
-
-        invoice_date = _parse_date(data.get("invoice_date")) or date.today()
-        due_date = _parse_date(data.get("due_date")) or invoice_date
-
-        return SupplierInvoiceInput(
-            supplier_id=UUID(data["supplier_id"]),
-            invoice_type=SupplierInvoiceType.STANDARD,
-            invoice_date=invoice_date,
-            received_date=invoice_date,
-            due_date=due_date,
-            currency_code=data.get(
-                "currency_code",
-                settings.default_functional_currency_code,
-            ),
-            supplier_invoice_number=data.get("invoice_number"),
-            lines=lines,
+    def build_invoice_input(
+        db: Session, data: dict, organization_id: UUID
+    ) -> SupplierInvoiceInput:
+        payload = dict(data)
+        return supplier_invoice_service.build_input_from_payload(
+            db=db,
+            organization_id=organization_id,
+            payload=payload,
         )
 
     @staticmethod
     def list_suppliers_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        status: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -661,7 +574,7 @@ class APWebService:
     def supplier_form_context(
         db: Session,
         organization_id: str,
-        supplier_id: Optional[str] = None,
+        supplier_id: str | None = None,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
         supplier = None
@@ -783,11 +696,11 @@ class APWebService:
     def list_invoices_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        supplier_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        supplier_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -939,8 +852,8 @@ class APWebService:
     def invoice_form_context(
         db: Session,
         organization_id: str,
-        supplier_id: Optional[str] = None,
-        po_id: Optional[str] = None,
+        supplier_id: str | None = None,
+        po_id: str | None = None,
     ) -> dict:
         from app.models.finance.tax.tax_code import TaxCode
         from app.models.fixed_assets.asset_category import AssetCategory
@@ -1156,11 +1069,11 @@ class APWebService:
     def list_payments_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        supplier_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        supplier_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -1252,7 +1165,7 @@ class APWebService:
     def payment_form_context(
         db: Session,
         organization_id: str,
-        invoice_id: Optional[str] = None,
+        invoice_id: str | None = None,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
         suppliers_list = [
@@ -1445,8 +1358,8 @@ class APWebService:
     def aging_context(
         db: Session,
         organization_id: str,
-        as_of_date: Optional[str],
-        supplier_id: Optional[str],
+        as_of_date: str | None,
+        supplier_id: str | None,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
         ref_date = _parse_date(as_of_date)
@@ -1471,7 +1384,9 @@ class APWebService:
 
         # Build template-ready context from raw aging data
         currency = aging_data[0].currency_code if aging_data else "NGN"
-        fmt = lambda v: _format_currency(v, currency)
+
+        def fmt(v):
+            return _format_currency(v, currency)
 
         # Aggregate totals across all suppliers
         total_current = sum(r.current for r in aging_data)
@@ -1568,49 +1483,17 @@ class APWebService:
         db: Session,
         organization_id: str,
         supplier_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete a supplier. Returns error message or None on success."""
         org_id = coerce_uuid(organization_id)
         sup_id = coerce_uuid(supplier_id)
 
-        supplier = db.get(Supplier, sup_id)
-        if not supplier or supplier.organization_id != org_id:
-            return "Supplier not found"
-
-        # Check for existing invoices
-        invoice_count = (
-            db.query(func.count(SupplierInvoice.invoice_id))
-            .filter(
-                SupplierInvoice.organization_id == org_id,
-                SupplierInvoice.supplier_id == sup_id,
-            )
-            .scalar()
-            or 0
-        )
-
-        if invoice_count > 0:
-            return f"Cannot delete supplier with {invoice_count} invoice(s). Deactivate instead."
-
-        # Check for existing payments
-        payment_count = (
-            db.query(func.count(SupplierPayment.payment_id))
-            .filter(
-                SupplierPayment.organization_id == org_id,
-                SupplierPayment.supplier_id == sup_id,
-            )
-            .scalar()
-            or 0
-        )
-
-        if payment_count > 0:
-            return f"Cannot delete supplier with {payment_count} payment(s). Deactivate instead."
-
         try:
-            db.delete(supplier)
-            db.commit()
+            supplier_service.delete_supplier(db, org_id, sup_id)
             return None
+        except HTTPException as exc:
+            return exc.detail
         except Exception as e:
-            db.rollback()
             return f"Failed to delete supplier: {str(e)}"
 
     @staticmethod
@@ -1618,108 +1501,29 @@ class APWebService:
         db: Session,
         organization_id: str,
         invoice_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete an invoice. Returns error message or None on success."""
         org_id = coerce_uuid(organization_id)
         inv_id = coerce_uuid(invoice_id)
 
-        invoice = db.get(SupplierInvoice, inv_id)
-        if not invoice or invoice.organization_id != org_id:
-            return "Invoice not found"
-
-        # Only DRAFT invoices can be deleted
-        if invoice.status != SupplierInvoiceStatus.DRAFT:
-            return f"Cannot delete invoice with status '{invoice.status.value}'. Only DRAFT invoices can be deleted."
-
-        # Check for existing payments/allocations
-        allocation_count = (
-            db.query(func.count(APPaymentAllocation.allocation_id))
-            .filter(APPaymentAllocation.invoice_id == inv_id)
-            .scalar()
-            or 0
-        )
-
-        if allocation_count > 0:
-            return (
-                f"Cannot delete invoice with {allocation_count} payment allocation(s)."
-            )
-
         try:
-            # Delete invoice lines first
-            db.query(SupplierInvoiceLine).filter(
-                SupplierInvoiceLine.invoice_id == inv_id
-            ).delete()
-            db.delete(invoice)
-            db.commit()
+            supplier_invoice_service.delete_invoice(db, org_id, inv_id)
             return None
+        except HTTPException as exc:
+            return exc.detail
         except Exception as e:
-            db.rollback()
             return f"Failed to delete invoice: {str(e)}"
 
     @staticmethod
-    def build_payment_input(data: dict) -> SupplierPaymentInput:
+    def build_payment_input(
+        db: Session, data: dict, organization_id: UUID
+    ) -> SupplierPaymentInput:
         """Build SupplierPaymentInput from form data."""
-        payment_date = _parse_date(data.get("payment_date")) or date.today()
-
-        # Parse payment method
-        method_str = data.get("payment_method", "BANK_TRANSFER")
-        try:
-            payment_method = APPaymentMethod(method_str)
-        except ValueError:
-            payment_method = APPaymentMethod.BANK_TRANSFER
-
-        # Parse allocations if provided
-        allocations = []
-        allocations_data = data.get("allocations", [])
-        if isinstance(allocations_data, str):
-            try:
-                allocations_data = json.loads(allocations_data)
-            except json.JSONDecodeError:
-                allocations_data = []
-
-        for alloc in allocations_data:
-            if alloc.get("invoice_id") and alloc.get("amount"):
-                allocations.append(
-                    PaymentAllocationInput(
-                        invoice_id=UUID(alloc["invoice_id"]),
-                        amount=Decimal(str(alloc["amount"])),
-                    )
-                )
-
-        # Parse WHT fields
-        wht_code_id = None
-        wht_amount = Decimal("0")
-        gross_amount = None
-
-        # Check if WHT is applied (has_wht checkbox or wht_amount > 0)
-        has_wht = data.get("has_wht") in ("true", "1", True, "on")
-        if has_wht:
-            if data.get("wht_code_id"):
-                wht_code_id = UUID(data["wht_code_id"])
-            if data.get("wht_amount"):
-                wht_amount = Decimal(str(data["wht_amount"]))
-            if data.get("gross_amount"):
-                gross_amount = Decimal(str(data["gross_amount"]))
-
-        return SupplierPaymentInput(
-            supplier_id=UUID(data["supplier_id"]),
-            payment_date=payment_date,
-            payment_method=payment_method,
-            currency_code=data.get(
-                "currency_code",
-                settings.default_functional_currency_code,
-            ),
-            amount=Decimal(str(data.get("amount", 0))),
-            bank_account_id=UUID(data["bank_account_id"])
-            if data.get("bank_account_id")
-            else None,
-            reference=data.get("reference"),
-            description=data.get("description"),
-            allocations=allocations,
-            # WHT fields
-            gross_amount=gross_amount,
-            wht_code_id=wht_code_id,
-            wht_amount=wht_amount,
+        payload = dict(data)
+        return supplier_payment_service.build_input_from_payload(
+            db=db,
+            organization_id=organization_id,
+            payload=payload,
         )
 
     @staticmethod
@@ -1727,29 +1531,17 @@ class APWebService:
         db: Session,
         organization_id: str,
         payment_id: str,
-    ) -> Optional[str]:
+    ) -> str | None:
         """Delete a payment. Returns error message or None on success."""
         org_id = coerce_uuid(organization_id)
         pay_id = coerce_uuid(payment_id)
 
-        payment = db.get(SupplierPayment, pay_id)
-        if not payment or payment.organization_id != org_id:
-            return "Payment not found"
-
-        # Only DRAFT payments can be deleted
-        if payment.status != APPaymentStatus.DRAFT:
-            return f"Cannot delete payment with status '{payment.status.value}'. Only draft payments can be deleted."
-
         try:
-            # Delete allocations first
-            db.query(APPaymentAllocation).filter(
-                APPaymentAllocation.payment_id == pay_id
-            ).delete()
-            db.delete(payment)
-            db.commit()
+            supplier_payment_service.delete_payment(db, org_id, pay_id)
             return None
+        except HTTPException as exc:
+            return exc.detail
         except Exception as e:
-            db.rollback()
             return f"Failed to delete payment: {str(e)}"
 
     # =========================================================================
@@ -1760,11 +1552,11 @@ class APWebService:
     def list_purchase_orders_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        supplier_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        supplier_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -2021,7 +1813,7 @@ class APWebService:
     def purchase_order_form_context(
         db: Session,
         organization_id: str,
-        po_id: Optional[str] = None,
+        po_id: str | None = None,
     ) -> dict:
         """Build context for purchase order form (create/edit)."""
         org_id = coerce_uuid(organization_id)
@@ -2124,12 +1916,12 @@ class APWebService:
     def list_goods_receipts_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        supplier_id: Optional[str],
-        po_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        supplier_id: str | None,
+        po_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -2375,7 +2167,7 @@ class APWebService:
     def goods_receipt_form_context(
         db: Session,
         organization_id: str,
-        po_id: Optional[str] = None,
+        po_id: str | None = None,
     ) -> dict:
         """Build context for goods receipt form (create)."""
         org_id = coerce_uuid(organization_id)
@@ -2481,8 +2273,8 @@ class APWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        search: Optional[str],
-        status: Optional[str],
+        search: str | None,
+        status: str | None,
         page: int,
         limit: int,
         db: Session,
@@ -2555,7 +2347,9 @@ class APWebService:
         form_data = await request.form()
 
         try:
-            input_data = self.build_supplier_input(dict(form_data))
+            input_data = self.build_supplier_input(
+                db, dict(form_data), auth.organization_id
+            )
 
             supplier_service.create_supplier(
                 db=db,
@@ -2587,7 +2381,9 @@ class APWebService:
         form_data = await request.form()
 
         try:
-            input_data = self.build_supplier_input(dict(form_data))
+            input_data = self.build_supplier_input(
+                db, dict(form_data), auth.organization_id
+            )
 
             supplier_service.update_supplier(
                 db=db,
@@ -2641,11 +2437,11 @@ class APWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        search: Optional[str],
-        supplier_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        supplier_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         db: Session,
     ) -> HTMLResponse:
@@ -2668,8 +2464,8 @@ class APWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        supplier_id: Optional[str],
-        po_id: Optional[str],
+        supplier_id: str | None,
+        po_id: str | None,
         db: Session,
     ) -> HTMLResponse:
         context = base_context(request, auth, "New AP Invoice", "ap")
@@ -2700,7 +2496,7 @@ class APWebService:
             data = dict(form_data)
 
         try:
-            input_data = self.build_invoice_input(data)
+            input_data = self.build_invoice_input(db, data, auth.organization_id)
 
             invoice = supplier_invoice_service.create_invoice(
                 db=db,
@@ -2801,7 +2597,7 @@ class APWebService:
         context.update(self.invoice_form_context(db, str(auth.organization_id)))
 
         # Add existing invoice data
-        supplier = db.get(Supplier, invoice.supplier_id)
+        db.get(Supplier, invoice.supplier_id)
         lines = (
             db.query(SupplierInvoiceLine)
             .filter(SupplierInvoiceLine.invoice_id == inv_id)
@@ -2857,7 +2653,7 @@ class APWebService:
             data = dict(form_data)
 
         try:
-            input_data = self.build_invoice_input(data)
+            input_data = self.build_invoice_input(db, data, auth.organization_id)
 
             invoice = supplier_invoice_service.update_invoice(
                 db=db,
@@ -2997,11 +2793,11 @@ class APWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        search: Optional[str],
-        supplier_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        supplier_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         db: Session,
     ) -> HTMLResponse:
@@ -3071,7 +2867,7 @@ class APWebService:
             data = dict(form_data)
 
         try:
-            input_data = self.build_payment_input(data)
+            input_data = self.build_payment_input(db, data, auth.organization_id)
 
             payment = supplier_payment_service.create_payment(
                 db=db,
@@ -3290,7 +3086,7 @@ class APWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        status: Optional[str],
+        status: str | None,
         page: int,
         db: Session,
     ) -> HTMLResponse:
@@ -3372,11 +3168,11 @@ class APWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        search: Optional[str],
-        supplier_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        supplier_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         db: Session,
     ) -> HTMLResponse:
@@ -3460,70 +3256,10 @@ class APWebService:
             data = dict(form_data)
 
         try:
-            lines_data = data.get("lines", [])
-            if isinstance(lines_data, str):
-                lines_data = json.loads(lines_data)
-
-            lines = []
-            for line in lines_data:
-                if line.get("description"):
-                    lines.append(
-                        POLineInput(
-                            item_id=UUID(line["item_id"])
-                            if line.get("item_id")
-                            else None,
-                            description=line.get("description", ""),
-                            quantity_ordered=Decimal(
-                                str(
-                                    line.get(
-                                        "quantity", line.get("quantity_ordered", 1)
-                                    )
-                                )
-                            ),
-                            unit_price=Decimal(str(line.get("unit_price", 0))),
-                            expense_account_id=UUID(line["expense_account_id"])
-                            if line.get("expense_account_id")
-                            else None,
-                            tax_code_id=UUID(line["tax_code_id"])
-                            if line.get("tax_code_id")
-                            else None,
-                            cost_center_id=UUID(line["cost_center_id"])
-                            if line.get("cost_center_id")
-                            else None,
-                            project_id=UUID(line["project_id"])
-                            if line.get("project_id")
-                            else None,
-                        )
-                    )
-
-            po_date_str = data.get("po_date")
-            po_date = (
-                datetime.strptime(po_date_str, "%Y-%m-%d").date()
-                if po_date_str
-                else None
-            )
-
-            expected_delivery_str = data.get("expected_delivery_date")
-            expected_delivery = (
-                datetime.strptime(expected_delivery_str, "%Y-%m-%d").date()
-                if expected_delivery_str
-                else None
-            )
-
-            currency_code = data.get(
-                "currency_code"
-            ) or org_context_service.get_functional_currency(
-                db,
-                auth.organization_id,
-            )
-
-            input_data = PurchaseOrderInput(
-                supplier_id=UUID(data["supplier_id"]),
-                po_date=po_date,
-                expected_delivery_date=expected_delivery,
-                currency_code=currency_code,
-                terms_and_conditions=data.get("terms_and_conditions"),
-                lines=lines,
+            input_data = purchase_order_service.build_input_from_payload(
+                db=db,
+                organization_id=auth.organization_id,
+                payload=dict(data),
             )
 
             po = purchase_order_service.create_po(
@@ -3653,12 +3389,12 @@ class APWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        search: Optional[str],
-        supplier_id: Optional[str],
-        po_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        supplier_id: str | None,
+        po_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         db: Session,
     ) -> HTMLResponse:
@@ -3684,7 +3420,7 @@ class APWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        po_id: Optional[str],
+        po_id: str | None,
         db: Session,
     ) -> HTMLResponse:
         context = base_context(request, auth, "New Goods Receipt", "ap")
@@ -3729,40 +3465,10 @@ class APWebService:
             data = dict(form_data)
 
         try:
-            lines_data = data.get("lines", [])
-            if isinstance(lines_data, str):
-                lines_data = json.loads(lines_data)
-
-            lines = []
-            for line in lines_data:
-                qty = Decimal(str(line.get("quantity_to_receive", 0)))
-                if qty > 0:
-                    lines.append(
-                        GRLineInput(
-                            po_line_id=UUID(line["line_id"]),
-                            quantity_received=qty,
-                            lot_number=line.get("lot_number"),
-                        )
-                    )
-
-            if not lines:
-                raise ValueError("No items to receive")
-
-            receipt_date_str = data.get("receipt_date")
-            receipt_date = (
-                datetime.strptime(receipt_date_str, "%Y-%m-%d").date()
-                if receipt_date_str
-                else None
-            )
-
-            input_data = GoodsReceiptInput(
-                po_id=UUID(data["po_id"]),
-                receipt_date=receipt_date,
-                warehouse_id=UUID(data["warehouse_id"])
-                if data.get("warehouse_id")
-                else None,
-                notes=data.get("notes"),
-                lines=lines,
+            input_data = goods_receipt_service.build_input_from_payload(
+                db=db,
+                organization_id=auth.organization_id,
+                payload=dict(data),
             )
 
             receipt = goods_receipt_service.create_receipt(
@@ -3864,8 +3570,8 @@ class APWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        as_of_date: Optional[str],
-        supplier_id: Optional[str],
+        as_of_date: str | None,
+        supplier_id: str | None,
         db: Session,
     ) -> HTMLResponse:
         context = base_context(request, auth, "AP Aging Report", "ap")
@@ -3883,7 +3589,7 @@ class APWebService:
         self,
         invoice_id: str,
         file: UploadFile,
-        description: Optional[str],
+        description: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:
@@ -3932,7 +3638,7 @@ class APWebService:
         self,
         po_id: str,
         file: UploadFile,
-        description: Optional[str],
+        description: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:
@@ -3981,7 +3687,7 @@ class APWebService:
         self,
         receipt_id: str,
         file: UploadFile,
-        description: Optional[str],
+        description: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:
@@ -4030,7 +3736,7 @@ class APWebService:
         self,
         payment_id: str,
         file: UploadFile,
-        description: Optional[str],
+        description: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:
@@ -4079,7 +3785,7 @@ class APWebService:
         self,
         supplier_id: str,
         file: UploadFile,
-        description: Optional[str],
+        description: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:

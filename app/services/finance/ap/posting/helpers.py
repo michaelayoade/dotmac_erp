@@ -9,7 +9,6 @@ Provides:
 """
 
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -27,7 +26,7 @@ def determine_debit_account(
     organization_id: UUID,
     line: SupplierInvoiceLine,
     supplier: Supplier,
-) -> Optional[UUID]:
+) -> UUID | None:
     """
     Determine the appropriate debit account for an invoice line.
 
@@ -69,7 +68,7 @@ def determine_debit_account(
 
         org = db.get(Organization, organization_id)
         if org and hasattr(org, "grni_account_id"):
-            acc_id: Optional[UUID] = getattr(org, "grni_account_id", None)
+            acc_id: UUID | None = getattr(org, "grni_account_id", None)
             if acc_id:
                 return acc_id
         # If no GRNI account configured, fall through to expense routing
@@ -172,7 +171,7 @@ def create_wht_transaction(
     supplier: Supplier,
     wht_amount: Decimal,
     exchange_rate: Decimal,
-) -> Optional[UUID]:
+) -> UUID | None:
     """
     Create a WHT tax transaction for a supplier payment.
 

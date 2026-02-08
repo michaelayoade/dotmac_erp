@@ -7,7 +7,7 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, Generic, TypeVar
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -72,7 +72,7 @@ class BaseSyncService(ABC, Generic[T]):
         self._sync_entity_cache: dict[str, SyncEntity] = {}
 
     @abstractmethod
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         """
         Fetch records from ERPNext.
 
@@ -139,7 +139,7 @@ class BaseSyncService(ABC, Generic[T]):
         """
         return str(record.get("name", ""))
 
-    def get_sync_entity(self, source_name: str) -> Optional[SyncEntity]:
+    def get_sync_entity(self, source_name: str) -> SyncEntity | None:
         """
         Get existing sync entity record.
 
@@ -176,7 +176,7 @@ class BaseSyncService(ABC, Generic[T]):
         self._sync_entity_cache[source_name] = sync_entity
         return sync_entity
 
-    def find_existing_entity(self, source_name: str) -> Optional[T]:
+    def find_existing_entity(self, source_name: str) -> T | None:
         """
         Find existing DotMac ERP entity by sync record.
 
@@ -190,7 +190,7 @@ class BaseSyncService(ABC, Generic[T]):
         return None
 
     def should_update(
-        self, sync_entity: SyncEntity, source_modified: Optional[datetime]
+        self, sync_entity: SyncEntity, source_modified: datetime | None
     ) -> bool:
         """
         Determine if entity should be updated.
@@ -327,7 +327,7 @@ class BaseSyncService(ABC, Generic[T]):
 
     def _sync_single_record(
         self, record: dict[str, Any], result: SyncResult
-    ) -> Optional[T]:
+    ) -> T | None:
         """
         Sync a single record.
 
@@ -372,7 +372,7 @@ class BaseSyncService(ABC, Generic[T]):
         result.synced_count += 1
         return entity
 
-    def _get_last_sync_time(self) -> Optional[datetime]:
+    def _get_last_sync_time(self) -> datetime | None:
         """Get the most recent sync timestamp for incremental sync."""
         result = self.db.execute(
             select(SyncEntity.synced_at)
@@ -388,9 +388,7 @@ class BaseSyncService(ABC, Generic[T]):
 
         return result
 
-    def resolve_parent_id(
-        self, parent_source_name: Optional[str]
-    ) -> Optional[uuid.UUID]:
+    def resolve_parent_id(self, parent_source_name: str | None) -> uuid.UUID | None:
         """
         Resolve parent entity ID from source name.
 

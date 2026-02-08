@@ -5,7 +5,7 @@ Supplier Model - AP Schema.
 import enum
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -68,13 +68,11 @@ class Supplier(Base):
 
     # Identity
     legal_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    trading_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    tax_identification_number: Mapped[Optional[str]] = mapped_column(
+    trading_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    tax_identification_number: Mapped[str | None] = mapped_column(
         String(50), nullable=True
     )
-    registration_number: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True
-    )
+    registration_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Payment terms
     payment_terms_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
@@ -85,7 +83,7 @@ class Supplier(Base):
     )
 
     # Defaults
-    default_expense_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    default_expense_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -93,7 +91,7 @@ class Supplier(Base):
         UUID(as_uuid=True),
         nullable=False,
     )
-    supplier_group_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    supplier_group_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -102,9 +100,7 @@ class Supplier(Base):
     is_related_party: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
-    related_party_relationship: Mapped[Optional[str]] = mapped_column(
-        Text, nullable=True
-    )
+    related_party_relationship: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Withholding tax
     withholding_tax_applicable: Mapped[bool] = mapped_column(
@@ -112,22 +108,18 @@ class Supplier(Base):
         nullable=False,
         default=False,
     )
-    withholding_tax_code_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    withholding_tax_code_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
 
     # Contact & Address
-    billing_address: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    billing_address: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    remittance_address: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, nullable=True
     )
-    remittance_address: Mapped[Optional[dict[str, Any]]] = mapped_column(
-        JSONB, nullable=True
-    )
-    primary_contact: Mapped[Optional[dict[str, Any]]] = mapped_column(
-        JSONB, nullable=True
-    )
-    bank_details: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    primary_contact: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    bank_details: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Encrypted/masked",
@@ -136,7 +128,7 @@ class Supplier(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Audit fields
-    created_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="User who created/imported this supplier",
@@ -146,12 +138,12 @@ class Supplier(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    updated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="User who last updated this supplier",
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

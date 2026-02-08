@@ -17,6 +17,7 @@
 {% block content %}
 <div class="mx-auto max-w-3xl">
     <form method="post" action="/automation/fields/{% if is_edit %}{{ field.field_id }}/edit{% else %}new{% endif %}" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
         <!-- Basic Info -->
         <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">
             <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
@@ -25,7 +26,7 @@
             <div class="p-6 space-y-4">
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label for="entity_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Entity Type *</label>
+                        <label for="entity_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Entity Type <span class="text-rose-500">*</span></label>
                         <select id="entity_type" name="entity_type" required {% if is_edit %}disabled{% endif %}
                                 class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                             <option value="">Select entity...</option>
@@ -35,7 +36,7 @@
                         </select>
                     </div>
                     <div>
-                        <label for="field_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Field Type *</label>
+                        <label for="field_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Field Type <span class="text-rose-500">*</span></label>
                         <select id="field_type" name="field_type" required {% if is_edit %}disabled{% endif %}
                                 class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                             <option value="">Select type...</option>
@@ -47,7 +48,7 @@
                 </div>
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
-                        <label for="field_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Field Code *</label>
+                        <label for="field_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Field Code <span class="text-rose-500">*</span></label>
                         <input type="text" id="field_code" name="field_code" required {% if is_edit %}readonly{% endif %}
                                value="{{ field.field_code if field else form_data.field_code | default('', true) }}"
                                pattern="[a-zA-Z_][a-zA-Z0-9_]*"
@@ -56,7 +57,7 @@
                         <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Unique identifier (letters, numbers, underscores)</p>
                     </div>
                     <div>
-                        <label for="field_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Display Name *</label>
+                        <label for="field_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Display Name <span class="text-rose-500">*</span></label>
                         <input type="text" id="field_name" name="field_name" required
                                value="{{ field.field_name if field else form_data.field_name | default('', true) }}"
                                placeholder="e.g., Custom Reference"
@@ -132,7 +133,7 @@
                            value="{{ field.help_text if field else form_data.help_text | default('', true) }}"
                            class="mt-1 w-full rounded-lg border border-slate-300 px-4 py-2 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
                 </div>
-                <div class="space-y-3">
+                <div class="space-y-4">
                     <label class="flex items-center gap-3">
                         <input type="checkbox" name="show_in_form" {{ 'checked' if (field.show_in_form if field else True) else '' }}
                                class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">

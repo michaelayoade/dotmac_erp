@@ -6,12 +6,19 @@ commitments, virements, and reporting.
 """
 
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.api.deps import (
+    _get_db as get_db,
+)
+from app.api.deps import (
+    require_organization_id,
+    require_tenant_auth,
+    require_tenant_permission,
+)
 from app.schemas.finance.ipsas import (
     AllotmentCreate,
     AllotmentResponse,
@@ -30,12 +37,6 @@ from app.schemas.finance.ipsas import (
     VirementCreate,
     VirementResponse,
 )
-from app.api.deps import (
-    _get_db as get_db,
-    require_organization_id,
-    require_tenant_auth,
-    require_tenant_permission,
-)
 
 router = APIRouter(
     prefix="/ipsas",
@@ -52,8 +53,8 @@ router = APIRouter(
 @router.get("/funds", response_model=list[FundResponse])
 def list_funds(
     organization_id: UUID = Depends(require_organization_id),
-    status: Optional[str] = None,
-    fund_type: Optional[str] = None,
+    status: str | None = None,
+    fund_type: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ipsas:funds:read")),
@@ -84,7 +85,6 @@ def create_fund(
         raise HTTPException(status_code=400, detail="Missing person_id in auth context")
     user_id = UUID(person_id)
     fund = svc.create(organization_id, payload, user_id)
-    db.commit()
     return fund
 
 
@@ -115,14 +115,13 @@ def update_fund(
     svc = FundService(db)
     svc.get_or_404(fund_id, organization_id)  # verify tenant ownership
     fund = svc.update(fund_id, payload)
-    db.commit()
     return fund
 
 
 @router.get("/funds/{fund_id}/balance")
 def get_fund_balance(
     fund_id: UUID,
-    fiscal_period_id: Optional[UUID] = None,
+    fiscal_period_id: UUID | None = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:funds:read")),
     db: Session = Depends(get_db),
@@ -144,9 +143,9 @@ def get_fund_balance(
 @router.get("/appropriations", response_model=list[AppropriationResponse])
 def list_appropriations(
     organization_id: UUID = Depends(require_organization_id),
-    fiscal_year_id: Optional[UUID] = None,
-    fund_id: Optional[UUID] = None,
-    status: Optional[str] = None,
+    fiscal_year_id: UUID | None = None,
+    fund_id: UUID | None = None,
+    status: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ipsas:appropriations:read")),
@@ -182,7 +181,6 @@ def create_appropriation(
         raise HTTPException(status_code=400, detail="Missing person_id in auth context")
     user_id = UUID(person_id)
     approp = svc.create(organization_id, payload, user_id)
-    db.commit()
     return approp
 
 
@@ -218,7 +216,6 @@ def approve_appropriation(
         raise HTTPException(status_code=400, detail="Missing person_id")
     user_id = UUID(person_id)
     approp = svc.approve(appropriation_id, user_id)
-    db.commit()
     return approp
 
 
@@ -252,7 +249,7 @@ def get_appropriation_available_balance(
 @router.get("/allotments", response_model=list[AllotmentResponse])
 def list_allotments(
     organization_id: UUID = Depends(require_organization_id),
-    appropriation_id: Optional[UUID] = None,
+    appropriation_id: UUID | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ipsas:appropriations:read")),
@@ -279,7 +276,6 @@ def create_allotment(
 
     svc = AppropriationService(db)
     allotment = svc.create_allotment(organization_id, payload)
-    db.commit()
     return allotment
 
 
@@ -291,8 +287,8 @@ def create_allotment(
 @router.get("/commitments", response_model=list[CommitmentResponse])
 def list_commitments(
     organization_id: UUID = Depends(require_organization_id),
-    fund_id: Optional[UUID] = None,
-    status: Optional[str] = None,
+    fund_id: UUID | None = None,
+    status: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ipsas:commitments:read")),
@@ -332,7 +328,7 @@ def create_commitment_from_po(
     amount: Decimal = Query(...),
     currency_code: str = Query(...),
     commitment_number: str = Query(...),
-    appropriation_id: Optional[UUID] = None,
+    appropriation_id: UUID | None = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:commitments:create")),
     db: Session = Depends(get_db),
@@ -358,7 +354,6 @@ def create_commitment_from_po(
         commitment_number=commitment_number,
         appropriation_id=appropriation_id,
     )
-    db.commit()
     return commitment
 
 
@@ -376,7 +371,6 @@ def obligate_commitment(
     svc = CommitmentService(db)
     svc.get_or_404(commitment_id, organization_id)  # verify tenant ownership
     commitment = svc.record_obligation(commitment_id, amount)
-    db.commit()
     return commitment
 
 
@@ -394,14 +388,13 @@ def expend_commitment(
     svc = CommitmentService(db)
     svc.get_or_404(commitment_id, organization_id)  # verify tenant ownership
     commitment = svc.record_expenditure(commitment_id, amount)
-    db.commit()
     return commitment
 
 
 @router.post("/commitments/{commitment_id}/cancel", response_model=CommitmentResponse)
 def cancel_commitment(
     commitment_id: UUID,
-    amount: Optional[Decimal] = None,
+    amount: Decimal | None = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:commitments:update")),
     db: Session = Depends(get_db),
@@ -412,7 +405,6 @@ def cancel_commitment(
     svc = CommitmentService(db)
     svc.get_or_404(commitment_id, organization_id)  # verify tenant ownership
     commitment = svc.cancel_commitment(commitment_id, amount)
-    db.commit()
     return commitment
 
 
@@ -424,8 +416,8 @@ def cancel_commitment(
 @router.get("/virements", response_model=list[VirementResponse])
 def list_virements(
     organization_id: UUID = Depends(require_organization_id),
-    fiscal_year_id: Optional[UUID] = None,
-    status: Optional[str] = None,
+    fiscal_year_id: UUID | None = None,
+    status: str | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("ipsas:virements:read")),
@@ -461,7 +453,6 @@ def create_virement(
         raise HTTPException(status_code=400, detail="Missing person_id in auth context")
     user_id = UUID(person_id)
     virement = svc.create(organization_id, payload, user_id, virement_number)
-    db.commit()
     return virement
 
 
@@ -482,7 +473,6 @@ def approve_virement(
         raise HTTPException(status_code=400, detail="Missing person_id")
     user_id = UUID(person_id)
     virement = svc.approve(virement_id, user_id)
-    db.commit()
     return virement
 
 
@@ -499,7 +489,6 @@ def apply_virement(
     svc = VirementService(db)
     svc.get_or_404(virement_id, organization_id)  # verify tenant ownership
     virement = svc.apply(virement_id)
-    db.commit()
     return virement
 
 
@@ -511,7 +500,7 @@ def apply_virement(
 @router.get("/reports/budget-comparison", response_model=BudgetComparisonResponse)
 def get_budget_comparison(
     fiscal_year_id: UUID = Query(...),
-    fund_id: Optional[UUID] = None,
+    fund_id: UUID | None = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:reports:read")),
     db: Session = Depends(get_db),
@@ -529,7 +518,7 @@ def get_budget_comparison(
 @router.get("/reports/financial-position")
 def get_financial_position(
     fiscal_period_id: UUID = Query(...),
-    fund_id: Optional[UUID] = None,
+    fund_id: UUID | None = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:reports:read")),
     db: Session = Depends(get_db),
@@ -545,7 +534,7 @@ def get_financial_position(
 @router.get("/reports/financial-performance")
 def get_financial_performance(
     fiscal_period_id: UUID = Query(...),
-    fund_id: Optional[UUID] = None,
+    fund_id: UUID | None = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:reports:read")),
     db: Session = Depends(get_db),
@@ -561,7 +550,7 @@ def get_financial_performance(
 @router.get("/reports/changes-net-assets")
 def get_changes_net_assets(
     fiscal_period_id: UUID = Query(...),
-    fund_id: Optional[UUID] = None,
+    fund_id: UUID | None = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:reports:read")),
     db: Session = Depends(get_db),
@@ -577,7 +566,7 @@ def get_changes_net_assets(
 @router.get("/reports/cash-flow")
 def get_cash_flow(
     fiscal_period_id: UUID = Query(...),
-    fund_id: Optional[UUID] = None,
+    fund_id: UUID | None = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:reports:read")),
     db: Session = Depends(get_db),
@@ -597,9 +586,9 @@ def get_cash_flow(
 
 @router.get("/available-balance", response_model=AvailableBalanceResponse)
 def get_available_balance(
-    appropriation_id: Optional[UUID] = None,
-    fund_id: Optional[UUID] = None,
-    account_id: Optional[UUID] = None,
+    appropriation_id: UUID | None = None,
+    fund_id: UUID | None = None,
+    account_id: UUID | None = None,
     organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("ipsas:reports:read")),
     db: Session = Depends(get_db),
@@ -664,7 +653,6 @@ def create_coa_segment(
     from app.services.finance.ipsas.coa_segment_service import CoASegmentService
 
     seg = CoASegmentService(db).define_segment(organization_id, payload)
-    db.commit()
     return seg
 
 
@@ -699,5 +687,4 @@ def create_coa_segment_value(
     from app.services.finance.ipsas.coa_segment_service import CoASegmentService
 
     val = CoASegmentService(db).create_value(organization_id, segment_def_id, payload)
-    db.commit()
     return val

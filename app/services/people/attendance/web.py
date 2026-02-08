@@ -7,9 +7,9 @@ Provides view-focused data and operations for attendance web routes.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, time, timezone
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
-from typing import Any, Optional, cast
+from typing import Any, cast
 from urllib.parse import quote
 from uuid import UUID
 
@@ -31,7 +31,7 @@ class AttendanceWebService:
     """Web service methods for attendance pages."""
 
     @staticmethod
-    def _parse_date(value: Optional[str]) -> Optional[date]:
+    def _parse_date(value: str | None) -> date | None:
         if not value:
             return None
         try:
@@ -40,7 +40,7 @@ class AttendanceWebService:
             return None
 
     @staticmethod
-    def _parse_uuid(value: Optional[str]) -> Optional[UUID]:
+    def _parse_uuid(value: str | None) -> UUID | None:
         if not value:
             return None
         try:
@@ -49,7 +49,7 @@ class AttendanceWebService:
             return None
 
     @staticmethod
-    def _parse_decimal(value: Optional[str]) -> Optional[Decimal]:
+    def _parse_decimal(value: str | None) -> Decimal | None:
         if value is None or value == "":
             return None
         try:
@@ -58,7 +58,7 @@ class AttendanceWebService:
             return None
 
     @staticmethod
-    def _parse_int(value: Optional[str], default: int = 0) -> int:
+    def _parse_int(value: str | None, default: int = 0) -> int:
         if value is None or value == "":
             return default
         try:
@@ -71,7 +71,7 @@ class AttendanceWebService:
         return datetime.strptime(value, "%H:%M").time()
 
     @staticmethod
-    def _parse_bool(value: Optional[str], default: bool = False) -> bool:
+    def _parse_bool(value: str | None, default: bool = False) -> bool:
         if value is None:
             return default
         return value.lower() in {"1", "true", "on", "yes"}
@@ -84,7 +84,7 @@ class AttendanceWebService:
         return str(value).strip()
 
     @staticmethod
-    def _shift_form_context(shift_type: Optional[dict] = None) -> dict:
+    def _shift_form_context(shift_type: dict | None = None) -> dict:
         if not shift_type:
             return {}
         return {
@@ -125,13 +125,13 @@ class AttendanceWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
-        employee_id: Optional[str],
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
+        employee_id: str | None,
         page: int,
-        success: Optional[str],
-        error: Optional[str],
+        success: str | None,
+        error: str | None,
     ) -> HTMLResponse:
         """Attendance records list page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -156,11 +156,11 @@ class AttendanceWebService:
 
         org_tzinfo = svc.get_org_tzinfo(org_id)
 
-        def _format_time(value: Optional[datetime]) -> str:
+        def _format_time(value: datetime | None) -> str:
             if not value:
                 return "-"
             if value.tzinfo is None:
-                value = value.replace(tzinfo=timezone.utc)
+                value = value.replace(tzinfo=UTC)
             return value.astimezone(org_tzinfo).strftime("%H:%M")
 
         records = []
@@ -301,8 +301,8 @@ class AttendanceWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str],
-        is_active: Optional[str],
+        search: str | None,
+        is_active: str | None,
         page: int,
     ) -> HTMLResponse:
         """Shift type list page."""
@@ -781,9 +781,9 @@ class AttendanceWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        start_date: Optional[str],
-        end_date: Optional[str],
-        department_id: Optional[str],
+        start_date: str | None,
+        end_date: str | None,
+        department_id: str | None,
     ) -> HTMLResponse:
         """Attendance summary report page."""
         from app.services.people.hr import DepartmentFilters, OrganizationService
@@ -825,9 +825,9 @@ class AttendanceWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        start_date: Optional[str],
-        end_date: Optional[str],
-        department_id: Optional[str],
+        start_date: str | None,
+        end_date: str | None,
+        department_id: str | None,
     ) -> HTMLResponse:
         """Attendance by employee report page."""
         from app.services.people.hr import DepartmentFilters, OrganizationService
@@ -869,9 +869,9 @@ class AttendanceWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        start_date: Optional[str],
-        end_date: Optional[str],
-        department_id: Optional[str],
+        start_date: str | None,
+        end_date: str | None,
+        department_id: str | None,
     ) -> HTMLResponse:
         """Late arrivals and early departures report page."""
         from app.services.people.hr import DepartmentFilters, OrganizationService
@@ -937,12 +937,12 @@ class AttendanceWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
-        success: Optional[str],
-        error: Optional[str],
+        success: str | None,
+        error: str | None,
     ) -> HTMLResponse:
         """Attendance requests list page."""
         from app.models.people.attendance import AttendanceRequestStatus
@@ -1001,8 +1001,8 @@ class AttendanceWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        form_data: Optional[dict] = None,
-        error: Optional[str] = None,
+        form_data: dict | None = None,
+        error: str | None = None,
     ) -> HTMLResponse:
         """New attendance request form."""
         org_id = coerce_uuid(auth.organization_id)

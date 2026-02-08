@@ -6,7 +6,6 @@ Document 10: Event-Driven Architecture.
 import enum
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import (
     DateTime,
@@ -60,7 +59,7 @@ class EventHandlerCheckpoint(Base):
     )
     handler_name: Mapped[str] = mapped_column(String(200), nullable=False)
 
-    processed_at: Mapped[Optional[datetime]] = mapped_column(
+    processed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -70,7 +69,7 @@ class EventHandlerCheckpoint(Base):
         default=CheckpointStatus.PENDING,
     )
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    last_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

@@ -19,6 +19,7 @@
 {% block content %}
 <div class="max-w-3xl mx-auto">
     <form method="post" action="{{ '/inventory/counts/' ~ count.count_id ~ '/edit' if count else '/inventory/counts/new' }}" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
         {% if error %}
         <div class="rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 p-4">
             <div class="flex items-center gap-3">
@@ -106,7 +107,7 @@
             </div>
         </div>
 
-        <div class="flex items-center justify-end gap-3">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/inventory/counts" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 {{ 'Update Count' if count else 'Create Count' }}

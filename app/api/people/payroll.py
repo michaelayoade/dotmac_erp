@@ -4,61 +4,60 @@ Payroll API Router.
 Thin API wrapper for Payroll endpoints. All business logic is in services.
 """
 
-from datetime import date
-from typing import Optional
 import csv
 import io
+from datetime import date
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, Response, status, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
 from app.db import SessionLocal
-from app.schemas.people.payroll import (
-    # Salary Component
-    SalaryComponentCreate,
-    SalaryComponentUpdate,
-    SalaryComponentRead,
-    SalaryComponentListResponse,
-    # Salary Structure
-    SalaryStructureCreate,
-    SalaryStructureUpdate,
-    SalaryStructureRead,
-    SalaryStructureListResponse,
-    SalaryStructureAssignmentCreate,
-    SalaryStructureAssignmentUpdate,
-    SalaryStructureAssignmentRead,
-    SalaryStructureAssignmentListResponse,
-    # Salary Slip
-    SalarySlipCreate,
-    SalarySlipRead,
-    SalarySlipListResponse,
-    SalarySlipPostRequest,
-    SalarySlipPostResponse,
-    PayrollEntryUpdate,
-    PayrollEntryListResponse,
-    PayrollSlipGenerationResult,
-    PayrollPayoutRequest,
-    PayrollPayoutResult,
-    # Payroll Entry
-    PayrollEntryCreate,
-    PayrollEntryRead,
-)
+from app.models.people.payroll.payroll_entry import PayrollEntryStatus
 from app.models.people.payroll.salary_component import (
     SalaryComponent,
     SalaryComponentType,
 )
-from app.models.people.payroll.salary_structure import PayrollFrequency
 from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
-from app.services.people.payroll import (
-    salary_slip_service,
-    SalarySlipInput,
-    payroll_gl_adapter,
-    PayrollService,
+from app.models.people.payroll.salary_structure import PayrollFrequency
+from app.schemas.people.payroll import (
+    # Payroll Entry
+    PayrollEntryCreate,
+    PayrollEntryListResponse,
+    PayrollEntryRead,
+    PayrollEntryUpdate,
+    PayrollPayoutRequest,
+    PayrollPayoutResult,
+    PayrollSlipGenerationResult,
+    # Salary Component
+    SalaryComponentCreate,
+    SalaryComponentListResponse,
+    SalaryComponentRead,
+    SalaryComponentUpdate,
+    # Salary Slip
+    SalarySlipCreate,
+    SalarySlipListResponse,
+    SalarySlipPostRequest,
+    SalarySlipPostResponse,
+    SalarySlipRead,
+    SalaryStructureAssignmentCreate,
+    SalaryStructureAssignmentListResponse,
+    SalaryStructureAssignmentRead,
+    SalaryStructureAssignmentUpdate,
+    # Salary Structure
+    SalaryStructureCreate,
+    SalaryStructureListResponse,
+    SalaryStructureRead,
+    SalaryStructureUpdate,
 )
 from app.services.common import PaginationParams, coerce_uuid
-from app.models.people.payroll.payroll_entry import PayrollEntryStatus
+from app.services.people.payroll import (
+    PayrollService,
+    SalarySlipInput,
+    payroll_gl_adapter,
+    salary_slip_service,
+)
 
 router = APIRouter(
     prefix="/payroll",
@@ -96,8 +95,8 @@ def csv_response(rows: list[list[str]], filename: str) -> Response:
 @router.get("/components", response_model=SalaryComponentListResponse)
 def list_salary_components(
     organization_id: UUID = Depends(require_organization_id),
-    component_type: Optional[SalaryComponentType] = None,
-    is_active: Optional[bool] = None,
+    component_type: SalaryComponentType | None = None,
+    is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -199,8 +198,8 @@ def update_salary_component(
 @router.get("/structures", response_model=SalaryStructureListResponse)
 def list_salary_structures(
     organization_id: UUID = Depends(require_organization_id),
-    search: Optional[str] = None,
-    is_active: Optional[bool] = None,
+    search: str | None = None,
+    is_active: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -298,9 +297,9 @@ def delete_salary_structure(
 @router.get("/assignments", response_model=SalaryStructureAssignmentListResponse)
 def list_salary_assignments(
     organization_id: UUID = Depends(require_organization_id),
-    employee_id: Optional[UUID] = None,
-    structure_id: Optional[UUID] = None,
-    active_on: Optional[date] = None,
+    employee_id: UUID | None = None,
+    structure_id: UUID | None = None,
+    active_on: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -399,10 +398,10 @@ def delete_salary_assignment(
 @router.get("/slips", response_model=SalarySlipListResponse)
 def list_salary_slips(
     organization_id: UUID = Depends(require_organization_id),
-    employee_id: Optional[UUID] = None,
-    status: Optional[SalarySlipStatus] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    employee_id: UUID | None = None,
+    status: SalarySlipStatus | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -439,10 +438,10 @@ def list_salary_slips(
 @router.get("/slips/export")
 def export_salary_slips(
     organization_id: UUID = Depends(require_organization_id),
-    employee_id: Optional[UUID] = None,
-    status: Optional[SalarySlipStatus] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    employee_id: UUID | None = None,
+    status: SalarySlipStatus | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     db: Session = Depends(get_db),
 ):
     """Export salary slips to CSV."""
@@ -620,10 +619,10 @@ def reverse_salary_slip(
 @router.get("/entries", response_model=PayrollEntryListResponse)
 def list_payroll_entries(
     organization_id: UUID = Depends(require_organization_id),
-    status: Optional[PayrollEntryStatus] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
-    payroll_frequency: Optional[str] = None,
+    status: PayrollEntryStatus | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
+    payroll_frequency: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -806,10 +805,14 @@ def handoff_payroll_to_books(
 # PAYE Tax (NTA 2025)
 # =============================================================================
 
-from decimal import Decimal as PyDecimal
-from pydantic import BaseModel, Field
-from app.services.people.payroll.paye_calculator import PAYECalculator
-from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
+from decimal import Decimal as PyDecimal  # noqa: E402
+
+from pydantic import BaseModel, Field  # noqa: E402
+
+from app.models.people.payroll.employee_tax_profile import (  # noqa: E402
+    EmployeeTaxProfile,
+)
+from app.services.people.payroll.paye_calculator import PAYECalculator  # noqa: E402
 
 
 class TaxBandRead(BaseModel):
@@ -819,10 +822,10 @@ class TaxBandRead(BaseModel):
     organization_id: UUID
     name: str
     min_amount: PyDecimal
-    max_amount: Optional[PyDecimal]
+    max_amount: PyDecimal | None
     rate: PyDecimal
     effective_from: date
-    effective_to: Optional[date]
+    effective_to: date | None
     sequence: int
     is_active: bool
 
@@ -856,7 +859,7 @@ class PAYECalculateRequest(BaseModel):
         le=float(MAX_MONTHLY_SALARY),
         description="Monthly basic salary (max ₦1B)",
     )
-    annual_rent: Optional[PyDecimal] = Field(
+    annual_rent: PyDecimal | None = Field(
         None,
         ge=0,
         le=float(MAX_ANNUAL_RENT),
@@ -865,18 +868,16 @@ class PAYECalculateRequest(BaseModel):
     rent_verified: bool = Field(
         False, description="Whether rent documentation is verified"
     )
-    pension_rate: Optional[PyDecimal] = Field(
+    pension_rate: PyDecimal | None = Field(
         None, ge=0, le=1, description="Override pension rate"
     )
-    nhf_rate: Optional[PyDecimal] = Field(
+    nhf_rate: PyDecimal | None = Field(
         None, ge=0, le=1, description="Override NHF rate"
     )
-    nhis_rate: Optional[PyDecimal] = Field(
+    nhis_rate: PyDecimal | None = Field(
         None, ge=0, le=1, description="Override NHIS rate"
     )
-    employee_id: Optional[UUID] = Field(
-        None, description="Employee ID for profile lookup"
-    )
+    employee_id: UUID | None = Field(None, description="Employee ID for profile lookup")
 
 
 class TaxBandBreakdownResponse(BaseModel):
@@ -934,9 +935,9 @@ class PAYEBreakdownResponse(BaseModel):
     band_breakdowns: list[TaxBandBreakdownResponse]
 
     # Employee info
-    employee_id: Optional[str] = None
-    tin: Optional[str] = None
-    tax_state: Optional[str] = None
+    employee_id: str | None = None
+    tin: str | None = None
+    tax_state: str | None = None
     is_tax_exempt: bool = False
 
 
@@ -946,18 +947,18 @@ class EmployeeTaxProfileRead(BaseModel):
     profile_id: UUID
     employee_id: UUID
     organization_id: UUID
-    tin: Optional[str]
-    tax_state: Optional[str]
+    tin: str | None
+    tax_state: str | None
     annual_rent: PyDecimal
     rent_receipt_verified: bool
-    rent_relief_amount: Optional[PyDecimal]
+    rent_relief_amount: PyDecimal | None
     pension_rate: PyDecimal
     nhf_rate: PyDecimal
     nhis_rate: PyDecimal
     is_tax_exempt: bool
-    exemption_reason: Optional[str]
+    exemption_reason: str | None
     effective_from: date
-    effective_to: Optional[date]
+    effective_to: date | None
 
     model_config = {"from_attributes": True}
 
@@ -966,31 +967,31 @@ class EmployeeTaxProfileCreate(BaseModel):
     """Employee tax profile create request."""
 
     employee_id: UUID
-    tin: Optional[str] = None
-    tax_state: Optional[str] = None
+    tin: str | None = None
+    tax_state: str | None = None
     annual_rent: PyDecimal = Field(default=PyDecimal("0"))
     rent_receipt_verified: bool = False
     pension_rate: PyDecimal = Field(default=PyDecimal("0.08"))
     nhf_rate: PyDecimal = Field(default=PyDecimal("0.025"))
     nhis_rate: PyDecimal = Field(default=PyDecimal("0"))
     is_tax_exempt: bool = False
-    exemption_reason: Optional[str] = None
+    exemption_reason: str | None = None
     effective_from: date
 
 
 class EmployeeTaxProfileUpdate(BaseModel):
     """Employee tax profile update request."""
 
-    tin: Optional[str] = None
-    tax_state: Optional[str] = None
-    annual_rent: Optional[PyDecimal] = None
-    rent_receipt_verified: Optional[bool] = None
-    pension_rate: Optional[PyDecimal] = None
-    nhf_rate: Optional[PyDecimal] = None
-    nhis_rate: Optional[PyDecimal] = None
-    is_tax_exempt: Optional[bool] = None
-    exemption_reason: Optional[str] = None
-    effective_to: Optional[date] = None
+    tin: str | None = None
+    tax_state: str | None = None
+    annual_rent: PyDecimal | None = None
+    rent_receipt_verified: bool | None = None
+    pension_rate: PyDecimal | None = None
+    nhf_rate: PyDecimal | None = None
+    nhis_rate: PyDecimal | None = None
+    is_tax_exempt: bool | None = None
+    exemption_reason: str | None = None
+    effective_to: date | None = None
 
 
 @router.get("/tax/bands", response_model=TaxBandListResponse)

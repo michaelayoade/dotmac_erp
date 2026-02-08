@@ -7,7 +7,7 @@ Handles webhook events from crm.dotmac.io and sync operations.
 import hashlib
 import hmac
 import logging
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -72,16 +72,16 @@ class WebhookEvent(BaseModel):
     event_type: str = Field(..., description="Event type (created, updated, deleted)")
     entity_type: str = Field(..., description="Entity type (ticket, project)")
     entity_id: str = Field(..., description="Entity ID in CRM")
-    subscriber_id: Optional[str] = Field(None, description="Subscriber/customer ID")
+    subscriber_id: str | None = Field(None, description="Subscriber/customer ID")
     data: dict[str, Any] = Field(default_factory=dict, description="Entity data")
-    timestamp: Optional[str] = Field(None, description="Event timestamp ISO format")
+    timestamp: str | None = Field(None, description="Event timestamp ISO format")
 
 
 class WebhookResponse(BaseModel):
     """Response to webhook."""
 
     status: str
-    message: Optional[str] = None
+    message: str | None = None
 
 
 class HealthResponse(BaseModel):
@@ -89,7 +89,7 @@ class HealthResponse(BaseModel):
 
     healthy: bool
     crm_url: str
-    message: Optional[str] = None
+    message: str | None = None
 
 
 # =============================================================================
@@ -317,7 +317,7 @@ def lookup_project_by_crm_id(
 @webhook_router.post("/webhook", response_model=WebhookResponse)
 async def crm_webhook(
     request: Request,
-    x_crm_signature: Optional[str] = Header(None, alias="X-CRM-Signature"),
+    x_crm_signature: str | None = Header(None, alias="X-CRM-Signature"),
     db: Session = Depends(get_db),
 ):
     """

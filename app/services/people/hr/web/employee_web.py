@@ -6,9 +6,9 @@ Provides view-focused data and operations for HR web routes.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import Request, UploadFile
@@ -34,7 +34,6 @@ from app.models.people.payroll.salary_assignment import SalaryStructureAssignmen
 from app.models.person import Gender, Person
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.attendance.attendance_service import AttendanceService
-from app.services.people.hr.web.constants import DEFAULT_PAGE_SIZE, DROPDOWN_LIMIT
 from app.services.people.hr import (
     DepartmentFilters,
     DesignationFilters,
@@ -47,6 +46,7 @@ from app.services.people.hr import (
     OrganizationService,
     TerminationData,
 )
+from app.services.people.hr.web.constants import DEFAULT_PAGE_SIZE, DROPDOWN_LIMIT
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -65,17 +65,17 @@ class HRWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
-        status: Optional[str] = None,
-        department_id: Optional[str] = None,
-        designation_id: Optional[str] = None,
-        date_of_joining_from: Optional[str] = None,
-        date_of_joining_to: Optional[str] = None,
-        date_of_leaving_from: Optional[str] = None,
-        date_of_leaving_to: Optional[str] = None,
+        search: str | None = None,
+        status: str | None = None,
+        department_id: str | None = None,
+        designation_id: str | None = None,
+        date_of_joining_from: str | None = None,
+        date_of_joining_to: str | None = None,
+        date_of_leaving_from: str | None = None,
+        date_of_leaving_to: str | None = None,
         page: int = 1,
-        success: Optional[str] = None,
-        error: Optional[str] = None,
+        success: str | None = None,
+        error: str | None = None,
     ) -> HTMLResponse:
         """Render employee list page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -235,6 +235,7 @@ class HRWebService:
         employment_type_id = self._form_str(form, "employment_type_id")
         grade_id = self._form_str(form, "grade_id")
         reports_to_id = self._form_str(form, "reports_to_id")
+        expense_approver_id = self._form_str(form, "expense_approver_id")
         assigned_location_id = self._form_str(form, "assigned_location_id")
         default_shift_type_id = self._form_str(form, "default_shift_type_id")
         linked_person_id = self._form_str(form, "linked_person_id")
@@ -306,6 +307,7 @@ class HRWebService:
                     "employment_type_id": employment_type_id,
                     "grade_id": grade_id,
                     "reports_to_id": reports_to_id,
+                    "expense_approver_id": expense_approver_id,
                     "assigned_location_id": assigned_location_id,
                     "default_shift_type_id": default_shift_type_id,
                     "linked_person_id": linked_person_id,
@@ -339,7 +341,7 @@ class HRWebService:
             except ValueError:
                 pass
 
-        person: Optional[Person] = None
+        person: Person | None = None
 
         # Check if person with this email already exists
         existing_person = (
@@ -370,6 +372,7 @@ class HRWebService:
                         "designation_id": designation_id,
                         "assigned_location_id": assigned_location_id,
                         "default_shift_type_id": default_shift_type_id,
+                        "expense_approver_id": expense_approver_id,
                         "linked_person_id": linked_person_id,
                         "date_of_joining": date_of_joining,
                         "status": status,
@@ -410,6 +413,7 @@ class HRWebService:
                             "employment_type_id": employment_type_id,
                             "grade_id": grade_id,
                             "reports_to_id": reports_to_id,
+                            "expense_approver_id": expense_approver_id,
                             "assigned_location_id": assigned_location_id,
                             "default_shift_type_id": default_shift_type_id,
                             "linked_person_id": linked_person_id,
@@ -457,6 +461,9 @@ class HRWebService:
             else None,
             grade_id=coerce_uuid(grade_id) if grade_id else None,
             reports_to_id=coerce_uuid(reports_to_id) if reports_to_id else None,
+            expense_approver_id=coerce_uuid(expense_approver_id)
+            if expense_approver_id
+            else None,
             assigned_location_id=coerce_uuid(assigned_location_id)
             if assigned_location_id
             else None,
@@ -511,6 +518,7 @@ class HRWebService:
         employment_type_id = self._form_str(form, "employment_type_id")
         grade_id = self._form_str(form, "grade_id")
         reports_to_id = self._form_str(form, "reports_to_id")
+        expense_approver_id = self._form_str(form, "expense_approver_id")
         assigned_location_id = self._form_str(form, "assigned_location_id")
         default_shift_type_id = self._form_str(form, "default_shift_type_id")
         linked_person_id = self._form_str(form, "linked_person_id")
@@ -553,6 +561,7 @@ class HRWebService:
             "employment_type_id",
             "grade_id",
             "reports_to_id",
+            "expense_approver_id",
             "cost_center_id",
             "assigned_location_id",
             "default_shift_type_id",
@@ -582,6 +591,9 @@ class HRWebService:
             else None,
             grade_id=coerce_uuid(grade_id) if grade_id else None,
             reports_to_id=coerce_uuid(reports_to_id) if reports_to_id else None,
+            expense_approver_id=coerce_uuid(expense_approver_id)
+            if expense_approver_id
+            else None,
             assigned_location_id=coerce_uuid(assigned_location_id)
             if assigned_location_id
             else None,
@@ -804,7 +816,7 @@ class HRWebService:
 
         # If disabling, revoke active sessions for immediate lockout.
         if not credential.is_active:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             active_sessions = (
                 db.query(AuthSession)
                 .filter(AuthSession.person_id == employee.person_id)
@@ -879,6 +891,25 @@ class HRWebService:
                         else ""
                     ),
                 }
+        expense_approver = None
+        if employee.expense_approver_id:
+            approver_emp = db.scalar(
+                select(Employee).where(
+                    Employee.employee_id == employee.expense_approver_id,
+                    Employee.organization_id == org_id,
+                    Employee.is_deleted == False,
+                )
+            )
+            if approver_emp:
+                approver_person = db.get(Person, approver_emp.person_id)
+                expense_approver = {
+                    "employee_id": approver_emp.employee_id,
+                    "name": (
+                        f"{approver_person.first_name or ''} {approver_person.last_name or ''}".strip()
+                        if approver_person
+                        else ""
+                    ),
+                }
 
         credentials = []
         if employee.person_id:
@@ -929,6 +960,7 @@ class HRWebService:
             "grade": grade,
             "employment_type": emp_type,
             "manager": manager,
+            "expense_approver": expense_approver,
             "credentials": credentials,
             "salary_assignments": salary_assignments,
             "tax_profile": tax_profile,
@@ -984,9 +1016,9 @@ class HRWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        error: Optional[str] = None,
-        form_data: Optional[dict] = None,
-        errors: Optional[dict] = None,
+        error: str | None = None,
+        form_data: dict | None = None,
+        errors: dict | None = None,
     ) -> HTMLResponse:
         """Render new employee form.
 
@@ -1108,7 +1140,7 @@ class HRWebService:
         return str(value).strip()
 
     @staticmethod
-    def _parse_date(value: str) -> Optional[date]:
+    def _parse_date(value: str) -> date | None:
         """Parse a date string in YYYY-MM-DD format."""
         if not value:
             return None
@@ -1118,7 +1150,7 @@ class HRWebService:
             return None
 
     @staticmethod
-    def _parse_decimal(value: str) -> Optional[Decimal]:
+    def _parse_decimal(value: str) -> Decimal | None:
         """Parse a decimal value from form input."""
         if not value:
             return None
@@ -1128,7 +1160,7 @@ class HRWebService:
             return None
 
     @staticmethod
-    def _parse_salary_mode(value: str) -> Optional[SalaryMode]:
+    def _parse_salary_mode(value: str) -> SalaryMode | None:
         """Parse salary mode enum from form input."""
         if not value:
             return None
@@ -1263,9 +1295,9 @@ class HRWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
+        search: str | None = None,
         page: int = 1,
-        is_active: Optional[bool] = None,
+        is_active: bool | None = None,
     ) -> HTMLResponse:
         """Render department list page."""
         org_id = coerce_uuid(auth.organization_id)
@@ -1308,7 +1340,7 @@ class HRWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        department_id: Optional[str] = None,
+        department_id: str | None = None,
     ) -> HTMLResponse:
         """Render department form (new or edit)."""
         org_id = coerce_uuid(auth.organization_id)
@@ -1398,7 +1430,7 @@ class HRWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
+        search: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Render designation list page."""
@@ -1431,7 +1463,7 @@ class HRWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        designation_id: Optional[str] = None,
+        designation_id: str | None = None,
     ) -> HTMLResponse:
         """Render designation form (new or edit)."""
         org_id = coerce_uuid(auth.organization_id)
@@ -1463,7 +1495,7 @@ class HRWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
+        search: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Render employment types list page."""
@@ -1496,7 +1528,7 @@ class HRWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        employment_type_id: Optional[str] = None,
+        employment_type_id: str | None = None,
     ) -> HTMLResponse:
         """Render employment type form (new or edit)."""
         org_id = coerce_uuid(auth.organization_id)
@@ -1528,7 +1560,7 @@ class HRWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
+        search: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Render employee grades list page."""
@@ -1561,7 +1593,7 @@ class HRWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        grade_id: Optional[str] = None,
+        grade_id: str | None = None,
     ) -> HTMLResponse:
         """Render employee grade form (new or edit)."""
         org_id = coerce_uuid(auth.organization_id)

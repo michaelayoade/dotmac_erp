@@ -1,0 +1,5 @@
+{% block content %}{% endblock %}
+
+---
+This is an automated message from {{ brand_name | default('Company') }}.
+{% if contact_email %}For questions, contact {{ contact_email }}.{% endif %}

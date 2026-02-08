@@ -1,0 +1,10 @@
+{% extends "emails/base_email.txt" %}
+{% block content %}Hi {{ manager_first }},
+
+This is to inform you that the contract for {{ employee_name }} will expire in {{ days_remaining }} days.
+
+Contract End Date: {{ contract_end_date }}
+
+Please take necessary action regarding contract renewal or extension.
+
+View Employee: {{ employee_url }}{% endblock %}

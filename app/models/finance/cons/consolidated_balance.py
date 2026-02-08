@@ -5,7 +5,6 @@ Consolidated Balance Model - Consolidation Schema.
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     DateTime,
@@ -56,7 +55,7 @@ class ConsolidatedBalance(Base):
         UUID(as_uuid=True),
         nullable=False,
     )
-    segment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    segment_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )

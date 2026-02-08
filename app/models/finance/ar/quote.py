@@ -8,7 +8,6 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional, List
 
 from sqlalchemy import (
     Date,
@@ -76,7 +75,7 @@ class Quote(Base):
 
     # Quote identification
     quote_number: Mapped[str] = mapped_column(String(30), nullable=False)
-    reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Customer
     customer_id: Mapped[uuid.UUID] = mapped_column(
@@ -86,8 +85,8 @@ class Quote(Base):
     )
 
     # Contact info (may differ from customer default)
-    contact_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    contact_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    contact_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Dates
     quote_date: Mapped[date] = mapped_column(Date, nullable=False)
@@ -128,16 +127,16 @@ class Quote(Base):
     )
 
     # Terms and conditions
-    payment_terms_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    payment_terms_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("ar.payment_terms.payment_terms_id"),
         nullable=True,
     )
-    terms_and_conditions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    terms_and_conditions: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Notes
-    internal_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    customer_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    internal_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    customer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Status
     status: Mapped[QuoteStatus] = mapped_column(
@@ -147,37 +146,35 @@ class Quote(Base):
     )
 
     # Conversion tracking
-    converted_to_invoice_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    converted_to_invoice_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("ar.invoice.invoice_id"),
         nullable=True,
     )
-    converted_to_so_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    converted_to_so_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,  # FK added after SalesOrder model
     )
-    converted_at: Mapped[Optional[datetime]] = mapped_column(
+    converted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
     # Workflow tracking
-    sent_at: Mapped[Optional[datetime]] = mapped_column(
+    sent_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    sent_by: Mapped[Optional[uuid.UUID]] = mapped_column(
-        UUID(as_uuid=True), nullable=True
-    )
-    viewed_at: Mapped[Optional[datetime]] = mapped_column(
+    sent_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    viewed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    accepted_at: Mapped[Optional[datetime]] = mapped_column(
+    accepted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    rejected_at: Mapped[Optional[datetime]] = mapped_column(
+    rejected_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    rejection_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    rejection_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Audit
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -186,10 +183,10 @@ class Quote(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -200,7 +197,7 @@ class Quote(Base):
     payment_terms = relationship(
         "PaymentTerms", foreign_keys=[payment_terms_id], lazy="joined"
     )
-    lines: Mapped[List["QuoteLine"]] = relationship(
+    lines: Mapped[list["QuoteLine"]] = relationship(
         "QuoteLine",
         back_populates="quote",
         cascade="all, delete-orphan",
@@ -251,7 +248,7 @@ class QuoteLine(Base):
     line_number: Mapped[int] = mapped_column(Integer, nullable=False)
 
     # Item details
-    item_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    item_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
     description: Mapped[str] = mapped_column(String(500), nullable=False)
 
     # Quantity and pricing
@@ -260,7 +257,7 @@ class QuoteLine(Base):
         nullable=False,
         default=Decimal("1"),
     )
-    unit_of_measure: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    unit_of_measure: Mapped[str | None] = mapped_column(String(20), nullable=True)
     unit_price: Mapped[Decimal] = mapped_column(
         Numeric(19, 4),
         nullable=False,
@@ -279,7 +276,7 @@ class QuoteLine(Base):
     )
 
     # Tax
-    tax_code_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    tax_code_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("tax.tax_code.tax_code_id"),
         nullable=True,
@@ -297,19 +294,19 @@ class QuoteLine(Base):
     )
 
     # Revenue account
-    revenue_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    revenue_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,
     )
 
     # Dimensions
-    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.project.project_id"),
         nullable=True,
     )
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.cost_center.cost_center_id"),
         nullable=True,

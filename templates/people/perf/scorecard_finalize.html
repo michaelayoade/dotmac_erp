@@ -79,7 +79,7 @@
             <h3 class="font-medium text-slate-900 dark:text-white">Calculated Scores (Preview)</h3>
         </div>
         <div class="card-body">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 {% set perspective_names = {
                     'financial_score': 'Financial',
                     'customer_score': 'Customer',
@@ -146,7 +146,7 @@
             </div>
         </div>
 
-        <div class="flex justify-end gap-3">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/people/perf/scorecards/{{ scorecard.scorecard_id }}" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary"
                     onclick="return confirm('Are you sure you want to finalize this scorecard? This action cannot be undone.')">

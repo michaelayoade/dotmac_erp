@@ -5,17 +5,17 @@ Verifies that approval limits configured via ExpenseApproverLimit are
 enforced when an approver attempts to approve a claim.
 """
 
-import pytest
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 from uuid import uuid4
+
+import pytest
 
 from app.models.expense.expense_claim import ExpenseClaimStatus
 from app.services.expense.expense_service import (
     ApproverAuthorityError,
     ExpenseService,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -215,15 +215,17 @@ class TestApproverAuthorityValidation:
         svc._begin_action = MagicMock(return_value=True)
         svc._set_action_status = MagicMock()
 
-        with patch.object(
-            svc,
-            "_validate_approver_authority",
-            side_effect=ApproverAuthorityError(
-                Decimal("100000.00"), Decimal("25000.00")
+        with (
+            patch.object(
+                svc,
+                "_validate_approver_authority",
+                side_effect=ApproverAuthorityError(
+                    Decimal("100000.00"), Decimal("25000.00")
+                ),
             ),
+            pytest.raises(ApproverAuthorityError),
         ):
-            with pytest.raises(ApproverAuthorityError):
-                svc.approve_claim(org_id, claim_id, approver_id=approver_id)
+            svc.approve_claim(org_id, claim_id, approver_id=approver_id)
 
 
 class TestSelfApprovalPrevention:

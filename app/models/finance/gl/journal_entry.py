@@ -98,7 +98,7 @@ class JournalEntry(Base, VersionedMixin):
 
     # Description
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Currency
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
@@ -107,7 +107,7 @@ class JournalEntry(Base, VersionedMixin):
         nullable=False,
         default=1.0,
     )
-    exchange_rate_type_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    exchange_rate_type_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -136,34 +136,32 @@ class JournalEntry(Base, VersionedMixin):
         nullable=False,
         default=JournalStatus.DRAFT,
     )
-    posting_batch_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    posting_batch_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
 
     # Reversal
     is_reversal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    reversed_journal_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    reversed_journal_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.journal_entry.journal_entry_id"),
         nullable=True,
     )
-    reversal_journal_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    reversal_journal_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    auto_reverse_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    auto_reverse_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Source
-    source_module: Mapped[Optional[str]] = mapped_column(
+    source_module: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="AR, AP, FA, LEASE, INV, TAX, FIN_INST, CONS",
     )
-    source_document_type: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True
-    )
-    source_document_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    source_document_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    source_document_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -172,11 +170,11 @@ class JournalEntry(Base, VersionedMixin):
     is_intercompany: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
-    intercompany_org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    intercompany_org_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    matching_journal_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    matching_journal_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -186,38 +184,38 @@ class JournalEntry(Base, VersionedMixin):
         UUID(as_uuid=True),
         nullable=False,
     )
-    submitted_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    submitted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    submitted_at: Mapped[Optional[datetime]] = mapped_column(
+    submitted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    approved_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    posted_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    posted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    posted_at: Mapped[Optional[datetime]] = mapped_column(
+    posted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
-    approval_request_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approval_request_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
 
     # Audit
-    correlation_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

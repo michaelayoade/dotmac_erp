@@ -1,45 +1,44 @@
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.services.auth_dependencies import require_permission
-from app.schemas.common import ListResponse
 from app.models.domain_settings import SettingDomain
+from app.schemas.common import ListResponse
+from app.schemas.finance.branding import (
+    BrandingCreate,
+    BrandingPreview,
+    BrandingResponse,
+    BrandingUpdate,
+    ColorPaletteResponse,
+    FontListResponse,
+    FontOption,
+)
 from app.schemas.settings import (
     DomainSettingRead,
     DomainSettingUpdate,
+    RestoreSettingRequest,
+    SettingHistoryListResponse,
+    SettingHistoryRead,
     SettingsExportRequest,
     SettingsExportResponse,
     SettingsImportRequest,
     SettingsImportResponse,
     SettingsImportResultItem,
-    SettingHistoryRead,
-    SettingHistoryListResponse,
-    RestoreSettingRequest,
-)
-from app.services.domain_settings import (
-    list_setting_history,
-    get_history_entry,
-    restore_from_history,
-)
-from app.schemas.finance.branding import (
-    BrandingCreate,
-    BrandingUpdate,
-    BrandingResponse,
-    BrandingPreview,
-    ColorPaletteResponse,
-    FontListResponse,
-    FontOption,
 )
 from app.services import settings_api as settings_service
+from app.services.auth_dependencies import require_permission
+from app.services.domain_settings import (
+    get_history_entry,
+    list_setting_history,
+    restore_from_history,
+)
 from app.services.finance.branding import (
-    BrandingService,
-    generate_color_palette,
-    CSSGenerator,
     FONT_PRESETS,
+    BrandingService,
+    CSSGenerator,
+    generate_color_palette,
 )
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -798,7 +797,7 @@ def get_color_palette(
     summary="List available font options",
 )
 def list_fonts(
-    category: Optional[str] = Query(
+    category: str | None = Query(
         None, description="Filter by category: sans-serif, serif, monospace"
     ),
     auth: dict = Depends(require_permission("settings:manage")),

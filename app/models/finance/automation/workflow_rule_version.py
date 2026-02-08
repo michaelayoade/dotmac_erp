@@ -7,7 +7,7 @@ whenever it is updated, providing an audit trail of changes.
 
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -50,7 +50,7 @@ class WorkflowRuleVersion(Base):
 
     # Full snapshot of rule configuration at this version
     rule_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     entity_type: Mapped[str] = mapped_column(String(50), nullable=False)
     trigger_event: Mapped[str] = mapped_column(String(50), nullable=False)
     trigger_conditions: Mapped[dict[str, Any]] = mapped_column(
@@ -61,16 +61,14 @@ class WorkflowRuleVersion(Base):
         JSONB, nullable=False, server_default="{}"
     )
     priority: Mapped[int] = mapped_column(Integer, nullable=False)
-    cooldown_seconds: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    schedule_config: Mapped[Optional[dict[str, Any]]] = mapped_column(
-        JSONB, nullable=True
-    )
+    cooldown_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    schedule_config: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     # Audit
-    changed_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    changed_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    change_summary: Mapped[Optional[str]] = mapped_column(
+    change_summary: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Human-readable description of what changed",

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-from typing import Dict, Iterable, Tuple
+from collections.abc import Iterable
 
 from sqlalchemy import create_engine, text
 
@@ -22,7 +22,7 @@ def _normalize_bank_name(value: str) -> str:
     return " ".join(value.strip().lower().split())
 
 
-def _load_mapping(csv_path: str) -> Dict[str, str]:
+def _load_mapping(csv_path: str) -> dict[str, str]:
     with open(csv_path, newline="") as f:
         reader = csv.DictReader(f)
         if not reader.fieldnames:
@@ -40,7 +40,7 @@ def _load_mapping(csv_path: str) -> Dict[str, str]:
                 "CSV must include headers: 'Bank Name' and 'Bank Sort Code' (or 'Sort Code'/'Branch Code')."
             )
 
-        mapping: Dict[str, str] = {}
+        mapping: dict[str, str] = {}
         for row in reader:
             raw_name = (row.get(name_key) or "").strip()
             raw_code = (row.get(code_key) or "").strip()
@@ -106,7 +106,7 @@ def _load_mapping(csv_path: str) -> Dict[str, str]:
         return mapping
 
 
-def _insert_mapping(conn, rows: Iterable[Tuple[str, str]]) -> None:
+def _insert_mapping(conn, rows: Iterable[tuple[str, str]]) -> None:
     conn.execute(
         text("CREATE TEMP TABLE tmp_bank_codes (bank_name text, sort_code text)")
     )

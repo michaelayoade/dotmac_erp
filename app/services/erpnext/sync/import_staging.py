@@ -7,7 +7,6 @@ Moves data from staging tables to production after validation passes.
 import logging
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -61,7 +60,7 @@ class StagingImportService:
         self,
         db: Session,
         organization_id: uuid.UUID,
-        user_id: Optional[uuid.UUID] = None,
+        user_id: uuid.UUID | None = None,
     ):
         self.db = db
         self.organization_id = organization_id
@@ -714,7 +713,7 @@ class StagingImportService:
 
     def _find_or_create_person(
         self, staging: StagingEmployee, email: str
-    ) -> tuple[uuid.UUID, Optional[uuid.UUID]]:
+    ) -> tuple[uuid.UUID, uuid.UUID | None]:
         """Find or create a Person record for the employee.
 
         Returns:

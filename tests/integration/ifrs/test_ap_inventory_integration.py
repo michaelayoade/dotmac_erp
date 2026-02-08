@@ -12,12 +12,12 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.orm import Session
 
+from app.models.finance.ap.goods_receipt import GoodsReceipt, ReceiptStatus
+from app.models.finance.ap.goods_receipt_line import GoodsReceiptLine, InspectionStatus
+from app.models.finance.ap.purchase_order import POStatus, PurchaseOrder
+from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
-from app.models.finance.ap.purchase_order import PurchaseOrder, POStatus
-from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
-from app.models.finance.ap.goods_receipt import GoodsReceipt, ReceiptStatus
-from app.models.finance.ap.goods_receipt_line import GoodsReceiptLine
 from app.models.inventory.item import CostingMethod
 
 
@@ -133,7 +133,7 @@ class TestGoodsReceiptInventoryIntegration:
         from app.services.finance.ap.goods_receipt import GoodsReceiptService
 
         # Accept all lines
-        result = GoodsReceiptService.accept_all(
+        GoodsReceiptService.accept_all(
             db=db,
             organization_id=org_id,
             receipt_id=goods_receipt.receipt_id,
@@ -202,8 +202,6 @@ class TestSupplierInvoiceCostUpdates:
         supplier_invoice.functional_currency_amount = Decimal("125.00")
         supplier_invoice.status = SupplierInvoiceStatus.APPROVED
         db.flush()
-
-        initial_cost = inventory_item.last_purchase_cost
 
         # Post the invoice
         from app.services.finance.ap.supplier_invoice import SupplierInvoiceService

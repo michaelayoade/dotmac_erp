@@ -6,7 +6,6 @@ import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     DateTime,
@@ -66,7 +65,7 @@ class ConsolidationRun(Base):
     )
     run_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
-    run_description: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    run_description: Mapped[str | None] = mapped_column(String(200), nullable=True)
     reporting_currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
 
     status: Mapped[ConsolidationStatus] = mapped_column(
@@ -108,15 +107,15 @@ class ConsolidationRun(Base):
     )
 
     # Execution tracking
-    started_at: Mapped[Optional[datetime]] = mapped_column(
+    started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -126,7 +125,7 @@ class ConsolidationRun(Base):
         UUID(as_uuid=True),
         nullable=False,
     )
-    approved_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -136,7 +135,7 @@ class ConsolidationRun(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

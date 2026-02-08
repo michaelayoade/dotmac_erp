@@ -16,6 +16,7 @@
     </div>
 
     <form action="{{ '/admin/organizations/' ~ organization_data.id ~ '/edit' if organization_data else '/admin/organizations/new' }}" method="POST" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
         <!-- Error Alert -->
         {% if error %}
         <div class="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
@@ -471,7 +472,8 @@
     </form>
 
     {% if organization_data %}
-    <form id="delete-form" action="/admin/organizations/{{ organization_data.id }}/delete" method="POST" class="hidden"></form>
+    <form id="delete-form" action="/admin/organizations/{{ organization_data.id }}/delete" method="POST" class="hidden">
+        {{ request.state.csrf_form | safe }}</form>
     {% endif %}
 </div>
 {% endblock %}

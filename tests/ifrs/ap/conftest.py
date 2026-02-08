@@ -6,22 +6,19 @@ while still testing the service logic.
 """
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
-from typing import Optional
 from unittest.mock import MagicMock
 
 import pytest
 
-
 # ============ Mock Enums ============
-
 from app.models.finance.ap.supplier import SupplierType
 from app.models.finance.ap.supplier_invoice import (
     SupplierInvoiceStatus,
     SupplierInvoiceType,
 )
-from app.models.finance.ap.supplier_payment import APPaymentStatus, APPaymentMethod
+from app.models.finance.ap.supplier_payment import APPaymentMethod, APPaymentStatus
 
 MockSupplierType = SupplierType
 MockSupplierInvoiceStatus = SupplierInvoiceStatus
@@ -43,22 +40,22 @@ class MockSupplier:
         supplier_code: str = "SUP001",
         supplier_type: SupplierType = SupplierType.VENDOR,
         legal_name: str = "Test Supplier",
-        trading_name: Optional[str] = None,
-        tax_identification_number: Optional[str] = None,
-        registration_number: Optional[str] = None,
+        trading_name: str | None = None,
+        tax_identification_number: str | None = None,
+        registration_number: str | None = None,
         payment_terms_days: int = 30,
         currency_code: str = "USD",
-        default_expense_account_id: Optional[uuid.UUID] = None,
-        ap_control_account_id: Optional[uuid.UUID] = None,
-        supplier_group_id: Optional[uuid.UUID] = None,
+        default_expense_account_id: uuid.UUID | None = None,
+        ap_control_account_id: uuid.UUID | None = None,
+        supplier_group_id: uuid.UUID | None = None,
         is_related_party: bool = False,
-        related_party_relationship: Optional[str] = None,
+        related_party_relationship: str | None = None,
         withholding_tax_applicable: bool = False,
-        withholding_tax_code_id: Optional[uuid.UUID] = None,
-        billing_address: Optional[dict] = None,
-        remittance_address: Optional[dict] = None,
-        primary_contact: Optional[dict] = None,
-        bank_details: Optional[dict] = None,
+        withholding_tax_code_id: uuid.UUID | None = None,
+        billing_address: dict | None = None,
+        remittance_address: dict | None = None,
+        primary_contact: dict | None = None,
+        bank_details: dict | None = None,
         is_active: bool = True,
         created_at: datetime = None,
         updated_at: datetime = None,
@@ -85,7 +82,7 @@ class MockSupplier:
         self.primary_contact = primary_contact
         self.bank_details = bank_details
         self.is_active = is_active
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
 
 
@@ -98,7 +95,7 @@ class MockSupplierInvoice:
         organization_id: uuid.UUID = None,
         supplier_id: uuid.UUID = None,
         invoice_number: str = "APINV-0001",
-        supplier_invoice_number: Optional[str] = None,
+        supplier_invoice_number: str | None = None,
         invoice_type: SupplierInvoiceType = SupplierInvoiceType.STANDARD,
         invoice_date: date = None,
         received_date: date = None,
@@ -111,17 +108,17 @@ class MockSupplierInvoice:
         amount_paid: Decimal = Decimal("0"),
         functional_currency_amount: Decimal = Decimal("1000.00"),
         status: SupplierInvoiceStatus = SupplierInvoiceStatus.DRAFT,
-        ap_control_account_id: Optional[uuid.UUID] = None,
-        journal_entry_id: Optional[uuid.UUID] = None,
-        posting_batch_id: Optional[uuid.UUID] = None,
+        ap_control_account_id: uuid.UUID | None = None,
+        journal_entry_id: uuid.UUID | None = None,
+        posting_batch_id: uuid.UUID | None = None,
         posting_status: str = "NOT_POSTED",
-        created_by_user_id: Optional[uuid.UUID] = None,
-        submitted_by_user_id: Optional[uuid.UUID] = None,
-        submitted_at: Optional[datetime] = None,
-        approved_by_user_id: Optional[uuid.UUID] = None,
-        approved_at: Optional[datetime] = None,
-        posted_by_user_id: Optional[uuid.UUID] = None,
-        posted_at: Optional[datetime] = None,
+        created_by_user_id: uuid.UUID | None = None,
+        submitted_by_user_id: uuid.UUID | None = None,
+        submitted_at: datetime | None = None,
+        approved_by_user_id: uuid.UUID | None = None,
+        approved_at: datetime | None = None,
+        posted_by_user_id: uuid.UUID | None = None,
+        posted_at: datetime | None = None,
         created_at: datetime = None,
     ):
         self.invoice_id = invoice_id or uuid.uuid4()
@@ -152,7 +149,7 @@ class MockSupplierInvoice:
         self.approved_at = approved_at
         self.posted_by_user_id = posted_by_user_id
         self.posted_at = posted_at
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.lines = []
 
     @property
@@ -168,12 +165,12 @@ class MockSupplierInvoiceLine:
         line_id: uuid.UUID = None,
         invoice_id: uuid.UUID = None,
         line_number: int = 1,
-        account_id: Optional[uuid.UUID] = None,
+        account_id: uuid.UUID | None = None,
         description: str = "Test line",
         quantity: Decimal = Decimal("1"),
         unit_price: Decimal = Decimal("1000.00"),
         amount: Decimal = Decimal("1000.00"),
-        tax_code_id: Optional[uuid.UUID] = None,
+        tax_code_id: uuid.UUID | None = None,
         tax_amount: Decimal = Decimal("0"),
     ):
         self.line_id = line_id or uuid.uuid4()
@@ -204,10 +201,10 @@ class MockSupplierPayment:
         amount: Decimal = Decimal("1000.00"),
         functional_currency_amount: Decimal = Decimal("1000.00"),
         status: APPaymentStatus = APPaymentStatus.DRAFT,
-        bank_account_id: Optional[uuid.UUID] = None,
-        reference: Optional[str] = None,
-        created_by_user_id: Optional[uuid.UUID] = None,
-        approved_by_user_id: Optional[uuid.UUID] = None,
+        bank_account_id: uuid.UUID | None = None,
+        reference: str | None = None,
+        created_by_user_id: uuid.UUID | None = None,
+        approved_by_user_id: uuid.UUID | None = None,
         created_at: datetime = None,
     ):
         self.payment_id = payment_id or uuid.uuid4()
@@ -226,7 +223,7 @@ class MockSupplierPayment:
         self.reference = reference
         self.created_by_user_id = created_by_user_id or uuid.uuid4()
         self.approved_by_user_id = approved_by_user_id
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.correlation_id = uuid.uuid4()
         self.allocations = []
 
@@ -246,7 +243,7 @@ class MockAPPaymentAllocation:
         self.payment_id = payment_id or uuid.uuid4()
         self.invoice_id = invoice_id or uuid.uuid4()
         self.allocated_amount = allocated_amount
-        self.allocated_at = allocated_at or datetime.now(timezone.utc)
+        self.allocated_at = allocated_at or datetime.now(UTC)
 
 
 class MockAPAgingSnapshot:
@@ -257,7 +254,7 @@ class MockAPAgingSnapshot:
         snapshot_id: uuid.UUID = None,
         organization_id: uuid.UUID = None,
         snapshot_date: date = None,
-        supplier_id: Optional[uuid.UUID] = None,
+        supplier_id: uuid.UUID | None = None,
         current_amount: Decimal = Decimal("0"),
         days_1_30: Decimal = Decimal("0"),
         days_31_60: Decimal = Decimal("0"),

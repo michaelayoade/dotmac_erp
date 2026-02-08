@@ -84,23 +84,23 @@ class JobOpening(Base, AuditMixin, ERPNextSyncMixin):
         String(200),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Position details
-    department_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    department_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.department.department_id"),
         nullable=True,
     )
-    designation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    designation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.designation.designation_id"),
         nullable=True,
     )
-    reports_to_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    reports_to_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
@@ -118,11 +118,11 @@ class JobOpening(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # Dates
-    posted_on: Mapped[Optional[date]] = mapped_column(
+    posted_on: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    closes_on: Mapped[Optional[date]] = mapped_column(
+    closes_on: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -133,7 +133,7 @@ class JobOpening(Base, AuditMixin, ERPNextSyncMixin):
         default="FULL_TIME",
         comment="FULL_TIME, PART_TIME, CONTRACT, INTERNSHIP",
     )
-    location: Mapped[Optional[str]] = mapped_column(
+    location: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
@@ -143,11 +143,11 @@ class JobOpening(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # Compensation
-    min_salary: Mapped[Optional[Decimal]] = mapped_column(
+    min_salary: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
     )
-    max_salary: Mapped[Optional[Decimal]] = mapped_column(
+    max_salary: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
     )
@@ -157,20 +157,20 @@ class JobOpening(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # Requirements
-    min_experience_years: Mapped[Optional[int]] = mapped_column(
+    min_experience_years: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
     )
-    required_skills: Mapped[Optional[str]] = mapped_column(
+    required_skills: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Comma-separated list of required skills",
     )
-    preferred_skills: Mapped[Optional[str]] = mapped_column(
+    preferred_skills: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    education_requirements: Mapped[Optional[str]] = mapped_column(
+    education_requirements: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -186,7 +186,7 @@ class JobOpening(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

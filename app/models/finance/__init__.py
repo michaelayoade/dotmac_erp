@@ -30,174 +30,85 @@ Part 2 - Business Modules (schemas below):
 # Part 1 - Core Infrastructure
 
 # Platform Schema
-from app.models.finance.platform import (
-    EventOutbox,
-    EventStatus,
-    EventHandlerCheckpoint,
-    CheckpointStatus,
-    IdempotencyRecord,
+# AP Schema
+from app.models.finance.ap import (
+    APAgingSnapshot,
+    APBatchStatus,
+    APPaymentAllocation,
+    APPaymentBatch,
+    APPaymentMethod,
+    APPaymentStatus,
+    GoodsReceipt,
+    GoodsReceiptLine,
+    POStatus,
+    PurchaseOrder,
+    PurchaseOrderLine,
+    ReceiptStatus,
+    Supplier,
+    SupplierInvoice,
+    SupplierInvoiceLine,
+    SupplierInvoiceStatus,
+    SupplierInvoiceType,
+    SupplierPayment,
+    SupplierType,
+)
+
+# Part 2 - Business Modules
+# AR Schema
+from app.models.finance.ar import (
+    ARAgingSnapshot,
+    Contract,
+    ContractStatus,
+    ContractType,
+    Customer,
+    CustomerPayment,
+    CustomerType,
+    Invoice,
+    InvoiceLine,
+    InvoiceStatus,
+    InvoiceType,
+    PaymentAllocation,
+    PaymentMethod,
+    PaymentTerms,
+    PerformanceObligation,
+    RevenueRecognitionEvent,
+    RiskCategory,
+    SatisfactionPattern,
+)
+from app.models.finance.ar import (
+    PaymentStatus as ARPaymentStatus,
 )
 
 # Audit Schema
 from app.models.finance.audit import (
-    AuditLog,
-    AuditAction,
-    ApprovalWorkflow,
-    ApprovalRequest,
-    ApprovalRequestStatus,
     ApprovalDecision,
     ApprovalDecisionAction,
+    ApprovalRequest,
+    ApprovalRequestStatus,
+    ApprovalWorkflow,
+    AuditAction,
+    AuditLog,
 )
 
-# Core Org Schema
-from app.models.finance.core_org import (
-    Organization,
-    ConsolidationMethod,
-    BusinessUnit,
-    BusinessUnitType,
-    ReportingSegment,
-    SegmentType,
-    CostCenter,
-    Project,
-    ProjectStatus,
-    Location,
-    LocationType,
-)
-
-# Core FX Schema
-from app.models.finance.core_fx import (
-    Currency,
-    ExchangeRateType,
-    ExchangeRate,
-    ExchangeRateSource,
-    CurrencyTranslationAdjustment,
-    CTAAdjustmentType,
-)
-
-# Core Config Schema
-from app.models.finance.core_config import (
-    NumberingSequence,
-    SequenceType,
-    SystemConfiguration,
-    ConfigType,
-)
-
-# GL Schema
-from app.models.finance.gl import (
-    AccountCategory,
-    IFRSCategory,
-    Account,
-    AccountType,
-    NormalBalance,
-    FiscalYear,
-    FiscalPeriod,
-    PeriodStatus,
-    JournalEntry,
-    JournalType,
-    JournalStatus,
-    JournalEntryLine,
-    PostingBatch,
-    BatchStatus,
-    PostedLedgerLine,
-    AccountBalance,
-    BalanceType,
-    Budget,
-    BudgetStatus,
-    BudgetLine,
-)
-
-# Part 2 - Business Modules
-
-# AR Schema
-from app.models.finance.ar import (
-    Customer,
-    CustomerType,
-    RiskCategory,
-    PaymentTerms,
-    Contract,
-    ContractType,
-    ContractStatus,
-    PerformanceObligation,
-    SatisfactionPattern,
-    RevenueRecognitionEvent,
-    Invoice,
-    InvoiceType,
-    InvoiceStatus,
-    InvoiceLine,
-    CustomerPayment,
-    PaymentMethod,
-    PaymentStatus as ARPaymentStatus,
-    PaymentAllocation,
-    ARAgingSnapshot,
-)
-
-# AP Schema
-from app.models.finance.ap import (
-    Supplier,
-    SupplierType,
-    PurchaseOrder,
-    POStatus,
-    PurchaseOrderLine,
-    GoodsReceipt,
-    ReceiptStatus,
-    GoodsReceiptLine,
-    SupplierInvoice,
-    SupplierInvoiceType,
-    SupplierInvoiceStatus,
-    SupplierInvoiceLine,
-    SupplierPayment,
-    APPaymentMethod,
-    APPaymentStatus,
-    APPaymentAllocation,
-    APPaymentBatch,
-    APBatchStatus,
-    APAgingSnapshot,
-)
-
-# FA Schema (standalone module)
-from app.models.fixed_assets import (
-    AssetCategory,
-    Asset,
-    AssetStatus,
-    AssetComponent,
-    DepreciationRun,
-    DepreciationRunStatus,
-    DepreciationSchedule,
-    AssetRevaluation,
-    CashGeneratingUnit,
-    AssetImpairment,
-    AssetDisposal,
-    DisposalType,
-)
-
-# Lease Schema
-from app.models.finance.lease import (
-    LeaseContract,
-    LeaseClassification,
-    LeaseStatus,
-    LeaseAsset,
-    LeaseLiability,
-    LeasePaymentSchedule,
-    PaymentStatus as LeasePaymentStatus,
-    LeaseModification,
-    ModificationType,
-)
-
-# Inventory Schema (standalone module)
-from app.models.inventory import (
-    ItemCategory,
-    Item,
-    ItemType,
-    CostingMethod,
-    Warehouse,
-    WarehouseLocation,
-    InventoryLot,
-    InventoryTransaction,
-    TransactionType,
-    InventoryValuation,
-    InventoryCount,
-    CountStatus,
-    InventoryCountLine,
+# Automation Schema
+from app.models.finance.automation import (
+    ActionType,
+    CustomFieldDefinition,
+    CustomFieldEntityType,
+    CustomFieldType,
+    DocumentTemplate,
+    ExecutionStatus,
+    RecurringEntityType,
+    RecurringFrequency,
+    RecurringLog,
+    RecurringLogStatus,
+    RecurringStatus,
+    RecurringTemplate,
+    TemplateType,
+    TriggerEvent,
+    WorkflowEntityType,
+    WorkflowExecution,
+    WorkflowRule,
 )
 
 # Banking Schema
@@ -205,69 +116,14 @@ from app.models.finance.banking import (
     BankAccount,
     BankAccountStatus,
     BankAccountType,
+    BankReconciliation,
+    BankReconciliationLine,
     BankStatement,
     BankStatementLine,
     BankStatementStatus,
-    StatementLineType,
-    BankReconciliation,
-    BankReconciliationLine,
-    ReconciliationStatus,
     ReconciliationMatchType,
-)
-
-
-# Tax Schema
-from app.models.finance.tax import (
-    TaxJurisdiction,
-    TaxCode,
-    TaxType,
-    TaxPeriod,
-    TaxPeriodFrequency,
-    TaxPeriodStatus,
-    TaxReturn,
-    TaxReturnStatus,
-    TaxReturnType,
-    TaxTransaction,
-    TaxTransactionType,
-    DeferredTaxBasis,
-    DifferenceType,
-    DeferredTaxMovement,
-    TaxReconciliation,
-)
-
-# Consolidation Schema
-from app.models.finance.cons import (
-    LegalEntity,
-    EntityType,
-    ConsolidationMethod as ConsConsolidationMethod,
-    OwnershipInterest,
-    IntercompanyBalance,
-    EliminationEntry,
-    EliminationType,
-    ConsolidationRun,
-    ConsolidationStatus,
-    ConsolidatedBalance,
-)
-
-# Reporting Schema
-from app.models.finance.rpt import (
-    ReportDefinition,
-    ReportType,
-    ReportSchedule,
-    ScheduleFrequency,
-    ReportInstance,
-    ReportStatus,
-    FinancialStatementLine,
-    StatementType,
-    DisclosureChecklist,
-    DisclosureStatus,
-)
-
-# Expense Schema
-from app.models.finance.exp import (
-    ExpenseEntry,
-    ExpenseStatus,
-    PaymentMethod as ExpensePaymentMethod,
+    ReconciliationStatus,
+    StatementLineType,
 )
 
 # Common Schema
@@ -276,25 +132,122 @@ from app.models.finance.common import (
     AttachmentCategory,
 )
 
-# Automation Schema
-from app.models.finance.automation import (
-    RecurringTemplate,
-    RecurringEntityType,
-    RecurringFrequency,
-    RecurringStatus,
-    RecurringLog,
-    RecurringLogStatus,
-    WorkflowRule,
-    WorkflowEntityType,
-    TriggerEvent,
-    ActionType,
-    WorkflowExecution,
-    ExecutionStatus,
-    CustomFieldDefinition,
-    CustomFieldEntityType,
-    CustomFieldType,
-    DocumentTemplate,
-    TemplateType,
+# Consolidation Schema
+from app.models.finance.cons import (
+    ConsolidatedBalance,
+    ConsolidationRun,
+    ConsolidationStatus,
+    EliminationEntry,
+    EliminationType,
+    EntityType,
+    IntercompanyBalance,
+    LegalEntity,
+    OwnershipInterest,
+)
+from app.models.finance.cons import (
+    ConsolidationMethod as ConsConsolidationMethod,
+)
+
+# Core Config Schema
+from app.models.finance.core_config import (
+    ConfigType,
+    NumberingSequence,
+    SequenceType,
+    SystemConfiguration,
+)
+
+# Core FX Schema
+from app.models.finance.core_fx import (
+    CTAAdjustmentType,
+    Currency,
+    CurrencyTranslationAdjustment,
+    ExchangeRate,
+    ExchangeRateSource,
+    ExchangeRateType,
+)
+
+# Core Org Schema
+from app.models.finance.core_org import (
+    BusinessUnit,
+    BusinessUnitType,
+    ConsolidationMethod,
+    CostCenter,
+    Location,
+    LocationType,
+    Organization,
+    Project,
+    ProjectStatus,
+    ReportingSegment,
+    SegmentType,
+)
+
+# Expense Schema
+from app.models.finance.exp import (
+    ExpenseEntry,
+    ExpenseStatus,
+)
+from app.models.finance.exp import (
+    PaymentMethod as ExpensePaymentMethod,
+)
+
+# GL Schema
+from app.models.finance.gl import (
+    Account,
+    AccountBalance,
+    AccountCategory,
+    AccountType,
+    BalanceType,
+    BatchStatus,
+    Budget,
+    BudgetLine,
+    BudgetStatus,
+    FiscalPeriod,
+    FiscalYear,
+    IFRSCategory,
+    JournalEntry,
+    JournalEntryLine,
+    JournalStatus,
+    JournalType,
+    NormalBalance,
+    PeriodStatus,
+    PostedLedgerLine,
+    PostingBatch,
+)
+
+# IPSAS Fund Accounting (public sector)
+from app.models.finance.ipsas import (  # noqa: F401
+    Allotment,
+    AllotmentStatus,
+    Appropriation,
+    AppropriationStatus,
+    AppropriationType,
+    CoASegmentDefinition,
+    CoASegmentType,
+    CoASegmentValue,
+    Commitment,
+    CommitmentLine,
+    CommitmentStatus,
+    CommitmentType,
+    Fund,
+    FundStatus,
+    FundType,
+    Virement,
+    VirementStatus,
+)
+
+# Lease Schema
+from app.models.finance.lease import (
+    LeaseAsset,
+    LeaseClassification,
+    LeaseContract,
+    LeaseLiability,
+    LeaseModification,
+    LeasePaymentSchedule,
+    LeaseStatus,
+    ModificationType,
+)
+from app.models.finance.lease import (
+    PaymentStatus as LeasePaymentStatus,
 )
 
 # Payments Schema
@@ -304,6 +257,13 @@ from app.models.finance.payments import (
     PaymentWebhook,
     WebhookStatus,
 )
+from app.models.finance.platform import (
+    CheckpointStatus,
+    EventHandlerCheckpoint,
+    EventOutbox,
+    EventStatus,
+    IdempotencyRecord,
+)
 
 # Remita Integration
 from app.models.finance.remita import (
@@ -311,25 +271,70 @@ from app.models.finance.remita import (
     RRRStatus,
 )
 
-# IPSAS Fund Accounting (public sector)
-from app.models.finance.ipsas import (  # noqa: F401
-    Fund,
-    FundType,
-    FundStatus,
-    Appropriation,
-    AppropriationType,
-    AppropriationStatus,
-    Allotment,
-    AllotmentStatus,
-    Commitment,
-    CommitmentLine,
-    CommitmentType,
-    CommitmentStatus,
-    Virement,
-    VirementStatus,
-    CoASegmentDefinition,
-    CoASegmentValue,
-    CoASegmentType,
+# Reporting Schema
+from app.models.finance.rpt import (
+    DisclosureChecklist,
+    DisclosureStatus,
+    FinancialStatementLine,
+    ReportDefinition,
+    ReportInstance,
+    ReportSchedule,
+    ReportStatus,
+    ReportType,
+    ScheduleFrequency,
+    StatementType,
+)
+
+# Tax Schema
+from app.models.finance.tax import (
+    DeferredTaxBasis,
+    DeferredTaxMovement,
+    DifferenceType,
+    TaxCode,
+    TaxJurisdiction,
+    TaxPeriod,
+    TaxPeriodFrequency,
+    TaxPeriodStatus,
+    TaxReconciliation,
+    TaxReturn,
+    TaxReturnStatus,
+    TaxReturnType,
+    TaxTransaction,
+    TaxTransactionType,
+    TaxType,
+)
+
+# FA Schema (standalone module)
+from app.models.fixed_assets import (
+    Asset,
+    AssetCategory,
+    AssetComponent,
+    AssetDisposal,
+    AssetImpairment,
+    AssetRevaluation,
+    AssetStatus,
+    CashGeneratingUnit,
+    DepreciationRun,
+    DepreciationRunStatus,
+    DepreciationSchedule,
+    DisposalType,
+)
+
+# Inventory Schema (standalone module)
+from app.models.inventory import (
+    CostingMethod,
+    CountStatus,
+    InventoryCount,
+    InventoryCountLine,
+    InventoryLot,
+    InventoryTransaction,
+    InventoryValuation,
+    Item,
+    ItemCategory,
+    ItemType,
+    TransactionType,
+    Warehouse,
+    WarehouseLocation,
 )
 
 __all__ = [
@@ -432,6 +437,18 @@ __all__ = [
     "APPaymentBatch",
     "APBatchStatus",
     "APAgingSnapshot",
+    # Banking
+    "BankAccount",
+    "BankAccountStatus",
+    "BankAccountType",
+    "BankReconciliation",
+    "BankReconciliationLine",
+    "BankStatement",
+    "BankStatementLine",
+    "BankStatementStatus",
+    "ReconciliationMatchType",
+    "ReconciliationStatus",
+    "StatementLineType",
     # FA
     "AssetCategory",
     "Asset",
@@ -473,12 +490,18 @@ __all__ = [
     "TaxJurisdiction",
     "TaxCode",
     "TaxType",
+    "TaxPeriod",
+    "TaxPeriodFrequency",
+    "TaxPeriodStatus",
     "TaxTransaction",
     "TaxTransactionType",
     "DeferredTaxBasis",
     "DifferenceType",
     "DeferredTaxMovement",
     "TaxReconciliation",
+    "TaxReturn",
+    "TaxReturnStatus",
+    "TaxReturnType",
     # Consolidation
     "LegalEntity",
     "EntityType",

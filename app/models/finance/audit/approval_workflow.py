@@ -5,7 +5,7 @@ Approval Workflow Model - Workflow definitions for document approvals.
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -63,7 +63,7 @@ class ApprovalWorkflow(Base):
 
     workflow_code: Mapped[str] = mapped_column(String(50), nullable=False)
     workflow_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Scope
     document_type: Mapped[str] = mapped_column(
@@ -73,11 +73,11 @@ class ApprovalWorkflow(Base):
     )
 
     # Thresholds
-    threshold_amount: Mapped[Optional[Decimal]] = mapped_column(
+    threshold_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
-    threshold_currency_code: Mapped[Optional[str]] = mapped_column(
+    threshold_currency_code: Mapped[str | None] = mapped_column(
         String(3),
         nullable=True,
     )

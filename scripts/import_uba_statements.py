@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 from uuid import UUID
 
 import msoffcrypto
@@ -85,11 +84,11 @@ class ParsedStatement:
     closing_balance: Decimal
     total_debit: Decimal
     total_credit: Decimal
-    transactions: List[Dict]
+    transactions: list[dict]
     source_file: str
 
 
-def parse_date(value) -> Optional[date]:
+def parse_date(value) -> date | None:
     """Parse date from various formats."""
     if value is None:
         return None
@@ -110,7 +109,7 @@ def parse_date(value) -> Optional[date]:
     return None
 
 
-def parse_period(period_str: str) -> Tuple[Optional[date], Optional[date]]:
+def parse_period(period_str: str) -> tuple[date | None, date | None]:
     """Parse period string like '01-Jan-2022 - 31-Dec-2023'."""
     if not period_str:
         return None, None
@@ -130,7 +129,7 @@ def parse_period(period_str: str) -> Tuple[Optional[date], Optional[date]]:
     return None, None
 
 
-def parse_decimal(value) -> Optional[Decimal]:
+def parse_decimal(value) -> Decimal | None:
     """Parse decimal from various formats."""
     if value is None:
         return None
@@ -149,7 +148,7 @@ def parse_decimal(value) -> Optional[Decimal]:
     return None
 
 
-def extract_account_number(value: str) -> Optional[str]:
+def extract_account_number(value: str) -> str | None:
     """Extract account number from strings like '1018904696 . '."""
     if not value:
         return None
@@ -157,7 +156,7 @@ def extract_account_number(value: str) -> Optional[str]:
     return match.group(1) if match else None
 
 
-def open_workbook(filepath: Path, password: Optional[str] = None):
+def open_workbook(filepath: Path, password: str | None = None):
     """Open Excel workbook, handling password protection."""
     try:
         # Try without password first
@@ -175,8 +174,8 @@ def open_workbook(filepath: Path, password: Optional[str] = None):
 
 
 def parse_uba_statement(
-    filepath: Path, password: Optional[str] = None
-) -> Optional[ParsedStatement]:
+    filepath: Path, password: str | None = None
+) -> ParsedStatement | None:
     """
     Parse UBA statement format.
 
@@ -216,7 +215,7 @@ def parse_uba_statement(
 
         # Parse transactions (start from row 18, index 17)
         transactions = []
-        for i, row in enumerate(rows[17:], start=18):
+        for _i, row in enumerate(rows[17:], start=18):
             tran_date = parse_date(row[0])
             if not tran_date:
                 continue
@@ -277,7 +276,7 @@ def ensure_bank_account(
     db,
     org_id: UUID,
     account_number: str,
-    config: Dict,
+    config: dict,
 ) -> BankAccount:
     """Ensure bank account exists, create if not."""
 
@@ -324,9 +323,9 @@ def ensure_bank_account(
 
 
 def convert_to_statement_lines(
-    transactions: List[Dict],
+    transactions: list[dict],
     start_line: int = 1,
-) -> List[StatementLineInput]:
+) -> list[StatementLineInput]:
     """Convert parsed transactions to StatementLineInput objects."""
     lines = []
 

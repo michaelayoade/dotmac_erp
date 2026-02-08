@@ -61,7 +61,7 @@
                             {{ batch.batch_date }}
                         </td>
                         <td class="whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
-                            {{ batch.payment_method }}
+                            {{ batch.payment_method | replace('_', ' ') | title }}
                         </td>
                         <td class="table-cell-amount">
                             {{ batch.total_amount }} {{ batch.currency_code }}

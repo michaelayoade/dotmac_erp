@@ -65,6 +65,7 @@
             </div>
             <div class="ml-4 flex-shrink-0">
                 <form method="POST" action="/settings/features/{{ feature.key }}/toggle" class="inline">
+                    {{ request.state.csrf_form | safe }}
                     <input type="hidden" name="enabled" value="{{ 'false' if feature.enabled else 'true' }}">
                     <button type="submit"
                             class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 {{ 'bg-teal-600' if feature.enabled else 'bg-slate-200 dark:bg-slate-700' }}"

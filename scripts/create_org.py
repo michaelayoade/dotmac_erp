@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.config import settings
 from app.db import SessionLocal
 from app.models.finance.core_org.organization import Organization
-from app.services.finance.tax.seed import seed_default_tax_data, get_country_config
+from app.services.finance.tax.seed import get_country_config, seed_default_tax_data
 
 
 def main():

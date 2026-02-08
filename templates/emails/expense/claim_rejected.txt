@@ -1,0 +1,16 @@
+{% extends "emails/base_email.txt" %}
+{% block content %}Hi {{ first_name }},
+
+Your expense claim has been rejected.
+{% if approver_name %}Reviewed by: {{ approver_name }}{% endif %}
+
+Claim Number: {{ claim_number }}
+Amount: {{ currency }} {{ amount }}
+Purpose: {{ purpose }}
+
+Reason for Rejection:
+{{ reason }}
+
+You may revise and resubmit the claim if applicable.
+
+View claim at: {{ claim_url }}{% endblock %}

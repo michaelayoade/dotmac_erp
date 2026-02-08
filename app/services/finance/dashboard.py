@@ -1305,16 +1305,6 @@ class DashboardService:
         )
         ap_status = ap_status_query.all()
 
-        status_colors = {
-            "DRAFT": "#94a3b8",
-            "SUBMITTED": "#60a5fa",
-            "APPROVED": "#34d399",
-            "PARTIALLY_PAID": "#fbbf24",
-            "PAID": "#10b981",
-            "VOIDED": "#ef4444",
-            "CANCELLED": "#f87171",
-        }
-
         return {
             "ar_status": [
                 {
@@ -1323,10 +1313,6 @@ class DashboardService:
                     else r.status,
                     "count": r.count,
                     "total": float(_safe_decimal(r.total)),
-                    "color": status_colors.get(
-                        r.status.value if hasattr(r.status, "value") else r.status,
-                        "#64748b",
-                    ),
                 }
                 for r in ar_status
             ],
@@ -1337,10 +1323,6 @@ class DashboardService:
                     else r.status,
                     "count": r.count,
                     "total": float(_safe_decimal(r.total)),
-                    "color": status_colors.get(
-                        r.status.value if hasattr(r.status, "value") else r.status,
-                        "#64748b",
-                    ),
                 }
                 for r in ap_status
             ],

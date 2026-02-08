@@ -7,11 +7,11 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.finance.gl.fiscal_period import (
-    FiscalPeriodService,
-    FiscalPeriodInput,
-)
 from app.models.finance.gl.fiscal_period import PeriodStatus
+from app.services.finance.gl.fiscal_period import (
+    FiscalPeriodInput,
+    FiscalPeriodService,
+)
 from tests.ifrs.gl.conftest import (
     MockFiscalPeriod,
 )
@@ -42,7 +42,7 @@ class TestCreatePeriod:
         """Test successful period creation."""
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        result = service.create_period(mock_db, org_id, sample_period_input)
+        service.create_period(mock_db, org_id, sample_period_input)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -78,7 +78,7 @@ class TestCreatePeriod:
         )
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        result = service.create_period(mock_db, org_id, input_data)
+        service.create_period(mock_db, org_id, input_data)
 
         mock_db.add.assert_called_once()
 

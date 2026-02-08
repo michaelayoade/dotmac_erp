@@ -2,7 +2,6 @@
 Workflow task API endpoints.
 """
 
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -13,8 +12,8 @@ from app.db import SessionLocal
 from app.models.workflow_task import WorkflowTaskPriority, WorkflowTaskStatus
 from app.schemas.workflow_task import (
     WorkflowTaskRead,
-    WorkflowTaskStatusUpdate,
     WorkflowTaskSnoozeRequest,
+    WorkflowTaskStatusUpdate,
 )
 from app.services.common import PaginationParams
 from app.services.people.hr.employees import EmployeeService
@@ -31,7 +30,7 @@ def get_db():
         db.close()
 
 
-def parse_enum(value: Optional[str], enum_type, field_name: str):
+def parse_enum(value: str | None, enum_type, field_name: str):
     if value is None:
         return None
     try:
@@ -52,8 +51,8 @@ def _get_employee_id(db: Session, organization_id: UUID, person_id: UUID) -> UUI
 
 @router.get("/my-tasks")
 def list_my_tasks(
-    status: Optional[str] = None,
-    priority: Optional[str] = None,
+    status: str | None = None,
+    priority: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     auth: dict = Depends(require_tenant_auth),

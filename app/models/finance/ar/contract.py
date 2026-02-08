@@ -7,7 +7,7 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -81,10 +81,10 @@ class Contract(Base):
 
     # Timeline
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
-    end_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Value
-    total_contract_value: Mapped[Optional[Decimal]] = mapped_column(
+    total_contract_value: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
@@ -114,13 +114,13 @@ class Contract(Base):
     )
 
     # Contract modifications (JSONB for history)
-    modification_history: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    modification_history: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
     )
 
     # Variable consideration
-    variable_consideration: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    variable_consideration: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
     )
@@ -129,18 +129,16 @@ class Contract(Base):
     significant_financing: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
-    financing_rate: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(8, 5), nullable=True
-    )
+    financing_rate: Mapped[Decimal | None] = mapped_column(Numeric(8, 5), nullable=True)
 
     # Non-cash consideration
-    noncash_consideration: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    noncash_consideration: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, nullable=True
     )
-    consideration_payable: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    consideration_payable: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, nullable=True
     )
-    terms_and_conditions: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    terms_and_conditions: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, nullable=True
     )
 
@@ -149,7 +147,7 @@ class Contract(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

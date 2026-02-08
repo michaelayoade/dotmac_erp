@@ -4,15 +4,12 @@ Leave management web routes.
 Provides list pages and CRUD forms for leave types, allocations, applications, and holiday lists.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.people.leave.web import leave_web_service
 from app.web.deps import WebAuthContext, get_db, require_hr_access
-
 
 router = APIRouter(prefix="/leave", tags=["people-leave-web"])
 
@@ -31,8 +28,8 @@ def leave_overview(
 @router.get("/types", response_class=HTMLResponse)
 def leave_types(
     request: Request,
-    search: Optional[str] = None,
-    is_active: Optional[bool] = None,
+    search: str | None = None,
+    is_active: bool | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -51,14 +48,14 @@ def leave_types(
 @router.get("/applications", response_class=HTMLResponse)
 def leave_applications(
     request: Request,
-    employee_id: Optional[str] = None,
-    leave_type_id: Optional[str] = None,
-    status: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    employee_id: str | None = None,
+    leave_type_id: str | None = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     page: int = Query(default=1, ge=1),
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -81,14 +78,14 @@ def leave_applications(
 @router.get("/allocations", response_class=HTMLResponse)
 def leave_allocations(
     request: Request,
-    employee_id: Optional[str] = None,
-    leave_type_id: Optional[str] = None,
-    year: Optional[str] = None,
-    is_active: Optional[str] = None,
+    employee_id: str | None = None,
+    leave_type_id: str | None = None,
+    year: str | None = None,
+    is_active: str | None = None,
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=25, ge=1),
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -111,8 +108,8 @@ def leave_allocations(
 @router.get("/holidays", response_class=HTMLResponse)
 def leave_holidays(
     request: Request,
-    year: Optional[int] = None,
-    is_active: Optional[bool] = None,
+    year: int | None = None,
+    is_active: bool | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -230,8 +227,8 @@ async def create_allocation(
 def view_allocation(
     request: Request,
     allocation_id: str,
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -554,8 +551,8 @@ async def delete_holiday_list(
 @router.get("/reports/balance", response_class=HTMLResponse)
 def leave_balance_report(
     request: Request,
-    year: Optional[int] = None,
-    department_id: Optional[str] = None,
+    year: int | None = None,
+    department_id: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -572,8 +569,8 @@ def leave_balance_report(
 @router.get("/reports/usage", response_class=HTMLResponse)
 def leave_usage_report(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -590,9 +587,9 @@ def leave_usage_report(
 @router.get("/reports/calendar", response_class=HTMLResponse)
 def leave_calendar_report(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    department_id: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    department_id: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):

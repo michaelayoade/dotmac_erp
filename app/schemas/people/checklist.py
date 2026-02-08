@@ -3,7 +3,6 @@ Checklist template schemas.
 """
 
 from datetime import datetime
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -39,7 +38,7 @@ class ChecklistTemplateBase(BaseModel):
 
     template_code: str = Field(max_length=30)
     template_name: str = Field(max_length=200)
-    description: Optional[str] = None
+    description: str | None = None
     template_type: ChecklistTemplateType
     is_active: bool = True
 
@@ -47,18 +46,18 @@ class ChecklistTemplateBase(BaseModel):
 class ChecklistTemplateCreate(ChecklistTemplateBase):
     """Create checklist template request."""
 
-    items: List[ChecklistItemCreate] = []
+    items: list[ChecklistItemCreate] = []
 
 
 class ChecklistTemplateUpdate(BaseModel):
     """Update checklist template request."""
 
-    template_code: Optional[str] = Field(default=None, max_length=30)
-    template_name: Optional[str] = Field(default=None, max_length=200)
-    description: Optional[str] = None
-    template_type: Optional[ChecklistTemplateType] = None
-    is_active: Optional[bool] = None
-    items: Optional[List[ChecklistItemCreate]] = None
+    template_code: str | None = Field(default=None, max_length=30)
+    template_name: str | None = Field(default=None, max_length=200)
+    description: str | None = None
+    template_type: ChecklistTemplateType | None = None
+    is_active: bool | None = None
+    items: list[ChecklistItemCreate] | None = None
 
 
 class ChecklistTemplateRead(ChecklistTemplateBase):
@@ -69,14 +68,14 @@ class ChecklistTemplateRead(ChecklistTemplateBase):
     template_id: UUID
     organization_id: UUID
     created_at: datetime
-    updated_at: Optional[datetime] = None
-    items: List[ChecklistItemRead] = []
+    updated_at: datetime | None = None
+    items: list[ChecklistItemRead] = []
 
 
 class ChecklistTemplateListResponse(BaseModel):
     """Paginated checklist template list response."""
 
-    items: List[ChecklistTemplateRead]
+    items: list[ChecklistTemplateRead]
     total: int
     offset: int
     limit: int

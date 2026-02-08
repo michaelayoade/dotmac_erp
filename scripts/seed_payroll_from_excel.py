@@ -29,33 +29,32 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from uuid import UUID
-import openpyxl
 
-from sqlalchemy import select, text, func
+import openpyxl
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal
-from app.models.people.hr.employee import Employee, EmployeeStatus
+from app.models.batch_operation import BatchOperation, BatchOperationType
 from app.models.people.hr.department import Department
 from app.models.people.hr.designation import Designation
+from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.hr.employment_type import EmploymentType
-from app.models.person import Person, PersonStatus
+from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
 from app.models.people.payroll.salary_component import (
     SalaryComponent,
     SalaryComponentType,
 )
 from app.models.people.payroll.salary_structure import (
-    SalaryStructure,
-    SalaryStructureEarning,
-    SalaryStructureDeduction,
     PayrollFrequency,
+    SalaryStructure,
+    SalaryStructureDeduction,
+    SalaryStructureEarning,
 )
-from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
-from app.models.batch_operation import BatchOperation, BatchOperationType
+from app.models.person import Person, PersonStatus
 from app.services.people.payroll.paye_calculator import PAYECalculator
-
 
 # Excel file path - works both locally and in Docker
 EXCEL_PATH = (

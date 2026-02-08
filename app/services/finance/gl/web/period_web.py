@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse
@@ -22,6 +21,7 @@ from app.models.finance.gl.account_category import AccountCategory
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 from app.models.finance.gl.fiscal_year import FiscalYear
 from app.services.common import coerce_uuid
+from app.services.finance.gl.fiscal_period import fiscal_period_service
 from app.services.finance.gl.web.base import (
     fiscal_year_option_view,
     format_currency,
@@ -47,7 +47,7 @@ class PeriodWebService:
     def periods_context(
         db: Session,
         organization_id: str,
-        year_id: Optional[str] = None,
+        year_id: str | None = None,
     ) -> dict:
         """Get context for fiscal periods listing page."""
         logger.debug("periods_context: org=%s year_id=%s", organization_id, year_id)
@@ -96,7 +96,7 @@ class PeriodWebService:
     def period_form_context(
         db: Session,
         organization_id: str,
-        period_id: Optional[str] = None,
+        period_id: str | None = None,
     ) -> dict:
         """Get context for period create/edit form."""
         logger.debug(
@@ -127,7 +127,7 @@ class PeriodWebService:
     def trial_balance_context(
         db: Session,
         organization_id: str,
-        as_of_date: Optional[str] = None,
+        as_of_date: str | None = None,
     ) -> dict:
         """Get context for trial balance report."""
         logger.debug(
@@ -212,29 +212,26 @@ class PeriodWebService:
         db: Session,
         organization_id: str,
         period_id: str,
-    ) -> Optional[str]:
+        closed_by_user_id: str,
+    ) -> str | None:
         """Close a fiscal period. Returns error message or None on success."""
         logger.debug("close_period: org=%s period_id=%s", organization_id, period_id)
         org_id = coerce_uuid(organization_id)
         per_id = coerce_uuid(period_id)
-
-        period = db.get(FiscalPeriod, per_id)
-        if not period or period.organization_id != org_id:
-            return "Period not found"
-
-        if period.status == PeriodStatus.HARD_CLOSED:
-            return "Period is already closed"
+        user_id = coerce_uuid(closed_by_user_id)
 
         try:
-            period.status = PeriodStatus.HARD_CLOSED
-            db.commit()
+            fiscal_period_service.hard_close_period(
+                db=db,
+                organization_id=org_id,
+                fiscal_period_id=per_id,
+                closed_by_user_id=user_id,
+            )
             logger.info("close_period: closed period %s for org %s", per_id, org_id)
             return None
-
         except Exception as e:
-            db.rollback()
             logger.exception("close_period: failed for org %s", org_id)
-            return f"Failed to close period: {str(e)}"
+            return str(e)
 
     # =========================================================================
     # Response Methods
@@ -280,7 +277,7 @@ class PeriodWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        as_of_date: Optional[str],
+        as_of_date: str | None,
     ) -> HTMLResponse:
         """Render trial balance report page."""
         context = base_context(request, auth, "Trial Balance", "gl")

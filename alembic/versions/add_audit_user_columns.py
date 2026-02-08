@@ -14,10 +14,10 @@ The columns reference public.people.id but we don't create FK constraints
 to avoid cross-schema FK complexity with RLS.
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
 
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "add_audit_user_columns"

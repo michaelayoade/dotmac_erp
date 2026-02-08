@@ -8,7 +8,6 @@ lookup of orchestrators by saga type name.
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from app.services.finance.platform.saga_orchestrator import SagaOrchestrator
 
@@ -41,7 +40,7 @@ class SagaFactory:
         self._orchestrators[saga_type] = orchestrator
         logger.info("Registered saga orchestrator: %s", saga_type)
 
-    def get_orchestrator(self, saga_type: str) -> Optional[SagaOrchestrator]:
+    def get_orchestrator(self, saga_type: str) -> SagaOrchestrator | None:
         """
         Get an orchestrator by saga type.
 

@@ -11,17 +11,16 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.services.inventory.balance import (
-    InventoryBalanceService,
     InventoryBalance,
+    InventoryBalanceService,
     ItemStockSummary,
     LowStockItem,
 )
 from tests.ifrs.inv.conftest import (
+    MockInventoryLot,
     MockItem,
     MockWarehouse,
-    MockInventoryLot,
 )
-
 
 # ============ Test Fixtures ============
 
@@ -185,25 +184,29 @@ class TestGetAvailable:
 
     def test_calculates_available_correctly(self, mock_db, org_id, item_id):
         """Should calculate on_hand - reserved."""
-        with patch.object(
-            InventoryBalanceService, "get_on_hand", return_value=Decimal("100")
-        ):
-            with patch.object(
+        with (
+            patch.object(
+                InventoryBalanceService, "get_on_hand", return_value=Decimal("100")
+            ),
+            patch.object(
                 InventoryBalanceService, "get_reserved", return_value=Decimal("30")
-            ):
-                result = InventoryBalanceService.get_available(mock_db, org_id, item_id)
+            ),
+        ):
+            result = InventoryBalanceService.get_available(mock_db, org_id, item_id)
 
         assert result == Decimal("70")
 
     def test_returns_negative_if_over_allocated(self, mock_db, org_id, item_id):
         """Should return negative if reserved exceeds on-hand."""
-        with patch.object(
-            InventoryBalanceService, "get_on_hand", return_value=Decimal("50")
-        ):
-            with patch.object(
+        with (
+            patch.object(
+                InventoryBalanceService, "get_on_hand", return_value=Decimal("50")
+            ),
+            patch.object(
                 InventoryBalanceService, "get_reserved", return_value=Decimal("70")
-            ):
-                result = InventoryBalanceService.get_available(mock_db, org_id, item_id)
+            ),
+        ):
+            result = InventoryBalanceService.get_available(mock_db, org_id, item_id)
 
         assert result == Decimal("-20")
 
@@ -211,15 +214,17 @@ class TestGetAvailable:
         self, mock_db, org_id, item_id, warehouse_id
     ):
         """Should pass warehouse_id to get_on_hand and get_reserved."""
-        with patch.object(
-            InventoryBalanceService, "get_on_hand", return_value=Decimal("100")
-        ) as mock_on_hand:
-            with patch.object(
+        with (
+            patch.object(
+                InventoryBalanceService, "get_on_hand", return_value=Decimal("100")
+            ) as mock_on_hand,
+            patch.object(
                 InventoryBalanceService, "get_reserved", return_value=Decimal("0")
-            ) as mock_reserved:
-                InventoryBalanceService.get_available(
-                    mock_db, org_id, item_id, warehouse_id
-                )
+            ) as mock_reserved,
+        ):
+            InventoryBalanceService.get_available(
+                mock_db, org_id, item_id, warehouse_id
+            )
 
         mock_on_hand.assert_called_once_with(mock_db, org_id, item_id, warehouse_id)
         mock_reserved.assert_called_once_with(mock_db, org_id, item_id, warehouse_id)
@@ -258,15 +263,17 @@ class TestGetItemBalance:
             mock_item if id == item_id else mock_warehouse
         )
 
-        with patch.object(
-            InventoryBalanceService, "get_on_hand", return_value=Decimal("100")
-        ):
-            with patch.object(
+        with (
+            patch.object(
+                InventoryBalanceService, "get_on_hand", return_value=Decimal("100")
+            ),
+            patch.object(
                 InventoryBalanceService, "get_reserved", return_value=Decimal("20")
-            ):
-                result = InventoryBalanceService.get_item_balance(
-                    mock_db, org_id, item_id, warehouse_id
-                )
+            ),
+        ):
+            result = InventoryBalanceService.get_item_balance(
+                mock_db, org_id, item_id, warehouse_id
+            )
 
         assert result is not None
         assert isinstance(result, InventoryBalance)
@@ -284,15 +291,15 @@ class TestGetItemBalance:
         """Should return balance without warehouse info when not provided."""
         mock_db.get.return_value = mock_item
 
-        with patch.object(
-            InventoryBalanceService, "get_on_hand", return_value=Decimal("50")
-        ):
-            with patch.object(
+        with (
+            patch.object(
+                InventoryBalanceService, "get_on_hand", return_value=Decimal("50")
+            ),
+            patch.object(
                 InventoryBalanceService, "get_reserved", return_value=Decimal("0")
-            ):
-                result = InventoryBalanceService.get_item_balance(
-                    mock_db, org_id, item_id
-                )
+            ),
+        ):
+            result = InventoryBalanceService.get_item_balance(mock_db, org_id, item_id)
 
         assert result is not None
         assert result.warehouse_id is None
@@ -304,15 +311,15 @@ class TestGetItemBalance:
         mock_item.average_cost = Decimal("25.00")
         mock_db.get.return_value = mock_item
 
-        with patch.object(
-            InventoryBalanceService, "get_on_hand", return_value=Decimal("100")
-        ):
-            with patch.object(
+        with (
+            patch.object(
+                InventoryBalanceService, "get_on_hand", return_value=Decimal("100")
+            ),
+            patch.object(
                 InventoryBalanceService, "get_reserved", return_value=Decimal("0")
-            ):
-                result = InventoryBalanceService.get_item_balance(
-                    mock_db, org_id, item_id
-                )
+            ),
+        ):
+            result = InventoryBalanceService.get_item_balance(mock_db, org_id, item_id)
 
         assert result.total_value == Decimal("2500.00")  # 100 * 25.00
 
@@ -321,15 +328,15 @@ class TestGetItemBalance:
         mock_item.average_cost = None
         mock_db.get.return_value = mock_item
 
-        with patch.object(
-            InventoryBalanceService, "get_on_hand", return_value=Decimal("100")
-        ):
-            with patch.object(
+        with (
+            patch.object(
+                InventoryBalanceService, "get_on_hand", return_value=Decimal("100")
+            ),
+            patch.object(
                 InventoryBalanceService, "get_reserved", return_value=Decimal("0")
-            ):
-                result = InventoryBalanceService.get_item_balance(
-                    mock_db, org_id, item_id
-                )
+            ),
+        ):
+            result = InventoryBalanceService.get_item_balance(mock_db, org_id, item_id)
 
         assert result.average_cost == Decimal("0")
         assert result.total_value == Decimal("0")
@@ -480,13 +487,15 @@ class TestGetLowStockItems:
             mock_db.query.return_value.join.return_value.filter.return_value.all
         ).return_value = [(mock_item, None)]
 
-        with patch.object(
-            InventoryBalanceService, "get_on_hand", return_value=Decimal("50")
-        ):
-            with patch.object(
+        with (
+            patch.object(
+                InventoryBalanceService, "get_on_hand", return_value=Decimal("50")
+            ),
+            patch.object(
                 InventoryBalanceService, "get_reserved", return_value=Decimal("0")
-            ):
-                result = InventoryBalanceService.get_low_stock_items(mock_db, org_id)
+            ),
+        ):
+            result = InventoryBalanceService.get_low_stock_items(mock_db, org_id)
 
         assert len(result) == 1
         assert result[0].item_code == mock_item.item_code
@@ -498,13 +507,15 @@ class TestGetLowStockItems:
             mock_db.query.return_value.join.return_value.filter.return_value.all
         ).return_value = [(mock_item, None)]
 
-        with patch.object(
-            InventoryBalanceService, "get_on_hand", return_value=Decimal("30")
-        ):
-            with patch.object(
+        with (
+            patch.object(
+                InventoryBalanceService, "get_on_hand", return_value=Decimal("30")
+            ),
+            patch.object(
                 InventoryBalanceService, "get_reserved", return_value=Decimal("0")
-            ):
-                result = InventoryBalanceService.get_low_stock_items(mock_db, org_id)
+            ),
+        ):
+            result = InventoryBalanceService.get_low_stock_items(mock_db, org_id)
 
         assert len(result) == 1
         assert isinstance(result[0], LowStockItem)
@@ -519,15 +530,17 @@ class TestGetLowStockItems:
         ).return_value = [(mock_item, None)]
 
         # Available = 20, which is below minimum (50) but above reorder (10)
-        with patch.object(
-            InventoryBalanceService, "get_on_hand", return_value=Decimal("20")
-        ):
-            with patch.object(
+        with (
+            patch.object(
+                InventoryBalanceService, "get_on_hand", return_value=Decimal("20")
+            ),
+            patch.object(
                 InventoryBalanceService, "get_reserved", return_value=Decimal("0")
-            ):
-                result = InventoryBalanceService.get_low_stock_items(
-                    mock_db, org_id, include_below_minimum=True
-                )
+            ),
+        ):
+            result = InventoryBalanceService.get_low_stock_items(
+                mock_db, org_id, include_below_minimum=True
+            )
 
         assert len(result) == 1
 
@@ -540,13 +553,15 @@ class TestGetLowStockItems:
             mock_db.query.return_value.join.return_value.filter.return_value.all
         ).return_value = [(mock_item, None)]
 
-        with patch.object(
-            InventoryBalanceService, "get_on_hand", return_value=Decimal("30")
-        ):
-            with patch.object(
+        with (
+            patch.object(
+                InventoryBalanceService, "get_on_hand", return_value=Decimal("30")
+            ),
+            patch.object(
                 InventoryBalanceService, "get_reserved", return_value=Decimal("0")
-            ):
-                result = InventoryBalanceService.get_low_stock_items(mock_db, org_id)
+            ),
+        ):
+            result = InventoryBalanceService.get_low_stock_items(mock_db, org_id)
 
         # max_stock - on_hand = 200 - 30 = 170, but max(reorder_qty=100, 170) = 170
         assert result[0].suggested_order_qty == Decimal("170")
@@ -561,13 +576,15 @@ class TestGetLowStockItems:
             mock_db.query.return_value.join.return_value.filter.return_value.all
         ).return_value = [(mock_item, None)]
 
-        with patch.object(
-            InventoryBalanceService, "get_on_hand", return_value=Decimal("10")
-        ):
-            with patch.object(
+        with (
+            patch.object(
+                InventoryBalanceService, "get_on_hand", return_value=Decimal("10")
+            ),
+            patch.object(
                 InventoryBalanceService, "get_reserved", return_value=Decimal("0")
-            ):
-                result = InventoryBalanceService.get_low_stock_items(mock_db, org_id)
+            ),
+        ):
+            result = InventoryBalanceService.get_low_stock_items(mock_db, org_id)
 
         assert result[0].default_supplier_id == supplier_id
         assert result[0].lead_time_days == 7

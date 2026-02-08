@@ -20,6 +20,7 @@
 {% block content %}
 <div class="max-w-4xl mx-auto" x-data="bomForm()">
     <form method="post" action="{{ '/inventory/boms/' ~ bom.bom_id ~ '/edit' if bom else '/inventory/boms/new' }}" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
         {% if error %}
         <div class="rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 p-4">
             <div class="flex items-center gap-3">
@@ -131,6 +132,12 @@
                                         <option value="">Select Item</option>
                                         {% for item in items | default([]) %}
                                         <option value="{{ item.item_id }}">{{ item.item_code }} - {{ item.item_name }}</option>
+                                        {% else %}
+                                        <tr>
+                                            <td colspan="99" class="p-0">
+                                                {{ empty_state("No items found", "There are no items to display.") }}
+                                            </td>
+                                        </tr>
                                         {% endfor %}
                                     </select>
                                 </td>
@@ -166,7 +173,7 @@
             <input type="hidden" name="components_json" :value="JSON.stringify(components)">
         </div>
 
-        <div class="flex items-center justify-end gap-3">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/inventory/boms" class="btn btn-secondary">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 {{ 'Update BOM' if bom else 'Create BOM' }}

@@ -6,7 +6,6 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -64,7 +63,7 @@ class Asset(Base):
 
     asset_number: Mapped[str] = mapped_column(String(30), nullable=False)
     asset_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     category_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
@@ -73,16 +72,16 @@ class Asset(Base):
     )
 
     # Location and responsibility
-    location_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    location_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.location.location_id"),
         nullable=True,
     )
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    custodian_employee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    custodian_employee_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
@@ -90,7 +89,7 @@ class Asset(Base):
     )
 
     # Project assignment (for project-specific assets)
-    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.project.project_id"),
         nullable=True,
@@ -100,7 +99,7 @@ class Asset(Base):
 
     # Acquisition details
     acquisition_date: Mapped[date] = mapped_column(Date, nullable=False)
-    in_service_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    in_service_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     acquisition_cost: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
     functional_currency_cost: Mapped[Decimal] = mapped_column(
@@ -108,16 +107,16 @@ class Asset(Base):
     )
 
     # Source document
-    source_type: Mapped[Optional[str]] = mapped_column(String(30), nullable=True)
-    source_document_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    source_type: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    source_document_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    supplier_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    supplier_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    invoice_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    invoice_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Depreciation parameters (can override category defaults)
     depreciation_method: Mapped[str] = mapped_column(String(30), nullable=False)
@@ -126,7 +125,7 @@ class Asset(Base):
     residual_value: Mapped[Decimal] = mapped_column(
         Numeric(20, 6), nullable=False, default=0
     )
-    depreciation_start_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    depreciation_start_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Current values
     accumulated_depreciation: Mapped[Decimal] = mapped_column(
@@ -135,7 +134,7 @@ class Asset(Base):
         default=0,
     )
     net_book_value: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
-    revalued_amount: Mapped[Optional[Decimal]] = mapped_column(
+    revalued_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6), nullable=True
     )
     impairment_loss: Mapped[Decimal] = mapped_column(
@@ -150,33 +149,31 @@ class Asset(Base):
     )
 
     # CGU assignment for impairment testing
-    cash_generating_unit_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cash_generating_unit_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("fa.cash_generating_unit.cgu_id"),
         nullable=True,
     )
 
     # Physical attributes
-    serial_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    barcode: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    manufacturer: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    model: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    warranty_expiry_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    serial_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    barcode: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    manufacturer: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    warranty_expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Insurance
-    insured_value: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(20, 6), nullable=True
-    )
-    insurance_policy_number: Mapped[Optional[str]] = mapped_column(
+    insured_value: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), nullable=True)
+    insurance_policy_number: Mapped[str | None] = mapped_column(
         String(100), nullable=True
     )
 
     # Disposal
-    disposal_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    disposal_proceeds: Mapped[Optional[Decimal]] = mapped_column(
+    disposal_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    disposal_proceeds: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6), nullable=True
     )
-    disposal_gain_loss: Mapped[Optional[Decimal]] = mapped_column(
+    disposal_gain_loss: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6), nullable=True
     )
 
@@ -184,7 +181,7 @@ class Asset(Base):
     is_component_parent: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
-    parent_asset_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    parent_asset_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("fa.asset.asset_id"),
         nullable=True,
@@ -200,7 +197,7 @@ class Asset(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

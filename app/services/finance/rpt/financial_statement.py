@@ -6,10 +6,10 @@ Manages financial statement line items and generates statements per IAS 1.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -34,21 +34,21 @@ class StatementLineInput:
     line_name: str
     sequence_number: int
     calculation_type: str = "SUM_ACCOUNTS"
-    parent_line_id: Optional[UUID] = None
-    description: Optional[str] = None
+    parent_line_id: UUID | None = None
+    description: str | None = None
     indent_level: int = 0
     is_header: bool = False
     is_total: bool = False
     is_subtotal: bool = False
     is_separator: bool = False
-    calculation_formula: Optional[str] = None
-    account_codes: Optional[list] = None
-    account_categories: Optional[list] = None
-    exclude_account_codes: Optional[list] = None
+    calculation_formula: str | None = None
+    account_codes: list | None = None
+    account_categories: list | None = None
+    exclude_account_codes: list | None = None
     normal_balance: str = "DEBIT"
     display_sign: str = "NATURAL"
-    xbrl_element: Optional[str] = None
-    formatting: Optional[dict] = None
+    xbrl_element: str | None = None
+    formatting: dict | None = None
 
 
 @dataclass
@@ -64,9 +64,9 @@ class StatementLineResult:
     is_total: bool
     is_subtotal: bool
     current_period: Decimal
-    prior_period: Optional[Decimal]
-    variance: Optional[Decimal]
-    variance_percent: Optional[Decimal]
+    prior_period: Decimal | None
+    variance: Decimal | None
+    variance_percent: Decimal | None
 
 
 @dataclass
@@ -173,11 +173,11 @@ class FinancialStatementService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         line_id: UUID,
-        line_name: Optional[str] = None,
-        description: Optional[str] = None,
-        sequence_number: Optional[int] = None,
-        indent_level: Optional[int] = None,
-        formatting: Optional[dict] = None,
+        line_name: str | None = None,
+        description: str | None = None,
+        sequence_number: int | None = None,
+        indent_level: int | None = None,
+        formatting: dict | None = None,
     ) -> FinancialStatementLine:
         """
         Update a financial statement line.
@@ -224,10 +224,10 @@ class FinancialStatementService(ListResponseMixin):
         organization_id: UUID,
         line_id: UUID,
         calculation_type: str,
-        calculation_formula: Optional[str] = None,
-        account_codes: Optional[list] = None,
-        account_categories: Optional[list] = None,
-        exclude_account_codes: Optional[list] = None,
+        calculation_formula: str | None = None,
+        account_codes: list | None = None,
+        account_categories: list | None = None,
+        exclude_account_codes: list | None = None,
     ) -> FinancialStatementLine:
         """
         Update line calculation configuration.
@@ -269,7 +269,7 @@ class FinancialStatementService(ListResponseMixin):
         organization_id: UUID,
         statement_type: StatementType,
         line_sequences: list[tuple[UUID, int]],
-    ) -> List[FinancialStatementLine]:
+    ) -> builtins.list[FinancialStatementLine]:
         """
         Reorder statement lines.
 
@@ -402,7 +402,7 @@ class FinancialStatementService(ListResponseMixin):
         source_organization_id: UUID,
         target_organization_id: UUID,
         statement_type: StatementType,
-    ) -> List[FinancialStatementLine]:
+    ) -> builtins.list[FinancialStatementLine]:
         """
         Copy statement structure from one org to another.
 
@@ -480,20 +480,25 @@ class FinancialStatementService(ListResponseMixin):
     def get(
         db: Session,
         line_id: str,
+        organization_id: UUID | None = None,
     ) -> FinancialStatementLine:
         """Get a statement line by ID."""
         line = db.get(FinancialStatementLine, coerce_uuid(line_id))
         if not line:
+            raise HTTPException(status_code=404, detail="Statement line not found")
+        if organization_id is not None and line.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Statement line not found")
         return line
 
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        statement_type: Optional[StatementType] = None,
-        parent_line_id: Optional[str] = None,
-        is_active: Optional[bool] = None,
+        organization_id: str | None = None,
+        statement_type: StatementType | None = None,
+        parent_line_id: str | None = None,
+        is_active: bool | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[FinancialStatementLine]:

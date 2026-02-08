@@ -125,8 +125,22 @@ def get_celery_config() -> dict:
     return config
 
 
+def _builtin_beat_schedule() -> dict[str, dict]:
+    """Built-in scheduled tasks that always run, independent of DB config."""
+    return {
+        "expense-approval-reminders": {
+            "task": "app.tasks.expense.process_expense_approval_reminders",
+            "schedule": crontab(hour=8, minute=0),  # Daily at 8 AM
+        },
+        "expense-stuck-transfers": {
+            "task": "app.tasks.expense.poll_stuck_expense_transfers",
+            "schedule": crontab(minute="*/30"),  # Every 30 minutes
+        },
+    }
+
+
 def build_beat_schedule() -> dict:
-    schedule: dict[str, dict] = {}
+    schedule: dict[str, dict] = _builtin_beat_schedule()
     session = SessionLocal()
     try:
         tasks = (

@@ -15,10 +15,11 @@ This migration creates:
                         fund_accounting_enabled, commitment_control_enabled
 """
 
-from alembic import op
-from app.alembic_utils import ensure_enum
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
+from app.alembic_utils import ensure_enum
 
 revision = "20260203_create_ipsas_schema"
 down_revision = "20260203_create_procurement_schema"

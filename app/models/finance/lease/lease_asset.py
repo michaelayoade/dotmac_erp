@@ -5,7 +5,6 @@ Lease Asset (Right-of-Use Asset) Model - Lease Schema.
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -109,8 +108,8 @@ class LeaseAsset(Base):
     )
 
     # Last depreciation
-    last_depreciation_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    last_depreciation_period_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    last_depreciation_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    last_depreciation_period_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -120,7 +119,7 @@ class LeaseAsset(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

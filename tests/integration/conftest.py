@@ -15,11 +15,14 @@ to avoid SQLite mock issues. Use: pytest tests/integration/ -p no:conftest
 Or run directly: pytest tests/integration/ifrs/test_*.py
 """
 
+from __future__ import annotations
+
 import os
 import uuid
-from datetime import date, datetime, timezone
+from collections.abc import Generator
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Generator
+from typing import TYPE_CHECKING
 
 # Load environment variables FIRST
 from dotenv import load_dotenv
@@ -34,10 +37,13 @@ os.environ.setdefault(
 )
 os.environ.setdefault("TOTP_ISSUER", "TestApp")
 
-import pytest
-from sqlalchemy import create_engine, event
-from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import Session, sessionmaker
+import pytest  # noqa: E402
+from sqlalchemy import create_engine, event  # noqa: E402
+from sqlalchemy.exc import OperationalError  # noqa: E402
+from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
+
+if TYPE_CHECKING:
+    from app.models.finance.core_org.organization import Organization
 
 
 def get_test_database_url() -> str:
@@ -108,7 +114,7 @@ def db(engine) -> Generator[Session, None, None]:
 
 
 @pytest.fixture(scope="function")
-def organization(db: Session) -> "Organization":
+def organization(db: Session) -> Organization:
     """Create an organization for testing."""
     from app.models.finance.core_org.organization import Organization
 
@@ -607,7 +613,7 @@ def inventory_item(
     revenue_account,
 ):
     """Create an inventory item for testing."""
-    from app.models.inventory.item import Item, CostingMethod
+    from app.models.inventory.item import CostingMethod, Item
 
     item = Item(
         organization_id=org_id,
@@ -650,7 +656,7 @@ def initial_inventory_transaction(
     txn = InventoryTransaction(
         organization_id=org_id,
         transaction_type=TransactionType.RECEIPT,
-        transaction_date=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        transaction_date=datetime(2024, 1, 1, tzinfo=UTC),
         fiscal_period_id=fiscal_period.fiscal_period_id,
         item_id=inventory_item.item_id,
         warehouse_id=warehouse.warehouse_id,

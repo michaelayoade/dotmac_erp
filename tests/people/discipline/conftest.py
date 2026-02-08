@@ -6,20 +6,19 @@ while still testing the service logic.
 """
 
 import uuid
-from datetime import date, datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
 from app.models.people.discipline import (
-    CaseStatus,
-    ViolationType,
-    SeverityLevel,
     ActionType,
+    CaseStatus,
     DocumentType,
+    SeverityLevel,
+    ViolationType,
 )
-
 
 # ============ Mock Model Classes ============
 
@@ -58,32 +57,32 @@ class MockDisciplinaryCase:
         violation_type: ViolationType = ViolationType.MISCONDUCT,
         severity: SeverityLevel = SeverityLevel.MODERATE,
         subject: str = "Test Violation",
-        description: Optional[str] = "Detailed description of the violation.",
-        incident_date: Optional[date] = None,
+        description: str | None = "Detailed description of the violation.",
+        incident_date: date | None = None,
         reported_date: date = None,
         status: CaseStatus = CaseStatus.DRAFT,
-        query_text: Optional[str] = None,
-        query_issued_date: Optional[date] = None,
-        response_due_date: Optional[date] = None,
-        hearing_date: Optional[datetime] = None,
-        hearing_location: Optional[str] = None,
-        hearing_notes: Optional[str] = None,
-        decision_summary: Optional[str] = None,
-        decision_date: Optional[date] = None,
-        appeal_deadline: Optional[date] = None,
-        appeal_reason: Optional[str] = None,
-        appeal_decision: Optional[str] = None,
-        closed_date: Optional[date] = None,
-        reported_by_id: Optional[uuid.UUID] = None,
-        investigating_officer_id: Optional[uuid.UUID] = None,
-        panel_chair_id: Optional[uuid.UUID] = None,
-        created_by_id: Optional[uuid.UUID] = None,
-        status_changed_at: Optional[datetime] = None,
-        status_changed_by_id: Optional[uuid.UUID] = None,
+        query_text: str | None = None,
+        query_issued_date: date | None = None,
+        response_due_date: date | None = None,
+        hearing_date: datetime | None = None,
+        hearing_location: str | None = None,
+        hearing_notes: str | None = None,
+        decision_summary: str | None = None,
+        decision_date: date | None = None,
+        appeal_deadline: date | None = None,
+        appeal_reason: str | None = None,
+        appeal_decision: str | None = None,
+        closed_date: date | None = None,
+        reported_by_id: uuid.UUID | None = None,
+        investigating_officer_id: uuid.UUID | None = None,
+        panel_chair_id: uuid.UUID | None = None,
+        created_by_id: uuid.UUID | None = None,
+        status_changed_at: datetime | None = None,
+        status_changed_by_id: uuid.UUID | None = None,
         is_deleted: bool = False,
         created_at: datetime = None,
-        updated_at: Optional[datetime] = None,
-        employee: Optional[MockEmployee] = None,
+        updated_at: datetime | None = None,
+        employee: MockEmployee | None = None,
     ):
         self.case_id = case_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -115,7 +114,7 @@ class MockDisciplinaryCase:
         self.status_changed_at = status_changed_at
         self.status_changed_by_id = status_changed_by_id
         self.is_deleted = is_deleted
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
         self.updated_at = updated_at
         self.employee = employee
 
@@ -137,14 +136,14 @@ class MockCaseAction:
         action_id: uuid.UUID = None,
         case_id: uuid.UUID = None,
         action_type: ActionType = ActionType.WRITTEN_WARNING,
-        description: Optional[str] = "Test action description",
+        description: str | None = "Test action description",
         effective_date: date = None,
-        end_date: Optional[date] = None,
-        warning_expiry_date: Optional[date] = None,
+        end_date: date | None = None,
+        warning_expiry_date: date | None = None,
         is_active: bool = True,
         payroll_processed: bool = False,
         lifecycle_triggered: bool = False,
-        issued_by_id: Optional[uuid.UUID] = None,
+        issued_by_id: uuid.UUID | None = None,
         created_at: datetime = None,
     ):
         self.action_id = action_id or uuid.uuid4()
@@ -158,7 +157,7 @@ class MockCaseAction:
         self.payroll_processed = payroll_processed
         self.lifecycle_triggered = lifecycle_triggered
         self.issued_by_id = issued_by_id
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
 
     @property
     def is_suspension(self) -> bool:
@@ -183,11 +182,11 @@ class MockCaseWitness:
         self,
         witness_id: uuid.UUID = None,
         case_id: uuid.UUID = None,
-        employee_id: Optional[uuid.UUID] = None,
-        external_name: Optional[str] = None,
-        external_contact: Optional[str] = None,
-        statement: Optional[str] = None,
-        statement_date: Optional[datetime] = None,
+        employee_id: uuid.UUID | None = None,
+        external_name: str | None = None,
+        external_contact: str | None = None,
+        statement: str | None = None,
+        statement_date: datetime | None = None,
         created_at: datetime = None,
     ):
         self.witness_id = witness_id or uuid.uuid4()
@@ -197,7 +196,7 @@ class MockCaseWitness:
         self.external_contact = external_contact
         self.statement = statement
         self.statement_date = statement_date
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
 
 
 class MockCaseDocument:
@@ -209,12 +208,12 @@ class MockCaseDocument:
         case_id: uuid.UUID = None,
         document_type: DocumentType = DocumentType.EVIDENCE,
         title: str = "Test Document",
-        description: Optional[str] = None,
+        description: str | None = None,
         file_path: str = "/uploads/discipline/test.pdf",
         file_name: str = "test.pdf",
-        file_size: Optional[int] = 1024,
-        mime_type: Optional[str] = "application/pdf",
-        uploaded_by_id: Optional[uuid.UUID] = None,
+        file_size: int | None = 1024,
+        mime_type: str | None = "application/pdf",
+        uploaded_by_id: uuid.UUID | None = None,
         created_at: datetime = None,
     ):
         self.document_id = document_id or uuid.uuid4()
@@ -227,7 +226,7 @@ class MockCaseDocument:
         self.file_size = file_size
         self.mime_type = mime_type
         self.uploaded_by_id = uploaded_by_id
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
 
 
 class MockCaseResponse:
@@ -241,14 +240,14 @@ class MockCaseResponse:
         is_initial_response: bool = True,
         is_appeal_response: bool = False,
         submitted_at: datetime = None,
-        acknowledged_at: Optional[datetime] = None,
+        acknowledged_at: datetime | None = None,
     ):
         self.response_id = response_id or uuid.uuid4()
         self.case_id = case_id or uuid.uuid4()
         self.response_text = response_text
         self.is_initial_response = is_initial_response
         self.is_appeal_response = is_appeal_response
-        self.submitted_at = submitted_at or datetime.now(timezone.utc)
+        self.submitted_at = submitted_at or datetime.now(UTC)
         self.acknowledged_at = acknowledged_at
 
 
@@ -283,9 +282,9 @@ class MockQueryBuilder:
 
 def create_mock_db_session(
     *,
-    get_returns: Optional[dict[uuid.UUID, Any]] = None,
+    get_returns: dict[uuid.UUID, Any] | None = None,
     scalar_returns: Any = None,
-    scalars_returns: Optional[list[Any]] = None,
+    scalars_returns: list[Any] | None = None,
 ) -> MagicMock:
     """
     Create a configurable mock database session.
@@ -440,7 +439,7 @@ def sample_issue_query_data() -> dict[str, Any]:
 def sample_schedule_hearing_data() -> dict[str, Any]:
     """Sample data for scheduling a hearing."""
     return {
-        "hearing_date": datetime.now(timezone.utc) + timedelta(days=5),
+        "hearing_date": datetime.now(UTC) + timedelta(days=5),
         "hearing_location": "Conference Room A",
         "panel_chair_id": uuid.uuid4(),
     }

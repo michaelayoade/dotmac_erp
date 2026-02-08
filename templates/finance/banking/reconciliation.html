@@ -1,4 +1,5 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import status_badge %}
 {% from "components/macros.html" import empty_state, status_badge %}
 
 {% block page_title %}Bank Reconciliation{% endblock %}
@@ -245,9 +246,7 @@
                         <td class="table-cell-amount text-slate-900 dark:text-white">{{ line.statement_amount | default("-") }}</td>
                         <td class="table-cell-amount text-slate-900 dark:text-white">{{ line.gl_amount | default("-") }}</td>
                         <td>
-                            <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium {{ 'bg-blue-100 text-blue-700' if line.match_type == 'auto' else 'bg-purple-100 text-purple-700' }}">
-                                {{ line.match_type | title }}
-                            </span>
+                            {{ status_badge(line.match_type, size="sm") }}
                         </td>
                         <td class="table-cell-amount {{ 'text-emerald-600 dark:text-emerald-400' if line.difference == 0 else 'text-rose-600 dark:text-rose-400' }}">{{ line.difference | default(0) }}</td>
                     </tr>

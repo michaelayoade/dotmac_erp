@@ -16,10 +16,10 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.services.finance.common.search import (
-    build_search_pattern,
-    apply_date_range_filter,
     apply_amount_range_filter,
+    apply_date_range_filter,
     apply_status_filter,
+    build_search_pattern,
 )
 
 
@@ -130,26 +130,26 @@ class TestApplyDateRangeFilter:
 
     def test_no_dates_returns_unchanged(self, mock_query, mock_date_field):
         """Test that no dates returns query unchanged."""
-        result = apply_date_range_filter(mock_query, mock_date_field)
+        apply_date_range_filter(mock_query, mock_date_field)
         mock_query.filter.assert_not_called()
 
     def test_start_date_only(self, mock_query, mock_date_field):
         """Test applying only start date."""
-        result = apply_date_range_filter(
+        apply_date_range_filter(
             mock_query, mock_date_field, start_date=date(2024, 1, 1)
         )
         mock_query.filter.assert_called_once()
 
     def test_end_date_only(self, mock_query, mock_date_field):
         """Test applying only end date."""
-        result = apply_date_range_filter(
+        apply_date_range_filter(
             mock_query, mock_date_field, end_date=date(2024, 12, 31)
         )
         mock_query.filter.assert_called_once()
 
     def test_both_dates(self, mock_query, mock_date_field):
         """Test applying both start and end dates."""
-        result = apply_date_range_filter(
+        apply_date_range_filter(
             mock_query,
             mock_date_field,
             start_date=date(2024, 1, 1),
@@ -164,26 +164,26 @@ class TestApplyAmountRangeFilter:
 
     def test_no_amounts_returns_unchanged(self, mock_query, mock_amount_field):
         """Test that no amounts returns query unchanged."""
-        result = apply_amount_range_filter(mock_query, mock_amount_field)
+        apply_amount_range_filter(mock_query, mock_amount_field)
         mock_query.filter.assert_not_called()
 
     def test_min_amount_only(self, mock_query, mock_amount_field):
         """Test applying only min amount."""
-        result = apply_amount_range_filter(
+        apply_amount_range_filter(
             mock_query, mock_amount_field, min_amount=Decimal("100")
         )
         mock_query.filter.assert_called_once()
 
     def test_max_amount_only(self, mock_query, mock_amount_field):
         """Test applying only max amount."""
-        result = apply_amount_range_filter(
+        apply_amount_range_filter(
             mock_query, mock_amount_field, max_amount=Decimal("1000")
         )
         mock_query.filter.assert_called_once()
 
     def test_both_amounts(self, mock_query, mock_amount_field):
         """Test applying both min and max amounts."""
-        result = apply_amount_range_filter(
+        apply_amount_range_filter(
             mock_query,
             mock_amount_field,
             min_amount=Decimal("100"),
@@ -198,15 +198,15 @@ class TestApplyStatusFilter:
 
     def test_empty_statuses_returns_unchanged(self, mock_query, mock_status_field):
         """Test that empty statuses returns query unchanged."""
-        result = apply_status_filter(mock_query, mock_status_field, None)
+        apply_status_filter(mock_query, mock_status_field, None)
         mock_query.filter.assert_not_called()
 
-        result = apply_status_filter(mock_query, mock_status_field, [])
+        apply_status_filter(mock_query, mock_status_field, [])
         mock_query.filter.assert_not_called()
 
     def test_applies_status_filter(self, mock_query, mock_status_field):
         """Test applying status filter with values."""
-        result = apply_status_filter(
+        apply_status_filter(
             mock_query, mock_status_field, [SampleStatus.ACTIVE, SampleStatus.PENDING]
         )
         mock_query.filter.assert_called_once()

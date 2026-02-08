@@ -34,6 +34,7 @@ weasyprint = "^62.0"
 python-dateutil = "^2.9.0"
 shapely = "^2.0.0"
 msoffcrypto-tool = "^6.0.0"
+openpyxl = "^3.1.5"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "8.2.2"
@@ -43,7 +44,6 @@ pytest-playwright = "^0.7.2"
 mypy = "^1.19.1"
 types-python-dateutil = "^2.9.0.20251115"
 pandas = "^2.3.3"
-openpyxl = "^3.1.5"
 ruff = "^0.15.0"
 pre-commit = "^4.5.1"
 detect-secrets = "^1.5.0"
@@ -82,7 +82,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["S101", "S105", "S106", "S311", "B017"]  # test fixtures use hardcoded values
+"tests/**/*.py" = ["S101", "S105", "S106", "S311", "B017", "SIM117"]  # test fixtures use hardcoded values
 "alembic/**/*.py" = ["E402", "F841", "S608"]  # migrations: late imports, unused vars, raw SQL
 "scripts/**/*.py" = ["T20", "E402", "S"]  # scripts: print, late imports, relaxed security
 

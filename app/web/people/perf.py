@@ -5,15 +5,12 @@ Lists appraisals and KPIs with full CRUD support.
 All business logic is delegated to the perf_web_service.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.people.perf.web import perf_web_service
 from app.web.deps import WebAuthContext, get_db, require_hr_access
-
 
 router = APIRouter(prefix="/perf", tags=["people-perf-web"])
 
@@ -26,10 +23,10 @@ router = APIRouter(prefix="/perf", tags=["people-perf-web"])
 @router.get("/appraisals", response_class=HTMLResponse)
 def list_appraisals(
     request: Request,
-    status: Optional[str] = None,
-    employee_id: Optional[str] = None,
-    cycle_id: Optional[str] = None,
-    manager_id: Optional[str] = None,
+    status: str | None = None,
+    employee_id: str | None = None,
+    cycle_id: str | None = None,
+    manager_id: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -64,8 +61,8 @@ async def create_appraisal(
 def appraisal_detail(
     request: Request,
     appraisal_id: str,
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -210,9 +207,9 @@ async def submit_calibration(
 @router.get("/feedback", response_class=HTMLResponse)
 def list_feedback_requests(
     request: Request,
-    appraisal_id: Optional[str] = None,
-    feedback_type: Optional[str] = None,
-    submitted: Optional[str] = None,
+    appraisal_id: str | None = None,
+    feedback_type: str | None = None,
+    submitted: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -250,8 +247,8 @@ async def create_feedback_request(
 def feedback_detail(
     request: Request,
     feedback_id: str,
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -305,11 +302,11 @@ def delete_feedback(
 @router.get("/goals", response_class=HTMLResponse)
 def list_kpis(
     request: Request,
-    status: Optional[str] = None,
-    search: Optional[str] = None,
-    employee_id: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    status: str | None = None,
+    search: str | None = None,
+    employee_id: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -323,7 +320,7 @@ def list_kpis(
 @router.get("/goals/new", response_class=HTMLResponse)
 def new_kpi_form(
     request: Request,
-    employee_id: Optional[str] = None,
+    employee_id: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -405,9 +402,9 @@ def delete_kpi(
 @router.get("/cycles", response_class=HTMLResponse)
 def list_cycles(
     request: Request,
-    status: Optional[str] = None,
-    year: Optional[int] = None,
-    search: Optional[str] = None,
+    status: str | None = None,
+    year: int | None = None,
+    search: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -442,8 +439,8 @@ async def create_cycle(
 def cycle_detail(
     request: Request,
     cycle_id: str,
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -523,9 +520,9 @@ def delete_cycle(
 @router.get("/kras", response_class=HTMLResponse)
 def list_kras(
     request: Request,
-    search: Optional[str] = None,
-    is_active: Optional[str] = None,
-    department_id: Optional[str] = None,
+    search: str | None = None,
+    is_active: str | None = None,
+    department_id: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -560,7 +557,7 @@ async def create_kra(
 def kra_detail(
     request: Request,
     kra_id: str,
-    success: Optional[str] = None,
+    success: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -618,8 +615,8 @@ def delete_kra(
 @router.get("/templates", response_class=HTMLResponse)
 def list_templates(
     request: Request,
-    search: Optional[str] = None,
-    is_active: Optional[str] = None,
+    search: str | None = None,
+    is_active: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -654,7 +651,7 @@ async def create_template(
 def template_detail(
     request: Request,
     template_id: str,
-    success: Optional[str] = None,
+    success: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -716,9 +713,9 @@ def delete_template(
 @router.get("/scorecards", response_class=HTMLResponse)
 def list_scorecards(
     request: Request,
-    employee_id: Optional[str] = None,
-    cycle_id: Optional[str] = None,
-    is_finalized: Optional[str] = None,
+    employee_id: str | None = None,
+    cycle_id: str | None = None,
+    is_finalized: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -732,7 +729,7 @@ def list_scorecards(
 @router.get("/scorecards/new", response_class=HTMLResponse)
 def new_scorecard_form(
     request: Request,
-    employee_id: Optional[str] = None,
+    employee_id: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -754,7 +751,7 @@ async def create_scorecard(
 def scorecard_detail(
     request: Request,
     scorecard_id: str,
-    success: Optional[str] = None,
+    success: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -826,7 +823,7 @@ async def finalize_scorecard(
 @router.get("/reports/ratings", response_class=HTMLResponse)
 def report_ratings(
     request: Request,
-    cycle_id: Optional[str] = None,
+    cycle_id: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -837,7 +834,7 @@ def report_ratings(
 @router.get("/reports/by-department", response_class=HTMLResponse)
 def report_by_department(
     request: Request,
-    cycle_id: Optional[str] = None,
+    cycle_id: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -848,9 +845,9 @@ def report_by_department(
 @router.get("/reports/kpi-achievement", response_class=HTMLResponse)
 def report_kpi_achievement(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    department_id: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    department_id: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -863,7 +860,7 @@ def report_kpi_achievement(
 @router.get("/reports/trends", response_class=HTMLResponse)
 def report_trends(
     request: Request,
-    employee_id: Optional[str] = None,
+    employee_id: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):

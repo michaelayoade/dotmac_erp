@@ -11,7 +11,6 @@ Falls back to PPA 2007 statutory defaults when not configured.
 
 import logging
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -29,8 +28,8 @@ PPA_THRESHOLDS: list[tuple[Decimal, str, str]] = [
 
 
 def _get_thresholds(
-    db: Optional[Session] = None,
-    organization_id: Optional[UUID] = None,
+    db: Session | None = None,
+    organization_id: UUID | None = None,
 ) -> list[tuple[Decimal, str, str]]:
     """
     Get procurement thresholds, reading org-level settings when available.
@@ -77,8 +76,8 @@ def _get_thresholds(
 
 def determine_procurement_method(
     estimated_value: Decimal,
-    db: Optional[Session] = None,
-    organization_id: Optional[UUID] = None,
+    db: Session | None = None,
+    organization_id: UUID | None = None,
 ) -> tuple[str, str]:
     """
     Determine procurement method and approving authority.
@@ -107,8 +106,8 @@ def determine_procurement_method(
 def validate_procurement_method(
     method: str,
     value: Decimal,
-    db: Optional[Session] = None,
-    organization_id: Optional[UUID] = None,
+    db: Session | None = None,
+    organization_id: UUID | None = None,
 ) -> None:
     """
     Validate that the chosen procurement method is appropriate for the value.

@@ -5,13 +5,11 @@ Schemas for Gantt chart data used in project visualization.
 """
 
 from datetime import date
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel
 
 from app.models.pm import DependencyType, TaskPriority, TaskStatus
-
 
 # =============================================================================
 # Gantt Chart Schemas
@@ -23,15 +21,15 @@ class GanttTask(BaseModel):
 
     id: str  # task_id as string for JS compatibility
     text: str  # task_name
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    duration: Optional[int] = None  # days
+    start_date: date | None = None
+    end_date: date | None = None
+    duration: int | None = None  # days
     progress: float = 0.0  # 0-1 scale
-    parent: Optional[str] = None  # parent_task_id as string
+    parent: str | None = None  # parent_task_id as string
     type: str = "task"  # "task", "milestone", "project"
     priority: TaskPriority = TaskPriority.MEDIUM
     status: TaskStatus = TaskStatus.OPEN
-    assigned_to: Optional[str] = None
+    assigned_to: str | None = None
     project_id: str
     open: bool = True  # expanded in tree view
 
@@ -51,10 +49,10 @@ class GanttChartData(BaseModel):
 
     project_id: UUID
     project_name: str
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
-    tasks: List[GanttTask]
-    links: List[GanttLink]
+    start_date: date | None = None
+    end_date: date | None = None
+    tasks: list[GanttTask]
+    links: list[GanttLink]
 
 
 # =============================================================================

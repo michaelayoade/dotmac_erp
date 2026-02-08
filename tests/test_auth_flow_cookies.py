@@ -1,11 +1,13 @@
 """Tests for auth_flow cookie settings - domain/samesite/secure and concurrent refresh."""
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from starlette.requests import Request
 
-from app.models.auth import Session as AuthSession, SessionStatus, UserCredential
+from app.models.auth import Session as AuthSession
+from app.models.auth import SessionStatus, UserCredential
 from app.models.domain_settings import DomainSetting, SettingDomain
 from app.services.auth_flow import (
     AuthFlow,
@@ -336,7 +338,7 @@ class TestConcurrentRefreshRotation:
             .filter(AuthSession.person_id == person.id)
             .first()
         )
-        session.expires_at = datetime.now(timezone.utc) - timedelta(hours=1)
+        session.expires_at = datetime.now(UTC) - timedelta(hours=1)
         db_session.commit()
 
         from fastapi import HTTPException

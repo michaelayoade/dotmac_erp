@@ -6,11 +6,12 @@ Manages asset records, categorization, and lifecycle status.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Any, List, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -42,10 +43,10 @@ class AssetCategoryInput:
     residual_value_percent: Decimal = Decimal("0")
     capitalization_threshold: Decimal = Decimal("0")
     revaluation_model_allowed: bool = False
-    revaluation_surplus_account_id: Optional[UUID] = None
-    impairment_loss_account_id: Optional[UUID] = None
-    parent_category_id: Optional[UUID] = None
-    description: Optional[str] = None
+    revaluation_surplus_account_id: UUID | None = None
+    impairment_loss_account_id: UUID | None = None
+    parent_category_id: UUID | None = None
+    description: str | None = None
 
 
 @dataclass
@@ -57,28 +58,28 @@ class AssetInput:
     acquisition_date: date
     acquisition_cost: Decimal
     currency_code: str
-    description: Optional[str] = None
-    location_id: Optional[UUID] = None
-    cost_center_id: Optional[UUID] = None
-    custodian_user_id: Optional[UUID] = None
-    in_service_date: Optional[date] = None
-    source_type: Optional[str] = None
-    source_document_id: Optional[UUID] = None
-    supplier_id: Optional[UUID] = None
-    invoice_reference: Optional[str] = None
-    depreciation_method: Optional[str] = None
-    useful_life_months: Optional[int] = None
-    residual_value: Optional[Decimal] = None
-    serial_number: Optional[str] = None
-    barcode: Optional[str] = None
-    manufacturer: Optional[str] = None
-    model: Optional[str] = None
-    warranty_expiry_date: Optional[date] = None
-    insured_value: Optional[Decimal] = None
-    insurance_policy_number: Optional[str] = None
-    cash_generating_unit_id: Optional[UUID] = None
-    parent_asset_id: Optional[UUID] = None
-    exchange_rate: Optional[Decimal] = None
+    description: str | None = None
+    location_id: UUID | None = None
+    cost_center_id: UUID | None = None
+    custodian_user_id: UUID | None = None
+    in_service_date: date | None = None
+    source_type: str | None = None
+    source_document_id: UUID | None = None
+    supplier_id: UUID | None = None
+    invoice_reference: str | None = None
+    depreciation_method: str | None = None
+    useful_life_months: int | None = None
+    residual_value: Decimal | None = None
+    serial_number: str | None = None
+    barcode: str | None = None
+    manufacturer: str | None = None
+    model: str | None = None
+    warranty_expiry_date: date | None = None
+    insured_value: Decimal | None = None
+    insurance_policy_number: str | None = None
+    cash_generating_unit_id: UUID | None = None
+    parent_asset_id: UUID | None = None
+    exchange_rate: Decimal | None = None
 
 
 class AssetCategoryService(ListResponseMixin):
@@ -155,21 +156,26 @@ class AssetCategoryService(ListResponseMixin):
     def get(
         db: Session,
         category_id: str,
+        organization_id: UUID | None = None,
     ) -> AssetCategory:
         """Get a category by ID."""
         category = db.get(AssetCategory, coerce_uuid(category_id))
         if not category:
+            raise HTTPException(status_code=404, detail="Asset category not found")
+        if organization_id is not None and category.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Asset category not found")
         return category
 
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        is_active: Optional[bool] = None,
+        organization_id: str | None = None,
+        is_active: bool | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[AssetCategory]:
+    ) -> builtins.list[AssetCategory]:
         """List asset categories."""
         query = db.query(AssetCategory)
 
@@ -190,7 +196,7 @@ class AssetCategoryService(ListResponseMixin):
         organization_id: UUID,
         category_id: str,
         input: AssetCategoryInput,
-        is_active: Optional[bool] = None,
+        is_active: bool | None = None,
     ) -> AssetCategory:
         """Update an asset category."""
         org_id = coerce_uuid(organization_id)
@@ -377,8 +383,8 @@ class AssetService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         asset_id: UUID,
-        in_service_date: Optional[date] = None,
-        depreciation_start_date: Optional[date] = None,
+        in_service_date: date | None = None,
+        depreciation_start_date: date | None = None,
     ) -> Asset:
         """
         Activate an asset and set it ready for depreciation.
@@ -518,10 +524,15 @@ class AssetService(ListResponseMixin):
     def get(
         db: Session,
         asset_id: str,
+        organization_id: UUID | None = None,
     ) -> Asset:
         """Get an asset by ID."""
         asset = db.get(Asset, coerce_uuid(asset_id))
         if not asset:
+            raise HTTPException(status_code=404, detail="Asset not found")
+        if organization_id is not None and asset.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Asset not found")
         return asset
 
@@ -530,7 +541,7 @@ class AssetService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         asset_number: str,
-    ) -> Optional[Asset]:
+    ) -> Asset | None:
         """Get an asset by asset number."""
         org_id = coerce_uuid(organization_id)
 
@@ -549,8 +560,8 @@ class AssetService(ListResponseMixin):
     def get_depreciable_assets(
         db: Session,
         organization_id: UUID,
-        as_of_date: Optional[date] = None,
-    ) -> List[Asset]:
+        as_of_date: date | None = None,
+    ) -> builtins.list[Asset]:
         """
         Get all assets eligible for depreciation.
 
@@ -583,15 +594,15 @@ class AssetService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        category_id: Optional[str] = None,
-        status: Optional[AssetStatus] = None,
-        location_id: Optional[str] = None,
-        cost_center_id: Optional[str] = None,
-        search: Optional[str] = None,
+        organization_id: str | None = None,
+        category_id: str | None = None,
+        status: AssetStatus | None = None,
+        location_id: str | None = None,
+        cost_center_id: str | None = None,
+        search: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[Asset]:
+    ) -> builtins.list[Asset]:
         """List assets with optional filters."""
         query = db.query(Asset)
 
@@ -626,7 +637,7 @@ class AssetService(ListResponseMixin):
     def get_asset_summary(
         db: Session,
         organization_id: UUID,
-        category_id: Optional[UUID] = None,
+        category_id: UUID | None = None,
     ) -> dict[str, Any]:
         """
         Get summary statistics for assets.

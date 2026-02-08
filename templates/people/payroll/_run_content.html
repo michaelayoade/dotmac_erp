@@ -1,5 +1,5 @@
 {# Partial template for payroll run detail - used for HTMX swaps #}
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, empty_state %}
 <div id="run-content" class="space-y-6">
     {% if error %}
     <div class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-200"
@@ -403,7 +403,7 @@
         </div>
 
         {% if slips %}
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
@@ -442,6 +442,12 @@
                         </td>
                         <td class="px-4 py-3 text-right">
                             <a href="/people/payroll/slips/{{ slip.slip_id }}" class="text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">View</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No slips found", "There are no slips to display.") }}
                         </td>
                     </tr>
                     {% endfor %}

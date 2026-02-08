@@ -64,7 +64,7 @@ class VehicleIncident(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
         nullable=False,
         comment="Employee who reported the incident",
     )
-    driver_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    driver_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
@@ -82,12 +82,12 @@ class VehicleIncident(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
         Date,
         nullable=False,
     )
-    incident_time: Mapped[Optional[str]] = mapped_column(
+    incident_time: Mapped[str | None] = mapped_column(
         String(10),
         nullable=True,
         comment="Time of incident (HH:MM format)",
     )
-    location: Mapped[Optional[str]] = mapped_column(
+    location: Mapped[str | None] = mapped_column(
         String(300),
         nullable=True,
     )
@@ -102,11 +102,11 @@ class VehicleIncident(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
     )
 
     # Police/legal
-    police_report_number: Mapped[Optional[str]] = mapped_column(
+    police_report_number: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
     )
-    police_report_date: Mapped[Optional[date]] = mapped_column(
+    police_report_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -115,63 +115,63 @@ class VehicleIncident(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
         nullable=False,
         default=False,
     )
-    third_party_details: Mapped[Optional[str]] = mapped_column(
+    third_party_details: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Details of third party involved",
     )
 
     # Insurance
-    insurance_claim_number: Mapped[Optional[str]] = mapped_column(
+    insurance_claim_number: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
     )
-    insurance_claim_date: Mapped[Optional[date]] = mapped_column(
+    insurance_claim_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    insurance_claim_status: Mapped[Optional[str]] = mapped_column(
+    insurance_claim_status: Mapped[str | None] = mapped_column(
         String(30),
         nullable=True,
         comment="PENDING, APPROVED, REJECTED, SETTLED",
     )
-    insurance_payout: Mapped[Optional[Decimal]] = mapped_column(
+    insurance_payout: Mapped[Decimal | None] = mapped_column(
         Numeric(18, 2),
         nullable=True,
     )
 
     # Costs
-    estimated_repair_cost: Mapped[Optional[Decimal]] = mapped_column(
+    estimated_repair_cost: Mapped[Decimal | None] = mapped_column(
         Numeric(18, 2),
         nullable=True,
     )
-    actual_repair_cost: Mapped[Optional[Decimal]] = mapped_column(
+    actual_repair_cost: Mapped[Decimal | None] = mapped_column(
         Numeric(18, 2),
         nullable=True,
     )
-    other_costs: Mapped[Optional[Decimal]] = mapped_column(
+    other_costs: Mapped[Decimal | None] = mapped_column(
         Numeric(18, 2),
         nullable=True,
         comment="Medical, towing, legal fees, etc.",
     )
-    expense_claim_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    expense_claim_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("expense.expense_claim.claim_id"),
         nullable=True,
     )
 
     # Resolution
-    resolution_date: Mapped[Optional[date]] = mapped_column(
+    resolution_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    resolution_notes: Mapped[Optional[str]] = mapped_column(
+    resolution_notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Notes
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )

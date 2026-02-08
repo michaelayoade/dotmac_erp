@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import logging
 from datetime import date
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -53,7 +52,7 @@ class ARPostingAdapter:
         invoice_id: UUID,
         posting_date: date,
         posted_by_user_id: UUID,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> ARPostingResult:
         """
         Post an AR invoice to the general ledger.
@@ -89,7 +88,7 @@ class ARPostingAdapter:
         payment_id: UUID,
         posting_date: date,
         posted_by_user_id: UUID,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> ARPostingResult:
         """
         Post a customer payment to the general ledger.

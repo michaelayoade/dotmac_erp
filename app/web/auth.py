@@ -6,10 +6,11 @@ Provides login, admin login, and logout pages for the web interface.
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
+from sqlalchemy.orm import Session
 
+from app.db import get_db
 from app.services.auth_web import auth_web_service
-from app.web.deps import optional_web_auth, WebAuthContext
-
+from app.web.deps import WebAuthContext, optional_web_auth
 
 router = APIRouter(tags=["web-auth"])
 
@@ -18,14 +19,17 @@ router = APIRouter(tags=["web-auth"])
 def login_page(
     request: Request,
     next: str = Query(default="/"),
+    org: str = Query(default=""),
     auth: WebAuthContext = Depends(optional_web_auth),
+    db: Session = Depends(get_db),
 ):
     """
     Display the login page.
 
     If user is already authenticated, redirect to the next URL.
+    Supports ?org=<slug> for org-specific branding.
     """
-    return auth_web_service.login_response(request, next, auth)
+    return auth_web_service.login_response(request, next, auth, db=db, org_slug=org)
 
 
 @router.get("/admin/login", response_class=HTMLResponse)
@@ -33,6 +37,7 @@ def admin_login_page(
     request: Request,
     next: str = Query(default="/admin"),
     auth: WebAuthContext = Depends(optional_web_auth),
+    db: Session = Depends(get_db),
 ):
     """
     Display the admin login page.
@@ -40,7 +45,7 @@ def admin_login_page(
     If user is already authenticated with admin role, redirect to admin dashboard.
     If authenticated without admin role, show error.
     """
-    return auth_web_service.admin_login_response(request, next, auth)
+    return auth_web_service.admin_login_response(request, next, auth, db=db)
 
 
 @router.get("/logout", response_class=HTMLResponse)

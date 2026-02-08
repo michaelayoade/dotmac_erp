@@ -6,11 +6,6 @@ Provides view-focused data and operations for AP goods receipt web routes.
 
 from __future__ import annotations
 
-import json
-import logging
-from datetime import date, datetime
-from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import Request, UploadFile
@@ -25,11 +20,7 @@ from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.common.attachment import AttachmentCategory
 from app.services.common import coerce_uuid
-from app.services.finance.ap.goods_receipt import (
-    GoodsReceiptInput,
-    GRLineInput,
-    goods_receipt_service,
-)
+from app.services.finance.ap.goods_receipt import goods_receipt_service
 from app.services.finance.ap.supplier import supplier_service
 from app.services.finance.ap.web.base import (
     format_currency,
@@ -45,8 +36,6 @@ from app.services.finance.common.attachment import AttachmentInput, attachment_s
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
-logger = logging.getLogger(__name__)
-
 
 class GoodsReceiptWebService:
     """Web service methods for AP goods receipts."""
@@ -59,12 +48,12 @@ class GoodsReceiptWebService:
     def list_goods_receipts_context(
         db: Session,
         organization_id: str,
-        search: Optional[str],
-        supplier_id: Optional[str],
-        po_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        supplier_id: str | None,
+        po_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         limit: int = 50,
     ) -> dict:
@@ -337,7 +326,7 @@ class GoodsReceiptWebService:
     def goods_receipt_form_context(
         db: Session,
         organization_id: str,
-        po_id: Optional[str] = None,
+        po_id: str | None = None,
     ) -> dict:
         """Build context for goods receipt form (create)."""
         logger.debug(
@@ -456,12 +445,12 @@ class GoodsReceiptWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        search: Optional[str],
-        supplier_id: Optional[str],
-        po_id: Optional[str],
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        search: str | None,
+        supplier_id: str | None,
+        po_id: str | None,
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
         page: int,
         db: Session,
     ) -> HTMLResponse:
@@ -488,7 +477,7 @@ class GoodsReceiptWebService:
         self,
         request: Request,
         auth: WebAuthContext,
-        po_id: Optional[str],
+        po_id: str | None,
         db: Session,
     ) -> HTMLResponse:
         """Render new goods receipt form."""
@@ -540,40 +529,11 @@ class GoodsReceiptWebService:
             user_id = auth.person_id
             assert org_id is not None
             assert user_id is not None
-            lines_data = data.get("lines", [])
-            if isinstance(lines_data, str):
-                lines_data = json.loads(lines_data)
-
-            lines = []
-            for line in lines_data:
-                qty = Decimal(str(line.get("quantity_to_receive", 0)))
-                if qty > 0:
-                    lines.append(
-                        GRLineInput(
-                            po_line_id=UUID(line["line_id"]),
-                            quantity_received=qty,
-                            lot_number=line.get("lot_number"),
-                        )
-                    )
-
-            if not lines:
-                raise ValueError("No items to receive")
-
-            receipt_date_str = data.get("receipt_date")
-            receipt_date = (
-                datetime.strptime(receipt_date_str, "%Y-%m-%d").date()
-                if receipt_date_str
-                else date.today()
-            )
-
-            input_data = GoodsReceiptInput(
-                po_id=UUID(data["po_id"]),
-                receipt_date=receipt_date,
-                warehouse_id=UUID(data["warehouse_id"])
-                if data.get("warehouse_id")
-                else None,
-                notes=data.get("notes"),
-                lines=lines,
+            payload = dict(data)
+            input_data = goods_receipt_service.build_input_from_payload(
+                db=db,
+                organization_id=org_id,
+                payload=payload,
             )
 
             receipt = goods_receipt_service.create_receipt(
@@ -702,7 +662,7 @@ class GoodsReceiptWebService:
         self,
         receipt_id: str,
         file: UploadFile,
-        description: Optional[str],
+        description: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:

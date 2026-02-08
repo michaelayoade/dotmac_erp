@@ -9,13 +9,11 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.finance.gl.reversal import (
-    ReversalService,
-    ReversalResult,
-)
-
-
 from app.models.finance.gl.journal_entry import JournalStatus, JournalType
+from app.services.finance.gl.reversal import (
+    ReversalResult,
+    ReversalService,
+)
 
 MockJournalStatus = JournalStatus
 MockJournalType = JournalType
@@ -217,9 +215,9 @@ class TestCreateReversal:
         mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = journal_lines
 
         period = MockFiscalPeriod()
-        period_result = MockPeriodGuardResult(is_allowed=True)
+        MockPeriodGuardResult(is_allowed=True)
 
-        with patch("app.services.finance.gl.reversal.JournalEntry") as mock_je:
+        with patch("app.services.finance.gl.reversal.JournalEntry"):
             with patch("app.services.finance.gl.reversal.JournalEntryLine"):
                 with patch(
                     "app.services.finance.gl.reversal.JournalStatus", MockJournalStatus
@@ -292,19 +290,19 @@ class TestCreateReversal:
         )
         mock_db.get.return_value = draft_journal
 
-        with patch("app.services.finance.gl.reversal.JournalEntry"):
-            with patch(
-                "app.services.finance.gl.reversal.JournalStatus", MockJournalStatus
-            ):
-                with pytest.raises(HTTPException) as exc:
-                    ReversalService.create_reversal(
-                        mock_db,
-                        org_id,
-                        draft_journal.journal_entry_id,
-                        date.today(),
-                        user_id,
-                        "Test",
-                    )
+        with (
+            patch("app.services.finance.gl.reversal.JournalEntry"),
+            patch("app.services.finance.gl.reversal.JournalStatus", MockJournalStatus),
+            pytest.raises(HTTPException) as exc,
+        ):
+            ReversalService.create_reversal(
+                mock_db,
+                org_id,
+                draft_journal.journal_entry_id,
+                date.today(),
+                user_id,
+                "Test",
+            )
 
         assert exc.value.status_code == 400
         assert "status" in exc.value.detail.lower()
@@ -320,19 +318,19 @@ class TestCreateReversal:
         )
         mock_db.get.return_value = already_reversed
 
-        with patch("app.services.finance.gl.reversal.JournalEntry"):
-            with patch(
-                "app.services.finance.gl.reversal.JournalStatus", MockJournalStatus
-            ):
-                with pytest.raises(HTTPException) as exc:
-                    ReversalService.create_reversal(
-                        mock_db,
-                        org_id,
-                        already_reversed.journal_entry_id,
-                        date.today(),
-                        user_id,
-                        "Test",
-                    )
+        with (
+            patch("app.services.finance.gl.reversal.JournalEntry"),
+            patch("app.services.finance.gl.reversal.JournalStatus", MockJournalStatus),
+            pytest.raises(HTTPException) as exc,
+        ):
+            ReversalService.create_reversal(
+                mock_db,
+                org_id,
+                already_reversed.journal_entry_id,
+                date.today(),
+                user_id,
+                "Test",
+            )
 
         assert exc.value.status_code == 400
         assert "already" in exc.value.detail.lower()
@@ -373,13 +371,13 @@ class TestCanReverse:
         """Test that posted journal can be reversed."""
         mock_db.get.return_value = posted_journal
 
-        with patch("app.services.finance.gl.reversal.JournalEntry"):
-            with patch(
-                "app.services.finance.gl.reversal.JournalStatus", MockJournalStatus
-            ):
-                can, reason = ReversalService.can_reverse(
-                    mock_db, org_id, posted_journal.journal_entry_id
-                )
+        with (
+            patch("app.services.finance.gl.reversal.JournalEntry"),
+            patch("app.services.finance.gl.reversal.JournalStatus", MockJournalStatus),
+        ):
+            can, reason = ReversalService.can_reverse(
+                mock_db, org_id, posted_journal.journal_entry_id
+            )
 
         assert can is True
         assert "can be reversed" in reason.lower()
@@ -399,13 +397,13 @@ class TestCanReverse:
         draft = MockJournalEntry(organization_id=org_id, status=MockJournalStatus.DRAFT)
         mock_db.get.return_value = draft
 
-        with patch("app.services.finance.gl.reversal.JournalEntry"):
-            with patch(
-                "app.services.finance.gl.reversal.JournalStatus", MockJournalStatus
-            ):
-                can, reason = ReversalService.can_reverse(
-                    mock_db, org_id, draft.journal_entry_id
-                )
+        with (
+            patch("app.services.finance.gl.reversal.JournalEntry"),
+            patch("app.services.finance.gl.reversal.JournalStatus", MockJournalStatus),
+        ):
+            can, reason = ReversalService.can_reverse(
+                mock_db, org_id, draft.journal_entry_id
+            )
 
         assert can is False
         assert "status" in reason.lower()
@@ -419,13 +417,13 @@ class TestCanReverse:
         )
         mock_db.get.return_value = already_reversed
 
-        with patch("app.services.finance.gl.reversal.JournalEntry"):
-            with patch(
-                "app.services.finance.gl.reversal.JournalStatus", MockJournalStatus
-            ):
-                can, reason = ReversalService.can_reverse(
-                    mock_db, org_id, already_reversed.journal_entry_id
-                )
+        with (
+            patch("app.services.finance.gl.reversal.JournalEntry"),
+            patch("app.services.finance.gl.reversal.JournalStatus", MockJournalStatus),
+        ):
+            can, reason = ReversalService.can_reverse(
+                mock_db, org_id, already_reversed.journal_entry_id
+            )
 
         assert can is False
         assert "already" in reason.lower()

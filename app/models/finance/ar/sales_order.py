@@ -8,7 +8,6 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional, List
 
 from sqlalchemy import (
     Boolean,
@@ -90,10 +89,8 @@ class SalesOrder(Base):
 
     # SO identification
     so_number: Mapped[str] = mapped_column(String(30), nullable=False)
-    customer_po_number: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True
-    )
-    reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    customer_po_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Customer
     customer_id: Mapped[uuid.UUID] = mapped_column(
@@ -103,7 +100,7 @@ class SalesOrder(Base):
     )
 
     # Source (if converted from quote)
-    quote_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    quote_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("ar.quote.quote_id"),
         nullable=True,
@@ -111,19 +108,17 @@ class SalesOrder(Base):
 
     # Dates
     order_date: Mapped[date] = mapped_column(Date, nullable=False)
-    requested_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    promised_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    requested_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    promised_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Shipping info
-    ship_to_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    ship_to_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    ship_to_city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    ship_to_state: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    ship_to_postal_code: Mapped[Optional[str]] = mapped_column(
-        String(20), nullable=True
-    )
-    ship_to_country: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    shipping_method: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    ship_to_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    ship_to_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ship_to_city: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    ship_to_state: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    ship_to_postal_code: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    ship_to_country: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    shipping_method: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Amounts
     subtotal: Mapped[Decimal] = mapped_column(
@@ -172,7 +167,7 @@ class SalesOrder(Base):
     )
 
     # Terms
-    payment_terms_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    payment_terms_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("ar.payment_terms.payment_terms_id"),
         nullable=True,
@@ -192,32 +187,32 @@ class SalesOrder(Base):
     )
 
     # Notes
-    internal_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    customer_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    internal_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    customer_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Workflow tracking
-    submitted_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    submitted_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    submitted_at: Mapped[Optional[datetime]] = mapped_column(
+    submitted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    approved_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    confirmed_at: Mapped[Optional[datetime]] = mapped_column(
+    confirmed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    cancelled_at: Mapped[Optional[datetime]] = mapped_column(
+    cancelled_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    cancellation_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    cancellation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Audit
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -226,10 +221,10 @@ class SalesOrder(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -241,13 +236,13 @@ class SalesOrder(Base):
     payment_terms = relationship(
         "PaymentTerms", foreign_keys=[payment_terms_id], lazy="joined"
     )
-    lines: Mapped[List["SalesOrderLine"]] = relationship(
+    lines: Mapped[list["SalesOrderLine"]] = relationship(
         "SalesOrderLine",
         back_populates="sales_order",
         cascade="all, delete-orphan",
         order_by="SalesOrderLine.line_number",
     )
-    shipments: Mapped[List["Shipment"]] = relationship(
+    shipments: Mapped[list["Shipment"]] = relationship(
         "Shipment",
         back_populates="sales_order",
         cascade="all, delete-orphan",
@@ -306,12 +301,12 @@ class SalesOrderLine(Base):
     line_number: Mapped[int] = mapped_column(Integer, nullable=False)
 
     # Item details
-    item_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    item_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("inv.item.item_id"),
         nullable=True,
     )
-    item_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    item_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
     description: Mapped[str] = mapped_column(String(500), nullable=False)
 
     # Quantity tracking
@@ -334,7 +329,7 @@ class SalesOrderLine(Base):
         nullable=False,
         default=Decimal("0"),
     )
-    unit_of_measure: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    unit_of_measure: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Pricing
     unit_price: Mapped[Decimal] = mapped_column(
@@ -355,7 +350,7 @@ class SalesOrderLine(Base):
     )
 
     # Tax
-    tax_code_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    tax_code_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("tax.tax_code.tax_code_id"),
         nullable=True,
@@ -380,27 +375,27 @@ class SalesOrderLine(Base):
     )
 
     # Revenue account
-    revenue_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    revenue_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,
     )
 
     # Dimensions
-    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.project.project_id"),
         nullable=True,
     )
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.cost_center.cost_center_id"),
         nullable=True,
     )
 
     # Dates
-    requested_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    promised_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    requested_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    promised_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Relationships
     sales_order = relationship("SalesOrder", back_populates="lines")
@@ -459,22 +454,22 @@ class Shipment(Base):
 
     # Shipment details
     shipment_date: Mapped[date] = mapped_column(Date, nullable=False)
-    carrier: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    tracking_number: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    shipping_method: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    carrier: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    tracking_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    shipping_method: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Shipping address (snapshot from SO)
-    ship_to_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
-    ship_to_address: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    ship_to_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    ship_to_address: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Status
     is_delivered: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    delivered_at: Mapped[Optional[datetime]] = mapped_column(
+    delivered_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
     # Notes
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Audit
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
@@ -486,7 +481,7 @@ class Shipment(Base):
 
     # Relationships
     sales_order = relationship("SalesOrder", back_populates="shipments")
-    lines: Mapped[List["ShipmentLine"]] = relationship(
+    lines: Mapped[list["ShipmentLine"]] = relationship(
         "ShipmentLine",
         back_populates="shipment",
         cascade="all, delete-orphan",
@@ -530,8 +525,8 @@ class ShipmentLine(Base):
     )
 
     # Lot/serial tracking (optional)
-    lot_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    serial_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    lot_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    serial_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Relationships
     shipment = relationship("Shipment", back_populates="lines")

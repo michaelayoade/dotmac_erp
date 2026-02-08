@@ -11,8 +11,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.finance.ar.quote import QuoteService
 from app.models.finance.ar.quote import QuoteStatus
+from app.services.finance.ar.quote import QuoteService
 
 
 class MockQuote:
@@ -159,7 +159,7 @@ class TestCreate:
         mock_quote.lines = []
         mock_quote_class.return_value = mock_quote
 
-        result = QuoteService.create(
+        QuoteService.create(
             db=mock_db,
             organization_id=org_id,
             customer_id=customer_id,
@@ -204,7 +204,7 @@ class TestCreate:
             }
         ]
 
-        result = QuoteService.create(
+        QuoteService.create(
             db=mock_db,
             organization_id=org_id,
             customer_id=customer_id,
@@ -641,7 +641,7 @@ class TestConvertToInvoice:
         mock_numbering.generate_next_number.return_value = "INV-001"
         mock_numbering_class.return_value = mock_numbering
 
-        result = QuoteService.convert_to_invoice(
+        QuoteService.convert_to_invoice(
             db=mock_db,
             organization_id=str(org_id),
             quote_id=str(quote_id),
@@ -728,7 +728,7 @@ class TestConvertToSalesOrder:
         mock_numbering.generate_next_number.return_value = "SO-001"
         mock_numbering_class.return_value = mock_numbering
 
-        result = QuoteService.convert_to_sales_order(
+        QuoteService.convert_to_sales_order(
             db=mock_db,
             organization_id=str(org_id),
             quote_id=str(quote_id),

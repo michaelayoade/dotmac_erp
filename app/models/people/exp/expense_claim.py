@@ -83,13 +83,13 @@ class ExpenseCategory(Base, AuditMixin, ERPNextSyncMixin):
         String(200),
         nullable=False,
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # GL Integration
-    expense_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    expense_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,
@@ -97,7 +97,7 @@ class ExpenseCategory(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # Limits
-    max_amount_per_claim: Mapped[Optional[Decimal]] = mapped_column(
+    max_amount_per_claim: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
     )
@@ -115,7 +115,7 @@ class ExpenseCategory(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )
@@ -176,11 +176,11 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         Date,
         nullable=False,
     )
-    expense_period_start: Mapped[Optional[date]] = mapped_column(
+    expense_period_start: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    expense_period_end: Mapped[Optional[date]] = mapped_column(
+    expense_period_end: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
@@ -190,19 +190,19 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         String(500),
         nullable=False,
     )
-    project_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.project.project_id"),
         nullable=True,
         comment="If expense is project-related",
     )
-    ticket_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    ticket_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("support.ticket.ticket_id"),
         nullable=True,
         comment="Related support ticket from ERPNext",
     )
-    task_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    task_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("pm.task.task_id"),
         nullable=True,
@@ -215,7 +215,7 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         nullable=False,
         default=Decimal("0.00"),
     )
-    total_approved_amount: Mapped[Optional[Decimal]] = mapped_column(
+    total_approved_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
     )
@@ -230,21 +230,21 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         default=Decimal("0.00"),
         comment="Amount adjusted against cash advance",
     )
-    cash_advance_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cash_advance_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("expense.cash_advance.advance_id"),
         nullable=True,
     )
 
     # Net payable
-    net_payable_amount: Mapped[Optional[Decimal]] = mapped_column(
+    net_payable_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
         comment="approved_amount - advance_adjusted",
     )
 
     # Cost allocation
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.cost_center.cost_center_id"),
         nullable=True,
@@ -257,58 +257,64 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
     )
 
     # Approval
-    approver_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approver_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
     )
-    approved_on: Mapped[Optional[date]] = mapped_column(
+    requested_approver_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("hr.employee.employee_id"),
+        nullable=True,
+        comment="Requested approver selected by submitter",
+    )
+    approved_on: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    rejection_reason: Mapped[Optional[str]] = mapped_column(
+    rejection_reason: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # AP Integration
-    supplier_invoice_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    supplier_invoice_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("ap.supplier_invoice.invoice_id"),
         nullable=True,
         comment="Created when claim is approved",
     )
-    recipient_bank_code: Mapped[Optional[str]] = mapped_column(
+    recipient_bank_code: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="Paystack recipient bank code",
     )
-    recipient_bank_name: Mapped[Optional[str]] = mapped_column(
+    recipient_bank_name: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Recipient bank name",
     )
-    recipient_name: Mapped[Optional[str]] = mapped_column(
+    recipient_name: Mapped[str | None] = mapped_column(
         String(150),
         nullable=True,
         comment="Beneficiary name for reimbursement",
     )
-    recipient_account_number: Mapped[Optional[str]] = mapped_column(
+    recipient_account_number: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="Paystack recipient account number",
     )
-    payment_reference: Mapped[Optional[str]] = mapped_column(
+    payment_reference: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
-    paid_on: Mapped[Optional[date]] = mapped_column(
+    paid_on: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
 
     # Notes
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -318,7 +324,7 @@ class ExpenseClaim(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )
@@ -416,36 +422,36 @@ class ExpenseClaimItem(Base):
         Numeric(12, 2),
         nullable=False,
     )
-    approved_amount: Mapped[Optional[Decimal]] = mapped_column(
+    approved_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(12, 2),
         nullable=True,
     )
 
     # GL Override
-    expense_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    expense_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("gl.account.account_id"),
         nullable=True,
         comment="Override category default",
     )
-    cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.cost_center.cost_center_id"),
         nullable=True,
     )
 
     # Receipt
-    receipt_url: Mapped[Optional[str]] = mapped_column(
+    receipt_url: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
     )
-    receipt_number: Mapped[Optional[str]] = mapped_column(
+    receipt_number: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
     )
 
     # Vendor
-    vendor_name: Mapped[Optional[str]] = mapped_column(
+    vendor_name: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
     )
@@ -454,21 +460,21 @@ class ExpenseClaimItem(Base):
     is_travel_expense: Mapped[bool] = mapped_column(
         default=False,
     )
-    travel_from: Mapped[Optional[str]] = mapped_column(
+    travel_from: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
     )
-    travel_to: Mapped[Optional[str]] = mapped_column(
+    travel_to: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
     )
-    distance_km: Mapped[Optional[Decimal]] = mapped_column(
+    distance_km: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 2),
         nullable=True,
     )
 
     # Notes
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )

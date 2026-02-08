@@ -1,5 +1,6 @@
 {% extends "inventory/base_inventory.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}Material Request {{ material_request.request_number }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -49,31 +50,9 @@
             <div>
                 <div class="flex items-center gap-3">
                     <h2 class="text-xl font-bold text-slate-900 dark:text-white font-mono">{{ material_request.request_number }}</h2>
-                    {% if material_request.status == 'DRAFT' %}
-                    <span class="badge badge-neutral">Draft</span>
-                    {% elif material_request.status == 'SUBMITTED' %}
-                    <span class="badge badge-warning">Submitted</span>
-                    {% elif material_request.status == 'PARTIALLY_ORDERED' %}
-                    <span class="badge badge-info">Partially Ordered</span>
-                    {% elif material_request.status == 'ORDERED' %}
-                    <span class="badge badge-primary">Ordered</span>
-                    {% elif material_request.status == 'ISSUED' %}
-                    <span class="badge badge-success">Issued</span>
-                    {% elif material_request.status == 'TRANSFERRED' %}
-                    <span class="badge badge-teal">Transferred</span>
-                    {% elif material_request.status == 'CANCELLED' %}
-                    <span class="badge badge-neutral">Cancelled</span>
-                    {% endif %}
+                    {{ status_badge(material_request.status) }}
 
-                    {% if material_request.request_type == 'PURCHASE' %}
-                    <span class="badge badge-info">Purchase</span>
-                    {% elif material_request.request_type == 'TRANSFER' %}
-                    <span class="badge badge-warning">Transfer</span>
-                    {% elif material_request.request_type == 'ISSUE' %}
-                    <span class="badge badge-success">Issue</span>
-                    {% elif material_request.request_type == 'MANUFACTURE' %}
-                    <span class="badge badge-violet">Manufacture</span>
-                    {% endif %}
+                    {{ status_badge(material_request.request_type) }}
                 </div>
                 <p class="text-slate-500 dark:text-slate-400 mt-1">Schedule Date: {{ material_request.schedule_date or 'Not set' }}</p>
             </div>
@@ -257,6 +236,7 @@
         <div class="flex flex-wrap gap-3">
 {% if material_request.can_submit and auth is defined and auth.has_any_permission(['inv:material_requests:submit', 'inventory:material_requests:submit']) %}
             <form method="post" action="/inventory/material-requests/{{ material_request.request_id }}/submit" class="inline">
+                {{ request.state.csrf_form | safe }}
                 <button type="submit" class="btn btn-warning">
                     <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
@@ -269,6 +249,7 @@
 {% if material_request.can_approve and auth is defined and auth.has_any_permission(['inv:material_requests:approve', 'inventory:material_requests:approve']) %}
             <form method="post" action="/inventory/material-requests/{{ material_request.request_id }}/approve" class="inline"
                   onsubmit="return confirm('Approve this request? {% if material_request.request_type in ['ISSUE', 'TRANSFER', 'MANUFACTURE'] %}Stock will be deducted from the warehouse immediately.{% else %}This will mark the request as ordered.{% endif %}')">
+                {{ request.state.csrf_form | safe }}
                 <button type="submit" class="btn btn-success">
                     <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
@@ -280,6 +261,7 @@
 
 {% if material_request.can_cancel and auth is defined and auth.has_any_permission(['inv:material_requests:submit', 'inventory:material_requests:submit']) %}
             <form method="post" action="/inventory/material-requests/{{ material_request.request_id }}/cancel" class="inline">
+                {{ request.state.csrf_form | safe }}
                 <div class="flex items-center gap-3">
                     <input type="text" name="cancel_reason" required
                            placeholder="Cancellation reason"
@@ -296,6 +278,7 @@
 
 {% if material_request.can_delete and auth is defined and auth.has_any_permission(['inv:material_requests:delete', 'inventory:material_requests:delete']) %}
             <form method="post" action="/inventory/material-requests/{{ material_request.request_id }}/delete" class="inline" onsubmit="return confirm('Delete this material request? This cannot be undone.')">
+                {{ request.state.csrf_form | safe }}
                 <button type="submit" class="btn btn-secondary text-rose-600 hover:text-rose-700">
                     <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>

@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, Any, List, Optional, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 from uuid import UUID
 
 from sqlalchemy import case, func, or_, select
@@ -124,7 +124,7 @@ class TrainingService:
     def __init__(
         self,
         db: Session,
-        ctx: Optional["WebAuthContext"] = None,
+        ctx: WebAuthContext | None = None,
     ) -> None:
         self.db = db
         self.ctx = ctx
@@ -137,11 +137,11 @@ class TrainingService:
         self,
         org_id: UUID,
         *,
-        status: Optional[TrainingProgramStatus] = None,
-        category: Optional[str] = None,
-        is_active: Optional[bool] = None,
-        search: Optional[str] = None,
-        pagination: Optional[PaginationParams] = None,
+        status: TrainingProgramStatus | None = None,
+        category: str | None = None,
+        is_active: bool | None = None,
+        search: str | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[TrainingProgram]:
         """List training programs."""
         query = select(TrainingProgram).where(TrainingProgram.organization_id == org_id)
@@ -207,18 +207,18 @@ class TrainingService:
         program_code: str,
         program_name: str,
         training_type: str = "INTERNAL",
-        category: Optional[str] = None,
-        duration_hours: Optional[int] = None,
-        duration_days: Optional[int] = None,
-        department_id: Optional[UUID] = None,
-        cost_per_attendee: Optional[Decimal] = None,
+        category: str | None = None,
+        duration_hours: int | None = None,
+        duration_days: int | None = None,
+        department_id: UUID | None = None,
+        cost_per_attendee: Decimal | None = None,
         currency_code: str = "NGN",
-        objectives: Optional[str] = None,
-        prerequisites: Optional[str] = None,
-        syllabus: Optional[str] = None,
-        provider_name: Optional[str] = None,
-        provider_contact: Optional[str] = None,
-        description: Optional[str] = None,
+        objectives: str | None = None,
+        prerequisites: str | None = None,
+        syllabus: str | None = None,
+        provider_name: str | None = None,
+        provider_contact: str | None = None,
+        description: str | None = None,
         status: TrainingProgramStatus = TrainingProgramStatus.DRAFT,
     ) -> TrainingProgram:
         """Create a new training program."""
@@ -290,13 +290,13 @@ class TrainingService:
         self,
         org_id: UUID,
         *,
-        program_id: Optional[UUID] = None,
-        status: Optional[TrainingEventStatus] = None,
-        trainer_id: Optional[UUID] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
-        search: Optional[str] = None,
-        pagination: Optional[PaginationParams] = None,
+        program_id: UUID | None = None,
+        status: TrainingEventStatus | None = None,
+        trainer_id: UUID | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        search: str | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[TrainingEvent]:
         """List training events."""
         query = select(TrainingEvent).where(TrainingEvent.organization_id == org_id)
@@ -361,18 +361,18 @@ class TrainingService:
         event_name: str,
         start_date: date,
         end_date: date,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
         event_type: str = "IN_PERSON",
-        location: Optional[str] = None,
-        meeting_link: Optional[str] = None,
-        trainer_name: Optional[str] = None,
-        trainer_email: Optional[str] = None,
-        trainer_employee_id: Optional[UUID] = None,
-        max_attendees: Optional[int] = None,
-        total_cost: Optional[Decimal] = None,
+        location: str | None = None,
+        meeting_link: str | None = None,
+        trainer_name: str | None = None,
+        trainer_email: str | None = None,
+        trainer_employee_id: UUID | None = None,
+        max_attendees: int | None = None,
+        total_cost: Decimal | None = None,
         currency_code: str = "NGN",
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> TrainingEvent:
         """Create a new training event."""
         # Verify program exists
@@ -443,7 +443,7 @@ class TrainingService:
         org_id: UUID,
         event_id: UUID,
         *,
-        feedback_notes: Optional[str] = None,
+        feedback_notes: str | None = None,
     ) -> TrainingEvent:
         """Complete a training event."""
         event = self.get_event(org_id, event_id)
@@ -475,7 +475,7 @@ class TrainingService:
         org_id: UUID,
         event_id: UUID,
         *,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> TrainingEvent:
         """Cancel a training event."""
         event = self.get_event(org_id, event_id)
@@ -500,10 +500,10 @@ class TrainingService:
         self,
         org_id: UUID,
         *,
-        event_id: Optional[UUID] = None,
-        employee_id: Optional[UUID] = None,
-        status: Optional[AttendeeStatus] = None,
-        pagination: Optional[PaginationParams] = None,
+        event_id: UUID | None = None,
+        employee_id: UUID | None = None,
+        status: AttendeeStatus | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[TrainingAttendee]:
         """List training attendees."""
         query = select(TrainingAttendee).where(
@@ -564,7 +564,7 @@ class TrainingService:
         event_id: UUID,
         employee_id: UUID,
         *,
-        notes: Optional[str] = None,
+        notes: str | None = None,
     ) -> TrainingAttendee:
         """Invite an employee to a training event."""
         # Verify event exists
@@ -613,8 +613,8 @@ class TrainingService:
         self,
         org_id: UUID,
         event_id: UUID,
-        employee_ids: List[UUID],
-    ) -> List[TrainingAttendee]:
+        employee_ids: list[UUID],
+    ) -> list[TrainingAttendee]:
         """Bulk invite employees to a training event."""
         attendees = []
 
@@ -658,7 +658,7 @@ class TrainingService:
         attendee_id: UUID,
         *,
         rating: int,
-        feedback: Optional[str] = None,
+        feedback: str | None = None,
     ) -> TrainingAttendee:
         """Submit attendee feedback."""
         attendee = self.get_attendee(org_id, attendee_id)
@@ -690,7 +690,7 @@ class TrainingService:
     def get_event_summary(
         self,
         org_id: UUID,
-        program_id: Optional[UUID] = None,
+        program_id: UUID | None = None,
     ) -> dict:
         """Get training event summary by status."""
         query = select(TrainingEvent.status, func.count(TrainingEvent.event_id)).where(
@@ -805,7 +805,7 @@ class TrainingService:
             .all()
         )
 
-        total_trainings = len(attendances)
+        len(attendances)
         attended = [a for a in attendances if a.status == AttendeeStatus.ATTENDED]
         total_attended = len(attended)
 

@@ -11,8 +11,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.admin.sync_web import sync_web_service
-from app.web.deps import get_db, optional_web_auth, WebAuthContext
-
+from app.web.deps import WebAuthContext, get_db, optional_web_auth
 
 router = APIRouter(prefix="/admin/sync", tags=["admin-sync-web"])
 

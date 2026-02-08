@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
-from typing import TYPE_CHECKING, List, Optional, TypedDict
+from typing import TYPE_CHECKING, TypedDict
 from uuid import UUID
 
 from sqlalchemy import and_, false, func, or_, select
@@ -138,7 +138,7 @@ class PerformanceService:
     def __init__(
         self,
         db: Session,
-        ctx: Optional["WebAuthContext"] = None,
+        ctx: WebAuthContext | None = None,
     ) -> None:
         self.db = db
         self.ctx = ctx
@@ -151,10 +151,10 @@ class PerformanceService:
         self,
         org_id: UUID,
         *,
-        search: Optional[str] = None,
-        status: Optional[AppraisalCycleStatus] = None,
-        year: Optional[int] = None,
-        pagination: Optional[PaginationParams] = None,
+        search: str | None = None,
+        status: AppraisalCycleStatus | None = None,
+        year: int | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[AppraisalCycle]:
         """List appraisal cycles."""
         query = select(AppraisalCycle).where(AppraisalCycle.organization_id == org_id)
@@ -204,10 +204,10 @@ class PerformanceService:
         self,
         org_id: UUID,
         *,
-        search: Optional[str] = None,
-        status: Optional[AppraisalCycleStatus] = None,
-        year: Optional[int] = None,
-        pagination: Optional[PaginationParams] = None,
+        search: str | None = None,
+        status: AppraisalCycleStatus | None = None,
+        year: int | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[AppraisalCycle]:
         """Compatibility wrapper for appraisal cycles listing."""
         return self.list_cycles(
@@ -240,12 +240,12 @@ class PerformanceService:
         review_period_end: date,
         start_date: date,
         end_date: date,
-        self_assessment_deadline: Optional[date] = None,
-        manager_review_deadline: Optional[date] = None,
-        calibration_deadline: Optional[date] = None,
+        self_assessment_deadline: date | None = None,
+        manager_review_deadline: date | None = None,
+        calibration_deadline: date | None = None,
         include_probation_employees: bool = False,
         min_tenure_months: int = 3,
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> AppraisalCycle:
         """Create a new appraisal cycle."""
         cycle = AppraisalCycle(
@@ -313,12 +313,12 @@ class PerformanceService:
         self,
         org_id: UUID,
         *,
-        department_id: Optional[UUID] = None,
-        designation_id: Optional[UUID] = None,
-        is_active: Optional[bool] = None,
-        category: Optional[str] = None,
-        search: Optional[str] = None,
-        pagination: Optional[PaginationParams] = None,
+        department_id: UUID | None = None,
+        designation_id: UUID | None = None,
+        is_active: bool | None = None,
+        category: str | None = None,
+        search: str | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[KRA]:
         """List KRAs."""
         query = select(KRA).where(KRA.organization_id == org_id)
@@ -381,13 +381,13 @@ class PerformanceService:
         *,
         kra_code: str,
         kra_name: str,
-        department_id: Optional[UUID] = None,
-        designation_id: Optional[UUID] = None,
+        department_id: UUID | None = None,
+        designation_id: UUID | None = None,
         default_weightage: Decimal = Decimal("0"),
-        category: Optional[str] = None,
-        measurement_criteria: Optional[str] = None,
+        category: str | None = None,
+        measurement_criteria: str | None = None,
         is_active: bool = True,
-        description: Optional[str] = None,
+        description: str | None = None,
     ) -> KRA:
         """Create a new KRA."""
         kra = KRA(
@@ -437,11 +437,11 @@ class PerformanceService:
         self,
         org_id: UUID,
         *,
-        department_id: Optional[UUID] = None,
-        designation_id: Optional[UUID] = None,
-        is_active: Optional[bool] = None,
-        search: Optional[str] = None,
-        pagination: Optional[PaginationParams] = None,
+        department_id: UUID | None = None,
+        designation_id: UUID | None = None,
+        is_active: bool | None = None,
+        search: str | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[AppraisalTemplate]:
         """List appraisal templates."""
         query = select(AppraisalTemplate).where(
@@ -508,12 +508,12 @@ class PerformanceService:
         *,
         template_code: str,
         template_name: str,
-        description: Optional[str] = None,
-        department_id: Optional[UUID] = None,
-        designation_id: Optional[UUID] = None,
+        description: str | None = None,
+        department_id: UUID | None = None,
+        designation_id: UUID | None = None,
         rating_scale_max: int = 5,
         is_active: bool = True,
-        kras: Optional[List[dict]] = None,
+        kras: list[dict] | None = None,
     ) -> AppraisalTemplate:
         """Create a new appraisal template."""
         template = AppraisalTemplate(
@@ -592,14 +592,14 @@ class PerformanceService:
         self,
         org_id: UUID,
         *,
-        employee_id: Optional[UUID] = None,
-        kra_id: Optional[UUID] = None,
-        status: Optional[KPIStatus] = None,
-        search: Optional[str] = None,
-        is_active: Optional[bool] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
-        pagination: Optional[PaginationParams] = None,
+        employee_id: UUID | None = None,
+        kra_id: UUID | None = None,
+        status: KPIStatus | None = None,
+        search: str | None = None,
+        is_active: bool | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[KPI]:
         """List KPIs."""
         query = select(KPI).where(KPI.organization_id == org_id)
@@ -670,17 +670,17 @@ class PerformanceService:
         org_id: UUID,
         *,
         employee_id: UUID,
-        kra_id: Optional[UUID] = None,
+        kra_id: UUID | None = None,
         kpi_name: str,
         period_start: date,
         period_end: date,
         target_value: Decimal,
-        unit_of_measure: Optional[str] = None,
-        threshold_value: Optional[Decimal] = None,
-        stretch_value: Optional[Decimal] = None,
+        unit_of_measure: str | None = None,
+        threshold_value: Decimal | None = None,
+        stretch_value: Decimal | None = None,
         weightage: Decimal = Decimal("0"),
-        notes: Optional[str] = None,
-        description: Optional[str] = None,
+        notes: str | None = None,
+        description: str | None = None,
     ) -> KPI:
         """Create a new KPI."""
         kpi = KPI(
@@ -724,8 +724,8 @@ class PerformanceService:
         kpi_id: UUID,
         *,
         actual_value: Decimal,
-        evidence: Optional[str] = None,
-        notes: Optional[str] = None,
+        evidence: str | None = None,
+        notes: str | None = None,
     ) -> KPI:
         """Update KPI progress."""
         kpi = self.get_kpi(org_id, kpi_id)
@@ -768,11 +768,11 @@ class PerformanceService:
         self,
         org_id: UUID,
         *,
-        employee_id: Optional[UUID] = None,
-        cycle_id: Optional[UUID] = None,
-        manager_id: Optional[UUID] = None,
-        status: Optional[AppraisalStatus] = None,
-        pagination: Optional[PaginationParams] = None,
+        employee_id: UUID | None = None,
+        cycle_id: UUID | None = None,
+        manager_id: UUID | None = None,
+        status: AppraisalStatus | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[Appraisal]:
         """List appraisals."""
         query = select(Appraisal).where(Appraisal.organization_id == org_id)
@@ -830,8 +830,8 @@ class PerformanceService:
         employee_id: UUID,
         cycle_id: UUID,
         manager_id: UUID,
-        template_id: Optional[UUID] = None,
-        kra_scores: Optional[List[dict]] = None,
+        template_id: UUID | None = None,
+        kra_scores: list[dict] | None = None,
     ) -> Appraisal:
         """Create a new appraisal."""
         # Verify cycle exists
@@ -893,11 +893,11 @@ class PerformanceService:
         appraisal_id: UUID,
         *,
         self_overall_rating: int,
-        self_summary: Optional[str] = None,
-        achievements: Optional[str] = None,
-        challenges: Optional[str] = None,
-        development_needs: Optional[str] = None,
-        kra_ratings: Optional[List[dict]] = None,
+        self_summary: str | None = None,
+        achievements: str | None = None,
+        challenges: str | None = None,
+        development_needs: str | None = None,
+        kra_ratings: list[dict] | None = None,
     ) -> Appraisal:
         """Submit employee self-assessment."""
         appraisal = self.get_appraisal(org_id, appraisal_id)
@@ -935,9 +935,9 @@ class PerformanceService:
         appraisal_id: UUID,
         *,
         manager_overall_rating: int,
-        manager_summary: Optional[str] = None,
-        manager_recommendations: Optional[str] = None,
-        kra_ratings: Optional[List[dict]] = None,
+        manager_summary: str | None = None,
+        manager_recommendations: str | None = None,
+        kra_ratings: list[dict] | None = None,
     ) -> Appraisal:
         """Submit manager review."""
         appraisal = self.get_appraisal(org_id, appraisal_id)
@@ -970,8 +970,8 @@ class PerformanceService:
         appraisal_id: UUID,
         *,
         calibrated_rating: int,
-        calibration_notes: Optional[str] = None,
-        rating_label: Optional[str] = None,
+        calibration_notes: str | None = None,
+        rating_label: str | None = None,
     ) -> Appraisal:
         """Submit HR calibration."""
         appraisal = self.get_appraisal(org_id, appraisal_id)
@@ -1015,11 +1015,11 @@ class PerformanceService:
         self,
         org_id: UUID,
         *,
-        employee_id: Optional[UUID] = None,
-        department_id: Optional[UUID] = None,
-        cycle_id: Optional[UUID] = None,
-        is_finalized: Optional[bool] = None,
-        pagination: Optional[PaginationParams] = None,
+        employee_id: UUID | None = None,
+        department_id: UUID | None = None,
+        cycle_id: UUID | None = None,
+        is_finalized: bool | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[Scorecard]:
         """List scorecards."""
         query = select(Scorecard).where(Scorecard.organization_id == org_id)
@@ -1091,8 +1091,8 @@ class PerformanceService:
         employee_id: UUID,
         period_start: date,
         period_end: date,
-        period_label: Optional[str] = None,
-        items: Optional[List[dict]] = None,
+        period_label: str | None = None,
+        items: list[dict] | None = None,
     ) -> Scorecard:
         """Create a new scorecard."""
         scorecard = Scorecard(
@@ -1169,7 +1169,7 @@ class PerformanceService:
         org_id: UUID,
         scorecard_id: UUID,
         *,
-        summary: Optional[str] = None,
+        summary: str | None = None,
     ) -> Scorecard:
         """Finalize a scorecard."""
         scorecard = self.get_scorecard(org_id, scorecard_id)
@@ -1375,7 +1375,7 @@ class PerformanceService:
         self,
         org_id: UUID,
         *,
-        cycle_id: Optional[UUID] = None,
+        cycle_id: UUID | None = None,
     ) -> dict:
         """Get performance ratings distribution report.
 
@@ -1451,7 +1451,7 @@ class PerformanceService:
         self,
         org_id: UUID,
         *,
-        cycle_id: Optional[UUID] = None,
+        cycle_id: UUID | None = None,
     ) -> dict:
         """Get performance breakdown by department.
 
@@ -1523,9 +1523,9 @@ class PerformanceService:
         self,
         org_id: UUID,
         *,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
-        department_id: Optional[UUID] = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        department_id: UUID | None = None,
     ) -> dict:
         """Get KPI achievement rates report.
 
@@ -1640,7 +1640,7 @@ class PerformanceService:
         self,
         org_id: UUID,
         *,
-        department_id: Optional[UUID] = None,
+        department_id: UUID | None = None,
     ) -> dict:
         """Get performance trends across cycles.
 
@@ -1738,11 +1738,11 @@ class PerformanceService:
         self,
         org_id: UUID,
         *,
-        appraisal_id: Optional[UUID] = None,
-        feedback_from_id: Optional[UUID] = None,
-        feedback_type: Optional[str] = None,
-        submitted: Optional[bool] = None,
-        pagination: Optional[PaginationParams] = None,
+        appraisal_id: UUID | None = None,
+        feedback_from_id: UUID | None = None,
+        feedback_type: str | None = None,
+        submitted: bool | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[AppraisalFeedback]:
         """List feedback entries."""
         query = select(AppraisalFeedback).where(
@@ -1831,10 +1831,10 @@ class PerformanceService:
         org_id: UUID,
         feedback_id: UUID,
         *,
-        overall_rating: Optional[int] = None,
-        strengths: Optional[str] = None,
-        areas_for_improvement: Optional[str] = None,
-        general_comments: Optional[str] = None,
+        overall_rating: int | None = None,
+        strengths: str | None = None,
+        areas_for_improvement: str | None = None,
+        general_comments: str | None = None,
     ) -> AppraisalFeedback:
         """Submit feedback."""
         feedback = self.get_feedback(org_id, feedback_id)

@@ -37,7 +37,7 @@
             justify-content: space-between;
             align-items: flex-start;
             padding-bottom: 15px;
-            border-bottom: 2px solid #0d9488;
+            border-bottom: 2px solid {{ primary_color | default('#0d9488') }};
             margin-bottom: 20px;
         }
 
@@ -48,7 +48,7 @@
         .company-name {
             font-size: 16pt;
             font-weight: bold;
-            color: #0d9488;
+            color: {{ primary_color | default('#0d9488') }};
             margin-bottom: 4px;
         }
 
@@ -71,7 +71,7 @@
 
         .document-number {
             font-size: 11pt;
-            color: #0d9488;
+            color: {{ primary_color | default('#0d9488') }};
             font-weight: 600;
             margin-top: 4px;
         }
@@ -222,7 +222,7 @@
 
         /* Summary section */
         .summary-section {
-            background: linear-gradient(135deg, #0d9488 0%, #14b8a6 100%);
+            background: linear-gradient(135deg, {{ primary_color | default('#0d9488') }} 0%, {{ accent_color | default('#14b8a6') }} 100%);
             color: white;
             border-radius: 6px;
             padding: 20px;

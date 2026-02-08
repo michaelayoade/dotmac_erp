@@ -10,45 +10,45 @@ import math
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from io import BytesIO, StringIO
-from typing import Dict, List, Optional, Tuple
+from typing import TypedDict
 from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
-from pydantic import ValidationError as PydanticValidationError
-
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from sqlalchemy.orm import Session, selectinload
+from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError, DataError
+from sqlalchemy.exc import DataError, IntegrityError
+from sqlalchemy.orm import Session, selectinload
 
-from app.services.common import NotFoundError, ValidationError
-from app.services.procurement.procurement_plan import ProcurementPlanService
-from app.services.procurement.contract import ContractService
-from app.services.procurement.rfq import RFQService
-from app.services.procurement.requisition import RequisitionService
-from app.services.procurement.vendor import VendorPrequalificationService
-from app.services.procurement.web.procurement_web import ProcurementWebService
 from app.models.procurement.enums import (
+    ContractStatus,
     ProcurementMethod,
     ProcurementPlanStatus,
     RequisitionStatus,
     RFQStatus,
     UrgencyLevel,
-    ContractStatus,
 )
-from app.models.procurement.procurement_plan import ProcurementPlan
-from app.models.procurement.rfq import RequestForQuotation
-from app.models.procurement.purchase_requisition import PurchaseRequisition
 from app.models.procurement.procurement_contract import ProcurementContract
+from app.models.procurement.procurement_plan import ProcurementPlan
+from app.models.procurement.purchase_requisition import PurchaseRequisition
+from app.models.procurement.rfq import RequestForQuotation
+from app.schemas.procurement.contract import ContractCreate
 from app.schemas.procurement.procurement_plan import (
     PlanItemCreate,
     ProcurementPlanCreate,
 )
 from app.schemas.procurement.requisition import RequisitionCreate, RequisitionLineCreate
 from app.schemas.procurement.rfq import RFQCreate
-from app.schemas.procurement.contract import ContractCreate
 from app.schemas.procurement.vendor import PrequalificationCreate
+from app.services.common import NotFoundError, ValidationError
+from app.services.procurement.contract import ContractService
+from app.services.procurement.procurement_plan import ProcurementPlanService
+from app.services.procurement.requisition import RequisitionService
+from app.services.procurement.rfq import RFQService
+from app.services.procurement.vendor import VendorPrequalificationService
+from app.services.procurement.web.procurement_web import ProcurementWebService
+from app.services.upload_utils import get_env_max_bytes, read_upload_bytes
 from app.web.deps import (
     WebAuthContext,
     base_context,
@@ -148,6 +148,29 @@ CONTRACT_OPTIONAL_COLUMNS = [
 CONTRACT_ALL_COLUMNS = CONTRACT_REQUIRED_COLUMNS + CONTRACT_OPTIONAL_COLUMNS
 
 
+class _PlanImportEntry(TypedDict):
+    plan_number: str
+    fiscal_year: str
+    title: str
+    currency_code: str
+    items: list[PlanItemCreate]
+    line_numbers: set[int]
+
+
+class _RequisitionImportEntry(TypedDict):
+    requisition_number: str
+    requisition_date: date
+    requester_id: UUID | None
+    department_id: UUID | None
+    urgency: UrgencyLevel
+    justification: str | None
+    currency_code: str
+    material_request_id: UUID | None
+    plan_item_id: UUID | None
+    lines: list[RequisitionLineCreate]
+    line_numbers: set[int]
+
+
 def _xlsx_available() -> bool:
     try:
         import openpyxl  # noqa: F401
@@ -167,9 +190,7 @@ def _is_empty(value: object) -> bool:
         return True
     if isinstance(value, float) and math.isnan(value):
         return True
-    if isinstance(value, str) and not value.strip():
-        return True
-    return False
+    return bool(isinstance(value, str) and not value.strip())
 
 
 def _parse_decimal(value: object) -> Decimal:
@@ -210,7 +231,7 @@ def _parse_date(value: object) -> date:
         raise InvalidOperation("Invalid date format (expected YYYY-MM-DD)") from exc
 
 
-def _parse_uuid(value: object) -> Optional[UUID]:
+def _parse_uuid(value: object) -> UUID | None:
     if _is_empty(value):
         return None
     try:
@@ -234,13 +255,13 @@ def _parse_bool(value: object) -> bool:
 
 def _load_import_rows(
     content: bytes, fmt: str
-) -> Tuple[List[Dict[str, object]], List[str]]:
+) -> tuple[list[dict[str, object]], list[str]]:
     if fmt == "csv":
         reader = csv.DictReader(StringIO(content.decode("utf-8-sig")))
         if not reader.fieldnames:
             return [], []
-        rows = [dict(row) for row in reader]
-        return rows, list(reader.fieldnames)
+        csv_rows = [dict(row) for row in reader]
+        return csv_rows, list(reader.fieldnames)
     if fmt == "xlsx":
         try:
             import openpyxl
@@ -256,16 +277,16 @@ def _load_import_rows(
         except StopIteration:
             return [], []
         headers = [str(cell).strip() if cell is not None else "" for cell in header_row]
-        rows: List[Dict[str, object]] = []
+        xlsx_rows: list[dict[str, object]] = []
         for row in rows_iter:
-            row_dict: Dict[str, object] = {}
+            row_dict: dict[str, object] = {}
             for idx, header in enumerate(headers):
                 if not header:
                     continue
                 value = row[idx] if idx < len(row) else None
                 row_dict[header] = value
-            rows.append(row_dict)
-        return rows, headers
+            xlsx_rows.append(row_dict)
+        return xlsx_rows, headers
     raise ValueError("Unsupported import format")
 
 
@@ -295,12 +316,13 @@ def procurement_dashboard(
 @router.get("/plans", response_class=HTMLResponse)
 def plan_list(
     request: Request,
-    status: Optional[str] = None,
-    fiscal_year: Optional[str] = None,
+    status: str | None = None,
+    fiscal_year: str | None = None,
+    search: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
@@ -312,6 +334,7 @@ def plan_list(
             auth.organization_id,
             status=status,
             fiscal_year=fiscal_year,
+            search=search,
             offset=offset,
             limit=limit,
         )
@@ -347,7 +370,7 @@ def plan_import_template(
     if fmt == "xlsx" and not _xlsx_available():
         fmt = "csv"
 
-    sample = {
+    sample: dict[str, list[object]] = {
         "plan_number": ["PLAN-2026-001"],
         "fiscal_year": ["2026/2027"],
         "title": ["Annual Procurement Plan"],
@@ -363,11 +386,11 @@ def plan_import_template(
     }
 
     if fmt == "csv":
-        output = StringIO()
-        writer = csv.writer(output)
+        csv_output = StringIO()
+        writer = csv.writer(csv_output)
         writer.writerow(IMPORT_ALL_COLUMNS)
         writer.writerow([sample[col][0] for col in IMPORT_ALL_COLUMNS])
-        content = output.getvalue()
+        content = csv_output.getvalue()
         return Response(
             content,
             media_type="text/csv",
@@ -376,7 +399,7 @@ def plan_import_template(
             },
         )
 
-    output = BytesIO()
+    xlsx_output = BytesIO()
     try:
         import openpyxl
     except ImportError:
@@ -385,9 +408,9 @@ def plan_import_template(
     sheet = workbook.active
     sheet.append(IMPORT_ALL_COLUMNS)
     sheet.append([sample[col][0] for col in IMPORT_ALL_COLUMNS])
-    workbook.save(output)
+    workbook.save(xlsx_output)
     return Response(
-        output.getvalue(),
+        xlsx_output.getvalue(),
         media_type=(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         ),
@@ -400,8 +423,8 @@ def plan_import_template(
 @router.get("/plans/export")
 def plan_export(
     format: str = Query("csv"),
-    status: Optional[str] = None,
-    fiscal_year: Optional[str] = None,
+    status: str | None = None,
+    fiscal_year: str | None = None,
     auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
@@ -427,7 +450,7 @@ def plan_export(
         query = query.where(ProcurementPlan.fiscal_year == fiscal_year)
 
     plans = list(db.scalars(query).all())
-    rows: List[List[object]] = []
+    rows: list[list[object]] = []
     for plan in plans:
         if plan.items:
             for item in plan.items:
@@ -469,17 +492,17 @@ def plan_export(
 
     filename = "procurement_plans_export"
     if fmt == "csv":
-        output = StringIO()
-        writer = csv.writer(output)
+        csv_output = StringIO()
+        writer = csv.writer(csv_output)
         writer.writerow(IMPORT_ALL_COLUMNS)
         writer.writerows(rows)
         return Response(
-            output.getvalue(),
+            csv_output.getvalue(),
             media_type="text/csv",
             headers={"Content-Disposition": f"attachment; filename={filename}.csv"},
         )
 
-    output = BytesIO()
+    xlsx_output = BytesIO()
     try:
         import openpyxl
     except ImportError:
@@ -489,9 +512,9 @@ def plan_export(
     sheet.append(IMPORT_ALL_COLUMNS)
     for row in rows:
         sheet.append(row)
-    workbook.save(output)
+    workbook.save(xlsx_output)
     return Response(
-        output.getvalue(),
+        xlsx_output.getvalue(),
         media_type=(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         ),
@@ -524,7 +547,7 @@ def plan_detail(
 async def plan_import(
     request: Request,
     file: UploadFile = File(...),
-    format: Optional[str] = Form(None),
+    format: str | None = Form(None),
     auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
@@ -547,7 +570,12 @@ async def plan_import(
             url="/procurement/plans?error=Unsupported+file+format", status_code=303
         )
 
-    content = await file.read()
+    max_bytes = get_env_max_bytes("MAX_IMPORT_FILE_SIZE", 50 * 1024 * 1024)
+    content = await read_upload_bytes(
+        file,
+        max_bytes,
+        error_detail=f"File too large. Maximum size: {max_bytes // 1024 // 1024}MB",
+    )
     if not content:
         return RedirectResponse(
             url="/procurement/plans?error=Empty+file+uploaded", status_code=303
@@ -576,10 +604,12 @@ async def plan_import(
         msg = quote(f"Missing required columns: {', '.join(sorted(missing))}")
         return RedirectResponse(url=f"/procurement/plans?error={msg}", status_code=303)
 
-    rows_normalized: List[Dict[str, object]] = []
-    header_map = {orig: norm for orig, norm in zip(headers, normalized_headers)}
+    rows_normalized: list[dict[str, object]] = []
+    header_map = {
+        orig: norm for orig, norm in zip(headers, normalized_headers, strict=False)
+    }
     for row in rows:
-        normalized_row: Dict[str, object] = {}
+        normalized_row: dict[str, object] = {}
         for key, value in row.items():
             norm_key = header_map.get(key, _normalize_column(str(key)))
             normalized_row[norm_key] = value
@@ -587,8 +617,8 @@ async def plan_import(
             normalized_row.setdefault(col, None)
         rows_normalized.append(normalized_row)
 
-    errors: List[str] = []
-    plans: Dict[str, Dict[str, object]] = {}
+    errors: list[str] = []
+    plans: dict[str, _PlanImportEntry] = {}
 
     for idx, row in enumerate(rows_normalized):
         row_num = idx + 2
@@ -695,14 +725,14 @@ async def plan_import(
                     f"Row {row_num}: currency_code mismatch for plan_number {plan_number}"
                 )
 
-        plan = plans.get(plan_number)
-        if plan is not None:
-            if line_number in plan["line_numbers"]:
+        plan_entry = plans.get(plan_number)
+        if plan_entry is not None:
+            if line_number in plan_entry["line_numbers"]:
                 errors.append(
                     f"Row {row_num}: duplicate line_number {line_number} for plan_number {plan_number}"
                 )
-            plan["line_numbers"].add(line_number)
-            plan["items"].append(
+            plan_entry["line_numbers"].add(line_number)
+            plan_entry["items"].append(
                 PlanItemCreate(
                     line_number=line_number,
                     description=description,
@@ -728,7 +758,7 @@ async def plan_import(
             )
         ).all()
     )
-    duplicates = [num for num in plans.keys() if num in existing]
+    duplicates = [num for num in plans if num in existing]
     if duplicates:
         msg = quote("Plan number(s) already exist: " + ", ".join(sorted(duplicates)))
         return RedirectResponse(url=f"/procurement/plans?error={msg}", status_code=303)
@@ -766,12 +796,13 @@ async def plan_import(
 @router.get("/requisitions", response_class=HTMLResponse)
 def requisition_list(
     request: Request,
-    status: Optional[str] = None,
-    urgency: Optional[str] = None,
+    status: str | None = None,
+    urgency: str | None = None,
+    search: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
@@ -783,6 +814,7 @@ def requisition_list(
             auth.organization_id,
             status=status,
             urgency=urgency,
+            search=search,
             offset=offset,
             limit=limit,
         )
@@ -807,7 +839,7 @@ def requisition_import_template(
     if fmt == "xlsx" and not _xlsx_available():
         fmt = "csv"
 
-    sample = {
+    sample: dict[str, list[object]] = {
         "requisition_number": ["PR-2026-001"],
         "requisition_date": ["2026-02-01"],
         "requester_id": ["00000000-0000-0000-0000-000000000001"],
@@ -831,19 +863,19 @@ def requisition_import_template(
     }
 
     if fmt == "csv":
-        output = StringIO()
-        writer = csv.writer(output)
+        csv_output = StringIO()
+        writer = csv.writer(csv_output)
         writer.writerow(REQUISITION_ALL_COLUMNS)
         writer.writerow([sample[col][0] for col in REQUISITION_ALL_COLUMNS])
         return Response(
-            output.getvalue(),
+            csv_output.getvalue(),
             media_type="text/csv",
             headers={
                 "Content-Disposition": "attachment; filename=requisitions_template.csv"
             },
         )
 
-    output = BytesIO()
+    xlsx_output = BytesIO()
     try:
         import openpyxl
     except ImportError:
@@ -852,9 +884,9 @@ def requisition_import_template(
     sheet = workbook.active
     sheet.append(REQUISITION_ALL_COLUMNS)
     sheet.append([sample[col][0] for col in REQUISITION_ALL_COLUMNS])
-    workbook.save(output)
+    workbook.save(xlsx_output)
     return Response(
-        output.getvalue(),
+        xlsx_output.getvalue(),
         media_type=(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         ),
@@ -867,8 +899,8 @@ def requisition_import_template(
 @router.get("/requisitions/export")
 def requisition_export(
     format: str = Query("csv"),
-    status: Optional[str] = None,
-    urgency: Optional[str] = None,
+    status: str | None = None,
+    urgency: str | None = None,
     auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
@@ -897,7 +929,7 @@ def requisition_export(
             pass
 
     requisitions = list(db.scalars(query).all())
-    rows: List[List[object]] = []
+    rows: list[list[object]] = []
     for req in requisitions:
         header_values = [
             req.requisition_number,
@@ -933,17 +965,17 @@ def requisition_export(
 
     filename = "requisitions_export"
     if fmt == "csv":
-        output = StringIO()
-        writer = csv.writer(output)
+        csv_output = StringIO()
+        writer = csv.writer(csv_output)
         writer.writerow(REQUISITION_ALL_COLUMNS)
         writer.writerows(rows)
         return Response(
-            output.getvalue(),
+            csv_output.getvalue(),
             media_type="text/csv",
             headers={"Content-Disposition": f"attachment; filename={filename}.csv"},
         )
 
-    output = BytesIO()
+    xlsx_output = BytesIO()
     try:
         import openpyxl
     except ImportError:
@@ -953,9 +985,9 @@ def requisition_export(
     sheet.append(REQUISITION_ALL_COLUMNS)
     for row in rows:
         sheet.append(row)
-    workbook.save(output)
+    workbook.save(xlsx_output)
     return Response(
-        output.getvalue(),
+        xlsx_output.getvalue(),
         media_type=(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         ),
@@ -967,7 +999,7 @@ def requisition_export(
 async def requisition_import(
     request: Request,
     file: UploadFile = File(...),
-    format: Optional[str] = Form(None),
+    format: str | None = Form(None),
     auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
@@ -991,7 +1023,12 @@ async def requisition_import(
             status_code=303,
         )
 
-    content = await file.read()
+    max_bytes = get_env_max_bytes("MAX_IMPORT_FILE_SIZE", 50 * 1024 * 1024)
+    content = await read_upload_bytes(
+        file,
+        max_bytes,
+        error_detail=f"File too large. Maximum size: {max_bytes // 1024 // 1024}MB",
+    )
     if not content:
         return RedirectResponse(
             url="/procurement/requisitions?error=Empty+file+uploaded",
@@ -1025,10 +1062,12 @@ async def requisition_import(
             url=f"/procurement/requisitions?error={msg}", status_code=303
         )
 
-    rows_normalized: List[Dict[str, object]] = []
-    header_map = {orig: norm for orig, norm in zip(headers, normalized_headers)}
+    rows_normalized: list[dict[str, object]] = []
+    header_map = {
+        orig: norm for orig, norm in zip(headers, normalized_headers, strict=False)
+    }
     for row in rows:
-        normalized_row: Dict[str, object] = {}
+        normalized_row: dict[str, object] = {}
         for key, value in row.items():
             norm_key = header_map.get(key, _normalize_column(str(key)))
             normalized_row[norm_key] = value
@@ -1036,8 +1075,8 @@ async def requisition_import(
             normalized_row.setdefault(col, None)
         rows_normalized.append(normalized_row)
 
-    errors: List[str] = []
-    requisitions: Dict[str, Dict[str, object]] = {}
+    errors: list[str] = []
+    requisitions: dict[str, _RequisitionImportEntry] = {}
 
     for idx, row in enumerate(rows_normalized):
         row_num = idx + 2
@@ -1221,14 +1260,14 @@ async def requisition_import(
                     f"Row {row_num}: plan_item_id mismatch for requisition_number {requisition_number}"
                 )
 
-        req = requisitions.get(requisition_number)
-        if req is not None:
-            if line_number in req["line_numbers"]:
+        req_entry = requisitions.get(requisition_number)
+        if req_entry is not None:
+            if line_number in req_entry["line_numbers"]:
                 errors.append(
                     f"Row {row_num}: duplicate line_number {line_number} for requisition_number {requisition_number}"
                 )
-            req["line_numbers"].add(line_number)
-            req["lines"].append(
+            req_entry["line_numbers"].add(line_number)
+            req_entry["lines"].append(
                 RequisitionLineCreate(
                     line_number=line_number,
                     item_id=item_id,
@@ -1259,7 +1298,7 @@ async def requisition_import(
             )
         ).all()
     )
-    duplicates = [num for num in requisitions.keys() if num in existing]
+    duplicates = [num for num in requisitions if num in existing]
     if duplicates:
         msg = quote(
             "Requisition number(s) already exist: " + ", ".join(sorted(duplicates))
@@ -1351,12 +1390,13 @@ def requisition_detail(
 @router.get("/rfqs", response_class=HTMLResponse)
 def rfq_list(
     request: Request,
-    status: Optional[str] = None,
-    method: Optional[str] = None,
+    status: str | None = None,
+    method: str | None = None,
+    search: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
@@ -1368,6 +1408,7 @@ def rfq_list(
             auth.organization_id,
             status=status,
             procurement_method=method,
+            search=search,
             offset=offset,
             limit=limit,
         )
@@ -1390,7 +1431,7 @@ def rfq_import_template(
     if fmt == "xlsx" and not _xlsx_available():
         fmt = "csv"
 
-    sample = {
+    sample: dict[str, list[object]] = {
         "rfq_number": ["RFQ-2026-001"],
         "title": ["Office IT Equipment"],
         "rfq_date": ["2026-02-01"],
@@ -1407,17 +1448,17 @@ def rfq_import_template(
     }
 
     if fmt == "csv":
-        output = StringIO()
-        writer = csv.writer(output)
+        csv_output = StringIO()
+        writer = csv.writer(csv_output)
         writer.writerow(RFQ_ALL_COLUMNS)
         writer.writerow([sample[col][0] for col in RFQ_ALL_COLUMNS])
         return Response(
-            output.getvalue(),
+            csv_output.getvalue(),
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=rfqs_template.csv"},
         )
 
-    output = BytesIO()
+    xlsx_output = BytesIO()
     try:
         import openpyxl
     except ImportError:
@@ -1426,9 +1467,9 @@ def rfq_import_template(
     sheet = workbook.active
     sheet.append(RFQ_ALL_COLUMNS)
     sheet.append([sample[col][0] for col in RFQ_ALL_COLUMNS])
-    workbook.save(output)
+    workbook.save(xlsx_output)
     return Response(
-        output.getvalue(),
+        xlsx_output.getvalue(),
         media_type=(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         ),
@@ -1439,8 +1480,8 @@ def rfq_import_template(
 @router.get("/rfqs/export")
 def rfq_export(
     format: str = Query("csv"),
-    status: Optional[str] = None,
-    method: Optional[str] = None,
+    status: str | None = None,
+    method: str | None = None,
     auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
@@ -1470,7 +1511,7 @@ def rfq_export(
             query = query.where(RequestForQuotation.procurement_method == method_enum)
 
     rfqs = list(db.scalars(query).all())
-    rows: List[List[object]] = []
+    rows: list[list[object]] = []
     for rfq in rfqs:
         criteria = rfq.evaluation_criteria
         criteria_value = ""
@@ -1497,17 +1538,17 @@ def rfq_export(
 
     filename = "rfqs_export"
     if fmt == "csv":
-        output = StringIO()
-        writer = csv.writer(output)
+        csv_output = StringIO()
+        writer = csv.writer(csv_output)
         writer.writerow(RFQ_ALL_COLUMNS)
         writer.writerows(rows)
         return Response(
-            output.getvalue(),
+            csv_output.getvalue(),
             media_type="text/csv",
             headers={"Content-Disposition": f"attachment; filename={filename}.csv"},
         )
 
-    output = BytesIO()
+    xlsx_output = BytesIO()
     try:
         import openpyxl
     except ImportError:
@@ -1517,9 +1558,9 @@ def rfq_export(
     sheet.append(RFQ_ALL_COLUMNS)
     for row in rows:
         sheet.append(row)
-    workbook.save(output)
+    workbook.save(xlsx_output)
     return Response(
-        output.getvalue(),
+        xlsx_output.getvalue(),
         media_type=(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         ),
@@ -1531,7 +1572,7 @@ def rfq_export(
 async def rfq_import(
     request: Request,
     file: UploadFile = File(...),
-    format: Optional[str] = Form(None),
+    format: str | None = Form(None),
     auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
@@ -1554,7 +1595,12 @@ async def rfq_import(
             url="/procurement/rfqs?error=Unsupported+file+format", status_code=303
         )
 
-    content = await file.read()
+    max_bytes = get_env_max_bytes("MAX_IMPORT_FILE_SIZE", 50 * 1024 * 1024)
+    content = await read_upload_bytes(
+        file,
+        max_bytes,
+        error_detail=f"File too large. Maximum size: {max_bytes // 1024 // 1024}MB",
+    )
     if not content:
         return RedirectResponse(
             url="/procurement/rfqs?error=Empty+file+uploaded", status_code=303
@@ -1583,10 +1629,12 @@ async def rfq_import(
         msg = quote(f"Missing required columns: {', '.join(sorted(missing))}")
         return RedirectResponse(url=f"/procurement/rfqs?error={msg}", status_code=303)
 
-    rows_normalized: List[Dict[str, object]] = []
-    header_map = {orig: norm for orig, norm in zip(headers, normalized_headers)}
+    rows_normalized: list[dict[str, object]] = []
+    header_map = {
+        orig: norm for orig, norm in zip(headers, normalized_headers, strict=False)
+    }
     for row in rows:
-        normalized_row: Dict[str, object] = {}
+        normalized_row: dict[str, object] = {}
         for key, value in row.items():
             norm_key = header_map.get(key, _normalize_column(str(key)))
             normalized_row[norm_key] = value
@@ -1594,8 +1642,8 @@ async def rfq_import(
             normalized_row.setdefault(col, None)
         rows_normalized.append(normalized_row)
 
-    errors: List[str] = []
-    rfqs: Dict[str, Dict[str, object]] = {}
+    errors: list[str] = []
+    rfqs: dict[str, dict[str, object]] = {}
 
     for idx, row in enumerate(rows_normalized):
         row_num = idx + 2
@@ -1713,7 +1761,7 @@ async def rfq_import(
             )
         ).all()
     )
-    duplicates = [num for num in rfqs.keys() if num in existing]
+    duplicates = [num for num in rfqs if num in existing]
     if duplicates:
         msg = quote("RFQ number(s) already exist: " + ", ".join(sorted(duplicates)))
         return RedirectResponse(url=f"/procurement/rfqs?error={msg}", status_code=303)
@@ -1786,7 +1834,8 @@ def rfq_detail(
 @router.get("/evaluations", response_class=HTMLResponse)
 def evaluation_list(
     request: Request,
-    status: Optional[str] = None,
+    status: str | None = None,
+    search: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_procurement_access),
@@ -1799,6 +1848,7 @@ def evaluation_list(
         web_service.evaluation_list_context(
             auth.organization_id,
             status=status,
+            search=search,
             offset=offset,
             limit=limit,
         )
@@ -1841,11 +1891,12 @@ def evaluation_matrix(
 @router.get("/contracts", response_class=HTMLResponse)
 def contract_list(
     request: Request,
-    status: Optional[str] = None,
+    status: str | None = None,
+    search: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
@@ -1856,6 +1907,7 @@ def contract_list(
         web_service.contract_list_context(
             auth.organization_id,
             status=status,
+            search=search,
             offset=offset,
             limit=limit,
         )
@@ -1880,7 +1932,7 @@ def contract_import_template(
     if fmt == "xlsx" and not _xlsx_available():
         fmt = "csv"
 
-    sample = {
+    sample: dict[str, list[object]] = {
         "contract_number": ["CTR-2026-001"],
         "title": ["Office Renovation"],
         "supplier_id": ["00000000-0000-0000-0000-000000000001"],
@@ -1901,19 +1953,19 @@ def contract_import_template(
     }
 
     if fmt == "csv":
-        output = StringIO()
-        writer = csv.writer(output)
+        csv_output = StringIO()
+        writer = csv.writer(csv_output)
         writer.writerow(CONTRACT_ALL_COLUMNS)
         writer.writerow([sample[col][0] for col in CONTRACT_ALL_COLUMNS])
         return Response(
-            output.getvalue(),
+            csv_output.getvalue(),
             media_type="text/csv",
             headers={
                 "Content-Disposition": "attachment; filename=contracts_template.csv"
             },
         )
 
-    output = BytesIO()
+    xlsx_output = BytesIO()
     try:
         import openpyxl
     except ImportError:
@@ -1922,9 +1974,9 @@ def contract_import_template(
     sheet = workbook.active
     sheet.append(CONTRACT_ALL_COLUMNS)
     sheet.append([sample[col][0] for col in CONTRACT_ALL_COLUMNS])
-    workbook.save(output)
+    workbook.save(xlsx_output)
     return Response(
-        output.getvalue(),
+        xlsx_output.getvalue(),
         media_type=(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         ),
@@ -1935,7 +1987,7 @@ def contract_import_template(
 @router.get("/contracts/export")
 def contract_export(
     format: str = Query("csv"),
-    status: Optional[str] = None,
+    status: str | None = None,
     auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
@@ -1958,7 +2010,7 @@ def contract_export(
             pass
 
     contracts = list(db.scalars(query).all())
-    rows: List[List[object]] = []
+    rows: list[list[object]] = []
     for contract in contracts:
         rows.append(
             [
@@ -1990,17 +2042,17 @@ def contract_export(
 
     filename = "contracts_export"
     if fmt == "csv":
-        output = StringIO()
-        writer = csv.writer(output)
+        csv_output = StringIO()
+        writer = csv.writer(csv_output)
         writer.writerow(CONTRACT_ALL_COLUMNS)
         writer.writerows(rows)
         return Response(
-            output.getvalue(),
+            csv_output.getvalue(),
             media_type="text/csv",
             headers={"Content-Disposition": f"attachment; filename={filename}.csv"},
         )
 
-    output = BytesIO()
+    xlsx_output = BytesIO()
     try:
         import openpyxl
     except ImportError:
@@ -2010,9 +2062,9 @@ def contract_export(
     sheet.append(CONTRACT_ALL_COLUMNS)
     for row in rows:
         sheet.append(row)
-    workbook.save(output)
+    workbook.save(xlsx_output)
     return Response(
-        output.getvalue(),
+        xlsx_output.getvalue(),
         media_type=(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         ),
@@ -2024,7 +2076,7 @@ def contract_export(
 async def contract_import(
     request: Request,
     file: UploadFile = File(...),
-    format: Optional[str] = Form(None),
+    format: str | None = Form(None),
     auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
@@ -2048,7 +2100,12 @@ async def contract_import(
             status_code=303,
         )
 
-    content = await file.read()
+    max_bytes = get_env_max_bytes("MAX_IMPORT_FILE_SIZE", 50 * 1024 * 1024)
+    content = await read_upload_bytes(
+        file,
+        max_bytes,
+        error_detail=f"File too large. Maximum size: {max_bytes // 1024 // 1024}MB",
+    )
     if not content:
         return RedirectResponse(
             url="/procurement/contracts?error=Empty+file+uploaded",
@@ -2082,10 +2139,12 @@ async def contract_import(
             url=f"/procurement/contracts?error={msg}", status_code=303
         )
 
-    rows_normalized: List[Dict[str, object]] = []
-    header_map = {orig: norm for orig, norm in zip(headers, normalized_headers)}
+    rows_normalized: list[dict[str, object]] = []
+    header_map = {
+        orig: norm for orig, norm in zip(headers, normalized_headers, strict=False)
+    }
     for row in rows:
-        normalized_row: Dict[str, object] = {}
+        normalized_row: dict[str, object] = {}
         for key, value in row.items():
             norm_key = header_map.get(key, _normalize_column(str(key)))
             normalized_row[norm_key] = value
@@ -2093,8 +2152,8 @@ async def contract_import(
             normalized_row.setdefault(col, None)
         rows_normalized.append(normalized_row)
 
-    errors: List[str] = []
-    contracts: Dict[str, Dict[str, object]] = {}
+    errors: list[str] = []
+    contracts: dict[str, dict[str, object]] = {}
 
     for idx, row in enumerate(rows_normalized):
         row_num = idx + 2
@@ -2258,7 +2317,7 @@ async def contract_import(
             )
         ).all()
     )
-    duplicates = [num for num in contracts.keys() if num in existing]
+    duplicates = [num for num in contracts if num in existing]
     if duplicates:
         msg = quote(
             "Contract number(s) already exist: " + ", ".join(sorted(duplicates))
@@ -2350,7 +2409,7 @@ async def contract_create(
         start_date = _parse_date(form.get("start_date"))
         end_date = _parse_date(form.get("end_date"))
         contract_value = _parse_decimal(form.get("contract_value"))
-        currency_code = (form.get("currency_code") or "").strip() or "NGN"
+        currency_code = str(form.get("currency_code") or "").strip() or "NGN"
 
         bpp_clearance_date = (
             _parse_date(form.get("bpp_clearance_date"))
@@ -2369,11 +2428,11 @@ async def contract_create(
             end_date=end_date,
             contract_value=contract_value,
             currency_code=currency_code[:3],
-            bpp_clearance_number=(form.get("bpp_clearance_number") or "").strip()
+            bpp_clearance_number=str(form.get("bpp_clearance_number") or "").strip()
             or None,
             bpp_clearance_date=bpp_clearance_date,
-            payment_terms=(form.get("payment_terms") or "").strip() or None,
-            terms_and_conditions=(form.get("terms_and_conditions") or "").strip()
+            payment_terms=str(form.get("payment_terms") or "").strip() or None,
+            terms_and_conditions=str(form.get("terms_and_conditions") or "").strip()
             or None,
             performance_bond_required=_parse_bool(
                 form.get("performance_bond_required")
@@ -2470,8 +2529,8 @@ def contract_detail(
 @router.get("/vendors", response_class=HTMLResponse)
 def vendor_list(
     request: Request,
-    status: Optional[str] = None,
-    q: Optional[str] = None,
+    status: str | None = None,
+    q: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_procurement_access),
@@ -2503,12 +2562,12 @@ def prequalification_shortcut():
 @router.get("/vendors/prequalification", response_class=HTMLResponse)
 def prequalification_list(
     request: Request,
-    status: Optional[str] = None,
-    q: Optional[str] = None,
+    status: str | None = None,
+    q: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
@@ -2534,7 +2593,7 @@ def prequalification_list(
 @router.get("/vendors/prequalification/new", response_class=HTMLResponse)
 def prequalification_new(
     request: Request,
-    error: Optional[str] = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
@@ -2555,13 +2614,13 @@ def prequalification_create(
     request: Request,
     supplier_id: str = Form(...),
     application_date: str = Form(...),
-    categories: Optional[List[str]] = Form(None),
-    categories_json: Optional[str] = Form(None),
-    documents_verified: Optional[str] = Form(None),
-    tax_clearance_valid: Optional[str] = Form(None),
-    pension_compliance: Optional[str] = Form(None),
-    itf_compliance: Optional[str] = Form(None),
-    nsitf_compliance: Optional[str] = Form(None),
+    categories: list[str] | None = Form(None),
+    categories_json: str | None = Form(None),
+    documents_verified: str | None = Form(None),
+    tax_clearance_valid: str | None = Form(None),
+    pension_compliance: str | None = Form(None),
+    itf_compliance: str | None = Form(None),
+    nsitf_compliance: str | None = Form(None),
     auth: WebAuthContext = Depends(require_procurement_access),
     db: Session = Depends(get_db),
 ):
@@ -2572,7 +2631,7 @@ def prequalification_create(
             status_code=303,
         )
 
-    errors: List[str] = []
+    errors: list[str] = []
     try:
         supplier_uuid = _parse_uuid(supplier_id)
         if supplier_uuid is None:
@@ -2635,10 +2694,12 @@ def prequalification_create(
             status_code=303,
         )
 
+    assert supplier_uuid is not None
+
     service = VendorPrequalificationService(db)
     try:
         data = PrequalificationCreate(
-            supplier_id=supplier_uuid,  # type: ignore[arg-type]
+            supplier_id=supplier_uuid,
             application_date=app_date,
             categories=categories_value,
             documents_verified=documents_verified_val,
@@ -2647,7 +2708,7 @@ def prequalification_create(
             itf_compliance=itf_compliance_val,
             nsitf_compliance=nsitf_compliance_val,
         )
-        preq = service.create(auth.organization_id, data)
+        service.create(auth.organization_id, data)
         db.commit()
     except ValidationError as exc:
         db.rollback()

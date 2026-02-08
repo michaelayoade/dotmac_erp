@@ -5,12 +5,10 @@ These schemas define the request/response models for the public-facing
 careers API. They intentionally omit internal IDs and sensitive information.
 """
 
-from datetime import date
-from typing import Optional
 import uuid
+from datetime import date
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Job Listing Schemas (Public View)
@@ -24,12 +22,12 @@ class PublicJobBrief(BaseModel):
 
     job_code: str = Field(..., description="Job reference code")
     job_title: str = Field(..., description="Position title")
-    department_name: Optional[str] = Field(None, description="Department name")
-    location: Optional[str] = Field(None, description="Job location")
+    department_name: str | None = Field(None, description="Department name")
+    location: str | None = Field(None, description="Job location")
     employment_type: str = Field(..., description="FULL_TIME, PART_TIME, etc.")
     is_remote: bool = Field(False, description="Remote work available")
-    posted_on: Optional[date] = Field(None, description="Date posted")
-    closes_on: Optional[date] = Field(None, description="Application deadline")
+    posted_on: date | None = Field(None, description="Date posted")
+    closes_on: date | None = Field(None, description="Application deadline")
 
 
 class PublicJobRead(BaseModel):
@@ -39,17 +37,17 @@ class PublicJobRead(BaseModel):
 
     job_code: str
     job_title: str
-    description: Optional[str] = None
-    department_name: Optional[str] = None
-    location: Optional[str] = None
+    description: str | None = None
+    department_name: str | None = None
+    location: str | None = None
     employment_type: str
     is_remote: bool = False
-    min_experience_years: Optional[int] = None
-    required_skills: Optional[str] = None
-    preferred_skills: Optional[str] = None
-    education_requirements: Optional[str] = None
-    posted_on: Optional[date] = None
-    closes_on: Optional[date] = None
+    min_experience_years: int | None = None
+    required_skills: str | None = None
+    preferred_skills: str | None = None
+    education_requirements: str | None = None
+    posted_on: date | None = None
+    closes_on: date | None = None
     positions_remaining: int = 1
 
 
@@ -82,19 +80,19 @@ class ApplicationSubmitRequest(BaseModel):
     first_name: str = Field(..., min_length=1, max_length=80)
     last_name: str = Field(..., min_length=1, max_length=80)
     email: EmailStr
-    phone: Optional[str] = Field(None, max_length=40)
-    resume_file_id: Optional[str] = Field(None, description="Uploaded resume file ID")
-    cover_letter: Optional[str] = Field(None, max_length=5000)
-    current_employer: Optional[str] = Field(None, max_length=200)
-    current_job_title: Optional[str] = Field(None, max_length=200)
-    years_of_experience: Optional[int] = Field(None, ge=0, le=50)
-    highest_qualification: Optional[str] = Field(None, max_length=100)
-    skills: Optional[str] = Field(
+    phone: str | None = Field(None, max_length=40)
+    resume_file_id: str | None = Field(None, description="Uploaded resume file ID")
+    cover_letter: str | None = Field(None, max_length=5000)
+    current_employer: str | None = Field(None, max_length=200)
+    current_job_title: str | None = Field(None, max_length=200)
+    years_of_experience: int | None = Field(None, ge=0, le=50)
+    highest_qualification: str | None = Field(None, max_length=100)
+    skills: str | None = Field(
         None, max_length=1000, description="Comma-separated skills"
     )
-    city: Optional[str] = Field(None, max_length=80)
-    country_code: Optional[str] = Field(None, min_length=2, max_length=2)
-    captcha_token: Optional[str] = Field(None, description="CAPTCHA response token")
+    city: str | None = Field(None, max_length=80)
+    country_code: str | None = Field(None, min_length=2, max_length=2)
+    captcha_token: str | None = Field(None, description="CAPTCHA response token")
 
     @field_validator("first_name", "last_name")
     @classmethod
@@ -123,7 +121,7 @@ class StatusCheckRequest(BaseModel):
     """Request to check application status."""
 
     email: EmailStr
-    application_number: Optional[str] = Field(
+    application_number: str | None = Field(
         None,
         description="Optional: specific application number",
     )
@@ -145,7 +143,7 @@ class ApplicationStatusResponse(BaseModel):
     job_title: str
     status: str = Field(..., description="Status code")
     status_display: str = Field(..., description="Human-readable status")
-    applied_on: Optional[str] = Field(None, description="Application date ISO format")
+    applied_on: str | None = Field(None, description="Application date ISO format")
     applicant_name: str
 
 
@@ -171,5 +169,5 @@ class PublicOrganizationInfo(BaseModel):
     """Limited organization info for public careers page."""
 
     name: str = Field(..., description="Organization display name")
-    logo_url: Optional[str] = None
-    website_url: Optional[str] = None
+    logo_url: str | None = None
+    website_url: str | None = None

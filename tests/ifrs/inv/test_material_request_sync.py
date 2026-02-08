@@ -16,12 +16,11 @@ from unittest.mock import MagicMock
 import pytest
 
 from app.services.erpnext.mappings.material_request import (
-    MaterialRequestMapping,
     MaterialRequestItemMapping,
+    MaterialRequestMapping,
     map_material_request_status,
     map_material_request_type,
 )
-
 
 # ============ Status Mapping Tests ============
 

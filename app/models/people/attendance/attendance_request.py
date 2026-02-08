@@ -7,7 +7,7 @@ Tracks attendance correction/regularization requests.
 import enum
 import uuid
 from datetime import date, datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Date, Enum, ForeignKey, Index, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -76,17 +76,17 @@ class AttendanceRequest(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin)
         Boolean,
         default=False,
     )
-    half_day_date: Mapped[Optional[date]] = mapped_column(
+    half_day_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="Which date is half-day (if half_day=True)",
     )
 
-    reason: Mapped[Optional[str]] = mapped_column(
+    reason: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    explanation: Mapped[Optional[str]] = mapped_column(
+    explanation: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -100,7 +100,7 @@ class AttendanceRequest(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin)
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

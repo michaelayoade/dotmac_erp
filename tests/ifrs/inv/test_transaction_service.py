@@ -2,23 +2,23 @@
 Tests for InventoryTransactionService.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
 
+from app.models.inventory.inventory_transaction import TransactionType
 from app.services.inventory.transaction import (
     InventoryTransactionService,
     TransactionInput,
 )
-from app.models.inventory.inventory_transaction import TransactionType
 from tests.ifrs.inv.conftest import (
+    MockCostingMethod,
+    MockInventoryTransaction,
     MockItem,
     MockWarehouse,
-    MockInventoryTransaction,
-    MockCostingMethod,
 )
 
 
@@ -45,7 +45,7 @@ def sample_receipt_input():
     """Create sample receipt transaction input."""
     return TransactionInput(
         transaction_type=TransactionType.RECEIPT,
-        transaction_date=datetime.now(timezone.utc),
+        transaction_date=datetime.now(UTC),
         fiscal_period_id=uuid4(),
         item_id=uuid4(),
         warehouse_id=uuid4(),
@@ -61,7 +61,7 @@ def sample_issue_input():
     """Create sample issue transaction input."""
     return TransactionInput(
         transaction_type=TransactionType.ISSUE,
-        transaction_date=datetime.now(timezone.utc),
+        transaction_date=datetime.now(UTC),
         fiscal_period_id=uuid4(),
         item_id=uuid4(),
         warehouse_id=uuid4(),
@@ -105,19 +105,19 @@ class TestCreateReceipt:
             "0"
         )
 
-        with patch.object(
-            InventoryTransactionService,
-            "get_current_balance",
-            return_value=Decimal("0"),
-        ):
-            with patch.object(
+        with (
+            patch.object(
+                InventoryTransactionService,
+                "get_current_balance",
+                return_value=Decimal("0"),
+            ),
+            patch.object(
                 InventoryTransactionService,
                 "calculate_weighted_average_cost",
                 return_value=Decimal("10.00"),
-            ):
-                result = service.create_receipt(
-                    mock_db, org_id, sample_receipt_input, user_id
-                )
+            ),
+        ):
+            service.create_receipt(mock_db, org_id, sample_receipt_input, user_id)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -206,7 +206,7 @@ class TestCreateIssue:
             "get_current_balance",
             return_value=Decimal("100"),
         ):
-            result = service.create_issue(mock_db, org_id, sample_issue_input, user_id)
+            service.create_issue(mock_db, org_id, sample_issue_input, user_id)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -216,6 +216,7 @@ class TestCreateIssue:
     ):
         """Test issue creation with insufficient inventory."""
         from fastapi import HTTPException
+
         from app.services.inventory.transaction import InventoryTransactionService
 
         item = MockItem(
@@ -229,13 +230,15 @@ class TestCreateIssue:
 
         mock_db.get.side_effect = [item, warehouse]
 
-        with patch.object(
-            InventoryTransactionService,
-            "get_current_balance",
-            return_value=Decimal("10"),
+        with (
+            patch.object(
+                InventoryTransactionService,
+                "get_current_balance",
+                return_value=Decimal("10"),
+            ),
+            pytest.raises(HTTPException) as exc,
         ):
-            with pytest.raises(HTTPException) as exc:
-                service.create_issue(mock_db, org_id, sample_issue_input, user_id)
+            service.create_issue(mock_db, org_id, sample_issue_input, user_id)
 
         assert exc.value.status_code == 400
         assert "Insufficient inventory" in exc.value.detail
@@ -263,7 +266,7 @@ class TestCreateAdjustment:
 
         input_data = TransactionInput(
             transaction_type=TransactionType.ADJUSTMENT,
-            transaction_date=datetime.now(timezone.utc),
+            transaction_date=datetime.now(UTC),
             fiscal_period_id=uuid4(),
             item_id=uuid4(),
             warehouse_id=uuid4(),
@@ -291,7 +294,7 @@ class TestCreateAdjustment:
             "get_current_balance",
             return_value=Decimal("100"),
         ):
-            result = service.create_adjustment(mock_db, org_id, input_data, user_id)
+            service.create_adjustment(mock_db, org_id, input_data, user_id)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
@@ -302,7 +305,7 @@ class TestCreateAdjustment:
 
         input_data = TransactionInput(
             transaction_type=TransactionType.ADJUSTMENT,
-            transaction_date=datetime.now(timezone.utc),
+            transaction_date=datetime.now(UTC),
             fiscal_period_id=uuid4(),
             item_id=uuid4(),
             warehouse_id=uuid4(),
@@ -329,7 +332,7 @@ class TestCreateAdjustment:
             "get_current_balance",
             return_value=Decimal("100"),
         ):
-            result = service.create_adjustment(mock_db, org_id, input_data, user_id)
+            service.create_adjustment(mock_db, org_id, input_data, user_id)
 
         mock_db.add.assert_called_once()
 
@@ -338,11 +341,12 @@ class TestCreateAdjustment:
     ):
         """Test that adjustment resulting in negative inventory fails."""
         from fastapi import HTTPException
+
         from app.services.inventory.transaction import InventoryTransactionService
 
         input_data = TransactionInput(
             transaction_type=TransactionType.ADJUSTMENT,
-            transaction_date=datetime.now(timezone.utc),
+            transaction_date=datetime.now(UTC),
             fiscal_period_id=uuid4(),
             item_id=uuid4(),
             warehouse_id=uuid4(),
@@ -363,13 +367,15 @@ class TestCreateAdjustment:
 
         mock_db.get.side_effect = [item, warehouse]
 
-        with patch.object(
-            InventoryTransactionService,
-            "get_current_balance",
-            return_value=Decimal("100"),
+        with (
+            patch.object(
+                InventoryTransactionService,
+                "get_current_balance",
+                return_value=Decimal("100"),
+            ),
+            pytest.raises(HTTPException) as exc,
         ):
-            with pytest.raises(HTTPException) as exc:
-                service.create_adjustment(mock_db, org_id, input_data, user_id)
+            service.create_adjustment(mock_db, org_id, input_data, user_id)
 
         assert exc.value.status_code == 400
         assert "negative inventory" in exc.value.detail
@@ -384,7 +390,7 @@ class TestCreateTransfer:
 
         input_data = TransactionInput(
             transaction_type=TransactionType.TRANSFER,
-            transaction_date=datetime.now(timezone.utc),
+            transaction_date=datetime.now(UTC),
             fiscal_period_id=uuid4(),
             item_id=uuid4(),
             warehouse_id=uuid4(),
@@ -419,7 +425,7 @@ class TestCreateTransfer:
                 Decimal("50"),  # Destination warehouse
             ],
         ):
-            result = service.create_transfer(mock_db, org_id, input_data, user_id)
+            service.create_transfer(mock_db, org_id, input_data, user_id)
 
         # Should create 2 transactions (issue and receipt)
         assert mock_db.add.call_count == 2
@@ -433,7 +439,7 @@ class TestCreateTransfer:
 
         input_data = TransactionInput(
             transaction_type=TransactionType.TRANSFER,
-            transaction_date=datetime.now(timezone.utc),
+            transaction_date=datetime.now(UTC),
             fiscal_period_id=uuid4(),
             item_id=uuid4(),
             warehouse_id=uuid4(),
@@ -455,11 +461,12 @@ class TestCreateTransfer:
     ):
         """Test transfer with insufficient inventory fails."""
         from fastapi import HTTPException
+
         from app.services.inventory.transaction import InventoryTransactionService
 
         input_data = TransactionInput(
             transaction_type=TransactionType.TRANSFER,
-            transaction_date=datetime.now(timezone.utc),
+            transaction_date=datetime.now(UTC),
             fiscal_period_id=uuid4(),
             item_id=uuid4(),
             warehouse_id=uuid4(),
@@ -485,13 +492,15 @@ class TestCreateTransfer:
 
         mock_db.get.side_effect = [item, from_warehouse, to_warehouse]
 
-        with patch.object(
-            InventoryTransactionService,
-            "get_current_balance",
-            return_value=Decimal("100"),
+        with (
+            patch.object(
+                InventoryTransactionService,
+                "get_current_balance",
+                return_value=Decimal("100"),
+            ),
+            pytest.raises(HTTPException) as exc,
         ):
-            with pytest.raises(HTTPException) as exc:
-                service.create_transfer(mock_db, org_id, input_data, user_id)
+            service.create_transfer(mock_db, org_id, input_data, user_id)
 
         assert exc.value.status_code == 400
         assert "Insufficient inventory" in exc.value.detail

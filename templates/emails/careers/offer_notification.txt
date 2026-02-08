@@ -1,0 +1,13 @@
+{% extends "emails/base_email.txt" %}
+{% block content %}Dear {{ applicant_name }},
+
+Congratulations! We are delighted to inform you that you have been selected for the {{ job_title }} position at {{ org_name }}.
+
+After a thorough evaluation, we were impressed by your qualifications and believe you will be a valuable addition to our team.
+{% if offer_details %}
+Offer Details:
+{{ offer_details }}
+{% endif %}
+A member of our HR team will be in touch shortly with the full details of your offer, including compensation, benefits, and start date information.
+
+We are excited to welcome you aboard and look forward to working with you.{% endblock %}

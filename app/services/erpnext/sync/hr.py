@@ -12,7 +12,7 @@ Sync services for HR entities:
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -60,7 +60,7 @@ class DepartmentSyncService(BaseSyncService[Department]):
         self._mapping = DepartmentMapping()
         self._department_cache: dict[str, Department] = {}
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         """Fetch departments from ERPNext."""
         if since:
             yield from client.get_modified_since(
@@ -121,7 +121,7 @@ class DepartmentSyncService(BaseSyncService[Department]):
     def get_entity_id(self, entity: Department) -> uuid.UUID:
         return entity.department_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[Department]:
+    def find_existing_entity(self, source_name: str) -> Department | None:
         """Find existing department by sync record or code."""
         if source_name in self._department_cache:
             return self._department_cache[source_name]
@@ -152,7 +152,7 @@ class DesignationSyncService(BaseSyncService[Designation]):
         self._mapping = DesignationMapping()
         self._designation_cache: dict[str, Designation] = {}
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         """Fetch designations from ERPNext."""
         if since:
             yield from client.get_modified_since(
@@ -191,7 +191,7 @@ class DesignationSyncService(BaseSyncService[Designation]):
     def get_entity_id(self, entity: Designation) -> uuid.UUID:
         return entity.designation_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[Designation]:
+    def find_existing_entity(self, source_name: str) -> Designation | None:
         if source_name in self._designation_cache:
             return self._designation_cache[source_name]
 
@@ -221,7 +221,7 @@ class EmploymentTypeSyncService(BaseSyncService[EmploymentType]):
         self._mapping = EmploymentTypeMapping()
         self._type_cache: dict[str, EmploymentType] = {}
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         if since:
             yield from client.get_modified_since(
                 doctype="Employment Type",
@@ -261,7 +261,7 @@ class EmploymentTypeSyncService(BaseSyncService[EmploymentType]):
     def get_entity_id(self, entity: EmploymentType) -> uuid.UUID:
         return entity.employment_type_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[EmploymentType]:
+    def find_existing_entity(self, source_name: str) -> EmploymentType | None:
         if source_name in self._type_cache:
             return self._type_cache[source_name]
 
@@ -291,7 +291,7 @@ class EmployeeGradeSyncService(BaseSyncService[EmployeeGrade]):
         self._mapping = EmployeeGradeMapping()
         self._grade_cache: dict[str, EmployeeGrade] = {}
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         if since:
             yield from client.get_modified_since(
                 doctype="Employee Grade",
@@ -335,7 +335,7 @@ class EmployeeGradeSyncService(BaseSyncService[EmployeeGrade]):
     def get_entity_id(self, entity: EmployeeGrade) -> uuid.UUID:
         return entity.grade_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[EmployeeGrade]:
+    def find_existing_entity(self, source_name: str) -> EmployeeGrade | None:
         if source_name in self._grade_cache:
             return self._grade_cache[source_name]
 
@@ -372,7 +372,7 @@ class EmployeeSyncService(BaseSyncService[Employee]):
         self._employment_type_sync_cache: dict[str, uuid.UUID] = {}
         self._grade_sync_cache: dict[str, uuid.UUID] = {}
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         if since:
             yield from client.get_modified_since(
                 doctype="Employee",
@@ -387,10 +387,10 @@ class EmployeeSyncService(BaseSyncService[Employee]):
 
     def _resolve_entity_id(
         self,
-        source_name: Optional[str],
+        source_name: str | None,
         source_doctype: str,
         cache: dict[str, uuid.UUID],
-    ) -> Optional[uuid.UUID]:
+    ) -> uuid.UUID | None:
         """Resolve a foreign key ID from ERPNext source name."""
         if not source_name:
             return None
@@ -734,7 +734,7 @@ class EmployeeSyncService(BaseSyncService[Employee]):
     def get_entity_id(self, entity: Employee) -> uuid.UUID:
         return entity.employee_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[Employee]:
+    def find_existing_entity(self, source_name: str) -> Employee | None:
         if source_name in self._employee_cache:
             return self._employee_cache[source_name]
 

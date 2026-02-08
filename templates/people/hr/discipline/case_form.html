@@ -27,7 +27,7 @@
         </div>
     </div>
 
-    <form method="post" action="/people/hr/discipline/new" class="space-y-8">
+    <form method="post" action="/people/hr/discipline/new" class="space-y-6">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
         {% if error %}
         <div class="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
@@ -163,7 +163,7 @@
         </div>
 
         <!-- Actions -->
-        <div class="flex items-center justify-end gap-3">
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
             <a href="/people/hr/discipline" class="btn btn-ghost">Cancel</a>
             <button type="submit" class="btn btn-primary">
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

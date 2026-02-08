@@ -6,23 +6,28 @@ Manages customer records, credit limits, and risk assessment.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
-import re
 from decimal import Decimal
-from typing import Any, List, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_
+from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.finance.ar.customer import Customer, CustomerType, RiskCategory
 from app.services.common import coerce_uuid
+from app.services.finance.ar.input_utils import (
+    parse_decimal,
+    resolve_currency_code,
+)
 from app.services.finance.common import (
     apply_search_filter,
     get_org_scoped_entity,
+    parse_enum_safe,
     toggle_entity_status,
     validate_unique_code,
 )
@@ -43,37 +48,37 @@ class CustomerInput:
     # Template-friendly names (what API/templates send)
     customer_type: CustomerType
     customer_name: str  # Maps to model: legal_name
-    customer_code: Optional[str] = None
-    default_receivable_account_id: Optional[UUID] = (
+    customer_code: str | None = None
+    default_receivable_account_id: UUID | None = (
         None  # Maps to model: ar_control_account_id
     )
-    trading_name: Optional[str] = None
-    tax_id: Optional[str] = None  # Maps to model: tax_identification_number
-    registration_number: Optional[str] = None
-    vat_category: Optional[str] = None
-    default_tax_code_id: Optional[UUID] = None
-    credit_limit: Optional[Decimal] = None
+    trading_name: str | None = None
+    tax_id: str | None = None  # Maps to model: tax_identification_number
+    registration_number: str | None = None
+    vat_category: str | None = None
+    default_tax_code_id: UUID | None = None
+    credit_limit: Decimal | None = None
     payment_terms_days: int = 30  # Maps to model: credit_terms_days
     credit_hold: bool = False
-    payment_terms_id: Optional[UUID] = None
+    payment_terms_id: UUID | None = None
     currency_code: str = settings.default_functional_currency_code
-    price_list_id: Optional[UUID] = None
-    default_revenue_account_id: Optional[UUID] = None
-    sales_rep_user_id: Optional[UUID] = None
-    customer_group_id: Optional[UUID] = None
+    price_list_id: UUID | None = None
+    default_revenue_account_id: UUID | None = None
+    sales_rep_user_id: UUID | None = None
+    customer_group_id: UUID | None = None
     risk_category: RiskCategory = RiskCategory.MEDIUM
     is_related_party: bool = False
-    related_party_type: Optional[str] = None
-    related_party_relationship: Optional[str] = None
-    billing_address: Optional[dict[str, Any]] = None
-    shipping_address: Optional[dict[str, Any]] = None
-    primary_contact: Optional[dict[str, Any]] = None
-    bank_details: Optional[dict[str, Any]] = None
+    related_party_type: str | None = None
+    related_party_relationship: str | None = None
+    billing_address: dict[str, Any] | None = None
+    shipping_address: dict[str, Any] | None = None
+    primary_contact: dict[str, Any] | None = None
+    bank_details: dict[str, Any] | None = None
     is_active: bool = True
     # Additional template fields (optional - for richer UI forms)
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    address: Optional[str] = None
+    email: str | None = None
+    phone: str | None = None
+    address: str | None = None
 
 
 class CustomerService(ListResponseMixin):
@@ -82,6 +87,80 @@ class CustomerService(ListResponseMixin):
 
     Handles creation, updates, credit management, and queries.
     """
+
+    @staticmethod
+    def _parse_customer_type(value: str | None) -> CustomerType:
+        parsed = parse_enum_safe(CustomerType, value, CustomerType.COMPANY)
+        return parsed or CustomerType.COMPANY
+
+    @staticmethod
+    def build_input_from_payload(
+        db: Session,
+        organization_id: UUID,
+        payload: dict,
+    ) -> CustomerInput:
+        """Build CustomerInput from raw payload (strings or JSON)."""
+        org_id = coerce_uuid(organization_id)
+
+        credit_limit = None
+        if payload.get("credit_limit") not in (None, ""):
+            credit_limit = parse_decimal(payload.get("credit_limit"), "Credit limit")
+
+        payment_terms_raw = payload.get("payment_terms_days", 30)
+        try:
+            payment_terms_days = int(payment_terms_raw)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Invalid payment terms days") from exc
+
+        currency_code = resolve_currency_code(db, org_id, payload.get("currency_code"))
+
+        return CustomerInput(
+            customer_code=payload.get("customer_code", ""),
+            customer_type=CustomerService._parse_customer_type(
+                payload.get("customer_type")
+            ),
+            customer_name=payload.get("customer_name", ""),
+            trading_name=payload.get("trading_name")
+            or payload.get("customer_name", ""),
+            tax_id=payload.get("tax_id"),
+            currency_code=currency_code,
+            payment_terms_days=payment_terms_days,
+            credit_limit=credit_limit,
+            credit_hold=payload.get("credit_hold") is not None,
+            risk_category=RiskCategory.MEDIUM,
+            default_receivable_account_id=(
+                coerce_uuid(payload.get("default_receivable_account_id"))
+                if payload.get("default_receivable_account_id")
+                else UUID("00000000-0000-0000-0000-000000000001")
+            ),
+            default_revenue_account_id=(
+                coerce_uuid(payload.get("default_revenue_account_id"))
+                if payload.get("default_revenue_account_id")
+                else None
+            ),
+            default_tax_code_id=(
+                coerce_uuid(payload.get("default_tax_code_id"))
+                if payload.get("default_tax_code_id")
+                else None
+            ),
+            billing_address={
+                "address": payload.get("billing_address", ""),
+            }
+            if payload.get("billing_address")
+            else None,
+            shipping_address={
+                "address": payload.get("shipping_address", ""),
+            }
+            if payload.get("shipping_address")
+            else None,
+            primary_contact={
+                "email": payload.get("email", ""),
+                "phone": payload.get("phone", ""),
+            }
+            if payload.get("email") or payload.get("phone")
+            else None,
+            is_active=payload.get("is_active") is not None,
+        )
 
     @staticmethod
     def create_customer(
@@ -343,29 +422,17 @@ class CustomerService(ListResponseMixin):
 
     @staticmethod
     def _generate_customer_code(db: Session, org_id: UUID) -> str:
-        """Generate a unique customer code (CUST-00001)."""
-        prefix = "CUST"
-        max_num = 0
-        codes = (
-            db.query(Customer.customer_code)
-            .filter(
-                Customer.organization_id == org_id,
-                Customer.customer_code.ilike(f"{prefix}-%"),
-            )
-            .all()
+        """Generate a unique customer code (CUST-00001).
+
+        Delegates to SyncNumberingService for race-condition-safe generation
+        via SELECT FOR UPDATE locking.
+        """
+        from app.models.finance.core_config.numbering_sequence import SequenceType
+        from app.services.finance.common.numbering import SyncNumberingService
+
+        return SyncNumberingService(db).generate_next_number(
+            org_id, SequenceType.CUSTOMER
         )
-        pattern = re.compile(rf"^{prefix}-(\d+)$", re.IGNORECASE)
-        for (code,) in codes:
-            if not code:
-                continue
-            match = pattern.match(code.strip())
-            if match:
-                try:
-                    max_num = max(max_num, int(match.group(1)))
-                except ValueError:
-                    continue
-        next_num = max_num + 1
-        return f"{prefix}-{next_num:05d}"
 
     @staticmethod
     def update_credit_limit(
@@ -569,7 +636,7 @@ class CustomerService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         customer_code: str,
-    ) -> Optional[Customer]:
+    ) -> Customer | None:
         """Get a customer by code."""
         org_id = coerce_uuid(organization_id)
 
@@ -588,14 +655,14 @@ class CustomerService(ListResponseMixin):
     def list(
         db: Session,
         organization_id: str,
-        customer_type: Optional[CustomerType] = None,
-        risk_category: Optional[RiskCategory] = None,
-        is_active: Optional[bool] = None,
-        is_related_party: Optional[bool] = None,
-        search: Optional[str] = None,
+        customer_type: CustomerType | None = None,
+        risk_category: RiskCategory | None = None,
+        is_active: bool | None = None,
+        is_related_party: bool | None = None,
+        search: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[Customer]:
+    ) -> builtins.list[Customer]:
         """List customers with optional filters."""
         if not organization_id:
             raise HTTPException(status_code=400, detail="organization_id is required")
@@ -690,6 +757,63 @@ class CustomerService(ListResponseMixin):
             "risk_category": customer.risk_category.value,
             "is_related_party": customer.is_related_party,
         }
+
+    @staticmethod
+    def delete_customer(
+        db: Session,
+        organization_id: UUID,
+        customer_id: UUID,
+    ) -> None:
+        """Delete a customer (only when no invoices/receipts)."""
+        org_id = coerce_uuid(organization_id)
+        cust_id = coerce_uuid(customer_id)
+
+        customer = db.get(Customer, cust_id)
+        if not customer or customer.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Customer not found")
+
+        from app.models.finance.ar.customer_payment import CustomerPayment
+        from app.models.finance.ar.invoice import Invoice
+
+        invoice_count = (
+            db.query(func.count(Invoice.invoice_id))
+            .filter(
+                Invoice.organization_id == org_id,
+                Invoice.customer_id == cust_id,
+            )
+            .scalar()
+            or 0
+        )
+        if invoice_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Cannot delete customer with {invoice_count} invoice(s). "
+                    "Deactivate instead."
+                ),
+            )
+
+        payment_count = (
+            db.query(func.count(CustomerPayment.payment_id))
+            .filter(
+                CustomerPayment.organization_id == org_id,
+                CustomerPayment.customer_id == cust_id,
+            )
+            .scalar()
+            or 0
+        )
+        if payment_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Cannot delete customer with {payment_count} receipt(s). "
+                    "Deactivate instead."
+                ),
+            )
+
+        db.delete(customer)
+        db.flush()
+        db.commit()
 
 
 # Module-level singleton instance

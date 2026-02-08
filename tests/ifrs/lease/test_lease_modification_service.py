@@ -106,10 +106,11 @@ class TestLeaseModificationService:
 
     def test_approve_modification_not_found(self, mock_db, org_id, approver_id):
         """Test approving non-existent modification fails."""
+        from fastapi import HTTPException
+
         from app.services.finance.lease.lease_modification import (
             LeaseModificationService,
         )
-        from fastapi import HTTPException
 
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
@@ -127,10 +128,11 @@ class TestLeaseModificationService:
         self, mock_db, org_id, user_id, mock_modification
     ):
         """Test segregation of duties violation on approval."""
+        from fastapi import HTTPException
+
         from app.services.finance.lease.lease_modification import (
             LeaseModificationService,
         )
-        from fastapi import HTTPException
 
         mock_modification.created_by_user_id = user_id
         mock_db.query.return_value.filter.return_value.first.return_value = (

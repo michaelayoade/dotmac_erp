@@ -5,7 +5,7 @@ Imports bank accounts from CSV data into the banking system.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -55,14 +55,14 @@ class BankAccountImporter(BaseImporter[BankAccount]):
         self,
         db: Session,
         config: ImportConfig,
-        default_gl_account_id: Optional[UUID] = None,
+        default_gl_account_id: UUID | None = None,
     ):
         super().__init__(db, config)
         self.default_gl_account_id = default_gl_account_id
-        self._gl_account_cache: Dict[str, UUID] = {}
+        self._gl_account_cache: dict[str, UUID] = {}
         self._code_counter = 0
 
-    def get_field_mappings(self) -> List[FieldMapping]:
+    def get_field_mappings(self) -> list[FieldMapping]:
         """Define flexible field mappings supporting various CSV formats."""
         return [
             # Bank details
@@ -135,7 +135,7 @@ class BankAccountImporter(BaseImporter[BankAccount]):
             FieldMapping("Status", "status_str", required=False, default="active"),
         ]
 
-    def get_unique_key(self, row: Dict[str, Any]) -> str:
+    def get_unique_key(self, row: dict[str, Any]) -> str:
         """Unique key is account number + bank code."""
         account_number = str(
             row.get("Account Number") or row.get("Account No") or ""
@@ -145,7 +145,7 @@ class BankAccountImporter(BaseImporter[BankAccount]):
         ).strip()
         return f"{account_number}:{bank_code}"
 
-    def check_duplicate(self, row: Dict[str, Any]) -> Optional[BankAccount]:
+    def check_duplicate(self, row: dict[str, Any]) -> BankAccount | None:
         """Check if bank account already exists."""
         account_number = str(
             row.get("Account Number") or row.get("Account No") or ""
@@ -167,7 +167,7 @@ class BankAccountImporter(BaseImporter[BankAccount]):
 
         return existing
 
-    def validate_row(self, row: Dict[str, Any], row_num: int) -> bool:
+    def validate_row(self, row: dict[str, Any], row_num: int) -> bool:
         """Validate row data."""
         is_valid = super().validate_row(row, row_num)
 
@@ -189,7 +189,7 @@ class BankAccountImporter(BaseImporter[BankAccount]):
 
         return is_valid
 
-    def create_entity(self, row: Dict[str, Any]) -> BankAccount:
+    def create_entity(self, row: dict[str, Any]) -> BankAccount:
         """Create a new bank account from transformed row data."""
         # Get bank details
         bank_name = str(
@@ -303,7 +303,7 @@ class BankAccountImporter(BaseImporter[BankAccount]):
         return status_map.get(status_str.upper(), BankAccountStatus.active)
 
     def _get_gl_account_id(
-        self, row: Dict[str, Any], bank_name: str, currency: str
+        self, row: dict[str, Any], bank_name: str, currency: str
     ) -> UUID:
         """Get or create GL account for this bank account."""
         # Try to find by GL account code

@@ -118,7 +118,7 @@ class CoASegmentValue(Base):
     segment_name: Mapped[str] = mapped_column(String(200), nullable=False)
 
     # Hierarchy
-    parent_segment_value_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    parent_segment_value_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("ipsas.coa_segment_value.segment_value_id"),
         nullable=True,

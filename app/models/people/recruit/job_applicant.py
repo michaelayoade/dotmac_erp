@@ -7,7 +7,7 @@ Tracks candidates applying for job openings.
 import enum
 import uuid
 from datetime import date, datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
@@ -29,9 +29,9 @@ from app.db import Base
 from app.models.people.base import AuditMixin, ERPNextSyncMixin, StatusTrackingMixin
 
 if TYPE_CHECKING:
-    from app.models.people.recruit.job_opening import JobOpening
     from app.models.people.recruit.interview import Interview
     from app.models.people.recruit.job_offer import JobOffer
+    from app.models.people.recruit.job_opening import JobOpening
 
 
 class ApplicantStatus(str, enum.Enum):
@@ -106,47 +106,47 @@ class JobApplicant(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         String(255),
         nullable=False,
     )
-    phone: Mapped[Optional[str]] = mapped_column(
+    phone: Mapped[str | None] = mapped_column(
         String(40),
         nullable=True,
     )
-    date_of_birth: Mapped[Optional[date]] = mapped_column(
+    date_of_birth: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    gender: Mapped[Optional[str]] = mapped_column(
+    gender: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
     )
 
     # Address
-    city: Mapped[Optional[str]] = mapped_column(
+    city: Mapped[str | None] = mapped_column(
         String(80),
         nullable=True,
     )
-    country_code: Mapped[Optional[str]] = mapped_column(
+    country_code: Mapped[str | None] = mapped_column(
         String(2),
         nullable=True,
     )
 
     # Professional details
-    current_employer: Mapped[Optional[str]] = mapped_column(
+    current_employer: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
     )
-    current_job_title: Mapped[Optional[str]] = mapped_column(
+    current_job_title: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
     )
-    years_of_experience: Mapped[Optional[int]] = mapped_column(
+    years_of_experience: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
     )
-    highest_qualification: Mapped[Optional[str]] = mapped_column(
+    highest_qualification: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
     )
-    skills: Mapped[Optional[str]] = mapped_column(
+    skills: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Comma-separated list of skills",
@@ -158,21 +158,21 @@ class JobApplicant(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.current_date(),
     )
-    source: Mapped[Optional[str]] = mapped_column(
+    source: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="WEBSITE, LINKEDIN, REFERRAL, AGENCY, etc.",
     )
-    referral_employee_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    referral_employee_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.employee.employee_id"),
         nullable=True,
     )
-    cover_letter: Mapped[Optional[str]] = mapped_column(
+    cover_letter: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    resume_url: Mapped[Optional[str]] = mapped_column(
+    resume_url: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
     )
@@ -184,14 +184,14 @@ class JobApplicant(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
     )
 
     # Rating
-    overall_rating: Mapped[Optional[int]] = mapped_column(
+    overall_rating: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="1-5 overall rating",
     )
 
     # Notes
-    notes: Mapped[Optional[str]] = mapped_column(
+    notes: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -203,13 +203,13 @@ class JobApplicant(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         server_default=text("false"),
         comment="Whether applicant email has been verified for status tracking",
     )
-    verification_token: Mapped[Optional[str]] = mapped_column(
+    verification_token: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         index=True,
         comment="Token for verifying email to check application status",
     )
-    verification_token_expires: Mapped[Optional[datetime]] = mapped_column(
+    verification_token_expires: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="Expiration time for verification token",
@@ -220,7 +220,7 @@ class JobApplicant(Base, AuditMixin, StatusTrackingMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         nullable=True,
         onupdate=func.now(),
     )

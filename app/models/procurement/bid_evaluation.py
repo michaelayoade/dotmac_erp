@@ -6,7 +6,7 @@ Evaluation record comparing vendor bids for an RFQ.
 
 import uuid
 from datetime import date, datetime
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Date,
@@ -60,22 +60,22 @@ class BidEvaluation(Base, ProcurementBaseMixin):
     status: Mapped[EvaluationStatus] = mapped_column(
         default=EvaluationStatus.DRAFT,
     )
-    recommended_supplier_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    recommended_supplier_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="Winning vendor (ap.supplier)",
     )
-    recommended_response_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    recommended_response_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="Winning bid (quotation_response)",
     )
-    evaluation_report: Mapped[Optional[str]] = mapped_column(
+    evaluation_report: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Summary/justification",
     )
-    approval_request_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approval_request_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="Link to approval workflow",
@@ -84,17 +84,17 @@ class BidEvaluation(Base, ProcurementBaseMixin):
         UUID(as_uuid=True),
         nullable=False,
     )
-    approved_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
     # Relationships
-    scores: Mapped[List["BidEvaluationScore"]] = relationship(
+    scores: Mapped[list["BidEvaluationScore"]] = relationship(
         "BidEvaluationScore",
         back_populates="evaluation",
         cascade="all, delete-orphan",

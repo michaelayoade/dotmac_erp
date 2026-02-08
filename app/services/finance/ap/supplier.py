@@ -6,10 +6,11 @@ Manages vendor/supplier records, validation, and lifecycle.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, List, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -22,10 +23,13 @@ from app.models.finance.ap.supplier_invoice import (
     SupplierInvoice,
     SupplierInvoiceStatus,
 )
+from app.models.finance.ap.supplier_payment import SupplierPayment
 from app.services.common import coerce_uuid
+from app.services.finance.ap.input_utils import resolve_currency_code
 from app.services.finance.common import (
     apply_search_filter,
     get_org_scoped_entity,
+    parse_enum_safe,
     toggle_entity_status,
     validate_unique_code,
 )
@@ -47,29 +51,29 @@ class SupplierInput:
     supplier_code: str
     supplier_type: SupplierType
     supplier_name: str  # Maps to model: legal_name
-    default_payable_account_id: Optional[UUID] = (
+    default_payable_account_id: UUID | None = (
         None  # Maps to model: ap_control_account_id
     )
-    trading_name: Optional[str] = None
-    tax_id: Optional[str] = None  # Maps to model: tax_identification_number
-    registration_number: Optional[str] = None
+    trading_name: str | None = None
+    tax_id: str | None = None  # Maps to model: tax_identification_number
+    registration_number: str | None = None
     payment_terms_days: int = 30
     currency_code: str = settings.default_functional_currency_code
-    default_expense_account_id: Optional[UUID] = None
-    supplier_group_id: Optional[UUID] = None
+    default_expense_account_id: UUID | None = None
+    supplier_group_id: UUID | None = None
     is_related_party: bool = False
-    related_party_relationship: Optional[str] = None
+    related_party_relationship: str | None = None
     withholding_tax_applicable: bool = False
-    withholding_tax_code_id: Optional[UUID] = None
-    billing_address: Optional[dict[str, Any]] = None
-    remittance_address: Optional[dict[str, Any]] = None
-    primary_contact: Optional[dict[str, Any]] = None
-    bank_details: Optional[dict[str, Any]] = None
+    withholding_tax_code_id: UUID | None = None
+    billing_address: dict[str, Any] | None = None
+    remittance_address: dict[str, Any] | None = None
+    primary_contact: dict[str, Any] | None = None
+    bank_details: dict[str, Any] | None = None
     # Additional template fields (optional - for richer UI forms)
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    address: Optional[str] = None
-    payment_method: Optional[str] = None
+    email: str | None = None
+    phone: str | None = None
+    address: str | None = None
+    payment_method: str | None = None
 
 
 class SupplierService(ListResponseMixin):
@@ -78,6 +82,62 @@ class SupplierService(ListResponseMixin):
 
     Handles creation, updates, validation, and queries for supplier records.
     """
+
+    @staticmethod
+    def _parse_supplier_type(value: str | None) -> SupplierType:
+        parsed = parse_enum_safe(SupplierType, value, SupplierType.VENDOR)
+        return parsed or SupplierType.VENDOR
+
+    @staticmethod
+    def build_input_from_payload(
+        db: Session,
+        organization_id: UUID,
+        payload: dict,
+    ) -> SupplierInput:
+        """Build SupplierInput from raw payload."""
+        org_id = coerce_uuid(organization_id)
+
+        payment_terms_raw = payload.get("payment_terms_days", 30)
+        try:
+            payment_terms_days = int(payment_terms_raw)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Invalid payment terms days") from exc
+
+        currency_code = resolve_currency_code(db, org_id, payload.get("currency_code"))
+
+        return SupplierInput(
+            supplier_code=payload.get("supplier_code", ""),
+            supplier_type=SupplierService._parse_supplier_type(
+                payload.get("supplier_type")
+            ),
+            supplier_name=payload.get("supplier_name", ""),
+            trading_name=payload.get("trading_name")
+            or payload.get("supplier_name", ""),
+            tax_id=payload.get("tax_id"),
+            currency_code=currency_code,
+            payment_terms_days=payment_terms_days,
+            default_payable_account_id=(
+                coerce_uuid(payload.get("default_payable_account_id"))
+                if payload.get("default_payable_account_id")
+                else UUID("00000000-0000-0000-0000-000000000001")
+            ),
+            default_expense_account_id=(
+                coerce_uuid(payload.get("default_expense_account_id"))
+                if payload.get("default_expense_account_id")
+                else None
+            ),
+            billing_address={
+                "address": payload.get("billing_address", ""),
+            }
+            if payload.get("billing_address")
+            else None,
+            primary_contact={
+                "email": payload.get("email", ""),
+                "phone": payload.get("phone", ""),
+            }
+            if payload.get("email") or payload.get("phone")
+            else None,
+        )
 
     @staticmethod
     def create_supplier(
@@ -337,6 +397,7 @@ class SupplierService(ListResponseMixin):
                 )
             )
         )
+        outstanding_balance = outstanding_balance or Decimal("0")
 
         if outstanding_balance > Decimal("0"):
             raise HTTPException(
@@ -405,6 +466,59 @@ class SupplierService(ListResponseMixin):
         )
 
     @staticmethod
+    def delete_supplier(
+        db: Session,
+        organization_id: UUID,
+        supplier_id: UUID,
+    ) -> None:
+        """Delete a supplier (only when no invoices/payments)."""
+        org_id = coerce_uuid(organization_id)
+        sup_id = coerce_uuid(supplier_id)
+
+        supplier = db.get(Supplier, sup_id)
+        if not supplier or supplier.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Supplier not found")
+
+        invoice_count = (
+            db.query(func.count(SupplierInvoice.invoice_id))
+            .filter(
+                SupplierInvoice.organization_id == org_id,
+                SupplierInvoice.supplier_id == sup_id,
+            )
+            .scalar()
+            or 0
+        )
+        if invoice_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Cannot delete supplier with {invoice_count} invoice(s). "
+                    "Deactivate instead."
+                ),
+            )
+
+        payment_count = (
+            db.query(func.count(SupplierPayment.payment_id))
+            .filter(
+                SupplierPayment.organization_id == org_id,
+                SupplierPayment.supplier_id == sup_id,
+            )
+            .scalar()
+            or 0
+        )
+        if payment_count > 0:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Cannot delete supplier with {payment_count} payment(s). "
+                    "Deactivate instead."
+                ),
+            )
+
+        db.delete(supplier)
+        db.commit()
+
+    @staticmethod
     def get(
         db: Session,
         organization_id: UUID,
@@ -439,7 +553,7 @@ class SupplierService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         supplier_code: str,
-    ) -> Optional[Supplier]:
+    ) -> Supplier | None:
         """
         Get a supplier by code.
 
@@ -466,13 +580,13 @@ class SupplierService(ListResponseMixin):
     def list(
         db: Session,
         organization_id: str,
-        supplier_type: Optional[SupplierType] = None,
-        is_active: Optional[bool] = None,
-        is_related_party: Optional[bool] = None,
-        search: Optional[str] = None,
+        supplier_type: SupplierType | None = None,
+        is_active: bool | None = None,
+        is_related_party: bool | None = None,
+        search: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[Supplier]:
+    ) -> builtins.list[Supplier]:
         """
         List suppliers with optional filters.
 

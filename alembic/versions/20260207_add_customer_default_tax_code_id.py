@@ -5,9 +5,10 @@ Revises: 20260207_add_customer_vat_category
 Create Date: 2026-02-07
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "20260207_add_customer_default_tax_code_id"

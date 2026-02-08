@@ -5,7 +5,6 @@ Schemas for pool vehicle reservation API endpoints.
 """
 
 from datetime import datetime
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -20,9 +19,9 @@ class ReservationBase(BaseModel):
     start_datetime: datetime
     end_datetime: datetime
     purpose: str = Field(max_length=500)
-    destination: Optional[str] = Field(default=None, max_length=300)
-    estimated_distance_km: Optional[int] = Field(default=None, ge=0)
-    notes: Optional[str] = None
+    destination: str | None = Field(default=None, max_length=300)
+    estimated_distance_km: int | None = Field(default=None, ge=0)
+    notes: str | None = None
 
 
 class ReservationCreate(ReservationBase):
@@ -34,13 +33,13 @@ class ReservationCreate(ReservationBase):
 class ReservationUpdate(BaseModel):
     """Update reservation request."""
 
-    vehicle_id: Optional[UUID] = None
-    start_datetime: Optional[datetime] = None
-    end_datetime: Optional[datetime] = None
-    purpose: Optional[str] = Field(default=None, max_length=500)
-    destination: Optional[str] = Field(default=None, max_length=300)
-    estimated_distance_km: Optional[int] = Field(default=None, ge=0)
-    notes: Optional[str] = None
+    vehicle_id: UUID | None = None
+    start_datetime: datetime | None = None
+    end_datetime: datetime | None = None
+    purpose: str | None = Field(default=None, max_length=500)
+    destination: str | None = Field(default=None, max_length=300)
+    estimated_distance_km: int | None = Field(default=None, ge=0)
+    notes: str | None = None
 
 
 class ReservationRead(ReservationBase):
@@ -52,15 +51,15 @@ class ReservationRead(ReservationBase):
     organization_id: UUID
     employee_id: UUID
     status: ReservationStatus
-    actual_start_datetime: Optional[datetime] = None
-    actual_end_datetime: Optional[datetime] = None
-    approved_by_id: Optional[UUID] = None
-    approved_at: Optional[datetime] = None
-    rejection_reason: Optional[str] = None
-    start_odometer: Optional[int] = None
-    end_odometer: Optional[int] = None
+    actual_start_datetime: datetime | None = None
+    actual_end_datetime: datetime | None = None
+    approved_by_id: UUID | None = None
+    approved_at: datetime | None = None
+    rejection_reason: str | None = None
+    start_odometer: int | None = None
+    end_odometer: int | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class ReservationBrief(BaseModel):
@@ -82,12 +81,12 @@ class ReservationWithDetails(ReservationRead):
 
     model_config = ConfigDict(from_attributes=True)
 
-    employee_name: Optional[str] = None
-    vehicle_name: Optional[str] = None
-    approved_by_name: Optional[str] = None
-    duration_hours: Optional[float] = None
-    actual_duration_hours: Optional[float] = None
-    actual_distance_km: Optional[int] = None
+    employee_name: str | None = None
+    vehicle_name: str | None = None
+    approved_by_name: str | None = None
+    duration_hours: float | None = None
+    actual_duration_hours: float | None = None
+    actual_distance_km: int | None = None
 
 
 class ReservationApprove(BaseModel):
@@ -105,22 +104,22 @@ class ReservationReject(BaseModel):
 class ReservationCheckout(BaseModel):
     """Request to check out (start using) a vehicle."""
 
-    actual_start_datetime: Optional[datetime] = None
+    actual_start_datetime: datetime | None = None
     start_odometer: int = Field(ge=0)
 
 
 class ReservationCheckin(BaseModel):
     """Request to check in (return) a vehicle."""
 
-    actual_end_datetime: Optional[datetime] = None
+    actual_end_datetime: datetime | None = None
     end_odometer: int = Field(ge=0)
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class ReservationListResponse(BaseModel):
     """Paginated reservation list response."""
 
-    items: List[ReservationBrief]
+    items: list[ReservationBrief]
     total: int
     offset: int
     limit: int

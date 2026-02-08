@@ -10,7 +10,6 @@ Generates IPSAS-compliant financial statements:
 
 import logging
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -68,7 +67,7 @@ class IPSASStatementService:
         organization_id: UUID,
         fiscal_period_id: UUID,
         *,
-        fund_id: Optional[UUID] = None,
+        fund_id: UUID | None = None,
     ) -> dict:
         """
         Generate IPSAS 1 Statement of Financial Position.
@@ -164,7 +163,7 @@ class IPSASStatementService:
         organization_id: UUID,
         fiscal_period_id: UUID,
         *,
-        fund_id: Optional[UUID] = None,
+        fund_id: UUID | None = None,
     ) -> dict:
         """
         Generate IPSAS 1 Statement of Financial Performance.
@@ -258,7 +257,7 @@ class IPSASStatementService:
         organization_id: UUID,
         fiscal_period_id: UUID,
         *,
-        fund_id: Optional[UUID] = None,
+        fund_id: UUID | None = None,
     ) -> dict:
         """
         Generate IPSAS 1 Statement of Changes in Net Assets.
@@ -302,7 +301,7 @@ class IPSASStatementService:
         organization_id: UUID,
         fiscal_period_id: UUID,
         *,
-        fund_id: Optional[UUID] = None,
+        fund_id: UUID | None = None,
     ) -> dict:
         """
         Generate IPSAS 2 Cash Flow Statement.

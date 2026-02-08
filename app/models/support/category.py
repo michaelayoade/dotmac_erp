@@ -6,7 +6,7 @@ Represents categories/types for support tickets.
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     Boolean,
@@ -25,8 +25,8 @@ from app.db import Base
 
 if TYPE_CHECKING:
     from app.models.finance.core_org import Organization
-    from app.models.support.ticket import Ticket
     from app.models.support.team import SupportTeam
+    from app.models.support.ticket import Ticket
 
 
 class TicketCategory(Base):
@@ -74,18 +74,18 @@ class TicketCategory(Base):
         nullable=False,
         comment="Display name",
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
 
     # Display
-    color: Mapped[Optional[str]] = mapped_column(
+    color: Mapped[str | None] = mapped_column(
         String(7),
         nullable=True,
         comment="Hex color for badges (e.g., #FF5733)",
     )
-    icon: Mapped[Optional[str]] = mapped_column(
+    icon: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="Icon name for UI",
@@ -97,7 +97,7 @@ class TicketCategory(Base):
     )
 
     # Default assignment
-    default_team_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    default_team_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("support.support_team.team_id"),
         nullable=True,
@@ -105,16 +105,16 @@ class TicketCategory(Base):
     )
 
     # Default SLA (optional)
-    default_priority: Mapped[Optional[str]] = mapped_column(
+    default_priority: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="Default priority for new tickets",
     )
-    response_hours: Mapped[Optional[int]] = mapped_column(
+    response_hours: Mapped[int | None] = mapped_column(
         nullable=True,
         comment="SLA response time in hours",
     )
-    resolution_hours: Mapped[Optional[int]] = mapped_column(
+    resolution_hours: Mapped[int | None] = mapped_column(
         nullable=True,
         comment="SLA resolution time in hours",
     )
@@ -138,7 +138,7 @@ class TicketCategory(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -153,7 +153,7 @@ class TicketCategory(Base):
         "SupportTeam",
         foreign_keys=[default_team_id],
     )
-    tickets: Mapped[List["Ticket"]] = relationship(
+    tickets: Mapped[list["Ticket"]] = relationship(
         "Ticket",
         back_populates="category",
     )

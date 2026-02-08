@@ -9,11 +9,10 @@ from uuid import uuid4
 
 import pytest
 
+from app.models.finance.gl.fiscal_period import PeriodStatus
 from app.services.finance.gl.period_guard import (
     PeriodGuardService,
 )
-
-from app.models.finance.gl.fiscal_period import PeriodStatus
 
 MockPeriodStatus = PeriodStatus
 
@@ -90,13 +89,15 @@ def patch_period_guard():
         mock_fp.end_date = MockColumn()
         mock_fp.status = MockColumn()
         mock_fp.period_number = MockColumn()
-        with patch(
-            "app.services.finance.gl.period_guard.and_", return_value=MagicMock()
-        ):
-            with patch(
+        with (
+            patch(
+                "app.services.finance.gl.period_guard.and_", return_value=MagicMock()
+            ),
+            patch(
                 "app.services.finance.gl.period_guard.PeriodStatus", MockPeriodStatus
-            ):
-                yield mock_fp
+            ),
+        ):
+            yield mock_fp
 
 
 @pytest.fixture
@@ -125,13 +126,13 @@ class TestCanPostToDate:
         mock_db.query.return_value.filter.return_value.first.return_value = None
         posting_date = date(2024, 1, 15)
 
-        with patch_period_guard():
-            with patch.object(
+        with (
+            patch_period_guard(),
+            patch.object(
                 PeriodGuardService, "_ensure_period_exists", return_value=None
-            ):
-                result = PeriodGuardService.can_post_to_date(
-                    mock_db, org_id, posting_date
-                )
+            ),
+        ):
+            result = PeriodGuardService.can_post_to_date(mock_db, org_id, posting_date)
 
         assert result.is_allowed is False
         assert result.fiscal_period_id is None
@@ -298,9 +299,8 @@ class TestRequireOpenPeriod:
         mock_db.query.return_value.filter.return_value.first.return_value = period
         posting_date = date(2024, 1, 15)
 
-        with patch_period_guard():
-            with pytest.raises(HTTPException) as exc:
-                PeriodGuardService.require_open_period(mock_db, org_id, posting_date)
+        with patch_period_guard(), pytest.raises(HTTPException) as exc:
+            PeriodGuardService.require_open_period(mock_db, org_id, posting_date)
 
         assert exc.value.status_code == 400
 
@@ -331,9 +331,8 @@ class TestPeriodOperations:
         mock_db.get.return_value = None
         period_id = uuid4()
 
-        with patch_period_guard():
-            with pytest.raises(HTTPException) as exc:
-                PeriodGuardService.open_period(mock_db, org_id, period_id, user_id)
+        with patch_period_guard(), pytest.raises(HTTPException) as exc:
+            PeriodGuardService.open_period(mock_db, org_id, period_id, user_id)
 
         assert exc.value.status_code == 404
 

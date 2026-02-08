@@ -6,9 +6,9 @@ Synchronizes Paystack transactions with bank statements for reconciliation.
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any, Optional, cast
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
@@ -40,7 +40,7 @@ class SyncResult:
     """Result of a sync operation."""
 
     success: bool
-    statement_id: Optional[UUID] = None
+    statement_id: UUID | None = None
     transactions_synced: int = 0
     transfers_synced: int = 0
     settlements_synced: int = 0
@@ -82,7 +82,7 @@ class PaystackSyncService:
             webhook_secret=str(secret_key),
         )
 
-    def _get_bank_accounts(self) -> tuple[Optional[BankAccount], Optional[BankAccount]]:
+    def _get_bank_accounts(self) -> tuple[BankAccount | None, BankAccount | None]:
         """Get the Paystack bank accounts for collections and transfers."""
         collection_id = resolve_value(
             self.db, SettingDomain.payments, "paystack_collection_bank_account_id"
@@ -106,7 +106,7 @@ class PaystackSyncService:
         self,
         from_date: date,
         to_date: date,
-        user_id: Optional[UUID] = None,
+        user_id: UUID | None = None,
     ) -> SyncResult:
         """
         Sync Paystack transactions for a date range.
@@ -238,7 +238,7 @@ class PaystackSyncService:
         to_str: str,
         from_date: date,
         to_date: date,
-        user_id: Optional[UUID],
+        user_id: UUID | None,
     ) -> dict:
         """Sync collection transactions to bank statement."""
         # Get or create statement
@@ -313,7 +313,7 @@ class PaystackSyncService:
                     "channel": txn.channel,
                     "metadata": txn.metadata,
                 },
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
             )
             self.db.add(line)
             count += 1
@@ -335,7 +335,7 @@ class PaystackSyncService:
         to_str: str,
         from_date: date,
         to_date: date,
-        user_id: Optional[UUID],
+        user_id: UUID | None,
     ) -> dict:
         """Sync transfer transactions to bank statement."""
         # Get or create statement
@@ -411,7 +411,7 @@ class PaystackSyncService:
                     "recipient_account": txn.recipient_account_number,
                     "recipient_bank": txn.recipient_bank_code,
                 },
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
             )
             self.db.add(line)
             count += 1
@@ -433,7 +433,7 @@ class PaystackSyncService:
         to_str: str,
         from_date: date,
         to_date: date,
-        user_id: Optional[UUID],
+        user_id: UUID | None,
     ) -> dict:
         """Sync settlements (payouts to merchant bank) as debits on collections account."""
         # Get or create statement (same as collections)
@@ -479,24 +479,12 @@ class PaystackSyncService:
         total_fees = Decimal("0")
         line_number = statement.total_lines or 0
 
-        # Also check for existing fee lines
-        existing_fee_ids = set(
-            self.db.scalars(
-                select(BankStatementLine.transaction_id).where(
-                    BankStatementLine.statement_id == statement.statement_id,
-                    BankStatementLine.transaction_id.like("FEE-STL-%"),
-                )
-            ).all()
-        )
-
         for stl in all_settlements:
             stl_id = f"STL-{stl.id}"
-            fee_id = f"FEE-STL-{stl.id}"
             settlement_date = self._parse_date(stl.settlement_date or stl.created_at)
 
             # Convert kobo to naira
             net_amount = Decimal(stl.net_amount) / Decimal("100")
-            fee_amount = Decimal(stl.total_fees) / Decimal("100")
 
             # Create settlement line if not exists
             if stl_id not in existing_ids:
@@ -523,44 +511,17 @@ class PaystackSyncService:
                         "is_interbank": True,
                         "transfer_type": "Paystack Settlement",
                     },
-                    created_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(UTC),
                 )
                 self.db.add(line)
                 count += 1
                 total += net_amount
 
-            # Create fee line if not exists and fee > 0
-            if fee_id not in existing_fee_ids and fee_amount > 0:
-                line_number += 1
-                fee_line = BankStatementLine(
-                    line_id=uuid4(),
-                    statement_id=statement.statement_id,
-                    line_number=line_number,
-                    transaction_id=fee_id,
-                    transaction_date=settlement_date,
-                    transaction_type=StatementLineType.debit,
-                    amount=fee_amount,
-                    description=f"Paystack Fee: Settlement {stl.id}",
-                    reference=f"FEE-{stl.id}",
-                    payee_payer="Paystack Fees",
-                    bank_reference=str(stl.id),
-                    is_matched=False,
-                    raw_data={
-                        "settlement_id": stl.id,
-                        "fee_type": "paystack_transaction_fee",
-                        "is_expense": True,
-                    },
-                    created_at=datetime.now(timezone.utc),
-                )
-                self.db.add(fee_line)
-                fee_count += 1
-                total_fees += fee_amount
-
         # Update statement totals (settlements + fees are debits)
-        statement.total_debits += total + total_fees
-        statement.closing_balance -= total + total_fees
-        statement.total_lines += count + fee_count
-        statement.unmatched_lines += count + fee_count
+        statement.total_debits += total
+        statement.closing_balance -= total
+        statement.total_lines += count
+        statement.unmatched_lines += count
 
         return {
             "count": count,
@@ -575,7 +536,7 @@ class PaystackSyncService:
         from_date: date,
         to_date: date,
         source: str,
-        user_id: Optional[UUID],
+        user_id: UUID | None,
     ) -> BankStatement:
         """Get existing statement or create new one for the period."""
         statement_number = (
@@ -617,13 +578,13 @@ class PaystackSyncService:
             currency_code="NGN",
             status=BankStatementStatus.imported,
             import_source=source,
-            imported_at=datetime.now(timezone.utc),
+            imported_at=datetime.now(UTC),
             imported_by=user_id,
             total_lines=0,
             matched_lines=0,
             unmatched_lines=0,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         self.db.add(statement)
         self.db.flush()
@@ -652,9 +613,9 @@ class PaystackSyncService:
             account.last_statement_date = datetime.combine(
                 latest_statement.statement_date,
                 datetime.min.time(),
-                tzinfo=timezone.utc,
+                tzinfo=UTC,
             )
-            account.updated_at = datetime.now(timezone.utc)
+            account.updated_at = datetime.now(UTC)
 
     def _update_collections_balance_from_api(
         self, client: PaystackClient, account: BankAccount
@@ -682,8 +643,8 @@ class PaystackSyncService:
                 page += 1
 
             account.last_statement_balance = pending_total
-            account.last_statement_date = datetime.now(timezone.utc)
-            account.updated_at = datetime.now(timezone.utc)
+            account.last_statement_date = datetime.now(UTC)
+            account.updated_at = datetime.now(UTC)
             logger.info(
                 f"Updated {account.account_name} unsettled balance: ₦{pending_total:,.2f}"
             )
@@ -706,8 +667,8 @@ class PaystackSyncService:
                     balance_kobo = b.get("balance", 0)
                     balance_naira = Decimal(balance_kobo) / Decimal("100")
                     account.last_statement_balance = balance_naira
-                    account.last_statement_date = datetime.now(timezone.utc)
-                    account.updated_at = datetime.now(timezone.utc)
+                    account.last_statement_date = datetime.now(UTC)
+                    account.updated_at = datetime.now(UTC)
                     logger.info(
                         f"Updated {account.account_name} balance: ₦{balance_naira:,.2f}"
                     )

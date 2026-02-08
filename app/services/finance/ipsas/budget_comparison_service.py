@@ -6,7 +6,6 @@ Generates budget vs actual comparison reports as required by IPSAS 24.
 
 import logging
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -32,7 +31,7 @@ class BudgetComparisonService:
         organization_id: UUID,
         fiscal_year_id: UUID,
         *,
-        fund_id: Optional[UUID] = None,
+        fund_id: UUID | None = None,
     ) -> BudgetComparisonResponse:
         """
         Generate IPSAS 24 Budget vs Actual comparison.

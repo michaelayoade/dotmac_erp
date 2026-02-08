@@ -5,22 +5,21 @@ HTML pages for RRR (Remita Retrieval Reference) management.
 """
 
 from decimal import Decimal, InvalidOperation
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.services.remita.client import RemitaError
+from app.services.remita.web.remita_web import get_remita_web_service
 from app.templates import templates
 from app.web.deps import (
-    get_db,
-    require_finance_access,
     WebAuthContext,
     base_context,
+    get_db,
+    require_finance_access,
 )
-from app.services.remita.web.remita_web import get_remita_web_service
-from app.services.remita.client import RemitaError
 
 router = APIRouter(prefix="/remita", tags=["remita-web"])
 
@@ -29,11 +28,11 @@ router = APIRouter(prefix="/remita", tags=["remita-web"])
 @router.get("/", response_class=HTMLResponse)
 def remita_list(
     request: Request,
-    status: Optional[str] = None,
-    biller: Optional[str] = None,
+    status: str | None = None,
+    biller: str | None = None,
     page: int = Query(default=1, ge=1),
-    refresh_msg: Optional[str] = None,
-    error: Optional[str] = None,
+    refresh_msg: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -118,10 +117,10 @@ def generate_rrr(
     amount: str = Form(...),
     payer_name: str = Form(...),
     payer_email: str = Form(...),
-    payer_phone: Optional[str] = Form(None),
+    payer_phone: str | None = Form(None),
     description: str = Form(""),
-    source_type: Optional[str] = Form(None),
-    source_id: Optional[str] = Form(None),
+    source_type: str | None = Form(None),
+    source_id: str | None = Form(None),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -221,8 +220,8 @@ def generate_rrr(
 def rrr_detail(
     request: Request,
     rrr_id: UUID,
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):

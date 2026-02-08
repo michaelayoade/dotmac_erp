@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
@@ -103,7 +103,7 @@ class EmployeeDocumentService:
         self,
         db: Session,
         organization_id: uuid.UUID,
-        principal: Optional["Principal"] = None,
+        principal: Principal | None = None,
     ) -> None:
         self.db = db
         self.organization_id = organization_id
@@ -124,10 +124,10 @@ class EmployeeDocumentService:
     def list_documents(
         self,
         employee_id: uuid.UUID,
-        document_type: Optional[DocumentType] = None,
-        is_verified: Optional[bool] = None,
+        document_type: DocumentType | None = None,
+        is_verified: bool | None = None,
         include_expired: bool = True,
-    ) -> List[EmployeeDocument]:
+    ) -> list[EmployeeDocument]:
         """List documents for an employee."""
         query = select(EmployeeDocument).where(
             EmployeeDocument.organization_id == self.organization_id,
@@ -171,11 +171,11 @@ class EmployeeDocumentService:
         document_name: str,
         file_path: str,
         file_name: str,
-        file_size: Optional[int] = None,
-        mime_type: Optional[str] = None,
-        description: Optional[str] = None,
-        issue_date: Optional[date] = None,
-        expiry_date: Optional[date] = None,
+        file_size: int | None = None,
+        mime_type: str | None = None,
+        description: str | None = None,
+        issue_date: date | None = None,
+        expiry_date: date | None = None,
     ) -> EmployeeDocument:
         """Create a new document record."""
         self._get_employee(employee_id)
@@ -199,10 +199,10 @@ class EmployeeDocumentService:
     def update_document(
         self,
         document_id: uuid.UUID,
-        document_name: Optional[str] = None,
-        description: Optional[str] = None,
-        issue_date: Optional[date] = None,
-        expiry_date: Optional[date] = None,
+        document_name: str | None = None,
+        description: str | None = None,
+        issue_date: date | None = None,
+        expiry_date: date | None = None,
     ) -> EmployeeDocument:
         """Update document metadata."""
         doc = self.get_document(document_id)
@@ -221,13 +221,13 @@ class EmployeeDocumentService:
         self,
         document_id: uuid.UUID,
         verified_by_id: uuid.UUID,
-        notes: Optional[str] = None,
+        notes: str | None = None,
     ) -> EmployeeDocument:
         """Mark document as verified."""
         doc = self.get_document(document_id)
         doc.is_verified = True
         doc.verified_by_id = verified_by_id
-        doc.verified_at = datetime.now(timezone.utc)
+        doc.verified_at = datetime.now(UTC)
         doc.verification_notes = notes
         self.db.flush()
         return doc
@@ -236,13 +236,13 @@ class EmployeeDocumentService:
         """Soft delete a document."""
         doc = self.get_document(document_id)
         doc.is_deleted = True
-        doc.deleted_at = datetime.now(timezone.utc)
+        doc.deleted_at = datetime.now(UTC)
         self.db.flush()
 
     def get_expiring_documents(
         self,
         days_until_expiry: int = 30,
-    ) -> List[EmployeeDocument]:
+    ) -> list[EmployeeDocument]:
         """Get documents expiring within specified days."""
         cutoff = date.today()
         end_date = date.today()
@@ -277,7 +277,7 @@ class EmployeeQualificationService:
         self,
         db: Session,
         organization_id: uuid.UUID,
-        principal: Optional["Principal"] = None,
+        principal: Principal | None = None,
     ) -> None:
         self.db = db
         self.organization_id = organization_id
@@ -298,8 +298,8 @@ class EmployeeQualificationService:
     def list_qualifications(
         self,
         employee_id: uuid.UUID,
-        qualification_type: Optional[QualificationType] = None,
-    ) -> List[EmployeeQualification]:
+        qualification_type: QualificationType | None = None,
+    ) -> list[EmployeeQualification]:
         """List qualifications for an employee."""
         query = select(EmployeeQualification).where(
             EmployeeQualification.organization_id == self.organization_id,
@@ -339,16 +339,16 @@ class EmployeeQualificationService:
         qualification_type: QualificationType,
         qualification_name: str,
         institution_name: str,
-        field_of_study: Optional[str] = None,
-        institution_location: Optional[str] = None,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None,
+        field_of_study: str | None = None,
+        institution_location: str | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
         is_ongoing: bool = False,
-        grade: Optional[str] = None,
-        score: Optional[float] = None,
-        max_score: Optional[float] = None,
-        document_id: Optional[uuid.UUID] = None,
-        notes: Optional[str] = None,
+        grade: str | None = None,
+        score: float | None = None,
+        max_score: float | None = None,
+        document_id: uuid.UUID | None = None,
+        notes: str | None = None,
     ) -> EmployeeQualification:
         """Create a new qualification record."""
         self._get_employee(employee_id)
@@ -415,7 +415,7 @@ class EmployeeQualificationService:
         """Soft delete a qualification."""
         qual = self.get_qualification(qualification_id)
         qual.is_deleted = True
-        qual.deleted_at = datetime.now(timezone.utc)
+        qual.deleted_at = datetime.now(UTC)
         self.db.flush()
 
 
@@ -431,7 +431,7 @@ class EmployeeCertificationService:
         self,
         db: Session,
         organization_id: uuid.UUID,
-        principal: Optional["Principal"] = None,
+        principal: Principal | None = None,
     ) -> None:
         self.db = db
         self.organization_id = organization_id
@@ -453,7 +453,7 @@ class EmployeeCertificationService:
         self,
         employee_id: uuid.UUID,
         include_expired: bool = True,
-    ) -> List[EmployeeCertification]:
+    ) -> list[EmployeeCertification]:
         """List certifications for an employee."""
         query = select(EmployeeCertification).where(
             EmployeeCertification.organization_id == self.organization_id,
@@ -495,13 +495,13 @@ class EmployeeCertificationService:
         certification_name: str,
         issuing_authority: str,
         issue_date: date,
-        expiry_date: Optional[date] = None,
+        expiry_date: date | None = None,
         does_not_expire: bool = False,
-        credential_id: Optional[str] = None,
-        credential_url: Optional[str] = None,
+        credential_id: str | None = None,
+        credential_url: str | None = None,
         renewal_reminder_days: int = 30,
-        document_id: Optional[uuid.UUID] = None,
-        notes: Optional[str] = None,
+        document_id: uuid.UUID | None = None,
+        notes: str | None = None,
     ) -> EmployeeCertification:
         """Create a new certification record."""
         self._get_employee(employee_id)
@@ -562,13 +562,13 @@ class EmployeeCertificationService:
         """Soft delete a certification."""
         cert = self.get_certification(certification_id)
         cert.is_deleted = True
-        cert.deleted_at = datetime.now(timezone.utc)
+        cert.deleted_at = datetime.now(UTC)
         self.db.flush()
 
     def get_expiring_certifications(
         self,
         days_until_expiry: int = 30,
-    ) -> List[EmployeeCertification]:
+    ) -> list[EmployeeCertification]:
         """Get certifications expiring within specified days."""
         from datetime import timedelta
 
@@ -590,7 +590,7 @@ class EmployeeCertificationService:
 
         return list(self.db.scalars(query).all())
 
-    def get_certifications_needing_reminder(self) -> List[EmployeeCertification]:
+    def get_certifications_needing_reminder(self) -> list[EmployeeCertification]:
         """Get certifications that need renewal reminders."""
         query = (
             select(EmployeeCertification)
@@ -620,7 +620,7 @@ class EmployeeDependentService:
         self,
         db: Session,
         organization_id: uuid.UUID,
-        principal: Optional["Principal"] = None,
+        principal: Principal | None = None,
     ) -> None:
         self.db = db
         self.organization_id = organization_id
@@ -641,10 +641,10 @@ class EmployeeDependentService:
     def list_dependents(
         self,
         employee_id: uuid.UUID,
-        relationship: Optional[RelationshipType] = None,
+        relationship: RelationshipType | None = None,
         emergency_contacts_only: bool = False,
         beneficiaries_only: bool = False,
-    ) -> List[EmployeeDependent]:
+    ) -> list[EmployeeDependent]:
         """List dependents for an employee."""
         query = select(EmployeeDependent).where(
             EmployeeDependent.organization_id == self.organization_id,
@@ -687,18 +687,18 @@ class EmployeeDependentService:
         employee_id: uuid.UUID,
         full_name: str,
         relationship: RelationshipType,
-        date_of_birth: Optional[date] = None,
-        gender: Optional[str] = None,
-        phone: Optional[str] = None,
-        email: Optional[str] = None,
-        address: Optional[str] = None,
+        date_of_birth: date | None = None,
+        gender: str | None = None,
+        phone: str | None = None,
+        email: str | None = None,
+        address: str | None = None,
         is_emergency_contact: bool = False,
-        emergency_contact_priority: Optional[int] = None,
+        emergency_contact_priority: int | None = None,
         is_beneficiary: bool = False,
-        beneficiary_percentage: Optional[float] = None,
+        beneficiary_percentage: float | None = None,
         is_covered_under_insurance: bool = False,
-        insurance_id: Optional[str] = None,
-        notes: Optional[str] = None,
+        insurance_id: str | None = None,
+        notes: str | None = None,
     ) -> EmployeeDependent:
         """Create a new dependent record."""
         from app.models.people.hr.employee_extended import Gender as DepGender
@@ -759,13 +759,13 @@ class EmployeeDependentService:
         """Soft delete a dependent."""
         dep = self.get_dependent(dependent_id)
         dep.is_deleted = True
-        dep.deleted_at = datetime.now(timezone.utc)
+        dep.deleted_at = datetime.now(UTC)
         self.db.flush()
 
     def get_emergency_contacts(
         self,
         employee_id: uuid.UUID,
-    ) -> List[EmployeeDependent]:
+    ) -> list[EmployeeDependent]:
         """Get emergency contacts for an employee, ordered by priority."""
         return self.list_dependents(
             employee_id=employee_id,
@@ -785,7 +785,7 @@ class SkillService:
         self,
         db: Session,
         organization_id: uuid.UUID,
-        principal: Optional["Principal"] = None,
+        principal: Principal | None = None,
     ) -> None:
         self.db = db
         self.organization_id = organization_id
@@ -793,10 +793,10 @@ class SkillService:
 
     def list_skills(
         self,
-        category: Optional[SkillCategory] = None,
-        search: Optional[str] = None,
+        category: SkillCategory | None = None,
+        search: str | None = None,
         active_only: bool = True,
-    ) -> List[Skill]:
+    ) -> list[Skill]:
         """List skills in the catalog."""
         query = select(Skill).where(
             Skill.organization_id == self.organization_id,
@@ -830,7 +830,7 @@ class SkillService:
         self,
         skill_name: str,
         category: SkillCategory,
-        description: Optional[str] = None,
+        description: str | None = None,
         is_language: bool = False,
     ) -> Skill:
         """Create a new skill in the catalog."""
@@ -848,10 +848,10 @@ class SkillService:
     def update_skill(
         self,
         skill_id: uuid.UUID,
-        skill_name: Optional[str] = None,
-        category: Optional[SkillCategory] = None,
-        description: Optional[str] = None,
-        is_active: Optional[bool] = None,
+        skill_name: str | None = None,
+        category: SkillCategory | None = None,
+        description: str | None = None,
+        is_active: bool | None = None,
     ) -> Skill:
         """Update a skill."""
         skill = self.get_skill(skill_id)
@@ -870,7 +870,7 @@ class SkillService:
         """Soft delete a skill."""
         skill = self.get_skill(skill_id)
         skill.is_deleted = True
-        skill.deleted_at = datetime.now(timezone.utc)
+        skill.deleted_at = datetime.now(UTC)
         self.db.flush()
 
 
@@ -886,7 +886,7 @@ class EmployeeSkillService:
         self,
         db: Session,
         organization_id: uuid.UUID,
-        principal: Optional["Principal"] = None,
+        principal: Principal | None = None,
     ) -> None:
         self.db = db
         self.organization_id = organization_id
@@ -919,10 +919,10 @@ class EmployeeSkillService:
     def list_employee_skills(
         self,
         employee_id: uuid.UUID,
-        category: Optional[SkillCategory] = None,
+        category: SkillCategory | None = None,
         primary_only: bool = False,
-        min_proficiency: Optional[int] = None,
-    ) -> List[EmployeeSkill]:
+        min_proficiency: int | None = None,
+    ) -> list[EmployeeSkill]:
         """List skills for an employee."""
         query = (
             select(EmployeeSkill)
@@ -970,13 +970,13 @@ class EmployeeSkillService:
         employee_id: uuid.UUID,
         skill_id: uuid.UUID,
         proficiency_level: int,
-        years_experience: Optional[float] = None,
-        last_used_date: Optional[date] = None,
+        years_experience: float | None = None,
+        last_used_date: date | None = None,
         is_primary: bool = False,
         is_certified: bool = False,
         is_self_assessed: bool = True,
-        assessed_by_id: Optional[uuid.UUID] = None,
-        notes: Optional[str] = None,
+        assessed_by_id: uuid.UUID | None = None,
+        notes: str | None = None,
     ) -> EmployeeSkill:
         """Add a skill to an employee."""
         # Validate proficiency level
@@ -998,7 +998,7 @@ class EmployeeSkillService:
             is_certified=is_certified,
             is_self_assessed=is_self_assessed,
             assessed_by_id=assessed_by_id,
-            assessed_at=datetime.now(timezone.utc) if assessed_by_id else None,
+            assessed_at=datetime.now(UTC) if assessed_by_id else None,
             notes=notes,
         )
         self.db.add(emp_skill)
@@ -1008,12 +1008,12 @@ class EmployeeSkillService:
     def update_employee_skill(
         self,
         employee_skill_id: uuid.UUID,
-        proficiency_level: Optional[int] = None,
-        years_experience: Optional[float] = None,
-        last_used_date: Optional[date] = None,
-        is_primary: Optional[bool] = None,
-        is_certified: Optional[bool] = None,
-        notes: Optional[str] = None,
+        proficiency_level: int | None = None,
+        years_experience: float | None = None,
+        last_used_date: date | None = None,
+        is_primary: bool | None = None,
+        is_certified: bool | None = None,
+        notes: str | None = None,
     ) -> EmployeeSkill:
         """Update an employee skill."""
         emp_skill = self.get_employee_skill(employee_skill_id)
@@ -1041,14 +1041,14 @@ class EmployeeSkillService:
         employee_skill_id: uuid.UUID,
         assessed_by_id: uuid.UUID,
         proficiency_level: int,
-        notes: Optional[str] = None,
+        notes: str | None = None,
     ) -> EmployeeSkill:
         """Record a skill assessment by another person."""
         emp_skill = self.get_employee_skill(employee_skill_id)
         emp_skill.proficiency_level = proficiency_level
         emp_skill.is_self_assessed = False
         emp_skill.assessed_by_id = assessed_by_id
-        emp_skill.assessed_at = datetime.now(timezone.utc)
+        emp_skill.assessed_at = datetime.now(UTC)
         if notes:
             emp_skill.notes = notes
         self.db.flush()
@@ -1064,7 +1064,7 @@ class EmployeeSkillService:
         self,
         skill_id: uuid.UUID,
         min_proficiency: int = 1,
-    ) -> List[EmployeeSkill]:
+    ) -> list[EmployeeSkill]:
         """Find employees with a specific skill."""
         query = (
             select(EmployeeSkill)

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from datetime import date
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -68,10 +67,10 @@ class AssetAssignmentService:
         self,
         org_id: UUID,
         *,
-        asset_id: Optional[UUID] = None,
-        employee_id: Optional[UUID] = None,
-        status: Optional[AssignmentStatus] = None,
-        pagination: Optional[PaginationParams] = None,
+        asset_id: UUID | None = None,
+        employee_id: UUID | None = None,
+        status: AssignmentStatus | None = None,
+        pagination: PaginationParams | None = None,
     ) -> PaginatedResult[AssetAssignment]:
         query = select(AssetAssignment).where(AssetAssignment.organization_id == org_id)
 
@@ -119,9 +118,9 @@ class AssetAssignmentService:
         asset_id: UUID,
         employee_id: UUID,
         issued_on: date,
-        expected_return_date: Optional[date] = None,
-        condition_on_issue: Optional[AssetCondition] = None,
-        notes: Optional[str] = None,
+        expected_return_date: date | None = None,
+        condition_on_issue: AssetCondition | None = None,
+        notes: str | None = None,
     ) -> AssetAssignment:
         asset = self._get_asset(org_id, asset_id)
         employee = self._get_employee(org_id, employee_id)
@@ -157,9 +156,9 @@ class AssetAssignmentService:
         org_id: UUID,
         assignment_id: UUID,
         *,
-        returned_on: Optional[date] = None,
-        condition_on_return: Optional[AssetCondition] = None,
-        notes: Optional[str] = None,
+        returned_on: date | None = None,
+        condition_on_return: AssetCondition | None = None,
+        notes: str | None = None,
     ) -> AssetAssignment:
         assignment = self.get_assignment(org_id, assignment_id)
         if assignment.status != AssignmentStatus.ISSUED:
@@ -182,10 +181,10 @@ class AssetAssignmentService:
         assignment_id: UUID,
         *,
         new_employee_id: UUID,
-        issued_on: Optional[date] = None,
-        expected_return_date: Optional[date] = None,
-        condition_on_issue: Optional[AssetCondition] = None,
-        notes: Optional[str] = None,
+        issued_on: date | None = None,
+        expected_return_date: date | None = None,
+        condition_on_issue: AssetCondition | None = None,
+        notes: str | None = None,
     ) -> AssetAssignment:
         assignment = self.get_assignment(org_id, assignment_id)
         if assignment.status != AssignmentStatus.ISSUED:

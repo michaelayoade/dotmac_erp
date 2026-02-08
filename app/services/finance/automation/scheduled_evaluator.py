@@ -14,7 +14,7 @@ rather than in response to entity events. A Celery beat task calls
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import select
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 class ScheduledRuleEvaluator:
     """Evaluate and execute ON_SCHEDULE workflow rules."""
 
-    def evaluate_due_rules(self, db: Session) -> Dict[str, Any]:
+    def evaluate_due_rules(self, db: Session) -> dict[str, Any]:
         """Find and execute all due ON_SCHEDULE rules.
 
         Returns:
@@ -42,7 +42,7 @@ class ScheduledRuleEvaluator:
             workflow_service,
         )
 
-        results: Dict[str, Any] = {
+        results: dict[str, Any] = {
             "rules_checked": 0,
             "rules_due": 0,
             "actions_fired": 0,
@@ -115,7 +115,7 @@ class ScheduledRuleEvaluator:
         self,
         db: Session,
         rule: WorkflowRule,
-    ) -> List[UUID]:
+    ) -> list[UUID]:
         """Find entities matching the rule's conditions for scheduled execution.
 
         Uses the entity registry to build queries against the target entity type.

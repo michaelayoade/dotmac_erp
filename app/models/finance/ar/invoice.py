@@ -6,7 +6,7 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -89,7 +89,7 @@ class Invoice(Base, VersionedMixin):
         ForeignKey("ar.customer.customer_id"),
         nullable=False,
     )
-    contract_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    contract_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("ar.contract.contract_id"),
         nullable=True,
@@ -107,10 +107,10 @@ class Invoice(Base, VersionedMixin):
 
     # Currency
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
-    exchange_rate: Mapped[Optional[Decimal]] = mapped_column(
+    exchange_rate: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 10), nullable=True
     )
-    exchange_rate_type_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    exchange_rate_type_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -138,29 +138,27 @@ class Invoice(Base, VersionedMixin):
     )
 
     # References
-    payment_terms_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    payment_terms_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    billing_address: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    billing_address: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    shipping_address: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB, nullable=True
     )
-    shipping_address: Mapped[Optional[dict[str, Any]]] = mapped_column(
-        JSONB, nullable=True
-    )
-    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    internal_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    internal_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Accounting
     ar_control_account_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         nullable=False,
     )
-    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    posting_batch_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    posting_batch_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -184,16 +182,14 @@ class Invoice(Base, VersionedMixin):
     is_intercompany: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False
     )
-    intercompany_org_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    intercompany_org_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
 
     # Source
-    source_document_type: Mapped[Optional[str]] = mapped_column(
-        String(50), nullable=True
-    )
-    source_document_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    source_document_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    source_document_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -203,52 +199,52 @@ class Invoice(Base, VersionedMixin):
         UUID(as_uuid=True),
         nullable=False,
     )
-    submitted_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    submitted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    submitted_at: Mapped[Optional[datetime]] = mapped_column(
+    submitted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    approved_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    posted_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    posted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    posted_at: Mapped[Optional[datetime]] = mapped_column(
+    posted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    voided_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    voided_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    voided_at: Mapped[Optional[datetime]] = mapped_column(
+    voided_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    void_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    void_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    approval_request_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approval_request_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    correlation_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    correlation_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

@@ -5,8 +5,8 @@ Handles Paystack webhook events with idempotency and audit logging.
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 from sqlalchemy.exc import IntegrityError
@@ -29,6 +29,10 @@ class WebhookService:
 
     def __init__(self, db: Session):
         self.db = db
+
+    def _commit_and_refresh(self, webhook: PaymentWebhook) -> None:
+        self.db.commit()
+        self.db.refresh(webhook)
 
     def process_webhook(
         self,
@@ -74,6 +78,7 @@ class WebhookService:
             logger.info(f"Duplicate webhook received: {event_id}")
             existing.status = WebhookStatus.DUPLICATE
             self.db.flush()
+            self._commit_and_refresh(existing)
             return existing
 
         # Create webhook record
@@ -100,12 +105,13 @@ class WebhookService:
                 logger.info(f"Duplicate webhook received: {event_id}")
                 existing.status = WebhookStatus.DUPLICATE
                 self.db.flush()
+                self._commit_and_refresh(existing)
                 return existing
             raise
 
         try:
             # Find payment intent by reference
-            intent: Optional[PaymentIntent] = None
+            intent: PaymentIntent | None = None
             if reference:
                 intent = (
                     self.db.query(PaymentIntent)
@@ -120,6 +126,7 @@ class WebhookService:
                     f"Payment intent not found for reference: {reference}"
                 )
                 self.db.flush()
+                self._commit_and_refresh(webhook)
                 return webhook
 
             # Set organization ID from intent
@@ -144,7 +151,7 @@ class WebhookService:
                 logger.info(f"Unhandled event type: {event_type}")
 
             webhook.status = WebhookStatus.PROCESSED
-            webhook.processed_at = datetime.now(timezone.utc)
+            webhook.processed_at = datetime.now(UTC)
 
         except Exception as e:
             logger.exception(f"Webhook processing error: {e}")
@@ -153,6 +160,7 @@ class WebhookService:
             webhook.retry_count += 1
 
         self.db.flush()
+        self._commit_and_refresh(webhook)
         return webhook
 
     def _build_event_id(self, event_type: str, event_data: dict[str, Any]) -> str:
@@ -252,9 +260,9 @@ class WebhookService:
             try:
                 paid_at = datetime.fromisoformat(paid_at_str.replace("Z", "+00:00"))
             except ValueError:
-                paid_at = datetime.now(timezone.utc)
+                paid_at = datetime.now(UTC)
         else:
-            paid_at = datetime.now(timezone.utc)
+            paid_at = datetime.now(UTC)
 
         channel = data.get("channel", "card")
         transaction_id = str(data.get("id", ""))
@@ -317,9 +325,9 @@ class WebhookService:
                     completed_at_str.replace("Z", "+00:00")
                 )
             except ValueError:
-                completed_at = datetime.now(timezone.utc)
+                completed_at = datetime.now(UTC)
         else:
-            completed_at = datetime.now(timezone.utc)
+            completed_at = datetime.now(UTC)
 
         # Extract fee from webhook payload (Paystack uses 'fee' or 'fees')
         fee_kobo = data.get("fee") or data.get("fees")
@@ -381,9 +389,9 @@ class WebhookService:
                     reversed_at_str.replace("Z", "+00:00")
                 )
             except ValueError:
-                reversed_at = datetime.now(timezone.utc)
+                reversed_at = datetime.now(UTC)
         else:
-            reversed_at = datetime.now(timezone.utc)
+            reversed_at = datetime.now(UTC)
 
         reason = data.get("reason") or data.get("message") or "Transfer reversed"
 
@@ -403,7 +411,7 @@ class WebhookService:
             },
         )
 
-    def get_webhook_by_event_id(self, event_id: str) -> Optional[PaymentWebhook]:
+    def get_webhook_by_event_id(self, event_id: str) -> PaymentWebhook | None:
         """Get a webhook record by event ID."""
         return (
             self.db.query(PaymentWebhook)
@@ -444,6 +452,7 @@ class WebhookService:
             webhook.status = WebhookStatus.FAILED
             webhook.error_message = "Payment intent not found"
             self.db.flush()
+            self._commit_and_refresh(webhook)
             return webhook
 
         try:
@@ -462,7 +471,7 @@ class WebhookService:
                 self._handle_transfer_reversed(intent, webhook.payload or {})
 
             webhook.status = WebhookStatus.PROCESSED
-            webhook.processed_at = datetime.now(timezone.utc)
+            webhook.processed_at = datetime.now(UTC)
 
         except Exception as e:
             logger.exception(f"Webhook retry failed: {e}")
@@ -471,4 +480,5 @@ class WebhookService:
             webhook.retry_count += 1
 
         self.db.flush()
+        self._commit_and_refresh(webhook)
         return webhook

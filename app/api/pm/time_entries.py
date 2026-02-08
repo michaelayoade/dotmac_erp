@@ -5,7 +5,6 @@ REST API for time tracking.
 """
 
 from datetime import date
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -45,13 +44,13 @@ def get_db():
 @router.get("", response_model=TimeEntryListResponse)
 def list_time_entries(
     organization_id: UUID = Depends(require_organization_id),
-    project_id: Optional[UUID] = None,
-    task_id: Optional[UUID] = None,
-    employee_id: Optional[UUID] = None,
-    start_date: Optional[date] = None,
-    end_date: Optional[date] = None,
-    is_billable: Optional[bool] = None,
-    billing_status: Optional[str] = None,
+    project_id: UUID | None = None,
+    task_id: UUID | None = None,
+    employee_id: UUID | None = None,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    is_billable: bool | None = None,
+    billing_status: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),

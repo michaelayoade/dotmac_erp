@@ -7,7 +7,7 @@ Audit log for incoming Paystack webhooks with idempotency.
 import enum
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import DateTime, Enum, Integer, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -44,7 +44,7 @@ class PaymentWebhook(Base):
         server_default=text("gen_random_uuid()"),
     )
     # Resolved from payment intent after lookup
-    organization_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -61,7 +61,7 @@ class PaymentWebhook(Base):
         unique=True,
         comment="Unique event identifier for idempotency",
     )
-    paystack_reference: Mapped[Optional[str]] = mapped_column(
+    paystack_reference: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         index=True,
@@ -69,12 +69,12 @@ class PaymentWebhook(Base):
     )
 
     # Payload
-    payload: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    payload: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Full webhook payload for audit",
     )
-    signature: Mapped[Optional[str]] = mapped_column(
+    signature: Mapped[str | None] = mapped_column(
         String(200),
         nullable=True,
         comment="X-Paystack-Signature header for audit",
@@ -91,11 +91,11 @@ class PaymentWebhook(Base):
         nullable=False,
         default=WebhookStatus.RECEIVED,
     )
-    processed_at: Mapped[Optional[datetime]] = mapped_column(
+    processed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    error_message: Mapped[Optional[str]] = mapped_column(
+    error_message: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Error message if processing failed",

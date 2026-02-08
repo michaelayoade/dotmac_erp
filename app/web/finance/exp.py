@@ -34,7 +34,7 @@ _require_category_manage = require_web_permission("expense:categories:manage")
 _require_advance_disburse = require_web_permission("expense:advances:disburse")
 _require_advance_settle = require_web_permission("expense:advances:settle")
 
-router = APIRouter(tags=["expense-web"])
+router = APIRouter(prefix="/expense", tags=["expense-web"])
 
 # Include limits sub-router
 router.include_router(limits_router)

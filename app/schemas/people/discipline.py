@@ -10,19 +10,17 @@ Pydantic schemas for Discipline APIs including:
 """
 
 from datetime import date, datetime
-from typing import List, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.people.discipline import (
-    ViolationType,
-    SeverityLevel,
-    CaseStatus,
     ActionType,
+    CaseStatus,
     DocumentType,
+    SeverityLevel,
+    ViolationType,
 )
-
 
 # =============================================================================
 # Case Response Schemas (Employee Response to Query)
@@ -51,7 +49,7 @@ class CaseResponseRead(CaseResponseBase):
     response_id: UUID
     case_id: UUID
     submitted_at: datetime
-    acknowledged_at: Optional[datetime] = None
+    acknowledged_at: datetime | None = None
 
 
 # =============================================================================
@@ -62,10 +60,10 @@ class CaseResponseRead(CaseResponseBase):
 class CaseWitnessBase(BaseModel):
     """Base witness schema."""
 
-    employee_id: Optional[UUID] = None
-    external_name: Optional[str] = Field(default=None, max_length=200)
-    external_contact: Optional[str] = Field(default=None, max_length=255)
-    statement: Optional[str] = None
+    employee_id: UUID | None = None
+    external_name: str | None = Field(default=None, max_length=200)
+    external_contact: str | None = Field(default=None, max_length=255)
+    statement: str | None = None
 
 
 class CaseWitnessCreate(CaseWitnessBase):
@@ -77,8 +75,8 @@ class CaseWitnessCreate(CaseWitnessBase):
 class CaseWitnessUpdate(BaseModel):
     """Update witness schema."""
 
-    statement: Optional[str] = None
-    statement_date: Optional[datetime] = None
+    statement: str | None = None
+    statement_date: datetime | None = None
 
 
 class CaseWitnessRead(CaseWitnessBase):
@@ -88,10 +86,10 @@ class CaseWitnessRead(CaseWitnessBase):
 
     witness_id: UUID
     case_id: UUID
-    statement_date: Optional[datetime] = None
+    statement_date: datetime | None = None
     created_at: datetime
     # Nested employee info if available
-    employee_name: Optional[str] = None
+    employee_name: str | None = None
 
 
 # =============================================================================
@@ -103,10 +101,10 @@ class CaseActionBase(BaseModel):
     """Base action schema."""
 
     action_type: ActionType
-    description: Optional[str] = None
+    description: str | None = None
     effective_date: date
-    end_date: Optional[date] = None
-    warning_expiry_date: Optional[date] = None
+    end_date: date | None = None
+    warning_expiry_date: date | None = None
 
 
 class CaseActionCreate(CaseActionBase):
@@ -125,10 +123,10 @@ class CaseActionRead(CaseActionBase):
     is_active: bool
     payroll_processed: bool
     lifecycle_triggered: bool
-    issued_by_id: Optional[UUID] = None
+    issued_by_id: UUID | None = None
     created_at: datetime
     # Nested info
-    issued_by_name: Optional[str] = None
+    issued_by_name: str | None = None
 
 
 # =============================================================================
@@ -141,7 +139,7 @@ class CaseDocumentBase(BaseModel):
 
     document_type: DocumentType
     title: str = Field(max_length=255)
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class CaseDocumentCreate(CaseDocumentBase):
@@ -159,11 +157,11 @@ class CaseDocumentRead(CaseDocumentBase):
     case_id: UUID
     file_path: str
     file_name: str
-    file_size: Optional[int] = None
-    mime_type: Optional[str] = None
-    uploaded_by_id: Optional[UUID] = None
+    file_size: int | None = None
+    mime_type: str | None = None
+    uploaded_by_id: UUID | None = None
     created_at: datetime
-    uploaded_by_name: Optional[str] = None
+    uploaded_by_name: str | None = None
 
 
 # =============================================================================
@@ -178,26 +176,26 @@ class DisciplinaryCaseBase(BaseModel):
     violation_type: ViolationType
     severity: SeverityLevel = SeverityLevel.MODERATE
     subject: str = Field(max_length=255)
-    description: Optional[str] = None
-    incident_date: Optional[date] = None
+    description: str | None = None
+    incident_date: date | None = None
     reported_date: date
 
 
 class DisciplinaryCaseCreate(DisciplinaryCaseBase):
     """Create disciplinary case schema."""
 
-    reported_by_id: Optional[UUID] = None
+    reported_by_id: UUID | None = None
 
 
 class DisciplinaryCaseUpdate(BaseModel):
     """Update disciplinary case schema."""
 
-    violation_type: Optional[ViolationType] = None
-    severity: Optional[SeverityLevel] = None
-    subject: Optional[str] = Field(default=None, max_length=255)
-    description: Optional[str] = None
-    incident_date: Optional[date] = None
-    investigating_officer_id: Optional[UUID] = None
+    violation_type: ViolationType | None = None
+    severity: SeverityLevel | None = None
+    subject: str | None = Field(default=None, max_length=255)
+    description: str | None = None
+    incident_date: date | None = None
+    investigating_officer_id: UUID | None = None
 
 
 class IssueQueryRequest(BaseModel):
@@ -211,8 +209,8 @@ class ScheduleHearingRequest(BaseModel):
     """Request to schedule a hearing."""
 
     hearing_date: datetime
-    hearing_location: Optional[str] = Field(default=None, max_length=255)
-    panel_chair_id: Optional[UUID] = None
+    hearing_location: str | None = Field(default=None, max_length=255)
+    panel_chair_id: UUID | None = None
 
 
 class RecordHearingNotesRequest(BaseModel):
@@ -225,7 +223,7 @@ class RecordDecisionRequest(BaseModel):
     """Request to record decision after hearing."""
 
     decision_summary: str
-    actions: List[CaseActionCreate] = Field(default_factory=list)
+    actions: list[CaseActionCreate] = Field(default_factory=list)
 
 
 class FileAppealRequest(BaseModel):
@@ -239,7 +237,7 @@ class DecideAppealRequest(BaseModel):
 
     appeal_decision: str
     # Optionally modify the original actions
-    revised_actions: Optional[List[CaseActionCreate]] = None
+    revised_actions: list[CaseActionCreate] | None = None
 
 
 class DisciplinaryCaseRead(DisciplinaryCaseBase):
@@ -251,43 +249,43 @@ class DisciplinaryCaseRead(DisciplinaryCaseBase):
     organization_id: UUID
     case_number: str
     status: CaseStatus
-    query_issued_date: Optional[date] = None
-    response_due_date: Optional[date] = None
-    hearing_date: Optional[datetime] = None
-    decision_date: Optional[date] = None
-    appeal_deadline: Optional[date] = None
-    closed_date: Optional[date] = None
-    query_text: Optional[str] = None
-    hearing_location: Optional[str] = None
-    hearing_notes: Optional[str] = None
-    decision_summary: Optional[str] = None
-    appeal_reason: Optional[str] = None
-    appeal_decision: Optional[str] = None
-    reported_by_id: Optional[UUID] = None
-    investigating_officer_id: Optional[UUID] = None
-    panel_chair_id: Optional[UUID] = None
+    query_issued_date: date | None = None
+    response_due_date: date | None = None
+    hearing_date: datetime | None = None
+    decision_date: date | None = None
+    appeal_deadline: date | None = None
+    closed_date: date | None = None
+    query_text: str | None = None
+    hearing_location: str | None = None
+    hearing_notes: str | None = None
+    decision_summary: str | None = None
+    appeal_reason: str | None = None
+    appeal_decision: str | None = None
+    reported_by_id: UUID | None = None
+    investigating_officer_id: UUID | None = None
+    panel_chair_id: UUID | None = None
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
     # Nested names for display
-    employee_name: Optional[str] = None
-    reported_by_name: Optional[str] = None
-    investigating_officer_name: Optional[str] = None
-    panel_chair_name: Optional[str] = None
+    employee_name: str | None = None
+    reported_by_name: str | None = None
+    investigating_officer_name: str | None = None
+    panel_chair_name: str | None = None
 
 
 class DisciplinaryCaseDetail(DisciplinaryCaseRead):
     """Detailed case view with related entities."""
 
-    witnesses: List[CaseWitnessRead] = Field(default_factory=list)
-    actions: List[CaseActionRead] = Field(default_factory=list)
-    documents: List[CaseDocumentRead] = Field(default_factory=list)
-    responses: List[CaseResponseRead] = Field(default_factory=list)
+    witnesses: list[CaseWitnessRead] = Field(default_factory=list)
+    actions: list[CaseActionRead] = Field(default_factory=list)
+    documents: list[CaseDocumentRead] = Field(default_factory=list)
+    responses: list[CaseResponseRead] = Field(default_factory=list)
 
 
 class DisciplinaryCaseListResponse(BaseModel):
     """Paginated case list response."""
 
-    items: List[DisciplinaryCaseRead]
+    items: list[DisciplinaryCaseRead]
     total: int
     offset: int
     limit: int
@@ -301,13 +299,13 @@ class DisciplinaryCaseListResponse(BaseModel):
 class CaseListFilter(BaseModel):
     """Filter parameters for listing cases."""
 
-    status: Optional[CaseStatus] = None
-    violation_type: Optional[ViolationType] = None
-    severity: Optional[SeverityLevel] = None
-    employee_id: Optional[UUID] = None
-    investigating_officer_id: Optional[UUID] = None
-    from_date: Optional[date] = None
-    to_date: Optional[date] = None
+    status: CaseStatus | None = None
+    violation_type: ViolationType | None = None
+    severity: SeverityLevel | None = None
+    employee_id: UUID | None = None
+    investigating_officer_id: UUID | None = None
+    from_date: date | None = None
+    to_date: date | None = None
     include_closed: bool = False
 
 
@@ -326,11 +324,11 @@ class EmployeeCaseSummary(BaseModel):
     violation_type: ViolationType
     subject: str
     status: CaseStatus
-    query_issued_date: Optional[date] = None
-    response_due_date: Optional[date] = None
-    hearing_date: Optional[datetime] = None
-    decision_date: Optional[date] = None
-    appeal_deadline: Optional[date] = None
+    query_issued_date: date | None = None
+    response_due_date: date | None = None
+    hearing_date: datetime | None = None
+    decision_date: date | None = None
+    appeal_deadline: date | None = None
     has_pending_response: bool = False
 
 
@@ -344,19 +342,19 @@ class EmployeeCaseDetail(BaseModel):
     violation_type: ViolationType
     severity: SeverityLevel
     subject: str
-    description: Optional[str] = None
-    incident_date: Optional[date] = None
+    description: str | None = None
+    incident_date: date | None = None
     status: CaseStatus
-    query_text: Optional[str] = None
-    query_issued_date: Optional[date] = None
-    response_due_date: Optional[date] = None
-    hearing_date: Optional[datetime] = None
-    hearing_location: Optional[str] = None
-    decision_summary: Optional[str] = None
-    decision_date: Optional[date] = None
-    appeal_deadline: Optional[date] = None
-    appeal_decision: Optional[str] = None
+    query_text: str | None = None
+    query_issued_date: date | None = None
+    response_due_date: date | None = None
+    hearing_date: datetime | None = None
+    hearing_location: str | None = None
+    decision_summary: str | None = None
+    decision_date: date | None = None
+    appeal_deadline: date | None = None
+    appeal_decision: str | None = None
     # Employee's own responses
-    my_responses: List[CaseResponseRead] = Field(default_factory=list)
+    my_responses: list[CaseResponseRead] = Field(default_factory=list)
     # Actions taken
-    actions: List[CaseActionRead] = Field(default_factory=list)
+    actions: list[CaseActionRead] = Field(default_factory=list)

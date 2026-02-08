@@ -10,8 +10,7 @@ Provides methods for:
 import logging
 import secrets
 import uuid
-from datetime import date, datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
@@ -20,14 +19,14 @@ from app.config import settings
 from app.models.finance.core_org.organization import Organization
 from app.models.people.hr.department import Department
 from app.models.people.recruit.job_applicant import ApplicantStatus, JobApplicant
-from app.models.people.recruit.job_opening import JobOpening, JobOpeningStatus
 from app.models.people.recruit.job_offer import JobOffer, OfferStatus
+from app.models.people.recruit.job_opening import JobOpening, JobOpeningStatus
 from app.services.careers.candidate_notifications import CandidateNotificationService
+from app.services.careers.resume_service import ResumeService
 from app.services.people.recruit.notifications import (
     send_new_applicant_notification,
     send_offer_response_notification,
 )
-from app.services.careers.resume_service import ResumeService
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +71,7 @@ class CareersService:
         self.resume_service = ResumeService()
         self.notification_service = CandidateNotificationService()
 
-    def get_organization_by_slug(self, slug: str) -> Optional[Organization]:
+    def get_organization_by_slug(self, slug: str) -> Organization | None:
         """
         Get organization by its URL slug.
 
@@ -106,11 +105,11 @@ class CareersService:
         self,
         org_id: uuid.UUID,
         *,
-        search: Optional[str] = None,
-        department_id: Optional[list[uuid.UUID]] = None,
-        location: Optional[str] = None,
-        employment_type: Optional[str] = None,
-        is_remote: Optional[bool] = None,
+        search: str | None = None,
+        department_id: list[uuid.UUID] | None = None,
+        location: str | None = None,
+        employment_type: str | None = None,
+        is_remote: bool | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> tuple[list[JobOpening], int]:
@@ -183,9 +182,7 @@ class CareersService:
         jobs = list(self.db.scalars(stmt).unique().all())
         return jobs, total
 
-    def get_public_job(
-        self, org_id: uuid.UUID, job_id: uuid.UUID
-    ) -> Optional[JobOpening]:
+    def get_public_job(self, org_id: uuid.UUID, job_id: uuid.UUID) -> JobOpening | None:
         """
         Get a single job opening for public view.
 
@@ -207,7 +204,7 @@ class CareersService:
         )
         return self.db.scalar(stmt)
 
-    def get_job_by_code(self, org_id: uuid.UUID, job_code: str) -> Optional[JobOpening]:
+    def get_job_by_code(self, org_id: uuid.UUID, job_code: str) -> JobOpening | None:
         """
         Get a job opening by its code (for public URLs).
 
@@ -311,16 +308,16 @@ class CareersService:
         first_name: str,
         last_name: str,
         email: str,
-        phone: Optional[str] = None,
-        resume_file_id: Optional[str] = None,
-        cover_letter: Optional[str] = None,
-        current_employer: Optional[str] = None,
-        current_job_title: Optional[str] = None,
-        years_of_experience: Optional[int] = None,
-        highest_qualification: Optional[str] = None,
-        skills: Optional[str] = None,
-        city: Optional[str] = None,
-        country_code: Optional[str] = None,
+        phone: str | None = None,
+        resume_file_id: str | None = None,
+        cover_letter: str | None = None,
+        current_employer: str | None = None,
+        current_job_title: str | None = None,
+        years_of_experience: int | None = None,
+        highest_qualification: str | None = None,
+        skills: str | None = None,
+        city: str | None = None,
+        country_code: str | None = None,
     ) -> JobApplicant:
         """
         Submit a job application.
@@ -417,7 +414,7 @@ class CareersService:
         self,
         org_id: uuid.UUID,
         email: str,
-        application_number: Optional[str] = None,
+        application_number: str | None = None,
     ) -> bool:
         """
         Request application status check via email verification.
@@ -456,9 +453,7 @@ class CareersService:
 
         # Generate verification token
         token = secrets.token_urlsafe(32)
-        expires = datetime.now(timezone.utc) + timedelta(
-            hours=STATUS_TOKEN_EXPIRY_HOURS
-        )
+        expires = datetime.now(UTC) + timedelta(hours=STATUS_TOKEN_EXPIRY_HOURS)
 
         # Update applicant with token
         applicant.verification_token = token
@@ -481,7 +476,7 @@ class CareersService:
         logger.info("Status verification email sent to %s", email)
         return True
 
-    def verify_status_token(self, org_id: uuid.UUID, token: str) -> Optional[dict]:
+    def verify_status_token(self, org_id: uuid.UUID, token: str) -> dict | None:
         """
         Verify a status token and return application status.
 
@@ -510,7 +505,7 @@ class CareersService:
 
         # Check expiration
         if applicant.verification_token_expires:
-            if datetime.now(timezone.utc) > applicant.verification_token_expires:
+            if datetime.now(UTC) > applicant.verification_token_expires:
                 logger.debug(
                     "Status token expired for %s", applicant.application_number
                 )
@@ -539,7 +534,7 @@ class CareersService:
         self,
         org_id: uuid.UUID,
         token: str,
-    ) -> Optional[JobOffer]:
+    ) -> JobOffer | None:
         """Get a job offer by candidate portal token."""
         if not token:
             return None
@@ -563,15 +558,13 @@ class CareersService:
 
         if (
             offer.candidate_access_expires
-            and datetime.now(timezone.utc) > offer.candidate_access_expires
+            and datetime.now(UTC) > offer.candidate_access_expires
         ):
             return None
 
         return offer
 
-    def accept_offer_by_token(
-        self, org_id: uuid.UUID, token: str
-    ) -> Optional[JobOffer]:
+    def accept_offer_by_token(self, org_id: uuid.UUID, token: str) -> JobOffer | None:
         """Accept an offer using the candidate portal token."""
         offer = self.get_offer_by_token(org_id, token)
         if not offer:
@@ -594,8 +587,8 @@ class CareersService:
         org_id: uuid.UUID,
         token: str,
         *,
-        reason: Optional[str] = None,
-    ) -> Optional[JobOffer]:
+        reason: str | None = None,
+    ) -> JobOffer | None:
         """Decline an offer using the candidate portal token."""
         offer = self.get_offer_by_token(org_id, token)
         if not offer:

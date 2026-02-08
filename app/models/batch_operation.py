@@ -7,10 +7,9 @@ Each batch operation gets a unique ID that can be stored on created records.
 
 import enum
 import uuid
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column
@@ -88,11 +87,11 @@ class BatchOperation(Base):
         String(120), nullable=False
     )  # e.g., "seed_payroll_from_excel", "import_employees"
 
-    description: Mapped[Optional[str]] = mapped_column(Text)
+    description: Mapped[str | None] = mapped_column(Text)
 
     # Source file info (for imports)
-    source_file: Mapped[Optional[str]] = mapped_column(String(512))
-    source_checksum: Mapped[Optional[str]] = mapped_column(String(64))  # SHA256 of file
+    source_file: Mapped[str | None] = mapped_column(String(512))
+    source_checksum: Mapped[str | None] = mapped_column(String(64))  # SHA256 of file
 
     # Who ran it
     started_by_id: Mapped[uuid.UUID] = mapped_column(
@@ -103,9 +102,9 @@ class BatchOperation(Base):
 
     # Timing
     started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     # Status - use existing PostgreSQL enum type
     status: Mapped[BatchOperationStatus] = mapped_column(
@@ -125,16 +124,16 @@ class BatchOperation(Base):
     records_failed: Mapped[int] = mapped_column(Integer, default=0)
 
     # Error info
-    error_message: Mapped[Optional[str]] = mapped_column(Text)
+    error_message: Mapped[str | None] = mapped_column(Text)
 
     # Detailed log of what was created (for rollback)
     # Format: {"people": ["uuid1", "uuid2"], "employees": ["uuid3"]}
-    created_entity_ids: Mapped[Optional[dict]] = mapped_column(
+    created_entity_ids: Mapped[dict | None] = mapped_column(
         MutableDict.as_mutable(JSON)
     )
 
     # Additional metadata
-    metadata_: Mapped[Optional[dict]] = mapped_column(
+    metadata_: Mapped[dict | None] = mapped_column(
         "metadata", MutableDict.as_mutable(JSON)
     )
 
@@ -147,7 +146,7 @@ class BatchOperation(Base):
     ) -> None:
         """Mark the operation as completed with statistics."""
         self.status = BatchOperationStatus.COMPLETED
-        self.completed_at = datetime.now(timezone.utc)
+        self.completed_at = datetime.now(UTC)
         self.records_created = created
         self.records_updated = updated
         self.records_skipped = skipped
@@ -156,7 +155,7 @@ class BatchOperation(Base):
     def mark_failed(self, error: str) -> None:
         """Mark the operation as failed with error message."""
         self.status = BatchOperationStatus.FAILED
-        self.completed_at = datetime.now(timezone.utc)
+        self.completed_at = datetime.now(UTC)
         self.error_message = error
 
     def track_created(self, entity_type: str, entity_id: uuid.UUID) -> None:

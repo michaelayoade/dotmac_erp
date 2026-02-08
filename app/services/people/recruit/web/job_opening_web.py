@@ -6,8 +6,6 @@ Provides view-focused data and operations for job opening web routes.
 
 from __future__ import annotations
 
-import logging
-from typing import Optional
 from uuid import UUID
 
 from fastapi import Request
@@ -37,8 +35,6 @@ from .base import (
     parse_uuid,
 )
 
-logger = logging.getLogger(__name__)
-
 
 class JobOpeningWebService:
     """Web service methods for job openings."""
@@ -51,9 +47,9 @@ class JobOpeningWebService:
     def list_job_openings_context(
         db: Session,
         organization_id: UUID,
-        search: Optional[str] = None,
-        status: Optional[str] = None,
-        department_id: Optional[str] = None,
+        search: str | None = None,
+        status: str | None = None,
+        department_id: str | None = None,
         page: int = 1,
     ) -> dict:
         """Build context for job openings list page."""
@@ -93,7 +89,7 @@ class JobOpeningWebService:
     def job_opening_form_context(
         db: Session,
         organization_id: UUID,
-        job_opening_id: Optional[str] = None,
+        job_opening_id: str | None = None,
     ) -> dict:
         """Build context for job opening create/edit form."""
         org_svc = OrganizationService(db, organization_id)
@@ -195,9 +191,9 @@ class JobOpeningWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str] = None,
-        status: Optional[str] = None,
-        department_id: Optional[str] = None,
+        search: str | None = None,
+        status: str | None = None,
+        department_id: str | None = None,
         page: int = 1,
     ) -> HTMLResponse:
         """Render job openings list page."""

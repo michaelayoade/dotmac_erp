@@ -5,7 +5,6 @@ System-wide directory of Nigerian banks with codes and aliases for lookup.
 """
 
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, String, func, text
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -41,21 +40,21 @@ class BankDirectory(Base):
     )
 
     # NIBSS institution code (may differ from bank_code for some banks)
-    nibss_code: Mapped[Optional[str]] = mapped_column(
+    nibss_code: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="NIBSS institution code if different from bank_code",
     )
 
     # Alternative names for matching (e.g., ["GTBank", "GT Bank", "Guaranty Trust"])
-    aliases: Mapped[Optional[list[str]]] = mapped_column(
+    aliases: Mapped[list[str] | None] = mapped_column(
         ARRAY(String(100)),
         nullable=True,
         comment="Alternative names for fuzzy matching",
     )
 
     # Sort code prefix (for banks that use it)
-    sort_code_prefix: Mapped[Optional[str]] = mapped_column(
+    sort_code_prefix: Mapped[str | None] = mapped_column(
         String(10),
         nullable=True,
         comment="Bank sort code prefix",

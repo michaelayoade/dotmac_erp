@@ -5,38 +5,37 @@ Currently implements attendance self-service endpoints.
 """
 
 from datetime import date, timedelta
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy.orm import Session
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from app.api.deps import require_tenant_auth
 from app.db import SessionLocal
+from app.models.people.exp import CashAdvanceStatus, ExpenseClaimStatus
+from app.models.people.leave import LeaveApplicationStatus
+from app.models.people.payroll.salary_slip import SalarySlipStatus
+from app.models.people.perf.appraisal import AppraisalStatus
 from app.schemas.people.attendance import (
     AttendanceListResponse,
     AttendanceRead,
     AttendanceRecordCheckIn,
     AttendanceRecordCheckOut,
 )
+from app.schemas.people.expense import CashAdvanceRead, ExpenseClaimRead
 from app.schemas.people.leave import LeaveApplicationRead
 from app.schemas.people.payroll import SalarySlipRead
 from app.schemas.people.perf import AppraisalRead, ScorecardRead
-from app.schemas.people.expense import ExpenseClaimRead, CashAdvanceRead
-from app.models.people.payroll.salary_slip import SalarySlipStatus
-from app.models.people.perf.appraisal import AppraisalStatus
-from app.models.people.exp import ExpenseClaimStatus, CashAdvanceStatus
-from app.services.people.payroll.salary_slip_service import salary_slip_service
-from app.services.people.leave import LeaveService
-from app.models.people.leave import LeaveApplicationStatus
-from app.services.people.hr.employee_types import EmployeeFilters
 from app.services.common import PaginationParams
 from app.services.people.attendance import AttendanceService
+from app.services.people.expense import ExpenseService
+from app.services.people.hr.employee_types import EmployeeFilters
 from app.services.people.hr.employees import EmployeeService
+from app.services.people.leave import LeaveService
+from app.services.people.payroll.salary_slip_service import salary_slip_service
 from app.services.people.perf import PerformanceService
 from app.services.people.training import TrainingService
-from app.services.people.expense import ExpenseService
 
 router = APIRouter(
     prefix="/me",
@@ -82,11 +81,11 @@ class LeaveApplicationRequest(BaseModel):
     from_date: date
     to_date: date
     half_day: bool = False
-    half_day_date: Optional[date] = None
-    reason: Optional[str] = None
+    half_day_date: date | None = None
+    reason: str | None = None
 
 
-def _parse_month(month: Optional[str]) -> tuple[Optional[date], Optional[date]]:
+def _parse_month(month: str | None) -> tuple[date | None, date | None]:
     if not month:
         return None, None
     try:
@@ -101,7 +100,7 @@ def _parse_month(month: Optional[str]) -> tuple[Optional[date], Optional[date]]:
         raise HTTPException(status_code=400, detail="Invalid month format") from exc
 
 
-def _parse_status(value: Optional[str], enum_type, label: str):
+def _parse_status(value: str | None, enum_type, label: str):
     if not value:
         return None
     try:
@@ -134,7 +133,7 @@ def my_leave_balance(
 
 @router.get("/leave/applications")
 def my_leave_applications(
-    status: Optional[str] = Query(None),
+    status: str | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: dict = Depends(require_tenant_auth),
@@ -207,7 +206,7 @@ def get_leave_application(
 @router.post("/leave/applications/{application_id}/cancel")
 def cancel_leave_application(
     application_id: UUID,
-    reason: Optional[str] = None,
+    reason: str | None = None,
     auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db),
 ):
@@ -229,7 +228,7 @@ def cancel_leave_application(
 
 @router.get("/team/leave-requests")
 def team_leave_requests(
-    status: Optional[str] = Query(None),
+    status: str | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: dict = Depends(require_tenant_auth),
@@ -310,7 +309,7 @@ def approve_team_leave(
 @router.post("/team/leave-requests/{application_id}/reject")
 def reject_team_leave(
     application_id: UUID,
-    reason: Optional[str] = None,
+    reason: str | None = None,
     auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db),
 ):
@@ -347,8 +346,8 @@ def reject_team_leave(
 
 @router.get("/payslips")
 def my_payslips(
-    year: Optional[int] = Query(None),
-    status: Optional[str] = Query(None),
+    year: int | None = Query(None),
+    status: str | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(12, ge=1, le=100),
     auth: dict = Depends(require_tenant_auth),
@@ -423,7 +422,7 @@ def my_payslip_detail(
 
 @router.get("/attendance", response_model=AttendanceListResponse)
 def my_attendance(
-    month: Optional[str] = Query(None, description="Month in YYYY-MM format"),
+    month: str | None = Query(None, description="Month in YYYY-MM format"),
     offset: int = Query(0, ge=0),
     limit: int = Query(31, ge=1, le=100),
     auth: dict = Depends(require_tenant_auth),
@@ -524,7 +523,7 @@ def my_check_out(
 
 @router.get("/attendance/summary")
 def my_attendance_summary(
-    month: Optional[str] = Query(None, description="Month in YYYY-MM format"),
+    month: str | None = Query(None, description="Month in YYYY-MM format"),
     auth: dict = Depends(require_tenant_auth),
     db: Session = Depends(get_db),
 ):
@@ -582,7 +581,7 @@ def my_training_history(
 
 @router.get("/performance/appraisals")
 def my_appraisals(
-    status: Optional[str] = Query(None),
+    status: str | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: dict = Depends(require_tenant_auth),
@@ -609,7 +608,7 @@ def my_appraisals(
 
 @router.get("/performance/scorecards")
 def my_scorecards(
-    is_finalized: Optional[bool] = None,
+    is_finalized: bool | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: dict = Depends(require_tenant_auth),
@@ -640,7 +639,7 @@ def my_scorecards(
 
 @router.get("/expenses/claims")
 def my_expense_claims(
-    status: Optional[str] = Query(None),
+    status: str | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: dict = Depends(require_tenant_auth),
@@ -667,7 +666,7 @@ def my_expense_claims(
 
 @router.get("/expenses/advances")
 def my_cash_advances(
-    status: Optional[str] = Query(None),
+    status: str | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(25, ge=1, le=100),
     auth: dict = Depends(require_tenant_auth),

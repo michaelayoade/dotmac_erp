@@ -18,11 +18,11 @@ class TestReportDefinitionServiceCreate:
 
     def test_create_definition_success(self, mock_db, org_id, user_id):
         """Test successful report definition creation."""
-        from app.services.finance.rpt.report_definition import (
-            ReportDefinitionService,
-            ReportDefinitionInput,
-        )
         from app.models.finance.rpt.report_definition import ReportType
+        from app.services.finance.rpt.report_definition import (
+            ReportDefinitionInput,
+            ReportDefinitionService,
+        )
 
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
@@ -33,20 +33,18 @@ class TestReportDefinitionServiceCreate:
             data_source_type="SQL",
         )
 
-        result = ReportDefinitionService.create_definition(
-            mock_db, org_id, input_data, user_id
-        )
+        ReportDefinitionService.create_definition(mock_db, org_id, input_data, user_id)
 
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
 
     def test_create_definition_duplicate_code(self, mock_db, org_id, user_id):
         """Test creation with duplicate report code."""
-        from app.services.finance.rpt.report_definition import (
-            ReportDefinitionService,
-            ReportDefinitionInput,
-        )
         from app.models.finance.rpt.report_definition import ReportType
+        from app.services.finance.rpt.report_definition import (
+            ReportDefinitionInput,
+            ReportDefinitionService,
+        )
 
         existing = MockReportDefinition(report_code="RPT-001")
         mock_db.query.return_value.filter.return_value.first.return_value = existing
@@ -76,7 +74,7 @@ class TestReportDefinitionServiceUpdate:
 
         mock_db.get.return_value = mock_report_definition
 
-        result = ReportDefinitionService.update_definition(
+        ReportDefinitionService.update_definition(
             mock_db,
             org_id,
             mock_report_definition.report_def_id,
@@ -134,7 +132,7 @@ class TestReportDefinitionServiceUpdateStructure:
 
         column_defs = {"col1": {"name": "Account", "type": "string"}}
 
-        result = ReportDefinitionService.update_structure(
+        ReportDefinitionService.update_structure(
             mock_db,
             org_id,
             mock_report_definition.report_def_id,
@@ -173,7 +171,7 @@ class TestReportDefinitionServiceUpdateDataSource:
 
         data_source_config = {"query": "SELECT * FROM accounts"}
 
-        result = ReportDefinitionService.update_data_source(
+        ReportDefinitionService.update_data_source(
             mock_db,
             org_id,
             mock_report_definition.report_def_id,
@@ -195,7 +193,7 @@ class TestReportDefinitionServiceDeactivate:
 
         mock_db.get.return_value = mock_report_definition
 
-        result = ReportDefinitionService.deactivate(
+        ReportDefinitionService.deactivate(
             mock_db, org_id, mock_report_definition.report_def_id
         )
 
@@ -229,7 +227,7 @@ class TestReportDefinitionServiceClone:
         mock_db.get.return_value = mock_report_definition
         mock_db.query.return_value.filter.return_value.first.return_value = None
 
-        result = ReportDefinitionService.clone_definition(
+        ReportDefinitionService.clone_definition(
             mock_db,
             org_id,
             mock_report_definition.report_def_id,
@@ -312,8 +310,8 @@ class TestReportDefinitionServiceQueries:
 
     def test_get_by_type(self, mock_db, org_id, mock_report_definition):
         """Test getting definitions by type."""
-        from app.services.finance.rpt.report_definition import ReportDefinitionService
         from app.models.finance.rpt.report_definition import ReportType
+        from app.services.finance.rpt.report_definition import ReportDefinitionService
 
         mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
             mock_report_definition
@@ -350,8 +348,8 @@ class TestReportDefinitionServiceQueries:
 
     def test_list_definitions(self, mock_db, org_id, mock_report_definition):
         """Test listing definitions."""
-        from app.services.finance.rpt.report_definition import ReportDefinitionService
         from app.models.finance.rpt.report_definition import ReportType
+        from app.services.finance.rpt.report_definition import ReportDefinitionService
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query

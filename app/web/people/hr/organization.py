@@ -1,33 +1,32 @@
 """Organization routes - Departments, Designations, Employment Types, Grades."""
 
-from types import SimpleNamespace
-from typing import Any, Optional
 from decimal import Decimal, InvalidOperation
+from types import SimpleNamespace
+from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.services.people.hr.web import hr_web_service
+from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.hr import (
-    OrganizationService,
-    DepartmentFilters,
     DepartmentCreateData,
+    DepartmentFilters,
     DepartmentUpdateData,
     DesignationCreateData,
     DesignationUpdateData,
-    EmploymentTypeCreateData,
-    EmploymentTypeUpdateData,
     EmployeeGradeCreateData,
     EmployeeGradeUpdateData,
+    EmploymentTypeCreateData,
+    EmploymentTypeUpdateData,
+    OrganizationService,
 )
-from app.services.common import PaginationParams, coerce_uuid
+from app.services.people.hr.web import hr_web_service
 from app.services.people.hr.web.employee_web import DROPDOWN_LIMIT
 from app.templates import templates
-from app.web.deps import base_context, get_db, require_hr_access, WebAuthContext
+from app.web.deps import WebAuthContext, base_context, get_db, require_hr_access
 
 from ._common import _parse_bool
-
 
 router = APIRouter()
 
@@ -48,14 +47,14 @@ def _form_str(form: Any, key: str) -> str:
 @router.get("/departments", response_class=HTMLResponse)
 def list_departments(
     request: Request,
-    search: Optional[str] = None,
-    is_active: Optional[str] = None,
+    search: str | None = None,
+    is_active: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
     """Department list page."""
-    filter_is_active: Optional[bool] = None
+    filter_is_active: bool | None = None
     if is_active is None:
         filter_is_active = True
     else:
@@ -179,7 +178,7 @@ async def create_department(
         is_active=is_active,
     )
 
-    dept = svc.create_department(data)
+    svc.create_department(data)
     db.commit()
 
     return RedirectResponse(url="/people/hr/departments", status_code=303)
@@ -270,7 +269,7 @@ async def update_department(
 @router.get("/designations", response_class=HTMLResponse)
 def list_designations(
     request: Request,
-    search: Optional[str] = None,
+    search: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -347,7 +346,7 @@ async def create_designation(
         is_active=is_active,
     )
 
-    desig = svc.create_designation(data)
+    svc.create_designation(data)
     db.commit()
 
     return RedirectResponse(url="/people/hr/designations", status_code=303)
@@ -419,7 +418,7 @@ async def update_designation(
 @router.get("/employment-types", response_class=HTMLResponse)
 def list_employment_types(
     request: Request,
-    search: Optional[str] = None,
+    search: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -572,7 +571,7 @@ async def update_employment_type(
 @router.get("/grades", response_class=HTMLResponse)
 def list_grades(
     request: Request,
-    search: Optional[str] = None,
+    search: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),

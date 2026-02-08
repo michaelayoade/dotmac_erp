@@ -5,12 +5,12 @@ Common utility functions for API routes.
 """
 
 from enum import Enum
-from typing import Optional, TypeVar
+from typing import TypeVar
 
 E = TypeVar("E", bound=Enum)
 
 
-def parse_enum(enum_class: type[E], value: Optional[str]) -> Optional[E]:
+def parse_enum(enum_class: type[E], value: str | None) -> E | None:
     """
     Parse a string value to an enum, handling case-insensitivity and None values.
 
@@ -45,8 +45,8 @@ def parse_enum(enum_class: type[E], value: Optional[str]) -> Optional[E]:
 
 
 def parse_enum_safe(
-    enum_class: type[E], value: Optional[str], default: Optional[E] = None
-) -> Optional[E]:
+    enum_class: type[E], value: str | None, default: E | None = None
+) -> E | None:
     """
     Parse a string value to an enum, returning a default on invalid values.
 

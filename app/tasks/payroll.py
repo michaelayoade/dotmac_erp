@@ -44,7 +44,8 @@ def _get_org_setting(db, org_id, domain, key, default=None):
     Returns:
         Setting value or default
     """
-    from sqlalchemy import select, or_
+    from sqlalchemy import or_, select
+
     from app.models.domain_settings import DomainSetting, SettingValueType
 
     # Query for org-specific or global setting
@@ -115,10 +116,10 @@ def send_payslip_email(slip_id: str, org_id: str) -> dict[str, Any]:
 
     with SessionLocal() as db:
         try:
-            from app.models.people.payroll.salary_slip import SalarySlip
-            from app.services.people.payroll.payslip_pdf import PayslipPDFService
             from app.models.email_profile import EmailModule
+            from app.models.people.payroll.salary_slip import SalarySlip
             from app.services.email import send_email
+            from app.services.people.payroll.payslip_pdf import PayslipPDFService
 
             slip_uuid = uuid.UUID(slip_id)
             slip = db.get(SalarySlip, slip_uuid)
@@ -393,14 +394,14 @@ def auto_generate_draft_payroll() -> dict[str, Any]:
         Dict with processing statistics per organization
     """
 
-    from sqlalchemy import select, func
+    from sqlalchemy import func, select
 
+    from app.models.domain_settings import SettingDomain
     from app.models.finance.core_org import Organization
     from app.models.people.payroll.payroll_entry import PayrollEntry, PayrollEntryStatus
     from app.models.people.payroll.salary_structure import PayrollFrequency
-    from app.models.domain_settings import SettingDomain
-    from app.services.people.payroll.payroll_service import PayrollService
     from app.services.people.payroll.data_completeness import PayrollReadinessService
+    from app.services.people.payroll.payroll_service import PayrollService
 
     today = date.today()
     month_end = _last_day_of_month(today)
@@ -577,16 +578,16 @@ def _notify_draft_ready(
     generation_result,
 ) -> None:
     """Send in-app and email notifications for draft payroll."""
-    from app.services.notification import NotificationService
-    from app.services.rbac import get_users_with_permission
-    from app.models.notification import (
-        EntityType,
-        NotificationType,
-        NotificationChannel,
-    )
     from app.models.domain_settings import SettingDomain
     from app.models.email_profile import EmailModule
+    from app.models.notification import (
+        EntityType,
+        NotificationChannel,
+        NotificationType,
+    )
     from app.services.email import send_email
+    from app.services.notification import NotificationService
+    from app.services.rbac import get_users_with_permission
 
     notification_service = NotificationService()
 

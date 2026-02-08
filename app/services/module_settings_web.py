@@ -5,10 +5,13 @@ Provides context and update functions for module settings UI pages.
 Handles: Support, Inventory, Projects, Fleet, and Procurement settings.
 """
 
+from __future__ import annotations
+
 import logging
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.orm import Session
 
@@ -31,7 +34,7 @@ class ModuleSettingsConfig:
     page_title: str
     template: str
     setting_keys: list[str]
-    extra_context: Optional[Callable[[Session, uuid.UUID], dict[str, Any]]] = None
+    extra_context: Callable[[Session, uuid.UUID], dict[str, Any]] | None = None
 
 
 MODULE_SETTINGS_CONFIGS = [
@@ -153,7 +156,7 @@ class ModuleSettingsWebService:
         db: Session,
         organization_id: uuid.UUID,
         data: dict[str, Any],
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Update support settings."""
         return self._update_settings(
             db, organization_id, data, MODULE_SETTINGS_BY_KEY["support"].setting_keys
@@ -176,7 +179,7 @@ class ModuleSettingsWebService:
         db: Session,
         organization_id: uuid.UUID,
         data: dict[str, Any],
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Update inventory settings."""
         return self._update_settings(
             db, organization_id, data, MODULE_SETTINGS_BY_KEY["inventory"].setting_keys
@@ -199,7 +202,7 @@ class ModuleSettingsWebService:
         db: Session,
         organization_id: uuid.UUID,
         data: dict[str, Any],
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Update project settings."""
         return self._update_settings(
             db, organization_id, data, MODULE_SETTINGS_BY_KEY["projects"].setting_keys
@@ -220,7 +223,7 @@ class ModuleSettingsWebService:
         db: Session,
         organization_id: uuid.UUID,
         data: dict[str, Any],
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Update fleet settings."""
         return self._update_settings(
             db, organization_id, data, MODULE_SETTINGS_BY_KEY["fleet"].setting_keys
@@ -241,7 +244,7 @@ class ModuleSettingsWebService:
         db: Session,
         organization_id: uuid.UUID,
         data: dict[str, Any],
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """Update procurement settings."""
         return self._update_settings(
             db,
@@ -278,7 +281,7 @@ class ModuleSettingsWebService:
         organization_id: uuid.UUID,
         data: dict[str, Any],
         keys: list[str],
-    ) -> tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         for key in keys:
             if key in data:
                 spec = self._spec_for_key(key)
@@ -296,7 +299,7 @@ class ModuleSettingsWebService:
         db.commit()
         return True, None
 
-    def _coerce_value(self, value: Any, spec: SettingSpec) -> tuple[Any, Optional[str]]:
+    def _coerce_value(self, value: Any, spec: SettingSpec) -> tuple[Any, str | None]:
         default = spec.default
         if value in (None, ""):
             return default, None

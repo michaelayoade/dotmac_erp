@@ -4,42 +4,43 @@ Import/Export API Endpoints.
 Provides REST API endpoints for importing data from CSV files.
 """
 
-import tempfile
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from app.api.deps import require_tenant_auth
-from app.services.auth_dependencies import require_tenant_permission
 from app.db import get_db_session
-from app.services.auth_dependencies import get_current_user_id, get_current_org_id
+from app.services.auth_dependencies import (
+    get_current_org_id,
+    get_current_user_id,
+    require_tenant_permission,
+)
 from app.services.finance.import_export import (
     AccountImporter,
-    CustomerImporter,
-    SupplierImporter,
-    ItemImporter,
     AssetImporter,
     BankAccountImporter,
-    InvoiceImporter,
-    ExpenseImporter,
+    CustomerImporter,
     CustomerPaymentImporter,
-    SupplierPaymentImporter,
+    ExpenseImporter,
     ImportConfig,
     ImportResult,
-    ImportStatus,
+    InvoiceImporter,
+    ItemImporter,
     PreviewResult,
-    get_ar_control_account,
-    get_ap_control_account,
-    find_account_by_subledger_type,
+    SupplierImporter,
+    SupplierPaymentImporter,
     find_account_by_name_pattern,
+    find_account_by_subledger_type,
+    get_ap_control_account,
+    get_ar_control_account,
 )
-
+from app.services.upload_utils import get_env_max_bytes, write_upload_to_temp
 
 router = APIRouter(
     prefix="/import",
@@ -83,8 +84,8 @@ class ImportResultResponse(BaseModel):
     error_count: int
     success_rate: str
     duration_seconds: float
-    errors: List[str] = Field(default_factory=list)
-    warnings: List[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
     @classmethod
     def from_import_result(cls, result: ImportResult) -> "ImportResultResponse":
@@ -109,7 +110,7 @@ class ColumnMappingResponse(BaseModel):
     source: str
     target: str
     confidence: float
-    samples: List[str] = Field(default_factory=list)
+    samples: list[str] = Field(default_factory=list)
 
 
 class ImportPreviewResponse(BaseModel):
@@ -117,13 +118,13 @@ class ImportPreviewResponse(BaseModel):
 
     entity_type: str
     total_rows: int
-    sample_data: List[Dict[str, Any]]
-    detected_columns: List[str]
-    required_columns: List[str]
-    optional_columns: List[str]
-    missing_required: List[str]
-    column_mappings: List[ColumnMappingResponse]
-    validation_errors: List[str]
+    sample_data: list[dict[str, Any]]
+    detected_columns: list[str]
+    required_columns: list[str]
+    optional_columns: list[str]
+    missing_required: list[str]
+    column_mappings: list[ColumnMappingResponse]
+    validation_errors: list[str]
     detected_format: str  # zoho, quickbooks, xero, sage, wave, freshbooks, generic
     is_valid: bool
 
@@ -155,7 +156,7 @@ class ImportPreviewResponse(BaseModel):
 @router.get("/supported-types")
 async def get_supported_types(
     auth: dict = Depends(require_tenant_permission("import:read")),
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Get list of supported entity types and their required columns."""
     return {
         "entity_types": [
@@ -322,12 +323,13 @@ async def preview_import(
             detail="Only CSV files are supported",
         )
 
-    content = await file.read()
-
-    # Save to temp file for processing
-    with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp:
-        tmp.write(content)
-        tmp_path = tmp.name
+    max_bytes = get_env_max_bytes("MAX_IMPORT_FILE_SIZE", 50 * 1024 * 1024)
+    tmp_path = await write_upload_to_temp(
+        file,
+        suffix=".csv",
+        max_bytes=max_bytes,
+        error_detail=f"File too large. Maximum size: {max_bytes // 1024 // 1024}MB",
+    )
 
     try:
         # Create config for preview
@@ -388,13 +390,13 @@ async def import_data(
             detail="Only CSV files are supported",
         )
 
-    # Read file content
-    content = await file.read()
-
-    # Save to temp file for processing
-    with tempfile.NamedTemporaryFile(mode="wb", suffix=".csv", delete=False) as tmp:
-        tmp.write(content)
-        tmp_path = tmp.name
+    max_bytes = get_env_max_bytes("MAX_IMPORT_FILE_SIZE", 50 * 1024 * 1024)
+    tmp_path = await write_upload_to_temp(
+        file,
+        suffix=".csv",
+        max_bytes=max_bytes,
+        error_detail=f"File too large. Maximum size: {max_bytes // 1024 // 1024}MB",
+    )
 
     try:
         config = ImportConfig(
@@ -408,25 +410,16 @@ async def import_data(
         # Get the appropriate importer
         importer = _get_importer(entity_type, db, config)
 
-        # Run import
-        result = importer.import_file(tmp_path)
+        from app.services.finance.import_export.import_service import ImportService
 
-        # Commit if not dry run and successful
-        if not dry_run and result.status in (
-            ImportStatus.COMPLETED,
-            ImportStatus.COMPLETED_WITH_ERRORS,
-        ):
-            db.commit()
-        else:
-            db.rollback()
+        # Run import (service owns commit/rollback)
+        result = ImportService.run_import(importer, tmp_path)
 
         return ImportResultResponse.from_import_result(result)
 
     except ValueError as e:
-        db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Import failed: {str(e)}",
@@ -522,7 +515,7 @@ def _get_importer(entity_type: EntityType, db: Session, config: ImportConfig):
         raise ValueError(f"Unsupported entity type: {entity_type}")
 
 
-def _get_column_mappings(entity_type: EntityType, columns: List[str]) -> Dict[str, str]:
+def _get_column_mappings(entity_type: EntityType, columns: list[str]) -> dict[str, str]:
     """Get column mappings based on entity type and detected columns."""
     mappings = {}
 
@@ -557,8 +550,8 @@ def _get_column_mappings(entity_type: EntityType, columns: List[str]) -> Dict[st
 
 
 def _validate_preview(
-    entity_type: EntityType, rows: List[Dict], mappings: Dict
-) -> List[str]:
+    entity_type: EntityType, rows: list[dict], mappings: dict
+) -> list[str]:
     """Validate preview data and return errors."""
     errors = []
 
@@ -590,7 +583,7 @@ def _validate_preview(
 
     # Check for empty required values
     sample_errors = 0
-    for i, row in enumerate(rows[:10]):
+    for _i, row in enumerate(rows[:10]):
         if all(not v or v.strip() == "" for v in row.values()):
             sample_errors += 1
 

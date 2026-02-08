@@ -5,7 +5,7 @@ Training Web Service - Base utilities and common functions.
 from __future__ import annotations
 
 import logging
-from typing import Optional, cast
+from typing import cast
 from uuid import UUID
 
 from app.models.people.training import TrainingEventStatus, TrainingProgramStatus
@@ -18,17 +18,17 @@ from app.services.formatters import parse_time as parse_time  # noqa: F401
 logger = logging.getLogger(__name__)
 
 
-def parse_uuid(value: Optional[str]) -> Optional[UUID]:
+def parse_uuid(value: str | None) -> UUID | None:
     """Parse a string to UUID, returning None on failure."""
     if not value:
         return None
     try:
-        return cast(Optional[UUID], coerce_uuid(value))
+        return cast(UUID | None, coerce_uuid(value))
     except Exception:
         return None
 
 
-def parse_program_status(value: Optional[str]) -> Optional[TrainingProgramStatus]:
+def parse_program_status(value: str | None) -> TrainingProgramStatus | None:
     """Parse program status string to enum."""
     if not value:
         return None
@@ -38,7 +38,7 @@ def parse_program_status(value: Optional[str]) -> Optional[TrainingProgramStatus
         return None
 
 
-def parse_event_status(value: Optional[str]) -> Optional[TrainingEventStatus]:
+def parse_event_status(value: str | None) -> TrainingEventStatus | None:
     """Parse event status string to enum."""
     if not value:
         return None

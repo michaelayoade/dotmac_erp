@@ -4,11 +4,12 @@ Tests for ExpenseService.
 Tests expense entry creation, workflow (submit/approve/reject), and GL posting.
 """
 
-import pytest
 from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
 from uuid import uuid4
+
+import pytest
 
 from app.models.finance.exp.expense_entry import ExpenseStatus, PaymentMethod
 from app.services.finance.exp.expense import ExpenseService
@@ -164,7 +165,7 @@ class TestCreateExpense:
 
         expense_account_id = uuid4()
 
-        result = ExpenseService.create(
+        ExpenseService.create(
             db=mock_db,
             organization_id=str(org_id),
             expense_date=date.today(),
@@ -185,7 +186,7 @@ class TestCreateExpense:
         expense_account_id = uuid4()
         tax_code_id = uuid4()
 
-        result = ExpenseService.create(
+        ExpenseService.create(
             db=mock_db,
             organization_id=str(org_id),
             expense_date=date.today(),
@@ -207,7 +208,7 @@ class TestCreateExpense:
         expense_account_id = uuid4()
         payment_account_id = uuid4()
 
-        result = ExpenseService.create(
+        ExpenseService.create(
             db=mock_db,
             organization_id=str(org_id),
             expense_date=date.today(),
@@ -225,7 +226,7 @@ class TestCreateExpense:
         """Test expense creation with all optional fields."""
         mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
 
-        result = ExpenseService.create(
+        ExpenseService.create(
             db=mock_db,
             organization_id=str(org_id),
             expense_date=date.today(),
@@ -257,7 +258,7 @@ class TestSubmitExpense:
         expense = MockExpenseEntry(status=ExpenseStatus.DRAFT)
         mock_db.query.return_value.filter.return_value.first.return_value = expense
 
-        result = ExpenseService.submit(
+        ExpenseService.submit(
             mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id)
         )
 
@@ -299,7 +300,7 @@ class TestApproveExpense:
         expense = MockExpenseEntry(status=ExpenseStatus.SUBMITTED)
         mock_db.query.return_value.filter.return_value.first.return_value = expense
 
-        result = ExpenseService.approve(
+        ExpenseService.approve(
             mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id)
         )
 
@@ -341,7 +342,7 @@ class TestRejectExpense:
         expense = MockExpenseEntry(status=ExpenseStatus.SUBMITTED)
         mock_db.query.return_value.filter.return_value.first.return_value = expense
 
-        result = ExpenseService.reject(
+        ExpenseService.reject(
             mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id)
         )
 
@@ -354,7 +355,7 @@ class TestRejectExpense:
         expense = MockExpenseEntry(status=ExpenseStatus.APPROVED)
         mock_db.query.return_value.filter.return_value.first.return_value = expense
 
-        result = ExpenseService.reject(
+        ExpenseService.reject(
             mock_db, str(expense.organization_id), str(expense.expense_id), str(user_id)
         )
 
@@ -412,7 +413,7 @@ class TestPostExpense:
         # Mock savepoint
         mock_db.begin_nested.return_value = MagicMock()
 
-        result = ExpenseService.post(
+        ExpenseService.post(
             mock_db,
             str(expense.organization_id),
             str(expense.expense_id),
@@ -462,7 +463,7 @@ class TestPostExpense:
         # Mock savepoint
         mock_db.begin_nested.return_value = MagicMock()
 
-        result = ExpenseService.post(
+        ExpenseService.post(
             mock_db,
             str(expense.organization_id),
             str(expense.expense_id),
@@ -529,7 +530,7 @@ class TestVoidExpense:
         expense = MockExpenseEntry(status=ExpenseStatus.DRAFT)
         mock_db.get.return_value = expense
 
-        result = ExpenseService.void(mock_db, str(expense.expense_id), str(user_id))
+        ExpenseService.void(mock_db, str(expense.expense_id), str(user_id))
 
         assert expense.status == ExpenseStatus.VOID
         assert expense.updated_by is not None
@@ -540,7 +541,7 @@ class TestVoidExpense:
         expense = MockExpenseEntry(status=ExpenseStatus.SUBMITTED)
         mock_db.get.return_value = expense
 
-        result = ExpenseService.void(mock_db, str(expense.expense_id), str(user_id))
+        ExpenseService.void(mock_db, str(expense.expense_id), str(user_id))
 
         assert expense.status == ExpenseStatus.VOID
 
@@ -549,7 +550,7 @@ class TestVoidExpense:
         expense = MockExpenseEntry(status=ExpenseStatus.APPROVED)
         mock_db.get.return_value = expense
 
-        result = ExpenseService.void(mock_db, str(expense.expense_id), str(user_id))
+        ExpenseService.void(mock_db, str(expense.expense_id), str(user_id))
 
         assert expense.status == ExpenseStatus.VOID
 

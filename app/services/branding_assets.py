@@ -5,6 +5,7 @@ from pathlib import Path
 from fastapi import HTTPException, UploadFile
 
 from app.config import settings
+from app.services.upload_utils import write_upload_to_path
 
 
 def _allowed_types() -> set[str]:
@@ -37,24 +38,16 @@ async def save_branding_asset(file: UploadFile, org_id: str, asset_type: str) ->
     _validate_asset(file)
 
     upload_dir = Path(settings.branding_upload_dir) / org_id
-    upload_dir.mkdir(parents=True, exist_ok=True)
-
     ext = _get_extension(file.content_type or "image/png")
     filename = f"{asset_type}_{uuid.uuid4().hex[:10]}{ext}"
     file_path = upload_dir / filename
-
-    content = await file.read()
-    if len(content) > settings.branding_max_size_bytes:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "File too large. Maximum size: "
-                f"{settings.branding_max_size_bytes // 1024 // 1024}MB"
-            ),
-        )
-
-    with open(file_path, "wb") as f:
-        f.write(content)
+    max_mb = settings.branding_max_size_bytes // 1024 // 1024
+    await write_upload_to_path(
+        file,
+        file_path,
+        settings.branding_max_size_bytes,
+        error_detail=f"File too large. Maximum size: {max_mb}MB",
+    )
 
     return f"{settings.branding_url_prefix}/{org_id}/{filename}"
 

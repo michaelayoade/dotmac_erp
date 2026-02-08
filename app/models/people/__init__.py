@@ -19,6 +19,19 @@ All People models:
 - Support soft deletion where appropriate
 """
 
+# People Assets
+from app.models.people.assets import (
+    AssetAssignment,
+    AssetCondition,
+    AssignmentStatus,
+)
+
+# Attendance Models
+from app.models.people.attendance import (
+    Attendance,
+    AttendanceStatus,
+    ShiftType,
+)
 from app.models.people.base import (
     AuditMixin,
     ERPNextSyncMixin,
@@ -26,6 +39,35 @@ from app.models.people.base import (
     SoftDeleteMixin,
     StatusTrackingMixin,
     VersionMixin,
+)
+
+# Discipline Models
+from app.models.people.discipline import (
+    ActionType,
+    CaseAction,
+    CaseDocument,
+    CaseResponse,
+    CaseStatus,
+    CaseWitness,
+    DisciplinaryCase,
+    SeverityLevel,
+    ViolationType,
+)
+from app.models.people.discipline import (
+    DocumentType as DisciplineDocumentType,
+)
+
+# Expense Models
+from app.models.people.exp import (
+    CardTransaction,
+    CardTransactionStatus,
+    CashAdvance,
+    CashAdvanceStatus,
+    CorporateCard,
+    ExpenseCategory,
+    ExpenseClaim,
+    ExpenseClaimItem,
+    ExpenseClaimStatus,
 )
 
 # HR Core Models
@@ -37,6 +79,17 @@ from app.models.people.hr import (
     EmployeeStatus,
     EmploymentType,
     Gender,
+)
+
+# Leave Models
+from app.models.people.leave import (
+    Holiday,
+    HolidayList,
+    LeaveAllocation,
+    LeaveApplication,
+    LeaveApplicationStatus,
+    LeaveType,
+    LeaveTypePolicy,
 )
 
 # Payroll Models
@@ -56,96 +109,44 @@ from app.models.people.payroll import (
     SalaryStructureEarning,
 )
 
-# Leave Models
-from app.models.people.leave import (
-    LeaveType,
-    LeaveTypePolicy,
-    HolidayList,
-    Holiday,
-    LeaveAllocation,
-    LeaveApplication,
-    LeaveApplicationStatus,
-)
-
-# Attendance Models
-from app.models.people.attendance import (
-    ShiftType,
-    Attendance,
-    AttendanceStatus,
+# Performance Models
+from app.models.people.perf import (
+    KPI,
+    KRA,
+    Appraisal,
+    AppraisalCycle,
+    AppraisalCycleStatus,
+    AppraisalFeedback,
+    AppraisalKRAScore,
+    AppraisalStatus,
+    AppraisalTemplate,
+    AppraisalTemplateKRA,
+    KPIStatus,
+    Scorecard,
+    ScorecardItem,
 )
 
 # Recruitment Models
 from app.models.people.recruit import (
-    JobOpening,
-    JobOpeningStatus,
-    JobApplicant,
     ApplicantStatus,
     Interview,
     InterviewRound,
     InterviewStatus,
+    JobApplicant,
     JobOffer,
+    JobOpening,
+    JobOpeningStatus,
     OfferStatus,
 )
 
 # Training Models
 from app.models.people.training import (
-    TrainingProgram,
-    TrainingProgramStatus,
+    AttendeeStatus,
+    TrainingAttendee,
     TrainingEvent,
     TrainingEventStatus,
-    TrainingAttendee,
-    AttendeeStatus,
-)
-
-# Performance Models
-from app.models.people.perf import (
-    AppraisalCycle,
-    AppraisalCycleStatus,
-    AppraisalTemplate,
-    AppraisalTemplateKRA,
-    KRA,
-    KPI,
-    KPIStatus,
-    Appraisal,
-    AppraisalStatus,
-    AppraisalKRAScore,
-    AppraisalFeedback,
-    Scorecard,
-    ScorecardItem,
-)
-
-# People Assets
-from app.models.people.assets import (
-    AssetAssignment,
-    AssignmentStatus,
-    AssetCondition,
-)
-
-# Expense Models
-from app.models.people.exp import (
-    ExpenseCategory,
-    ExpenseClaim,
-    ExpenseClaimStatus,
-    ExpenseClaimItem,
-    CashAdvance,
-    CashAdvanceStatus,
-    CorporateCard,
-    CardTransaction,
-    CardTransactionStatus,
-)
-
-# Discipline Models
-from app.models.people.discipline import (
-    DisciplinaryCase,
-    CaseStatus,
-    ViolationType,
-    SeverityLevel,
-    CaseWitness,
-    CaseAction,
-    ActionType,
-    CaseDocument,
-    DocumentType as DisciplineDocumentType,
-    CaseResponse,
+    TrainingProgram,
+    TrainingProgramStatus,
 )
 
 __all__ = [

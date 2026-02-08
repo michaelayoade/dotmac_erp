@@ -32,6 +32,8 @@ class ExpenseClaimActionType(str, enum.Enum):
     LINK_ADVANCE = "LINK_ADVANCE"
     POST_GL = "POST_GL"
     CREATE_SUPPLIER_INVOICE = "CREATE_SUPPLIER_INVOICE"
+    CANCEL = "CANCEL"
+    RESUBMIT = "RESUBMIT"
 
 
 class ExpenseClaimActionStatus(str, enum.Enum):

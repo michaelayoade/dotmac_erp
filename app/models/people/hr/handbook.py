@@ -104,7 +104,7 @@ class HRDocument(Base):
         nullable=False,
         comment="Document title",
     )
-    description: Mapped[Optional[str]] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Brief description of the document",
@@ -124,7 +124,7 @@ class HRDocument(Base):
         default=1,
         comment="Document version number",
     )
-    previous_version_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    previous_version_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("hr.hr_document.document_id"),
         nullable=True,
@@ -153,7 +153,7 @@ class HRDocument(Base):
         nullable=False,
         default=0,
     )
-    content_hash: Mapped[Optional[str]] = mapped_column(
+    content_hash: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,
         comment="SHA256 hash for integrity verification",
@@ -166,7 +166,7 @@ class HRDocument(Base):
         default=date.today,
         comment="Date this version becomes effective",
     )
-    expiry_date: Mapped[Optional[date]] = mapped_column(
+    expiry_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="Optional expiry date",
@@ -179,7 +179,7 @@ class HRDocument(Base):
         default=True,
         comment="Whether employees must acknowledge this document",
     )
-    acknowledgment_deadline_days: Mapped[Optional[int]] = mapped_column(
+    acknowledgment_deadline_days: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         comment="Days from onboarding/effective date to acknowledge",
@@ -190,7 +190,7 @@ class HRDocument(Base):
         default=True,
         comment="If false, specific departments/roles may be defined",
     )
-    applies_to_departments: Mapped[Optional[list[str]]] = mapped_column(
+    applies_to_departments: Mapped[list[str] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="List of department IDs this applies to (if not all)",
@@ -204,12 +204,12 @@ class HRDocument(Base):
     )
 
     # Metadata
-    tags: Mapped[Optional[list[str]]] = mapped_column(
+    tags: Mapped[list[str] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Tags for searching/filtering",
     )
-    extra_metadata: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    extra_metadata: Mapped[dict[str, Any] | None] = mapped_column(
         "metadata",
         JSONB,
         nullable=True,
@@ -226,11 +226,11 @@ class HRDocument(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -265,9 +265,7 @@ class HRDocument(Base):
         today = date.today()
         if self.effective_date > today:
             return False
-        if self.expiry_date and self.expiry_date < today:
-            return False
-        return True
+        return not (self.expiry_date and self.expiry_date < today)
 
     @property
     def file_size_display(self) -> str:
@@ -321,24 +319,24 @@ class HRDocumentAcknowledgment(Base):
         nullable=False,
         server_default=func.now(),
     )
-    ip_address: Mapped[Optional[str]] = mapped_column(
+    ip_address: Mapped[str | None] = mapped_column(
         String(45),
         nullable=True,
         comment="IP address at time of acknowledgment",
     )
-    user_agent: Mapped[Optional[str]] = mapped_column(
+    user_agent: Mapped[str | None] = mapped_column(
         String(500),
         nullable=True,
         comment="Browser user agent for audit",
     )
 
     # Optional digital signature/confirmation
-    signature_data: Mapped[Optional[str]] = mapped_column(
+    signature_data: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Base64 encoded signature image if captured",
     )
-    confirmation_text: Mapped[Optional[str]] = mapped_column(
+    confirmation_text: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Text the employee confirmed, e.g., 'I have read and understood...'",

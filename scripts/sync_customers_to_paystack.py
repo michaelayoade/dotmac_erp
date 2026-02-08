@@ -23,12 +23,12 @@ sys.path.insert(0, "/app")
 from app.db import SessionLocal
 from app.models.domain_settings import SettingDomain
 from app.models.finance.ar.customer import Customer
-from app.services.settings_spec import resolve_value
 from app.services.finance.payments.paystack_client import (
     PaystackClient,
     PaystackConfig,
     PaystackError,
 )
+from app.services.settings_spec import resolve_value
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"

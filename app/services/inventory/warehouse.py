@@ -6,10 +6,11 @@ Manages warehouses, locations, and inventory balances.
 
 from __future__ import annotations
 
+import builtins
 import logging
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, List, Optional
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -35,17 +36,17 @@ class WarehouseInput:
 
     warehouse_code: str
     warehouse_name: str
-    description: Optional[str] = None
-    location_id: Optional[UUID] = None
-    address: Optional[dict[str, Any]] = None
-    contact_name: Optional[str] = None
-    contact_phone: Optional[str] = None
-    contact_email: Optional[str] = None
+    description: str | None = None
+    location_id: UUID | None = None
+    address: dict[str, Any] | None = None
+    contact_name: str | None = None
+    contact_phone: str | None = None
+    contact_email: str | None = None
     is_receiving: bool = True
     is_shipping: bool = True
     is_consignment: bool = False
     is_transit: bool = False
-    cost_center_id: Optional[UUID] = None
+    cost_center_id: UUID | None = None
 
 
 @dataclass
@@ -55,12 +56,12 @@ class WarehouseLocationInput:
     warehouse_id: UUID
     location_code: str
     location_name: str
-    description: Optional[str] = None
-    location_type: Optional[str] = None
-    aisle: Optional[str] = None
-    rack: Optional[str] = None
-    shelf: Optional[str] = None
-    bin: Optional[str] = None
+    description: str | None = None
+    location_type: str | None = None
+    aisle: str | None = None
+    rack: str | None = None
+    shelf: str | None = None
+    bin: str | None = None
     is_receiving: bool = True
     is_shipping: bool = True
     is_pickable: bool = True
@@ -219,7 +220,7 @@ class WarehouseService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         item_id: UUID,
-        warehouse_id: Optional[UUID] = None,
+        warehouse_id: UUID | None = None,
     ) -> list[InventoryBalance]:
         """
         Get inventory balance for an item across warehouses.
@@ -370,24 +371,29 @@ class WarehouseService(ListResponseMixin):
     def get(
         db: Session,
         warehouse_id: str,
+        organization_id: UUID | None = None,
     ) -> Warehouse:
         """Get a warehouse by ID."""
         warehouse = db.get(Warehouse, coerce_uuid(warehouse_id))
         if not warehouse:
+            raise HTTPException(status_code=404, detail="Warehouse not found")
+        if organization_id is not None and warehouse.organization_id != coerce_uuid(
+            organization_id
+        ):
             raise HTTPException(status_code=404, detail="Warehouse not found")
         return warehouse
 
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        is_active: Optional[bool] = None,
-        is_receiving: Optional[bool] = None,
-        is_shipping: Optional[bool] = None,
-        search: Optional[str] = None,
+        organization_id: str | None = None,
+        is_active: bool | None = None,
+        is_receiving: bool | None = None,
+        is_shipping: bool | None = None,
+        search: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> List[Warehouse]:
+    ) -> builtins.list[Warehouse]:
         """List warehouses with optional filters."""
         query = db.query(Warehouse)
 
@@ -419,10 +425,10 @@ class WarehouseService(ListResponseMixin):
     def list_locations(
         db: Session,
         warehouse_id: str,
-        is_active: Optional[bool] = None,
+        is_active: bool | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[WarehouseLocation]:
+    ) -> builtins.list[WarehouseLocation]:
         """List locations in a warehouse."""
         wh_id = coerce_uuid(warehouse_id)
 
@@ -482,9 +488,9 @@ class WarehouseService(ListResponseMixin):
     @staticmethod
     def count(
         db: Session,
-        organization_id: Optional[str] = None,
-        is_active: Optional[bool] = None,
-        search: Optional[str] = None,
+        organization_id: str | None = None,
+        is_active: bool | None = None,
+        search: str | None = None,
     ) -> int:
         """Count warehouses with filters."""
         query = db.query(Warehouse)

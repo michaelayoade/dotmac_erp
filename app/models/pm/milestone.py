@@ -80,11 +80,11 @@ class Milestone(Base, AuditMixin, ERPNextSyncMixin):
     # Basic fields
     milestone_code: Mapped[str] = mapped_column(String(30), nullable=False)
     milestone_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Dates
     target_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
-    actual_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    actual_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Status
     status: Mapped[MilestoneStatus] = mapped_column(
@@ -94,7 +94,7 @@ class Milestone(Base, AuditMixin, ERPNextSyncMixin):
     )
 
     # Optional linked task
-    linked_task_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    linked_task_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("pm.task.task_id"),
         nullable=True,
@@ -107,7 +107,7 @@ class Milestone(Base, AuditMixin, ERPNextSyncMixin):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -140,7 +140,7 @@ class Milestone(Base, AuditMixin, ERPNextSyncMixin):
         """Days until target date (negative if overdue)."""
         return (self.target_date - date.today()).days
 
-    def achieve(self, actual_date: Optional[date] = None) -> None:
+    def achieve(self, actual_date: date | None = None) -> None:
         """Mark milestone as achieved."""
         self.status = MilestoneStatus.ACHIEVED
         self.actual_date = actual_date or date.today()

@@ -68,6 +68,10 @@ const Charts = {
     }
   },
 
+  getStatusPalette() {
+    return this.colors.categorical;
+  },
+
   // Check dark mode
   isDark() {
     return document.documentElement.classList.contains('dark');

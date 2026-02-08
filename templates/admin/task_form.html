@@ -16,6 +16,7 @@
     </div>
 
     <form action="{{ '/admin/tasks/' ~ task_data.id ~ '/edit' if task_data else '/admin/tasks/new' }}" method="POST" class="space-y-6" x-data="{ intervalSeconds: {{ task_data.interval_seconds if task_data else 3600 }}, customInterval: false }">
+        {{ request.state.csrf_form | safe }}
         <!-- Error Alert -->
         {% if error %}
         <div class="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-4">
@@ -131,7 +132,7 @@
                     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                         Interval
                     </label>
-                    <div class="grid grid-cols-3 gap-2 mb-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-3">
                         {% for preset in interval_presets %}
                         <button
                             type="button"
@@ -254,7 +255,8 @@
     </form>
 
     {% if task_data %}
-    <form id="delete-form" action="/admin/tasks/{{ task_data.id }}/delete" method="POST" class="hidden"></form>
+    <form id="delete-form" action="/admin/tasks/{{ task_data.id }}/delete" method="POST" class="hidden">
+        {{ request.state.csrf_form | safe }}</form>
     {% endif %}
 </div>
 {% endblock %}

@@ -6,7 +6,7 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -80,7 +80,7 @@ class TaxReturn(Base):
         Enum(TaxReturnType, name="tax_return_type"),
         nullable=False,
     )
-    return_reference: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    return_reference: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Amounts
     total_output_tax: Mapped[Decimal] = mapped_column(
@@ -100,7 +100,7 @@ class TaxReturn(Base):
     )
 
     # Tax return box values (for various formats)
-    box_values: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    box_values: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     status: Mapped[TaxReturnStatus] = mapped_column(
         Enum(TaxReturnStatus, name="tax_return_status"),
@@ -109,40 +109,40 @@ class TaxReturn(Base):
     )
 
     # Filing
-    filed_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    filed_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    filed_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    filed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    filing_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    filing_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Payment
     is_paid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    payment_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    payment_reference: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    payment_journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    payment_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    payment_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    payment_journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
 
     # Amendment
     is_amendment: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    original_return_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    original_return_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    amendment_reason: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    amendment_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     # Review
-    prepared_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    prepared_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    prepared_at: Mapped[Optional[datetime]] = mapped_column(
+    prepared_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    reviewed_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    reviewed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+    reviewed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
@@ -151,7 +151,7 @@ class TaxReturn(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

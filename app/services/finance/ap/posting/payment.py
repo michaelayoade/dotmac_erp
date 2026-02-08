@@ -9,7 +9,6 @@ Transforms supplier payments into journal entries with:
 
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -32,7 +31,7 @@ def post_payment(
     payment_id: UUID,
     posting_date: date,
     posted_by_user_id: UUID,
-    idempotency_key: Optional[str] = None,
+    idempotency_key: str | None = None,
 ) -> APPostingResult:
     """
     Post a supplier payment to the general ledger.

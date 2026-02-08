@@ -9,9 +9,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -40,11 +39,11 @@ class ModificationInput:
     modification_date: date
     effective_date: date
     modification_type: ModificationType
-    description: Optional[str] = None
+    description: str | None = None
     is_separate_lease: bool = False
-    new_lease_payments: Optional[Decimal] = None
-    revised_discount_rate: Optional[Decimal] = None
-    revised_lease_term_months: Optional[int] = None
+    new_lease_payments: Decimal | None = None
+    revised_discount_rate: Decimal | None = None
+    revised_lease_term_months: int | None = None
 
 
 @dataclass
@@ -52,7 +51,7 @@ class ModificationResult:
     """Result of a lease modification."""
 
     success: bool
-    modification: Optional[LeaseModification] = None
+    modification: LeaseModification | None = None
     liability_adjustment: Decimal = Decimal("0")
     rou_asset_adjustment: Decimal = Decimal("0")
     gain_loss: Decimal = Decimal("0")
@@ -351,7 +350,7 @@ class LeaseModificationService(ListResponseMixin):
         Returns:
             Updated LeaseModification
         """
-        org_id = coerce_uuid(organization_id)
+        coerce_uuid(organization_id)
         mod_id = coerce_uuid(modification_id)
         user_id = coerce_uuid(approved_by_user_id)
 
@@ -373,7 +372,7 @@ class LeaseModificationService(ListResponseMixin):
             )
 
         modification.approved_by_user_id = user_id
-        modification.approved_at = datetime.now(timezone.utc)
+        modification.approved_at = datetime.now(UTC)
 
         db.commit()
         db.refresh(modification)
@@ -381,13 +380,24 @@ class LeaseModificationService(ListResponseMixin):
         return modification
 
     @staticmethod
-    def get(db: Session, modification_id: str) -> Optional[LeaseModification]:
+    def get(
+        db: Session,
+        modification_id: str,
+        organization_id: UUID | None = None,
+    ) -> LeaseModification | None:
         """Get a modification by ID."""
-        return (
+        modification = (
             db.query(LeaseModification)
             .filter(LeaseModification.modification_id == coerce_uuid(modification_id))
             .first()
         )
+        if not modification:
+            return None
+        if organization_id is not None:
+            lease = db.get(LeaseContract, modification.lease_id)
+            if not lease or lease.organization_id != coerce_uuid(organization_id):
+                return None
+        return modification
 
     @staticmethod
     def list_by_lease(
@@ -405,10 +415,10 @@ class LeaseModificationService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        modification_type: Optional[ModificationType] = None,
-        from_date: Optional[date] = None,
-        to_date: Optional[date] = None,
+        organization_id: str | None = None,
+        modification_type: ModificationType | None = None,
+        from_date: date | None = None,
+        to_date: date | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[LeaseModification]:

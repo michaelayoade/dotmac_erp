@@ -7,7 +7,7 @@ Syncs Timesheet Detail rows to pm.time_entry table.
 import logging
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -48,7 +48,7 @@ class TimesheetSyncService(BaseSyncService[TimeEntry]):
         self._project_cache: dict[str, uuid.UUID] = {}
         self._task_cache: dict[str, uuid.UUID] = {}
 
-    def fetch_records(self, client: Any, since: Optional[datetime] = None):
+    def fetch_records(self, client: Any, since: datetime | None = None):
         """
         Fetch Timesheet records from ERPNext.
 
@@ -174,7 +174,7 @@ class TimesheetSyncService(BaseSyncService[TimeEntry]):
         """Get the time entry ID."""
         return entity.entry_id
 
-    def find_existing_entity(self, source_name: str) -> Optional[TimeEntry]:
+    def find_existing_entity(self, source_name: str) -> TimeEntry | None:
         """Find existing TimeEntry by sync record."""
         sync_entity = self.get_sync_entity(source_name)
         if not sync_entity or not sync_entity.target_id:
@@ -184,9 +184,7 @@ class TimesheetSyncService(BaseSyncService[TimeEntry]):
             select(TimeEntry).where(TimeEntry.entry_id == sync_entity.target_id)
         ).scalar_one_or_none()
 
-    def _resolve_project_id(
-        self, project_source_name: Optional[str]
-    ) -> Optional[uuid.UUID]:
+    def _resolve_project_id(self, project_source_name: str | None) -> uuid.UUID | None:
         """Resolve DotMac project_id from ERPNext project name."""
         if not project_source_name:
             return None
@@ -210,7 +208,7 @@ class TimesheetSyncService(BaseSyncService[TimeEntry]):
 
         return result
 
-    def _resolve_task_id(self, task_source_name: Optional[str]) -> Optional[uuid.UUID]:
+    def _resolve_task_id(self, task_source_name: str | None) -> uuid.UUID | None:
         """Resolve DotMac task_id from ERPNext task name."""
         if not task_source_name:
             return None
@@ -235,8 +233,8 @@ class TimesheetSyncService(BaseSyncService[TimeEntry]):
         return result
 
     def _resolve_employee_id(
-        self, employee_source_name: Optional[str]
-    ) -> Optional[uuid.UUID]:
+        self, employee_source_name: str | None
+    ) -> uuid.UUID | None:
         """Resolve DotMac employee_id from ERPNext employee name."""
         if not employee_source_name:
             return None

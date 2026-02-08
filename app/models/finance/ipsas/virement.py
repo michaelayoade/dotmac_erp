@@ -6,7 +6,6 @@ Transfer of budget authority between appropriations.
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     DateTime,
@@ -77,15 +76,15 @@ class Virement(Base):
         ForeignKey("ipsas.appropriation.appropriation_id"),
         nullable=False,
     )
-    from_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    from_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    from_cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    from_cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    from_fund_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    from_fund_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -96,15 +95,15 @@ class Virement(Base):
         ForeignKey("ipsas.appropriation.appropriation_id"),
         nullable=False,
     )
-    to_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    to_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    to_cost_center_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    to_cost_center_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    to_fund_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    to_fund_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -115,24 +114,22 @@ class Virement(Base):
 
     # Justification
     justification: Mapped[str] = mapped_column(Text, nullable=False)
-    approval_authority: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True
-    )
+    approval_authority: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     # Audit / SoD
     created_by_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         nullable=False,
     )
-    approved_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    approved_at: Mapped[Optional[datetime]] = mapped_column(
+    approved_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    applied_at: Mapped[Optional[datetime]] = mapped_column(
+    applied_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -141,7 +138,7 @@ class Virement(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

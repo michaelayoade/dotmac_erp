@@ -1,0 +1,20 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Certification Expiry{% endblock %}
+{% block content %}
+<p style="margin: 0 0 16px 0;">Hi {{ employee_first }},</p>
+
+<p style="margin: 0 0 16px 0;">Your certification <strong>"{{ cert_name }}"</strong> is expiring in {{ days_remaining }} days.</p>
+
+<table role="presentation" style="width: 100%; border-collapse: collapse; margin: 20px 0; background: #f8fafc; border-radius: 6px;">
+  <tr>
+    <td style="padding: 12px 16px; color: #64748b; width: 45%;">Expiry Date</td>
+    <td style="padding: 12px 16px; font-weight: 600;">{{ expiry_date }}</td>
+  </tr>
+  <tr>
+    <td style="padding: 12px 16px; color: #64748b; border-top: 1px solid #e2e8f0;">Issuing Organization</td>
+    <td style="padding: 12px 16px; border-top: 1px solid #e2e8f0;">{{ issuing_org }}</td>
+  </tr>
+</table>
+
+<p style="margin: 0;">Please take necessary steps to renew your certification before it expires.</p>
+{% endblock %}

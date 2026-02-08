@@ -9,24 +9,6 @@ from app.services.finance.gl.account_balance import (
     AccountBalanceService,
     account_balance_service,
 )
-from app.services.finance.gl.journal import (
-    JournalInput,
-    JournalLineInput,
-    JournalService,
-    journal_service,
-)
-from app.services.finance.gl.ledger_posting import (
-    LedgerPostingService,
-    ledger_posting_service,
-)
-from app.services.finance.gl.period_guard import (
-    PeriodGuardService,
-    period_guard_service,
-)
-from app.services.finance.gl.reversal import ReversalService, reversal_service
-
-# Alias for backward compatibility with API imports
-balance_service = account_balance_service
 from app.services.finance.gl.chart_of_accounts import (
     AccountInput,
     ChartOfAccountsService,
@@ -47,6 +29,24 @@ from app.services.finance.gl.gl_posting_adapter import (
     GLPostingResult,
     gl_posting_adapter,
 )
+from app.services.finance.gl.journal import (
+    JournalInput,
+    JournalLineInput,
+    JournalService,
+    journal_service,
+)
+from app.services.finance.gl.ledger_posting import (
+    LedgerPostingService,
+    ledger_posting_service,
+)
+from app.services.finance.gl.period_guard import (
+    PeriodGuardService,
+    period_guard_service,
+)
+from app.services.finance.gl.reversal import ReversalService, reversal_service
+
+# Alias for backward compatibility with API imports
+balance_service = account_balance_service
 
 __all__ = [
     # Period Guard

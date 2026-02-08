@@ -6,7 +6,6 @@ Consolidation API endpoints per IFRS 10.
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -14,25 +13,24 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_organization_id, require_tenant_auth
-from app.services.auth_dependencies import require_tenant_permission
 from app.db import SessionLocal
-from app.schemas.finance.common import ListResponse, PostingResultSchema
 from app.models.finance.cons.consolidation_run import ConsolidationStatus
 from app.models.finance.cons.elimination_entry import EliminationEntry, EliminationType
 from app.models.finance.cons.legal_entity import ConsolidationMethod, EntityType
+from app.schemas.finance.common import ListResponse, PostingResultSchema
+from app.services.auth_dependencies import require_tenant_permission
 from app.services.finance.cons import (
-    legal_entity_service,
-    ownership_service,
-    intercompany_service,
-    consolidation_service,
-    cons_posting_adapter,
-    LegalEntityInput,
-    OwnershipInput,
-    IntercompanyBalanceInput,
     ConsolidationRunInput,
     EliminationInput,
+    IntercompanyBalanceInput,
+    LegalEntityInput,
+    OwnershipInput,
+    cons_posting_adapter,
+    consolidation_service,
+    intercompany_service,
+    legal_entity_service,
+    ownership_service,
 )
-
 
 router = APIRouter(
     prefix="/cons",
@@ -65,19 +63,19 @@ class LegalEntityCreate(BaseModel):
     country_code: str = Field(max_length=3)
     functional_currency_code: str = Field(max_length=3)
     reporting_currency_code: str = Field(max_length=3)
-    parent_entity_id: Optional[UUID] = None
-    organization_id: Optional[UUID] = None
+    parent_entity_id: UUID | None = None
+    organization_id: UUID | None = None
     is_consolidating_entity: bool = False
-    description: Optional[str] = None
-    incorporation_date: Optional[date] = None
-    registration_number: Optional[str] = None
-    tax_id: Optional[str] = None
+    description: str | None = None
+    incorporation_date: date | None = None
+    registration_number: str | None = None
+    tax_id: str | None = None
     fiscal_year_end_month: int = 12
     fiscal_year_end_day: int = 31
-    acquisition_date: Optional[date] = None
-    acquisition_cost: Optional[Decimal] = None
-    goodwill_at_acquisition: Optional[Decimal] = None
-    address: Optional[dict] = None
+    acquisition_date: date | None = None
+    acquisition_cost: Decimal | None = None
+    goodwill_at_acquisition: Decimal | None = None
+    address: dict | None = None
 
 
 class LegalEntityRead(BaseModel):
@@ -87,24 +85,24 @@ class LegalEntityRead(BaseModel):
 
     entity_id: UUID
     group_id: UUID
-    organization_id: Optional[UUID] = None
+    organization_id: UUID | None = None
     entity_code: str
     entity_name: str
     legal_name: str
-    description: Optional[str] = None
+    description: str | None = None
     entity_type: EntityType
     consolidation_method: ConsolidationMethod
-    parent_entity_id: Optional[UUID] = None
+    parent_entity_id: UUID | None = None
     is_consolidating_entity: bool
     country_code: str
     functional_currency_code: str
     reporting_currency_code: str
     fiscal_year_end_month: int
     fiscal_year_end_day: int
-    acquisition_date: Optional[date] = None
-    disposal_date: Optional[date] = None
-    acquisition_cost: Optional[Decimal] = None
-    goodwill_at_acquisition: Optional[Decimal] = None
+    acquisition_date: date | None = None
+    disposal_date: date | None = None
+    acquisition_cost: Decimal | None = None
+    goodwill_at_acquisition: Decimal | None = None
     accumulated_goodwill_impairment: Decimal
     is_active: bool
 
@@ -127,11 +125,11 @@ class OwnershipCreate(BaseModel):
     ownership_percentage: Decimal
     voting_rights_percentage: Decimal
     effective_from: date
-    shares_held: Optional[Decimal] = None
-    total_shares_outstanding: Optional[Decimal] = None
-    investment_cost: Optional[Decimal] = None
-    nci_at_acquisition: Optional[Decimal] = None
-    nci_measurement_basis: Optional[str] = None
+    shares_held: Decimal | None = None
+    total_shares_outstanding: Decimal | None = None
+    investment_cost: Decimal | None = None
+    nci_at_acquisition: Decimal | None = None
+    nci_measurement_basis: str | None = None
 
 
 class OwnershipRead(BaseModel):
@@ -146,13 +144,13 @@ class OwnershipRead(BaseModel):
     voting_rights_percentage: Decimal
     effective_ownership_percentage: Decimal
     effective_from: date
-    effective_to: Optional[date] = None
-    shares_held: Optional[Decimal] = None
-    total_shares_outstanding: Optional[Decimal] = None
-    investment_cost: Optional[Decimal] = None
+    effective_to: date | None = None
+    shares_held: Decimal | None = None
+    total_shares_outstanding: Decimal | None = None
+    investment_cost: Decimal | None = None
     nci_percentage: Decimal
-    nci_at_acquisition: Optional[Decimal] = None
-    nci_measurement_basis: Optional[str] = None
+    nci_at_acquisition: Decimal | None = None
+    nci_measurement_basis: str | None = None
     has_control: bool
     has_significant_influence: bool
     has_joint_control: bool
@@ -167,7 +165,7 @@ class NCISummaryRead(BaseModel):
     entity_id: UUID
     entity_name: str
     nci_percentage: Decimal
-    nci_at_acquisition: Optional[Decimal] = None
+    nci_at_acquisition: Decimal | None = None
     has_control: bool
 
 
@@ -189,7 +187,7 @@ class IntercompanyBalanceCreate(BaseModel):
     to_entity_functional_amount: Decimal
     reporting_currency_code: str = Field(max_length=3)
     reporting_currency_amount: Decimal
-    balance_description: Optional[str] = None
+    balance_description: str | None = None
 
 
 class IntercompanyBalanceRead(BaseModel):
@@ -203,7 +201,7 @@ class IntercompanyBalanceRead(BaseModel):
     from_entity_id: UUID
     to_entity_id: UUID
     balance_type: str
-    balance_description: Optional[str] = None
+    balance_description: str | None = None
     from_entity_gl_account_id: UUID
     from_entity_currency: str
     from_entity_amount: Decimal
@@ -216,9 +214,9 @@ class IntercompanyBalanceRead(BaseModel):
     reporting_currency_amount: Decimal
     is_matched: bool
     difference_amount: Decimal
-    difference_reason: Optional[str] = None
+    difference_reason: str | None = None
     is_eliminated: bool
-    elimination_entry_id: Optional[UUID] = None
+    elimination_entry_id: UUID | None = None
 
 
 class MatchingResultRead(BaseModel):
@@ -234,7 +232,7 @@ class MatchingResultRead(BaseModel):
     to_amount: Decimal
     difference: Decimal
     is_matched: bool
-    difference_reason: Optional[str] = None
+    difference_reason: str | None = None
 
 
 class ConsolidationRunCreate(BaseModel):
@@ -242,7 +240,7 @@ class ConsolidationRunCreate(BaseModel):
 
     fiscal_period_id: UUID
     reporting_currency_code: str = Field(max_length=3)
-    run_description: Optional[str] = None
+    run_description: str | None = None
 
 
 class ConsolidationRunRead(BaseModel):
@@ -254,7 +252,7 @@ class ConsolidationRunRead(BaseModel):
     group_id: UUID
     fiscal_period_id: UUID
     run_number: int
-    run_description: Optional[str] = None
+    run_description: str | None = None
     reporting_currency_code: str
     status: ConsolidationStatus
     entities_count: int
@@ -265,11 +263,11 @@ class ConsolidationRunRead(BaseModel):
     intercompany_differences: Decimal
     total_translation_adjustment: Decimal
     total_nci: Decimal
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
-    approved_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    approved_at: datetime | None = None
     created_by_user_id: UUID
-    approved_by_user_id: Optional[UUID] = None
+    approved_by_user_id: UUID | None = None
 
 
 class EliminationEntryCreate(BaseModel):
@@ -282,12 +280,12 @@ class EliminationEntryCreate(BaseModel):
     debit_amount: Decimal
     credit_account_id: UUID
     credit_amount: Decimal
-    entity_1_id: Optional[UUID] = None
-    entity_2_id: Optional[UUID] = None
-    source_balance_id: Optional[UUID] = None
-    nci_debit_account_id: Optional[UUID] = None
+    entity_1_id: UUID | None = None
+    entity_2_id: UUID | None = None
+    source_balance_id: UUID | None = None
+    nci_debit_account_id: UUID | None = None
     nci_debit_amount: Decimal = Decimal("0")
-    nci_credit_account_id: Optional[UUID] = None
+    nci_credit_account_id: UUID | None = None
     nci_credit_amount: Decimal = Decimal("0")
     is_automatic: bool = True
 
@@ -306,12 +304,12 @@ class EliminationEntryRead(BaseModel):
     debit_amount: Decimal
     credit_account_id: UUID
     credit_amount: Decimal
-    entity_1_id: Optional[UUID] = None
-    entity_2_id: Optional[UUID] = None
-    source_balance_id: Optional[UUID] = None
-    nci_debit_account_id: Optional[UUID] = None
+    entity_1_id: UUID | None = None
+    entity_2_id: UUID | None = None
+    source_balance_id: UUID | None = None
+    nci_debit_account_id: UUID | None = None
     nci_debit_amount: Decimal
-    nci_credit_account_id: Optional[UUID] = None
+    nci_credit_account_id: UUID | None = None
     nci_credit_amount: Decimal
     is_automatic: bool
 
@@ -379,19 +377,20 @@ def create_legal_entity(
 @router.get("/entities/{entity_id}", response_model=LegalEntityRead)
 def get_legal_entity(
     entity_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("cons:entities:read")),
     db: Session = Depends(get_db),
 ):
     """Get a legal entity by ID."""
-    return legal_entity_service.get(db, str(entity_id))
+    return legal_entity_service.get(db, str(entity_id), organization_id)
 
 
 @router.get("/entities", response_model=ListResponse[LegalEntityRead])
 def list_legal_entities(
     organization_id: UUID = Depends(require_organization_id),
-    entity_type: Optional[EntityType] = None,
-    consolidation_method: Optional[ConsolidationMethod] = None,
-    is_active: Optional[bool] = None,
+    entity_type: EntityType | None = None,
+    consolidation_method: ConsolidationMethod | None = None,
+    is_active: bool | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("cons:entities:read")),
@@ -418,7 +417,7 @@ def list_legal_entities(
 @router.get("/structure", response_model=list[GroupStructureRead])
 def get_group_structure(
     organization_id: UUID = Depends(require_organization_id),
-    as_of_date: Optional[date] = None,
+    as_of_date: date | None = None,
     auth: dict = Depends(require_tenant_permission("cons:entities:read")),
     db: Session = Depends(get_db),
 ):
@@ -505,10 +504,10 @@ def create_ownership(
 @router.get("/ownership", response_model=ListResponse[OwnershipRead])
 def list_ownership_interests(
     organization_id: UUID = Depends(require_organization_id),
-    investor_entity_id: Optional[UUID] = None,
-    investee_entity_id: Optional[UUID] = None,
-    is_current: Optional[bool] = None,
-    has_control: Optional[bool] = None,
+    investor_entity_id: UUID | None = None,
+    investee_entity_id: UUID | None = None,
+    is_current: bool | None = None,
+    has_control: bool | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("cons:ownership:read")),
@@ -610,12 +609,12 @@ def create_intercompany_balance(
 @router.get("/intercompany", response_model=ListResponse[IntercompanyBalanceRead])
 def list_intercompany_balances(
     organization_id: UUID = Depends(require_organization_id),
-    fiscal_period_id: Optional[UUID] = None,
-    from_entity_id: Optional[UUID] = None,
-    to_entity_id: Optional[UUID] = None,
-    balance_type: Optional[str] = None,
-    is_matched: Optional[bool] = None,
-    is_eliminated: Optional[bool] = None,
+    fiscal_period_id: UUID | None = None,
+    from_entity_id: UUID | None = None,
+    to_entity_id: UUID | None = None,
+    balance_type: str | None = None,
+    is_matched: bool | None = None,
+    is_eliminated: bool | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("cons:intercompany:read")),
@@ -690,18 +689,19 @@ def create_consolidation_run(
 @router.get("/runs/{run_id}", response_model=ConsolidationRunRead)
 def get_consolidation_run(
     run_id: UUID,
+    organization_id: UUID = Depends(require_organization_id),
     auth: dict = Depends(require_tenant_permission("cons:runs:read")),
     db: Session = Depends(get_db),
 ):
     """Get a consolidation run by ID."""
-    return consolidation_service.get(db, str(run_id))
+    return consolidation_service.get(db, str(run_id), organization_id)
 
 
 @router.get("/runs", response_model=ListResponse[ConsolidationRunRead])
 def list_consolidation_runs(
     organization_id: UUID = Depends(require_organization_id),
-    fiscal_period_id: Optional[UUID] = None,
-    status: Optional[ConsolidationStatus] = None,
+    fiscal_period_id: UUID | None = None,
+    status: ConsolidationStatus | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("cons:runs:read")),
@@ -818,7 +818,7 @@ def create_elimination_entry(
 def list_elimination_entries(
     run_id: UUID,
     organization_id: UUID = Depends(require_organization_id),
-    elimination_type: Optional[EliminationType] = None,
+    elimination_type: EliminationType | None = None,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     auth: dict = Depends(require_tenant_permission("cons:eliminations:read")),

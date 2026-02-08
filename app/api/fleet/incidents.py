@@ -5,7 +5,6 @@ REST API for vehicle incident management.
 """
 
 from datetime import date
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -39,13 +38,13 @@ def get_db():
 @router.get("", response_model=IncidentListResponse)
 def list_incidents(
     organization_id: UUID = Depends(require_organization_id),
-    vehicle_id: Optional[UUID] = None,
-    driver_id: Optional[UUID] = None,
-    status: Optional[str] = None,
-    incident_type: Optional[str] = None,
-    severity: Optional[str] = None,
-    from_date: Optional[date] = None,
-    to_date: Optional[date] = None,
+    vehicle_id: UUID | None = None,
+    driver_id: UUID | None = None,
+    status: str | None = None,
+    incident_type: str | None = None,
+    severity: str | None = None,
+    from_date: date | None = None,
+    to_date: date | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
     db: Session = Depends(get_db),

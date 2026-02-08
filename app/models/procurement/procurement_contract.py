@@ -7,7 +7,6 @@ Contract awarded after bid evaluation.
 import uuid
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -68,17 +67,17 @@ class ProcurementContract(Base, ProcurementBaseMixin):
         nullable=False,
         comment="ap.supplier",
     )
-    rfq_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    rfq_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="Source RFQ",
     )
-    evaluation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    evaluation_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="Source bid evaluation",
     )
-    purchase_order_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    purchase_order_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
         comment="Generated PO (ap.purchase_order)",
@@ -107,20 +106,20 @@ class ProcurementContract(Base, ProcurementBaseMixin):
     status: Mapped[ContractStatus] = mapped_column(
         default=ContractStatus.DRAFT,
     )
-    bpp_clearance_number: Mapped[Optional[str]] = mapped_column(
+    bpp_clearance_number: Mapped[str | None] = mapped_column(
         String(50),
         nullable=True,
         comment="BPP certificate of no objection number",
     )
-    bpp_clearance_date: Mapped[Optional[date]] = mapped_column(
+    bpp_clearance_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
     )
-    payment_terms: Mapped[Optional[str]] = mapped_column(
+    payment_terms: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
-    terms_and_conditions: Mapped[Optional[str]] = mapped_column(
+    terms_and_conditions: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )
@@ -129,11 +128,11 @@ class ProcurementContract(Base, ProcurementBaseMixin):
         nullable=False,
         default=False,
     )
-    performance_bond_amount: Mapped[Optional[Decimal]] = mapped_column(
+    performance_bond_amount: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6),
         nullable=True,
     )
-    retention_percentage: Mapped[Optional[Decimal]] = mapped_column(
+    retention_percentage: Mapped[Decimal | None] = mapped_column(
         Numeric(5, 2),
         nullable=True,
     )
@@ -142,7 +141,7 @@ class ProcurementContract(Base, ProcurementBaseMixin):
         nullable=False,
         default=Decimal("0"),
     )
-    completion_date: Mapped[Optional[date]] = mapped_column(
+    completion_date: Mapped[date | None] = mapped_column(
         Date,
         nullable=True,
         comment="Actual completion date",

@@ -6,7 +6,6 @@ import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     DateTime,
@@ -69,7 +68,7 @@ class DepreciationRun(Base):
     )
 
     run_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    run_description: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    run_description: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     status: Mapped[DepreciationRunStatus] = mapped_column(
         Enum(DepreciationRunStatus, name="depreciation_run_status"),
@@ -86,25 +85,25 @@ class DepreciationRun(Base):
     )
 
     # Journal entry reference
-    journal_entry_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    journal_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    posting_batch_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    posting_batch_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
 
     # Execution tracking
-    calculation_started_at: Mapped[Optional[datetime]] = mapped_column(
+    calculation_started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    calculation_completed_at: Mapped[Optional[datetime]] = mapped_column(
+    calculation_completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    posted_at: Mapped[Optional[datetime]] = mapped_column(
+    posted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -114,7 +113,7 @@ class DepreciationRun(Base):
         UUID(as_uuid=True),
         nullable=False,
     )
-    posted_by_user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    posted_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )

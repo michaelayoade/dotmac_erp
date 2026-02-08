@@ -14,20 +14,20 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
-from typing import TYPE_CHECKING, Optional, Set
+from datetime import UTC, date, datetime
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.models.finance.audit.audit_log import AuditAction
 from app.models.people.payroll.payroll_entry import PayrollEntry, PayrollEntryStatus
 from app.models.people.payroll.salary_slip import (
     SalarySlip,
     SalarySlipDeduction,
     SalarySlipStatus,
 )
-from app.models.finance.audit.audit_log import AuditAction
 from app.services.audit_dispatcher import fire_audit_event
 from app.services.common import coerce_uuid
 
@@ -57,7 +57,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-SLIP_TRANSITIONS: dict[SalarySlipStatus, Set[SalarySlipStatus]] = {
+SLIP_TRANSITIONS: dict[SalarySlipStatus, set[SalarySlipStatus]] = {
     SalarySlipStatus.DRAFT: {SalarySlipStatus.SUBMITTED, SalarySlipStatus.CANCELLED},
     SalarySlipStatus.SUBMITTED: {
         SalarySlipStatus.APPROVED,
@@ -77,7 +77,7 @@ SLIP_TRANSITIONS: dict[SalarySlipStatus, Set[SalarySlipStatus]] = {
 }
 
 
-RUN_TRANSITIONS: dict[PayrollEntryStatus, Set[PayrollEntryStatus]] = {
+RUN_TRANSITIONS: dict[PayrollEntryStatus, set[PayrollEntryStatus]] = {
     PayrollEntryStatus.DRAFT: {
         PayrollEntryStatus.PENDING,
         PayrollEntryStatus.SLIPS_CREATED,
@@ -147,7 +147,7 @@ class PayrollLifecycle:
     def __init__(
         self,
         db: Session,
-        dispatcher: Optional[PayrollEventDispatcher] = None,
+        dispatcher: PayrollEventDispatcher | None = None,
     ):
         self.db = db
         self.dispatcher = dispatcher or payroll_dispatcher
@@ -222,7 +222,7 @@ class PayrollLifecycle:
         """Update slip status and tracking fields."""
         previous = slip.status
         slip.status = new_status
-        slip.status_changed_at = datetime.now(timezone.utc)
+        slip.status_changed_at = datetime.now(UTC)
         slip.status_changed_by_id = changed_by_id
         return previous
 
@@ -392,7 +392,7 @@ class PayrollLifecycle:
         slip_id: UUID,
         posting_date: date,
         posted_by_id: UUID,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> TransitionResult:
         """
         Post a salary slip to GL - unified orchestration.
@@ -447,7 +447,7 @@ class PayrollLifecycle:
         # 3. Update status
         previous = self._update_slip_status(slip, SalarySlipStatus.POSTED, user_id)
         slip.journal_entry_id = gl_result.journal_entry_id
-        slip.posted_at = datetime.now(timezone.utc)
+        slip.posted_at = datetime.now(UTC)
         slip.posted_by_id = user_id
 
         # 4. Commit
@@ -485,7 +485,7 @@ class PayrollLifecycle:
         organization_id: UUID,
         slip_id: UUID,
         paid_by_id: UUID,
-        payment_reference: Optional[str] = None,
+        payment_reference: str | None = None,
     ) -> TransitionResult:
         """
         Mark a salary slip as paid.
@@ -500,7 +500,7 @@ class PayrollLifecycle:
         previous = self._update_slip_status(slip, SalarySlipStatus.PAID, user_id)
 
         # Set payment tracking fields
-        slip.paid_at = datetime.now(timezone.utc)
+        slip.paid_at = datetime.now(UTC)
         slip.paid_by_id = user_id
         if payment_reference:
             slip.payment_reference = payment_reference
@@ -550,7 +550,7 @@ class PayrollLifecycle:
         organization_id: UUID,
         slip_id: UUID,
         cancelled_by_id: UUID,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> TransitionResult:
         """
         Cancel a salary slip.
@@ -659,7 +659,7 @@ class PayrollLifecycle:
         """Update run status and tracking fields."""
         previous = run.status
         run.status = new_status
-        run.status_changed_at = datetime.now(timezone.utc)
+        run.status_changed_at = datetime.now(UTC)
         run.status_changed_by_id = changed_by_id
         return previous
 
@@ -875,7 +875,7 @@ class PayrollLifecycle:
         run_id: UUID,
         posting_date: date,
         posted_by_id: UUID,
-        idempotency_key: Optional[str] = None,
+        idempotency_key: str | None = None,
     ) -> TransitionResult:
         """
         Post a payroll run to GL - unified orchestration.
@@ -980,7 +980,7 @@ class PayrollLifecycle:
             )
 
         # 4. Update all slips to POSTED
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for slip in slips:
             slip.status = SalarySlipStatus.POSTED
             slip.journal_entry_id = gl_result.journal_entry_id
@@ -1026,7 +1026,7 @@ class PayrollLifecycle:
         organization_id: UUID,
         run_id: UUID,
         cancelled_by_id: UUID,
-        reason: Optional[str] = None,
+        reason: str | None = None,
     ) -> TransitionResult:
         """
         Cancel a payroll run.

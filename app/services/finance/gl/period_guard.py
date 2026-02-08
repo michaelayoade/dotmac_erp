@@ -11,8 +11,7 @@ import calendar
 import logging
 import uuid as uuid_lib
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
-from typing import Optional
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -32,10 +31,10 @@ class PeriodGuardResult:
     """Result of a period guard check."""
 
     is_allowed: bool
-    fiscal_period_id: Optional[UUID]
-    period_status: Optional[str]
+    fiscal_period_id: UUID | None
+    period_status: str | None
     message: str
-    reopen_session_id: Optional[UUID] = None
+    reopen_session_id: UUID | None = None
 
 
 class PeriodGuardService(ListResponseMixin):
@@ -55,7 +54,7 @@ class PeriodGuardService(ListResponseMixin):
         organization_id: UUID,
         posting_date: date,
         allow_adjustment: bool = False,
-        reopen_session_id: Optional[UUID] = None,
+        reopen_session_id: UUID | None = None,
     ) -> PeriodGuardResult:
         """
         Check if posting is allowed for a specific date.
@@ -166,7 +165,7 @@ class PeriodGuardService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         target_date: date,
-    ) -> Optional[FiscalPeriod]:
+    ) -> FiscalPeriod | None:
         """
         Ensure a fiscal period exists for the given date, creating if necessary.
 
@@ -250,7 +249,7 @@ class PeriodGuardService(ListResponseMixin):
         organization_id: UUID,
         posting_date: date,
         allow_adjustment: bool = False,
-        reopen_session_id: Optional[UUID] = None,
+        reopen_session_id: UUID | None = None,
     ) -> UUID:
         """
         Require an open period, raising exception if not available.
@@ -285,7 +284,7 @@ class PeriodGuardService(ListResponseMixin):
         db: Session,
         organization_id: UUID,
         target_date: date,
-    ) -> Optional[FiscalPeriod]:
+    ) -> FiscalPeriod | None:
         """
         Get the fiscal period containing a specific date.
 
@@ -350,7 +349,7 @@ class PeriodGuardService(ListResponseMixin):
     def get_current_period(
         db: Session,
         organization_id: UUID,
-    ) -> Optional[FiscalPeriod]:
+    ) -> FiscalPeriod | None:
         """
         Get the current fiscal period (containing today).
 
@@ -443,7 +442,7 @@ class PeriodGuardService(ListResponseMixin):
             )
 
         period.status = PeriodStatus.SOFT_CLOSED
-        period.soft_closed_at = datetime.now(timezone.utc)
+        period.soft_closed_at = datetime.now(UTC)
         period.soft_closed_by_user_id = user_id
 
         db.commit()
@@ -493,7 +492,7 @@ class PeriodGuardService(ListResponseMixin):
             )
 
         period.status = PeriodStatus.HARD_CLOSED
-        period.hard_closed_at = datetime.now(timezone.utc)
+        period.hard_closed_at = datetime.now(UTC)
         period.hard_closed_by_user_id = user_id
 
         db.commit()
@@ -596,7 +595,7 @@ class PeriodGuardService(ListResponseMixin):
             raise HTTPException(status_code=400, detail="Invalid reopen session ID")
 
         period.status = PeriodStatus.SOFT_CLOSED
-        period.soft_closed_at = datetime.now(timezone.utc)
+        period.soft_closed_at = datetime.now(UTC)
         period.soft_closed_by_user_id = user_id
 
         db.commit()
@@ -608,6 +607,7 @@ class PeriodGuardService(ListResponseMixin):
     def get(
         db: Session,
         fiscal_period_id: str,
+        organization_id: UUID | None = None,
     ) -> FiscalPeriod:
         """
         Get a period by ID.
@@ -625,14 +625,18 @@ class PeriodGuardService(ListResponseMixin):
         period = db.get(FiscalPeriod, coerce_uuid(fiscal_period_id))
         if not period:
             raise HTTPException(status_code=404, detail="Fiscal period not found")
+        if organization_id is not None and period.organization_id != coerce_uuid(
+            organization_id
+        ):
+            raise HTTPException(status_code=404, detail="Fiscal period not found")
         return period
 
     @staticmethod
     def list(
         db: Session,
-        organization_id: Optional[str] = None,
-        fiscal_year_id: Optional[str] = None,
-        status: Optional[PeriodStatus] = None,
+        organization_id: str | None = None,
+        fiscal_year_id: str | None = None,
+        status: PeriodStatus | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[FiscalPeriod]:

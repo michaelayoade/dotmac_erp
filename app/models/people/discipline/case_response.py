@@ -6,7 +6,7 @@ Stores employee responses to disciplinary queries.
 
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Text, func, text
 from sqlalchemy.dialects.postgresql import UUID
@@ -73,7 +73,7 @@ class CaseResponse(Base):
         server_default=func.now(),
         comment="When response was submitted",
     )
-    acknowledged_at: Mapped[Optional[datetime]] = mapped_column(
+    acknowledged_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         comment="When HR acknowledged the response",

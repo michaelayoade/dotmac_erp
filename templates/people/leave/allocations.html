@@ -87,7 +87,7 @@
             <form method="post" action="/people/leave/allocations/bulk-create">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
-                <div class="space-y-5">
+                <div class="space-y-6">
                     {# Employee Selection #}
                     <div>
                         <label class="form-label required">Select Employees</label>
@@ -123,7 +123,7 @@
                     </div>
 
                     {# Period #}
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label for="bulk_from_date" class="form-label required">From Date</label>
                             <input type="date" name="from_date" id="bulk_from_date" required class="form-input w-full" value="{{ today.replace(month=1, day=1).isoformat() }}">
@@ -135,7 +135,7 @@
                     </div>
 
                     {# Allocation Days #}
-                    <div class="grid grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label for="bulk_new_leaves" class="form-label required">New Leaves (days)</label>
                             <input type="number" name="new_leaves_allocated" id="bulk_new_leaves" required min="0" step="0.5" class="form-input w-full" value="20">
@@ -205,7 +205,7 @@
 
     {% if allocations %}
     <div class="card overflow-hidden">
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">

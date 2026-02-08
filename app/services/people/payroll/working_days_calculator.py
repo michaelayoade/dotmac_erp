@@ -19,7 +19,6 @@ from calendar import monthrange
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -267,11 +266,11 @@ class WorkingDaysCalculator:
         employee_joining_date: date,
         period_start: date,
         period_end: date,
-        employee_leaving_date: Optional[date] = None,
-        method: Optional[ProrationMethod] = None,
+        employee_leaving_date: date | None = None,
+        method: ProrationMethod | None = None,
         exclude_weekends: bool = True,
         exclude_holidays: bool = True,
-        custom_holidays: Optional[set[date]] = None,
+        custom_holidays: set[date] | None = None,
     ) -> ProrationResult:
         """
         Calculate working days and payment days for an employee in a period.
@@ -411,7 +410,7 @@ class WorkingDaysCalculator:
     def _determine_proration_reason(
         self,
         joining_date: date,
-        leaving_date: Optional[date],
+        leaving_date: date | None,
         period_start: date,
         period_end: date,
     ) -> ProrationReason:
@@ -494,7 +493,7 @@ class WorkingDaysCalculator:
         self,
         year: int,
         month: int,
-        organization_id: Optional[UUID] = None,
+        organization_id: UUID | None = None,
         exclude_weekends: bool = True,
         exclude_holidays: bool = True,
     ) -> int:
@@ -547,8 +546,8 @@ def calculate_proration(
     employee_joining_date: date,
     period_start: date,
     period_end: date,
-    employee_leaving_date: Optional[date] = None,
-    method: Optional[ProrationMethod] = None,
+    employee_leaving_date: date | None = None,
+    method: ProrationMethod | None = None,
 ) -> ProrationResult:
     """
     Convenience function for calculating pro-ration.

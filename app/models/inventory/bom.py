@@ -8,7 +8,7 @@ import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
@@ -27,6 +27,9 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
+
+if TYPE_CHECKING:
+    from app.models.inventory.item import Item
 
 
 class BOMType(str, enum.Enum):
@@ -63,7 +66,7 @@ class BillOfMaterials(Base):
 
     bom_code: Mapped[str] = mapped_column(String(30), nullable=False)
     bom_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # The item this BOM produces
     item_id: Mapped[uuid.UUID] = mapped_column(
@@ -96,7 +99,7 @@ class BillOfMaterials(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),
@@ -163,7 +166,7 @@ class BOMComponent(Base):
     line_number: Mapped[int] = mapped_column(Numeric(5, 0), nullable=False, default=1)
 
     # Optional: specific warehouse/location for component
-    warehouse_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    warehouse_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
 
@@ -179,4 +182,9 @@ class BOMComponent(Base):
     bom: Mapped["BillOfMaterials"] = relationship(
         "BillOfMaterials",
         back_populates="components",
+    )
+    component_item: Mapped["Item | None"] = relationship(
+        "Item",
+        foreign_keys=[component_item_id],
+        lazy="noload",
     )

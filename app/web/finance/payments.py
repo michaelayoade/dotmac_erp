@@ -4,21 +4,19 @@ Payment Web Routes.
 HTML pages for payment flow.
 """
 
-from typing import Optional
-
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.services.finance.payments.web import payment_web_service
 from app.templates import templates
 from app.web.deps import (
-    get_db,
-    require_finance_access,
-    optional_web_auth,
     WebAuthContext,
     base_context,
+    get_db,
+    optional_web_auth,
+    require_finance_access,
 )
-from app.services.finance.payments.web import payment_web_service
 
 router = APIRouter(prefix="/payments", tags=["payments-web"])
 
@@ -27,7 +25,7 @@ router = APIRouter(prefix="/payments", tags=["payments-web"])
 def payment_callback(
     request: Request,
     reference: str = Query(...),
-    trxref: Optional[str] = Query(None),  # Paystack also sends this
+    trxref: str | None = Query(None),  # Paystack also sends this
     db: Session = Depends(get_db),
     auth: WebAuthContext = Depends(optional_web_auth),
 ):
@@ -107,7 +105,8 @@ def reimburse_expense_page(
 @router.get("/transfers", response_class=HTMLResponse)
 def transfer_list(
     request: Request,
-    status: Optional[str] = None,
+    search: str | None = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
@@ -120,7 +119,7 @@ def transfer_list(
     context = base_context(request, auth, "Transfers", "expense", db=db)
     context.update(
         payment_web_service.transfer_list_context(
-            db, auth.organization_id, status, page
+            db, auth.organization_id, search, status, page
         )
     )
 
@@ -134,7 +133,7 @@ def transfer_list(
 @router.get("/history", response_class=HTMLResponse)
 def payment_history(
     request: Request,
-    status: Optional[str] = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),

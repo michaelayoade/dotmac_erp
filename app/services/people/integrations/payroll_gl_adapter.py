@@ -7,9 +7,8 @@ Creates GL journal entries from salary slips and payroll runs.
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -32,9 +31,9 @@ class GLPostingResult:
     """Result of posting to GL."""
 
     success: bool
-    journal_entry_id: Optional[uuid.UUID] = None
-    posting_batch_id: Optional[uuid.UUID] = None
-    error_message: Optional[str] = None
+    journal_entry_id: uuid.UUID | None = None
+    posting_batch_id: uuid.UUID | None = None
+    error_message: str | None = None
 
 
 class PayrollGLAdapter:
@@ -516,7 +515,7 @@ class PayrollGLAdapter:
             )
 
             # CREDITS: Each deduction type to its liability account
-            for comp_id, (
+            for _comp_id, (
                 comp_name,
                 amount,
                 liability_acc_id,
@@ -635,11 +634,11 @@ class PayrollGLAdapter:
             # Link journal to payroll entry
             payroll.journal_entry_id = journal.journal_entry_id
             payroll.status = PayrollEntryStatus.POSTED
-            payroll.status_changed_at = posted_at or datetime.now(timezone.utc)
+            payroll.status_changed_at = posted_at or datetime.now(UTC)
             payroll.status_changed_by_id = user_id
 
             # Update all slips to POSTED with same journal reference
-            now = posted_at or datetime.now(timezone.utc)
+            now = posted_at or datetime.now(UTC)
             for slip in slips:
                 slip.status = SalarySlipStatus.POSTED
                 slip.journal_entry_id = journal.journal_entry_id

@@ -6,11 +6,10 @@ like common.py, bulk_actions.py, scheduler.py, audit.py, and scheduler_config.py
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
 
 import pytest
-
 
 # ============ UUID Fixtures ============
 
@@ -76,7 +75,7 @@ class MockEntity:
         )
         self.is_active = is_active
         self.name = name
-        self.created_at = created_at or datetime.now(timezone.utc)
+        self.created_at = created_at or datetime.now(UTC)
 
 
 class MockEntityWithRelation(MockEntity):
@@ -191,8 +190,8 @@ def mock_scheduled_task():
     task.args_json = ["arg1", "arg2"]
     task.kwargs_json = {"key": "value"}
     task.enabled = True
-    task.created_at = datetime.now(timezone.utc)
-    task.updated_at = datetime.now(timezone.utc)
+    task.created_at = datetime.now(UTC)
+    task.updated_at = datetime.now(UTC)
     return task
 
 
@@ -243,7 +242,7 @@ def mock_audit_event():
     event.user_agent = "pytest"
     event.request_id = "req-123"
     event.metadata_ = {}
-    event.occurred_at = datetime.now(timezone.utc)
+    event.occurred_at = datetime.now(UTC)
     return event
 
 

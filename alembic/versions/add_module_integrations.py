@@ -9,9 +9,10 @@ This migration adds:
 - AR→INV: warehouse_id, lot_id, and inventory_transaction_id on ar.invoice_line
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "add_module_integrations"

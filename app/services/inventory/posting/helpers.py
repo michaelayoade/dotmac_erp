@@ -6,7 +6,6 @@ Provides:
 - Common validation logic
 """
 
-from typing import Optional, Tuple
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -19,7 +18,7 @@ from app.models.inventory.item_category import ItemCategory
 def get_item_accounts(
     db: Session,
     transaction: InventoryTransaction,
-) -> Tuple[Optional[Item], Optional[ItemCategory]]:
+) -> tuple[Item | None, ItemCategory | None]:
     """
     Get item and category for account resolution.
 
@@ -38,7 +37,7 @@ def get_item_accounts(
     return item, category
 
 
-def get_inventory_account(item: Item, category: ItemCategory) -> Optional[UUID]:
+def get_inventory_account(item: Item, category: ItemCategory) -> UUID | None:
     """Get the inventory account for an item."""
     return item.inventory_account_id or category.inventory_account_id
 
@@ -46,8 +45,8 @@ def get_inventory_account(item: Item, category: ItemCategory) -> Optional[UUID]:
 def get_cogs_account(
     item: Item,
     category: ItemCategory,
-    override_account_id: Optional[UUID] = None,
-) -> Optional[UUID]:
+    override_account_id: UUID | None = None,
+) -> UUID | None:
     """Get the COGS account for an item, with optional override."""
     if override_account_id:
         return override_account_id

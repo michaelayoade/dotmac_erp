@@ -1,0 +1,20 @@
+{% extends "emails/base_email.html" %}
+{% block title %}Verify Your Email{% endblock %}
+{% block content %}
+<p style="margin: 0 0 16px 0;">Dear {{ applicant_name }},</p>
+
+<p style="margin: 0 0 16px 0;">You requested to check your application status at <strong>{{ org_name }}</strong>.</p>
+
+<p style="margin: 0 0 8px 0;">Click the button below to verify your email and view your application status:</p>
+
+<p style="margin: 0 0 20px 0;">
+  <a href="{{ verification_url }}" style="display: inline-block; padding: 12px 24px; background-color: {{ primary_color | default('#0d9488') }}; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600;">View Application Status</a>
+</p>
+
+<p style="margin: 0 0 16px 0; font-size: 13px; color: #64748b;">If the button above does not work, copy and paste this link into your browser:<br>
+<a href="{{ verification_url }}" style="color: {{ primary_color | default('#0d9488') }}; text-decoration: none; word-break: break-all;">{{ verification_url }}</a></p>
+
+<p style="margin: 0 0 16px 0; color: #64748b; font-size: 14px;">This link will expire in 24 hours.</p>
+
+<p style="margin: 0;">If you didn't request this, you can safely ignore this email.</p>
+{% endblock %}

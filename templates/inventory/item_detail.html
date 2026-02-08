@@ -53,7 +53,7 @@
     </div>
 
     <!-- Quick Stats -->
-    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4 stagger-in" style="animation-delay: 50ms;">
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:grid-cols-4 stagger-in" style="animation-delay: 50ms;">
         <div class="card p-4">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Category</p>
             <p class="mt-1 text-lg font-semibold text-slate-900 dark:text-white">{{ category.category_name if category else '-' }}</p>
@@ -333,7 +333,7 @@
             <div class="p-6">
                 <!-- Stock Summary -->
                 {% if stock_summary %}
-                <div class="mb-6 grid grid-cols-3 gap-4">
+                <div class="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div class="rounded-lg bg-slate-50 p-4 dark:bg-slate-800/50">
                         <p class="text-xs uppercase tracking-wider text-slate-500 dark:text-slate-400">Total On Hand</p>
                         <p class="mt-1 text-2xl font-bold {% if stock_summary.below_reorder %}text-amber-600 dark:text-amber-400{% else %}text-slate-900 dark:text-white{% endif %} font-display font-mono">

@@ -10,7 +10,7 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, Generic, TypeVar
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -110,7 +110,7 @@ class BaseExportService(ABC, Generic[T]):
         pass
 
     @abstractmethod
-    def get_erpnext_id(self, entity: T) -> Optional[str]:
+    def get_erpnext_id(self, entity: T) -> str | None:
         """Get the ERPNext document name from entity (if synced before)."""
         pass
 
@@ -119,7 +119,7 @@ class BaseExportService(ABC, Generic[T]):
         """Set the ERPNext document name on entity after export."""
         pass
 
-    def get_sync_entity_by_target(self, target_id: uuid.UUID) -> Optional[SyncEntity]:
+    def get_sync_entity_by_target(self, target_id: uuid.UUID) -> SyncEntity | None:
         """
         Get existing sync entity record by target ID.
 
@@ -151,7 +151,7 @@ class BaseExportService(ABC, Generic[T]):
         """
         return self.get_erpnext_id(entity) is None
 
-    def export_single(self, entity: T) -> tuple[bool, Optional[str]]:
+    def export_single(self, entity: T) -> tuple[bool, str | None]:
         """
         Export a single entity to ERPNext.
 
@@ -223,7 +223,7 @@ class BaseExportService(ABC, Generic[T]):
             return False, error_msg
 
     def _update_sync_entity(
-        self, target_id: uuid.UUID, source_name: Optional[str]
+        self, target_id: uuid.UUID, source_name: str | None
     ) -> None:
         """Update or create sync entity after successful export."""
         if source_name is None:
@@ -251,7 +251,7 @@ class BaseExportService(ABC, Generic[T]):
 
     def export_batch(
         self,
-        entities: Optional[list[T]] = None,
+        entities: list[T] | None = None,
         batch_size: int = 50,
     ) -> ExportResult:
         """
@@ -308,7 +308,7 @@ class BaseExportService(ABC, Generic[T]):
 
         return result
 
-    def submit_document(self, entity: T) -> tuple[bool, Optional[str]]:
+    def submit_document(self, entity: T) -> tuple[bool, str | None]:
         """
         Submit a document in ERPNext (for workflow documents).
 
@@ -333,7 +333,7 @@ class BaseExportService(ABC, Generic[T]):
         except ERPNextError as e:
             return False, f"Failed to submit: {e.message}"
 
-    def cancel_document(self, entity: T) -> tuple[bool, Optional[str]]:
+    def cancel_document(self, entity: T) -> tuple[bool, str | None]:
         """
         Cancel a document in ERPNext.
 

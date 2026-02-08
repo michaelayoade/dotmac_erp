@@ -12,7 +12,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -46,11 +46,11 @@ class OpeningBalanceLine:
     debit: Decimal
     credit: Decimal
     normal_balance: BalanceType
-    notes: Optional[str] = None
-    coa_match: Optional[str] = None
+    notes: str | None = None
+    coa_match: str | None = None
     # Resolved during import
-    account_id: Optional[UUID] = None
-    matched_account_name: Optional[str] = None
+    account_id: UUID | None = None
+    matched_account_name: str | None = None
 
 
 @dataclass
@@ -62,15 +62,15 @@ class OpeningBalancePreview:
     total_credit: Decimal
     is_balanced: bool
     difference: Decimal
-    lines: List[OpeningBalanceLine]
+    lines: list[OpeningBalanceLine]
     matched_count: int
     unmatched_count: int
-    unmatched_accounts: List[str]
-    validation_errors: List[str]
+    unmatched_accounts: list[str]
+    validation_errors: list[str]
     entry_date: date
     detected_format: str
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for API response."""
         return {
             "total_rows": self.total_rows,
@@ -105,15 +105,15 @@ class OpeningBalanceResult:
     """Result of opening balance import."""
 
     success: bool
-    journal_entry_id: Optional[UUID]
-    journal_number: Optional[str]
+    journal_entry_id: UUID | None
+    journal_number: str | None
     total_debit: Decimal
     total_credit: Decimal
     lines_created: int
-    errors: List[str]
-    warnings: List[str]
+    errors: list[str]
+    warnings: list[str]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for API response."""
         return {
             "success": self.success,
@@ -162,7 +162,7 @@ class OpeningBalanceImporter:
     def __init__(self, db: Session, config: ImportConfig):
         self.db = db
         self.config = config
-        self._account_cache: Dict[str, Account] = {}
+        self._account_cache: dict[str, Account] = {}
         self._load_accounts()
 
     def _load_accounts(self) -> None:
@@ -178,7 +178,7 @@ class OpeningBalanceImporter:
             if account.account_code:
                 self._account_cache[account.account_code.lower().strip()] = account
 
-    def _find_column(self, row: Dict[str, Any], candidates: List[str]) -> Optional[str]:
+    def _find_column(self, row: dict[str, Any], candidates: list[str]) -> str | None:
         """Find the first matching column from candidates."""
         for col in candidates:
             if col in row:
@@ -211,8 +211,8 @@ class OpeningBalanceImporter:
             raise ValueError(f"Invalid decimal value: {value}") from exc
 
     def _match_account(
-        self, account_name: str, coa_match: Optional[str] = None
-    ) -> Optional[Account]:
+        self, account_name: str, coa_match: str | None = None
+    ) -> Account | None:
         """
         Find matching account in Chart of Accounts.
 
@@ -247,8 +247,8 @@ class OpeningBalanceImporter:
             OpeningBalancePreview with parsed data and validation
         """
         path = Path(file_path)
-        errors: List[str] = []
-        lines: List[OpeningBalanceLine] = []
+        errors: list[str] = []
+        lines: list[OpeningBalanceLine] = []
 
         if not path.exists():
             return OpeningBalancePreview(
@@ -267,7 +267,7 @@ class OpeningBalanceImporter:
             )
 
         try:
-            with open(path, "r", encoding=self.config.encoding) as f:
+            with open(path, encoding=self.config.encoding) as f:
                 reader = csv.DictReader(f)
                 columns = list(reader.fieldnames or [])
                 rows = list(reader)
@@ -417,7 +417,7 @@ class OpeningBalanceImporter:
         Returns:
             OpeningBalanceResult with import status
         """
-        errors: List[str] = []
+        errors: list[str] = []
         warnings: list[str] = []
 
         # Preview first to validate

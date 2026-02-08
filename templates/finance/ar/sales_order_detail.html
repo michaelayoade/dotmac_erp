@@ -1,5 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
+{% from "components/macros.html" import status_badge, empty_state %}
 {% block page_title %}{{ order.so_number if order else 'Sales Order Not Found' }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -21,6 +22,7 @@
 <div class="flex items-center gap-2">
     {% if order.can_submit %}
     <form method="post" action="/finance/sales-orders/{{ order.so_id }}/submit" class="inline">
+        {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-primary">
             <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -32,6 +34,7 @@
 
     {% if order.can_approve %}
     <form method="post" action="/finance/sales-orders/{{ order.so_id }}/approve" class="inline">
+        {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-primary">
             <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
@@ -43,6 +46,7 @@
 
     {% if order.can_confirm %}
     <form method="post" action="/finance/sales-orders/{{ order.so_id }}/confirm" class="inline">
+        {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-primary">
             <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -63,6 +67,7 @@
 
     {% if order.can_invoice %}
     <form method="post" action="/finance/sales-orders/{{ order.so_id }}/create-invoice" class="inline">
+        {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-secondary">
             <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -74,6 +79,7 @@
 
     {% if order.can_hold %}
     <form method="post" action="/finance/sales-orders/{{ order.so_id }}/hold" class="inline">
+        {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-secondary">
             <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -85,6 +91,7 @@
 
     {% if order.can_release %}
     <form method="post" action="/finance/sales-orders/{{ order.so_id }}/release" class="inline">
+        {{ request.state.csrf_form | safe }}
         <button type="submit" class="btn btn-primary">
             <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
@@ -127,25 +134,7 @@
             <div>
                 <div class="flex items-center gap-3">
                     <h2 class="text-2xl font-bold text-slate-900 dark:text-white">{{ order.so_number }}</h2>
-                    {% if order.status == 'DRAFT' %}
-                    <span class="badge badge-neutral">Draft</span>
-                    {% elif order.status == 'SUBMITTED' %}
-                    <span class="badge badge-info">Submitted</span>
-                    {% elif order.status == 'APPROVED' %}
-                    <span class="badge badge-info">Approved</span>
-                    {% elif order.status == 'CONFIRMED' %}
-                    <span class="badge badge-teal">Confirmed</span>
-                    {% elif order.status == 'IN_PROGRESS' %}
-                    <span class="badge badge-purple">In Progress</span>
-                    {% elif order.status == 'SHIPPED' %}
-                    <span class="badge badge-indigo">Shipped</span>
-                    {% elif order.status == 'COMPLETED' %}
-                    <span class="badge badge-success">Completed</span>
-                    {% elif order.status == 'ON_HOLD' %}
-                    <span class="badge badge-warning">On Hold</span>
-                    {% elif order.status == 'CANCELLED' %}
-                    <span class="badge badge-danger">Cancelled</span>
-                    {% endif %}
+                    {{ status_badge(order.status) }}
                 </div>
                 <p class="text-slate-500 dark:text-slate-400 mt-1">Order Date: {{ order.order_date }}</p>
             </div>
@@ -279,17 +268,13 @@
                         <td class="text-right font-mono text-slate-900 dark:text-white">{{ line.unit_price }}</td>
                         <td class="text-right font-mono text-slate-900 dark:text-white">{{ line.line_total }}</td>
                         <td>
-                            {% if line.fulfillment_status == 'FULFILLED' %}
-                            <span class="badge badge-success">Fulfilled</span>
-                            {% elif line.fulfillment_status == 'PARTIAL' %}
-                            <span class="badge badge-warning">Partial</span>
-                            {% elif line.fulfillment_status == 'CANCELLED' %}
-                            <span class="badge badge-danger">Cancelled</span>
-                            {% elif line.fulfillment_status == 'BACKORDERED' %}
-                            <span class="badge badge-info">Backordered</span>
-                            {% else %}
-                            <span class="badge badge-neutral">Pending</span>
-                            {% endif %}
+                            {{ status_badge(line.fulfillment_status) }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No lines found", "There are no lines to display.") }}
                         </td>
                     </tr>
                     {% endfor %}
@@ -333,6 +318,7 @@
                         <td>
                             {% if not ship.is_delivered %}
                             <form method="post" action="/finance/sales-orders/shipments/{{ ship.shipment_id }}/deliver" class="inline">
+                                {{ request.state.csrf_form | safe }}
                                 <button type="submit" class="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400">
                                     Mark Delivered
                                 </button>
@@ -424,6 +410,7 @@
         <h3 class="font-bold text-lg">Cancel Sales Order</h3>
         <p class="py-4">Are you sure you want to cancel this sales order?</p>
         <form method="post" action="/finance/sales-orders/{{ order.so_id }}/cancel">
+            {{ request.state.csrf_form | safe }}
             <div class="mb-4">
                 <label class="form-label">Reason (optional)</label>
                 <textarea name="reason" class="form-input" rows="2" placeholder="Enter cancellation reason"></textarea>

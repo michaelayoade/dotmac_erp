@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import status_badge, live_search %}
+{% from "components/macros.html" import status_badge, live_search, empty_state %}
 
 {% block page_title %}Payroll Run {{ entry.entry_number }}{% endblock %}
 
@@ -68,7 +68,7 @@
                                     <div class="mb-4">
                                         <label for="source_account" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                                             Source Bank Account (Debit Account)
-                                        </label>
+                                         <span class="text-rose-500">*</span></label>
                                         <select name="source_account" id="source_account" required
                                                 class="form-select w-full rounded-md border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white shadow-sm focus:border-teal-500 focus:ring-teal-500">
                                             <option value="">-- Select Bank Account --</option>
@@ -244,7 +244,7 @@
     <div id="results-container">
     <div class="card overflow-hidden">
         {% if slips %}
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
                 <thead>
                     <tr class="bg-slate-50 dark:bg-slate-800/50">
@@ -295,6 +295,12 @@
                         </td>
                         <td class="px-4 py-3 text-right">
                             <a href="/people/payroll/slips/{{ slip.slip_id }}" class="text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">View</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No slips found", "There are no slips to display.") }}
                         </td>
                     </tr>
                     {% endfor %}

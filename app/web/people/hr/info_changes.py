@@ -1,12 +1,11 @@
 """HR info change request routes."""
 
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.hr.info_change_request import (
     EmployeeInfoChangeRequest,
@@ -15,8 +14,7 @@ from app.models.people.hr.info_change_request import (
 )
 from app.services.people.hr.info_change_service import InfoChangeService
 from app.templates import templates
-from app.web.deps import base_context, get_db, require_hr_access, WebAuthContext
-
+from app.web.deps import WebAuthContext, base_context, get_db, require_hr_access
 
 router = APIRouter(tags=["hr-info-changes"])
 
@@ -24,9 +22,9 @@ router = APIRouter(tags=["hr-info-changes"])
 @router.get("/info-changes", response_class=HTMLResponse)
 def info_change_requests(
     request: Request,
-    status: Optional[str] = Query(default="PENDING"),
-    change_type: Optional[str] = Query(default=None),
-    employee_id: Optional[str] = Query(default=None),
+    status: str | None = Query(default="PENDING"),
+    change_type: str | None = Query(default=None),
+    employee_id: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -91,8 +89,8 @@ def info_change_requests(
 def info_change_request_detail(
     request: Request,
     request_id: UUID,
-    success: Optional[str] = None,
-    error: Optional[str] = None,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -129,7 +127,7 @@ def info_change_request_detail(
 @router.post("/info-changes/{request_id}/approve")
 def approve_info_change_request(
     request_id: UUID,
-    reviewer_notes: Optional[str] = Form(default=None),
+    reviewer_notes: str | None = Form(default=None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ) -> RedirectResponse:
@@ -156,7 +154,7 @@ def approve_info_change_request(
 @router.post("/info-changes/{request_id}/reject")
 def reject_info_change_request(
     request_id: UUID,
-    reviewer_notes: Optional[str] = Form(default=None),
+    reviewer_notes: str | None = Form(default=None),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ) -> RedirectResponse:

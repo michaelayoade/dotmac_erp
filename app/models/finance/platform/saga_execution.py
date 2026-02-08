@@ -9,7 +9,7 @@ compensation data for rollback.
 import enum
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import (
     DateTime,
@@ -88,7 +88,7 @@ class SagaExecution(Base):
         nullable=False,
         comment="Unique key for saga deduplication",
     )
-    correlation_id: Mapped[Optional[str]] = mapped_column(
+    correlation_id: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
         comment="Correlation ID for distributed tracing",
@@ -122,12 +122,12 @@ class SagaExecution(Base):
     )
 
     # Result
-    result: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    result: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Final result on completion",
     )
-    error_message: Mapped[Optional[str]] = mapped_column(
+    error_message: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
         comment="Error message if failed",
@@ -139,7 +139,7 @@ class SagaExecution(Base):
         nullable=False,
         server_default=func.now(),
     )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -202,34 +202,34 @@ class SagaStep(Base):
     )
 
     # Step data
-    input_data: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    input_data: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Input parameters for this step",
     )
-    output_data: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    output_data: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Output data from successful execution",
     )
-    compensation_data: Mapped[Optional[dict[str, Any]]] = mapped_column(
+    compensation_data: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
         comment="Data needed for compensation (rollback)",
     )
 
     # Timestamps
-    started_at: Mapped[Optional[datetime]] = mapped_column(
+    started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
 
     # Error tracking
-    error_message: Mapped[Optional[str]] = mapped_column(
+    error_message: Mapped[str | None] = mapped_column(
         Text,
         nullable=True,
     )

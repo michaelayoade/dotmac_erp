@@ -6,7 +6,7 @@ Handles category management for support tickets.
 
 import logging
 import uuid
-from typing import List, Optional, Tuple, cast
+from typing import cast
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -24,7 +24,7 @@ class CategoryService:
         db: Session,
         organization_id: uuid.UUID,
         active_only: bool = True,
-    ) -> List[TicketCategory]:
+    ) -> list[TicketCategory]:
         """
         List categories for an organization.
 
@@ -55,7 +55,7 @@ class CategoryService:
         db: Session,
         organization_id: uuid.UUID,
         category_id: uuid.UUID,
-    ) -> Optional[TicketCategory]:
+    ) -> TicketCategory | None:
         """Get a category by ID, scoped to organization."""
         return db.execute(
             select(TicketCategory).where(
@@ -69,7 +69,7 @@ class CategoryService:
         db: Session,
         organization_id: uuid.UUID,
         category_code: str,
-    ) -> Optional[TicketCategory]:
+    ) -> TicketCategory | None:
         """Get a category by code."""
         return db.execute(
             select(TicketCategory).where(
@@ -84,15 +84,15 @@ class CategoryService:
         organization_id: uuid.UUID,
         category_code: str,
         category_name: str,
-        description: Optional[str] = None,
-        color: Optional[str] = None,
-        icon: Optional[str] = None,
-        display_order: Optional[int] = None,
-        default_team_id: Optional[uuid.UUID] = None,
-        default_priority: Optional[str] = None,
-        response_hours: Optional[int] = None,
-        resolution_hours: Optional[int] = None,
-    ) -> Tuple[Optional[TicketCategory], Optional[str]]:
+        description: str | None = None,
+        color: str | None = None,
+        icon: str | None = None,
+        display_order: int | None = None,
+        default_team_id: uuid.UUID | None = None,
+        default_priority: str | None = None,
+        response_hours: int | None = None,
+        resolution_hours: int | None = None,
+    ) -> tuple[TicketCategory | None, str | None]:
         """
         Create a new category.
 
@@ -153,17 +153,17 @@ class CategoryService:
         db: Session,
         organization_id: uuid.UUID,
         category_id: uuid.UUID,
-        category_name: Optional[str] = None,
-        description: Optional[str] = None,
-        color: Optional[str] = None,
-        icon: Optional[str] = None,
-        display_order: Optional[int] = None,
-        default_team_id: Optional[uuid.UUID] = None,
-        default_priority: Optional[str] = None,
-        response_hours: Optional[int] = None,
-        resolution_hours: Optional[int] = None,
-        is_active: Optional[bool] = None,
-    ) -> Optional[TicketCategory]:
+        category_name: str | None = None,
+        description: str | None = None,
+        color: str | None = None,
+        icon: str | None = None,
+        display_order: int | None = None,
+        default_team_id: uuid.UUID | None = None,
+        default_priority: str | None = None,
+        response_hours: int | None = None,
+        resolution_hours: int | None = None,
+        is_active: bool | None = None,
+    ) -> TicketCategory | None:
         """Update a category."""
         category = self.get_category(db, organization_id, category_id)
         if not category:
@@ -200,7 +200,7 @@ class CategoryService:
         organization_id: uuid.UUID,
         category_id: uuid.UUID,
         hard_delete: bool = False,
-    ) -> Tuple[bool, Optional[str]]:
+    ) -> tuple[bool, str | None]:
         """
         Delete a category.
 
@@ -240,7 +240,7 @@ class CategoryService:
         self,
         db: Session,
         organization_id: uuid.UUID,
-    ) -> List[TicketCategory]:
+    ) -> list[TicketCategory]:
         """
         Create default categories for a new organization.
 
@@ -353,16 +353,14 @@ class CategoryService:
                 organization_id,
                 category_code,
                 category_name,
-                description=cast(Optional[str], cat_data.get("description")),
-                color=cast(Optional[str], cat_data.get("color")),
-                icon=cast(Optional[str], cat_data.get("icon")),
+                description=cast(str | None, cat_data.get("description")),
+                color=cast(str | None, cat_data.get("color")),
+                icon=cast(str | None, cat_data.get("icon")),
                 display_order=i + 1,
-                default_team_id=cast(
-                    Optional[uuid.UUID], cat_data.get("default_team_id")
-                ),
-                default_priority=cast(Optional[str], cat_data.get("default_priority")),
-                response_hours=cast(Optional[int], cat_data.get("response_hours")),
-                resolution_hours=cast(Optional[int], cat_data.get("resolution_hours")),
+                default_team_id=cast(uuid.UUID | None, cat_data.get("default_team_id")),
+                default_priority=cast(str | None, cat_data.get("default_priority")),
+                response_hours=cast(int | None, cat_data.get("response_hours")),
+                resolution_hours=cast(int | None, cat_data.get("resolution_hours")),
             )
             if category:
                 created.append(category)

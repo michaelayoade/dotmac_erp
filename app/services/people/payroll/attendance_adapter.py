@@ -14,7 +14,6 @@ import logging
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Optional
 from uuid import UUID
 
 from sqlalchemy import select
@@ -107,7 +106,7 @@ class AttendancePayrollAdapter:
         organization_id: UUID,
         employee_id: UUID,
         as_of_date: date,
-    ) -> Optional[ShiftType]:
+    ) -> ShiftType | None:
         """Get the employee's assigned shift for a specific date."""
         stmt = (
             select(ShiftType)

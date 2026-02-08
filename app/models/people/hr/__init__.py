@@ -9,24 +9,6 @@ This module contains all models for the HR Core functionality:
 - Employee: Central employee entity linking Person to HR
 """
 
-from app.models.people.hr.department import Department
-from app.models.people.hr.designation import Designation
-from app.models.people.hr.employee import Employee, EmployeeStatus, Gender
-from app.models.people.hr.employee_grade import EmployeeGrade
-from app.models.people.hr.employment_type import EmploymentType
-from app.models.people.hr.lifecycle import (
-    ActivityStatus,
-    BoardingStatus,
-    SeparationType,
-    EmployeeOnboarding,
-    EmployeeOnboardingActivity,
-    EmployeeSeparation,
-    EmployeeSeparationActivity,
-    EmployeePromotion,
-    EmployeePromotionDetail,
-    EmployeeTransfer,
-    EmployeeTransferDetail,
-)
 from app.models.people.hr.checklist_template import (
     AssigneeRole,
     ChecklistTemplate,
@@ -34,30 +16,48 @@ from app.models.people.hr.checklist_template import (
     ChecklistTemplateType,
     OnboardingCategory,
 )
+from app.models.people.hr.department import Department
+from app.models.people.hr.designation import Designation
+from app.models.people.hr.employee import Employee, EmployeeStatus, Gender
 from app.models.people.hr.employee_extended import (
     DocumentType,
-    QualificationType,
-    RelationshipType,
-    SkillCategory,
-    EmployeeDocument,
-    EmployeeQualification,
     EmployeeCertification,
     EmployeeDependent,
-    Skill,
+    EmployeeDocument,
+    EmployeeQualification,
     EmployeeSkill,
+    QualificationType,
+    RelationshipType,
+    Skill,
+    SkillCategory,
 )
-from app.models.people.hr.job_description import (
-    CompetencyCategory,
-    JobDescriptionStatus,
-    Competency,
-    JobDescription,
-    JobDescriptionCompetency,
-)
+from app.models.people.hr.employee_grade import EmployeeGrade
+from app.models.people.hr.employment_type import EmploymentType
 from app.models.people.hr.handbook import (
     DocumentCategory,
     DocumentStatus,
     HRDocument,
     HRDocumentAcknowledgment,
+)
+from app.models.people.hr.job_description import (
+    Competency,
+    CompetencyCategory,
+    JobDescription,
+    JobDescriptionCompetency,
+    JobDescriptionStatus,
+)
+from app.models.people.hr.lifecycle import (
+    ActivityStatus,
+    BoardingStatus,
+    EmployeeOnboarding,
+    EmployeeOnboardingActivity,
+    EmployeePromotion,
+    EmployeePromotionDetail,
+    EmployeeSeparation,
+    EmployeeSeparationActivity,
+    EmployeeTransfer,
+    EmployeeTransferDetail,
+    SeparationType,
 )
 
 __all__ = [

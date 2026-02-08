@@ -5,8 +5,9 @@ Revises: e0696f5adbeb
 Create Date: 2026-02-06
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "20260206_add_offer_portal_token"
 down_revision = "e0696f5adbeb"

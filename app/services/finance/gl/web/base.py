@@ -9,7 +9,6 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Optional
 
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
@@ -42,7 +41,7 @@ def ifrs_label(category: IFRSCategory) -> str:
     return label_map.get(category, category.value)
 
 
-def parse_category(value: Optional[str]) -> Optional[IFRSCategory]:
+def parse_category(value: str | None) -> IFRSCategory | None:
     """Parse a category string to IFRSCategory enum."""
     if not value:
         return None
@@ -56,7 +55,7 @@ def parse_category(value: Optional[str]) -> Optional[IFRSCategory]:
     return mapping.get(value)
 
 
-def parse_status(value: Optional[str]) -> Optional[JournalStatus]:
+def parse_status(value: str | None) -> JournalStatus | None:
     """Parse a status string to JournalStatus enum."""
     if not value:
         return None
@@ -149,8 +148,8 @@ def journal_entry_view(entry: JournalEntry) -> dict:
 
 def journal_line_view(
     line: JournalEntryLine,
-    account_name: Optional[str] = None,
-    account_code: Optional[str] = None,
+    account_name: str | None = None,
+    account_code: str | None = None,
 ) -> dict:
     """Transform a journal entry line for display."""
     return {

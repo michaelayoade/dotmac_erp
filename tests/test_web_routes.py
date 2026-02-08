@@ -12,10 +12,10 @@ import pytest
 from fastapi import FastAPI
 from starlette.routing import Match
 
-from app.web.deps import WebAuthContext, require_web_auth, get_db as web_get_db
-from app.web_home import router as web_home_router
+from app.web.deps import WebAuthContext, require_web_auth
+from app.web.deps import get_db as web_get_db
 from app.web.finance import router as finance_web_router
-
+from app.web_home import router as web_home_router
 
 # =============================================================================
 # Test Fixtures for Web Routes

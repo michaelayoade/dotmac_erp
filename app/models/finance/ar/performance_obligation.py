@@ -7,7 +7,6 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -72,12 +71,12 @@ class PerformanceObligation(Base):
         Enum(SatisfactionPattern, name="satisfaction_pattern"),
         nullable=False,
     )
-    over_time_method: Mapped[Optional[str]] = mapped_column(
+    over_time_method: Mapped[str | None] = mapped_column(
         String(20),
         nullable=True,
         comment="OUTPUT, INPUT, STRAIGHT_LINE",
     )
-    progress_measure: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    progress_measure: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Pricing
     standalone_selling_price: Mapped[Decimal] = mapped_column(
@@ -107,10 +106,8 @@ class PerformanceObligation(Base):
     )
 
     # Timeline
-    expected_completion_date: Mapped[Optional[date]] = mapped_column(
-        Date, nullable=True
-    )
-    actual_completion_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    expected_completion_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    actual_completion_date: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     # Status
     status: Mapped[str] = mapped_column(
@@ -124,11 +121,11 @@ class PerformanceObligation(Base):
     revenue_account_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), nullable=False
     )
-    contract_asset_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    contract_asset_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    contract_liability_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    contract_liability_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -138,7 +135,7 @@ class PerformanceObligation(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

@@ -6,7 +6,7 @@ Handles:
 """
 
 import logging
-from typing import Any, Optional
+from typing import Any
 
 from celery import shared_task
 
@@ -18,15 +18,15 @@ logger = logging.getLogger(__name__)
 @shared_task
 def log_audit_event(
     actor_type: str,
-    actor_id: Optional[str],
+    actor_id: str | None,
     action: str,
     entity_type: str,
-    entity_id: Optional[str],
+    entity_id: str | None,
     status_code: int,
     is_success: bool,
-    ip_address: Optional[str],
-    user_agent: Optional[str],
-    request_id: Optional[str],
+    ip_address: str | None,
+    user_agent: str | None,
+    request_id: str | None,
     metadata_: dict[str, Any],
 ) -> dict:
     """
@@ -50,7 +50,7 @@ def log_audit_event(
     Returns:
         Dict with event_id if successful, or error details
     """
-    from app.models.audit import AuditEvent, AuditActorType
+    from app.models.audit import AuditActorType, AuditEvent
     from app.schemas.audit import AuditEventCreate
 
     logger.debug("Logging audit event: %s %s", action, entity_type)

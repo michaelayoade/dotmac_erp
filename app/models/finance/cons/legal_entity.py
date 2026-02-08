@@ -6,7 +6,6 @@ import enum
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -65,7 +64,7 @@ class LegalEntity(Base):
         UUID(as_uuid=True),
         nullable=False,
     )
-    organization_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("core_org.organization.organization_id"),
         nullable=True,
@@ -74,7 +73,7 @@ class LegalEntity(Base):
     entity_code: Mapped[str] = mapped_column(String(30), nullable=False)
     entity_name: Mapped[str] = mapped_column(String(200), nullable=False)
     legal_name: Mapped[str] = mapped_column(String(300), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     entity_type: Mapped[EntityType] = mapped_column(
         Enum(EntityType, name="entity_type"),
@@ -82,7 +81,7 @@ class LegalEntity(Base):
     )
 
     # Immediate parent
-    parent_entity_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    parent_entity_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("cons.legal_entity.entity_id"),
         nullable=True,
@@ -99,11 +98,9 @@ class LegalEntity(Base):
 
     # Geographic/legal info
     country_code: Mapped[str] = mapped_column(String(3), nullable=False)
-    incorporation_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    registration_number: Mapped[Optional[str]] = mapped_column(
-        String(100), nullable=True
-    )
-    tax_id: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    incorporation_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    registration_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    tax_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
     # Functional currency
     functional_currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
@@ -118,14 +115,14 @@ class LegalEntity(Base):
     )
 
     # Acquisition/disposal
-    acquisition_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    disposal_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    acquisition_cost: Mapped[Optional[Decimal]] = mapped_column(
+    acquisition_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    disposal_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    acquisition_cost: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6), nullable=True
     )
 
     # Goodwill
-    goodwill_at_acquisition: Mapped[Optional[Decimal]] = mapped_column(
+    goodwill_at_acquisition: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6), nullable=True
     )
     accumulated_goodwill_impairment: Mapped[Decimal] = mapped_column(
@@ -135,7 +132,7 @@ class LegalEntity(Base):
     )
 
     # Contact info
-    address: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    address: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
@@ -144,7 +141,7 @@ class LegalEntity(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

@@ -1,5 +1,6 @@
 {% extends "people/base_people.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}{{ person.first_name }} {{ person.last_name }}{% endblock %}
 
 {% block breadcrumbs %}
@@ -85,9 +86,7 @@
                     'TERMINATED': 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
                     'RETIRED': 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300'
                 } %}
-                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium {{ status_colors.get(employee.status.value, 'bg-slate-100 text-slate-700') }}">
-                    {{ employee.status.value }}
-                </span>
+                {{ status_badge(employee.status.value) }}
             </div>
         </div>
     </div>
@@ -308,9 +307,7 @@
                     'IN_PROGRESS': 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
                     'COMPLETED': 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
                 } %}
-                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {{ status_colors.get(onboarding.status.value, 'bg-slate-100 text-slate-700') }}">
-                    {{ onboarding.status.value | replace('_', ' ') | title }}
-                </span>
+                {{ status_badge(onboarding.status.value, size="sm") }}
             </div>
             <div class="flex items-center gap-2">
                 {% set completed = onboarding.activities | selectattr('status', 'equalto', 'completed') | list | length %}
@@ -530,6 +527,18 @@
                             {% if manager %}
                             <a href="/people/hr/employees/{{ manager.employee_id }}" class="text-teal-600 hover:text-teal-700">
                                 {{ manager.name }}
+                            </a>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </dd>
+                    </div>
+                    <div class="flex justify-between">
+                        <dt class="text-slate-500 dark:text-slate-400">Expense Approver</dt>
+                        <dd class="text-slate-900 dark:text-white">
+                            {% if expense_approver %}
+                            <a href="/people/hr/employees/{{ expense_approver.employee_id }}" class="text-teal-600 hover:text-teal-700">
+                                {{ expense_approver.name }}
                             </a>
                             {% else %}
                             -

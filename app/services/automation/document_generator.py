@@ -12,7 +12,7 @@ import uuid as uuid_module
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from jinja2 import FileSystemLoader
 from jinja2.sandbox import SandboxedEnvironment
@@ -35,14 +35,18 @@ from app.services.automation.safe_template import (
 )
 from app.services.formatters import (
     format_currency_compact,
+)
+from app.services.formatters import (
     format_date as _base_format_date,
+)
+from app.services.formatters import (
     format_datetime as _base_format_datetime,
 )
 
 logger = logging.getLogger(__name__)
 
 # Template environment singleton (sandboxed for security)
-_template_env: Optional[SandboxedEnvironment] = None
+_template_env: SandboxedEnvironment | None = None
 
 
 def _get_template_env() -> SandboxedEnvironment:
@@ -133,8 +137,8 @@ class DocumentGeneratorService:
         self,
         organization_id: uuid_module.UUID,
         template_type: TemplateType,
-        template_name: Optional[str] = None,
-    ) -> Optional[DocumentTemplate]:
+        template_name: str | None = None,
+    ) -> DocumentTemplate | None:
         """
         Get a template by type and optionally name.
 
@@ -167,7 +171,7 @@ class DocumentGeneratorService:
         self,
         organization_id: uuid_module.UUID,
         template_type: TemplateType,
-    ) -> Optional[DocumentTemplate]:
+    ) -> DocumentTemplate | None:
         """Get the default template for a type."""
         stmt = select(DocumentTemplate).where(
             DocumentTemplate.organization_id == organization_id,
@@ -242,7 +246,19 @@ class DocumentGeneratorService:
             self._sanitize_css(template.css_styles) if template.css_styles else ""
         )
 
+        # Fetch branding for the organization
+        branding_ctx: dict[str, Any] = {}
+        org_id = context.get("organization_id") or getattr(
+            template, "organization_id", None
+        )
+        if org_id:
+            from app.services.email_branding import get_email_branding
+
+            branding_ctx = get_email_branding(self.db, org_id)
+
         full_context = {
+            "primary_color": branding_ctx.get("primary_color", "#0d9488"),
+            "accent_color": branding_ctx.get("accent_color", "#d97706"),
             "content": rendered_content,
             "css_styles": sanitized_css,
             "page_size": template.page_size,
@@ -306,16 +322,16 @@ class DocumentGeneratorService:
         template_type: TemplateType,
         context: dict[str, Any],
         *,
-        template_name: Optional[str] = None,
-        entity_type: Optional[str] = None,
-        entity_id: Optional[uuid_module.UUID] = None,
-        document_number: Optional[str] = None,
-        document_title: Optional[str] = None,
-        created_by: Optional[uuid_module.UUID] = None,
+        template_name: str | None = None,
+        entity_type: str | None = None,
+        entity_id: uuid_module.UUID | None = None,
+        document_number: str | None = None,
+        document_title: str | None = None,
+        created_by: uuid_module.UUID | None = None,
         save_record: bool = True,
         save_file: bool = False,
         use_base_template: bool = True,
-    ) -> tuple[bytes, Optional[GeneratedDocument]]:
+    ) -> tuple[bytes, GeneratedDocument | None]:
         """
         Generate PDF from template.
 
@@ -414,7 +430,7 @@ class DocumentGeneratorService:
         template_type: TemplateType,
         context: dict[str, Any],
         *,
-        template_name: Optional[str] = None,
+        template_name: str | None = None,
     ) -> tuple[str, str, str]:
         """
         Render email content from template.
@@ -446,7 +462,7 @@ class DocumentGeneratorService:
         self,
         document_id: uuid_module.UUID,
         recipient_email: str,
-    ) -> Optional[GeneratedDocument]:
+    ) -> GeneratedDocument | None:
         """Mark a generated document as sent."""
         doc = self.db.get(GeneratedDocument, document_id)
         if doc:
@@ -456,9 +472,7 @@ class DocumentGeneratorService:
             self.db.flush()
         return doc
 
-    def mark_as_final(
-        self, document_id: uuid_module.UUID
-    ) -> Optional[GeneratedDocument]:
+    def mark_as_final(self, document_id: uuid_module.UUID) -> GeneratedDocument | None:
         """Mark a generated document as final."""
         doc = self.db.get(GeneratedDocument, document_id)
         if doc:
@@ -500,7 +514,7 @@ class DocumentGeneratorService:
         self,
         organization_id: uuid_module.UUID,
         pdf_bytes: bytes,
-        document_number: Optional[str] = None,
+        document_number: str | None = None,
     ) -> str:
         """Save PDF to file system and return relative path."""
         org_dir = self._generated_docs_dir / str(organization_id)
@@ -536,9 +550,7 @@ class DocumentGeneratorService:
             # Convert common types
             if isinstance(value, (date, datetime)):
                 snapshot[key] = value.isoformat()
-            elif isinstance(value, Decimal):
-                snapshot[key] = str(value)
-            elif isinstance(value, uuid_module.UUID):
+            elif isinstance(value, (Decimal, uuid_module.UUID)):
                 snapshot[key] = str(value)
             elif isinstance(value, (str, int, float, bool, type(None))):
                 snapshot[key] = value

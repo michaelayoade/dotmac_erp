@@ -11,10 +11,9 @@ import logging
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
-from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import func, select, text
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
@@ -52,7 +51,7 @@ logger = logging.getLogger(__name__)
 class ExpensePostingResult(PostingResult):
     """Result of an expense posting operation."""
 
-    supplier_invoice_id: Optional[UUID] = None
+    supplier_invoice_id: UUID | None = None
 
 
 class ExpensePostingAdapter:
@@ -81,14 +80,17 @@ class ExpensePostingAdapter:
         return f"EXPENSE:{claim_id}:{action.value}:v1"
 
     @staticmethod
-    def _next_invoice_number(db: Session) -> str:
-        if db.bind and db.bind.dialect.name == "postgresql":
-            seq = db.scalar(
-                text("select nextval('expense.expense_supplier_invoice_number_seq')")
-            )
-            return f"EXP-INV-{date.today().year}-{int(seq):05d}"
-        count = db.scalar(select(func.count(SupplierInvoice.invoice_id))) or 0
-        return f"EXP-INV-{date.today().year}-{count + 1:05d}"
+    def _next_invoice_number(db: Session, org_id: UUID) -> str:
+        """Generate next expense invoice number.
+
+        Delegates to SyncNumberingService for race-condition-safe generation.
+        """
+        from app.models.finance.core_config.numbering_sequence import SequenceType
+        from app.services.finance.common.numbering import SyncNumberingService
+
+        return SyncNumberingService(db).generate_next_number(
+            org_id, SequenceType.EXPENSE_INVOICE
+        )
 
     @staticmethod
     def _try_record_action(
@@ -162,10 +164,10 @@ class ExpensePostingAdapter:
         posting_date: date,
         posted_by_user_id: UUID,
         *,
-        employee_payable_account_id: Optional[UUID] = None,
+        employee_payable_account_id: UUID | None = None,
         auto_post: bool = True,
-        idempotency_key: Optional[str] = None,
-        correlation_id: Optional[str] = None,
+        idempotency_key: str | None = None,
+        correlation_id: str | None = None,
     ) -> ExpensePostingResult:
         """
         Post an approved expense claim to the general ledger.
@@ -392,7 +394,7 @@ class ExpensePostingAdapter:
         claim_id: UUID,
         created_by_user_id: UUID,
         *,
-        supplier_id: Optional[UUID] = None,
+        supplier_id: UUID | None = None,
     ) -> ExpensePostingResult:
         """
         Create a supplier invoice from an approved expense claim.
@@ -475,7 +477,7 @@ class ExpensePostingAdapter:
                 )
 
             # Generate invoice number
-            invoice_number = ExpensePostingAdapter._next_invoice_number(db)
+            invoice_number = ExpensePostingAdapter._next_invoice_number(db, org_id)
 
             # Create supplier invoice
             invoice = SupplierInvoice(
@@ -567,8 +569,8 @@ class ExpensePostingAdapter:
         *,
         bank_account_id: UUID,
         auto_post: bool = True,
-        idempotency_key: Optional[str] = None,
-        correlation_id: Optional[str] = None,
+        idempotency_key: str | None = None,
+        correlation_id: str | None = None,
     ) -> ExpensePostingResult:
         """
         Post a disbursed cash advance to the general ledger.
@@ -728,10 +730,10 @@ class ExpensePostingAdapter:
         posting_date: date,
         posted_by_user_id: UUID,
         *,
-        settlement_amount: Optional[Decimal] = None,
+        settlement_amount: Decimal | None = None,
         auto_post: bool = True,
-        idempotency_key: Optional[str] = None,
-        correlation_id: Optional[str] = None,
+        idempotency_key: str | None = None,
+        correlation_id: str | None = None,
     ) -> ExpensePostingResult:
         """
         Settle a cash advance against an expense claim.
@@ -812,9 +814,8 @@ class ExpensePostingAdapter:
             )
 
         # Build employee name
-        employee_name = "Employee"
         if claim.employee:
-            employee_name = claim.employee.full_name
+            pass
 
         # Build journal lines
         journal_lines = []
@@ -940,7 +941,7 @@ class ExpensePostingAdapter:
         db: Session,
         organization_id: UUID,
         item: ExpenseClaimItem,
-    ) -> Optional[UUID]:
+    ) -> UUID | None:
         """
         Determine the expense account for an expense claim item.
 
@@ -972,9 +973,8 @@ class ExpensePostingAdapter:
     def _get_employee_payable_account(
         db: Session,
         organization_id: UUID,
-    ) -> Optional[UUID]:
+    ) -> UUID | None:
         """Get the employee payable account for the organization."""
-        from sqlalchemy import select
 
         # Try organization settings first
         from app.models.finance.core_org.organization import Organization
@@ -982,7 +982,7 @@ class ExpensePostingAdapter:
 
         org = db.get(Organization, organization_id)
         if org and hasattr(org, "employee_payable_account_id"):
-            acc_id: Optional[UUID] = getattr(org, "employee_payable_account_id", None)
+            acc_id: UUID | None = getattr(org, "employee_payable_account_id", None)
             if acc_id:
                 return acc_id
 
@@ -1005,9 +1005,8 @@ class ExpensePostingAdapter:
     def _get_advance_account(
         db: Session,
         organization_id: UUID,
-    ) -> Optional[UUID]:
+    ) -> UUID | None:
         """Get the employee advance account for the organization."""
-        from sqlalchemy import select
 
         # Try organization settings first
         from app.models.finance.core_org.organization import Organization
@@ -1015,7 +1014,7 @@ class ExpensePostingAdapter:
 
         org = db.get(Organization, organization_id)
         if org and hasattr(org, "employee_advance_account_id"):
-            acc_id: Optional[UUID] = getattr(org, "employee_advance_account_id", None)
+            acc_id: UUID | None = getattr(org, "employee_advance_account_id", None)
             if acc_id:
                 return acc_id
 
@@ -1038,7 +1037,7 @@ class ExpensePostingAdapter:
         organization_id: UUID,
         employee,
         user_id: UUID,
-    ) -> Optional[Supplier]:
+    ) -> Supplier | None:
         """
         Get or create a supplier record for an employee.
 
@@ -1046,8 +1045,6 @@ class ExpensePostingAdapter:
         """
         if not employee:
             return None
-
-        from sqlalchemy import select
 
         supplier_code = f"EMP-{employee.employee_id.hex[:8].upper()}"
 
@@ -1096,10 +1093,10 @@ class ExpensePostingAdapter:
         posted_by_user_id: UUID,
         *,
         bank_account_id: UUID,
-        employee_payable_account_id: Optional[UUID] = None,
-        payment_reference: Optional[str] = None,
-        idempotency_key: Optional[str] = None,
-        correlation_id: Optional[str] = None,
+        employee_payable_account_id: UUID | None = None,
+        payment_reference: str | None = None,
+        idempotency_key: str | None = None,
+        correlation_id: str | None = None,
     ) -> ExpensePostingResult:
         """
         Post expense reimbursement (payment) to the general ledger.
@@ -1271,8 +1268,8 @@ class ExpensePostingAdapter:
         fee_expense_account_id: UUID,
         reference: str,
         description: str,
-        idempotency_key: Optional[str] = None,
-        correlation_id: Optional[str] = None,
+        idempotency_key: str | None = None,
+        correlation_id: str | None = None,
     ) -> ExpensePostingResult:
         """
         Post transfer fee (bank charge) to the general ledger.
@@ -1404,8 +1401,8 @@ class ExpensePostingAdapter:
         posted_by_user_id: UUID,
         *,
         bank_account_id: UUID,
-        reason: Optional[str] = None,
-        correlation_id: Optional[str] = None,
+        reason: str | None = None,
+        correlation_id: str | None = None,
     ) -> ExpensePostingResult:
         """
         Post reversal for expense reimbursement.
@@ -1570,7 +1567,7 @@ class ExpensePostingAdapter:
         fee_amount: Decimal,
         bank_account_id: UUID,
         reference: str,
-        correlation_id: Optional[str] = None,
+        correlation_id: str | None = None,
     ) -> ExpensePostingResult:
         """
         Post reversal for transfer fee.

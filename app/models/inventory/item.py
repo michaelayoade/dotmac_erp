@@ -6,7 +6,6 @@ import enum
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import (
     Boolean,
@@ -67,7 +66,7 @@ class Item(Base):
 
     item_code: Mapped[str] = mapped_column(String(50), nullable=False)
     item_name: Mapped[str] = mapped_column(String(200), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     item_type: Mapped[ItemType] = mapped_column(
         Enum(ItemType, name="item_type"),
@@ -82,8 +81,8 @@ class Item(Base):
 
     # Units
     base_uom: Mapped[str] = mapped_column(String(20), nullable=False)
-    purchase_uom: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    sales_uom: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    purchase_uom: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    sales_uom: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Costing
     costing_method: Mapped[CostingMethod] = mapped_column(
@@ -91,19 +90,15 @@ class Item(Base):
         nullable=False,
         default=CostingMethod.WEIGHTED_AVERAGE,
     )
-    standard_cost: Mapped[Optional[Decimal]] = mapped_column(
+    standard_cost: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), nullable=True)
+    last_purchase_cost: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6), nullable=True
     )
-    last_purchase_cost: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(20, 6), nullable=True
-    )
-    average_cost: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(20, 6), nullable=True
-    )
+    average_cost: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), nullable=True)
 
     # Pricing
     currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
-    list_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6), nullable=True)
+    list_price: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), nullable=True)
 
     # Stock tracking
     track_inventory: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -113,55 +108,49 @@ class Item(Base):
     )
 
     # Reorder
-    reorder_point: Mapped[Optional[Decimal]] = mapped_column(
+    reorder_point: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), nullable=True)
+    reorder_quantity: Mapped[Decimal | None] = mapped_column(
         Numeric(20, 6), nullable=True
     )
-    reorder_quantity: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(20, 6), nullable=True
-    )
-    minimum_stock: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(20, 6), nullable=True
-    )
-    maximum_stock: Mapped[Optional[Decimal]] = mapped_column(
-        Numeric(20, 6), nullable=True
-    )
+    minimum_stock: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), nullable=True)
+    maximum_stock: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), nullable=True)
 
     # Lead time
-    lead_time_days: Mapped[Optional[int]] = mapped_column(Numeric(10, 0), nullable=True)
+    lead_time_days: Mapped[int | None] = mapped_column(Numeric(10, 0), nullable=True)
 
     # Physical attributes
-    weight: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6), nullable=True)
-    weight_uom: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
-    volume: Mapped[Optional[Decimal]] = mapped_column(Numeric(20, 6), nullable=True)
-    volume_uom: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    weight: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), nullable=True)
+    weight_uom: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    volume: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), nullable=True)
+    volume_uom: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # Barcodes
-    barcode: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    manufacturer_part_number: Mapped[Optional[str]] = mapped_column(
+    barcode: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    manufacturer_part_number: Mapped[str | None] = mapped_column(
         String(100), nullable=True
     )
 
     # Tax
-    tax_code_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    tax_code_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
     is_taxable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # Account overrides
-    inventory_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    inventory_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
-    cogs_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    cogs_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True
     )
-    revenue_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    revenue_account_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
 
     # Default supplier
-    default_supplier_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    default_supplier_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         nullable=True,
     )
@@ -175,7 +164,7 @@ class Item(Base):
         nullable=False,
         server_default=func.now(),
     )
-    updated_at: Mapped[Optional[datetime]] = mapped_column(
+    updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=func.now(),

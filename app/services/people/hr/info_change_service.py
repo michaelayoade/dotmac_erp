@@ -8,14 +8,15 @@ bank details, tax info, and pension info.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import TYPE_CHECKING, Any, Optional, cast
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, Any, cast
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.models.email_profile import EmailModule
 from app.models.notification import EntityType, NotificationChannel, NotificationType
 from app.models.people.hr.employee import Employee
 from app.models.people.hr.info_change_request import (
@@ -27,7 +28,6 @@ from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 from app.models.person import Gender as PersonGender
 from app.models.person import Person
 from app.models.rbac import PersonRole, Role
-from app.models.email_profile import EmailModule
 from app.services.email import send_email
 from app.services.notification import NotificationService
 
@@ -65,7 +65,7 @@ class InfoChangeService:
         employee_id: UUID,
         proposed_changes: dict[str, Any],
         *,
-        requester_notes: Optional[str] = None,
+        requester_notes: str | None = None,
         expiry_days: int = DEFAULT_EXPIRY_DAYS,
     ) -> EmployeeInfoChangeRequest:
         """
@@ -110,7 +110,7 @@ class InfoChangeService:
         )
 
         # Create expiry time
-        expires_at = datetime.now(timezone.utc) + timedelta(days=expiry_days)
+        expires_at = datetime.now(UTC) + timedelta(days=expiry_days)
 
         # Create the request
         request = EmployeeInfoChangeRequest(
@@ -172,7 +172,7 @@ class InfoChangeService:
     def _get_previous_values(
         self,
         employee: Employee,
-        tax_profile: Optional[EmployeeTaxProfile],
+        tax_profile: EmployeeTaxProfile | None,
         proposed: dict[str, Any],
     ) -> dict[str, Any]:
         """Get the current values for fields being changed."""
@@ -250,7 +250,7 @@ class InfoChangeService:
         request_id: UUID,
         reviewer_id: UUID,
         *,
-        reviewer_notes: Optional[str] = None,
+        reviewer_notes: str | None = None,
     ) -> EmployeeInfoChangeRequest:
         """
         Approve a change request and apply the changes.
@@ -280,7 +280,7 @@ class InfoChangeService:
         request.status = InfoChangeStatus.APPROVED
         request.reviewer_id = reviewer_id
         request.reviewer_notes = reviewer_notes
-        request.reviewed_at = datetime.now(timezone.utc)
+        request.reviewed_at = datetime.now(UTC)
 
         self.db.flush()
 
@@ -302,7 +302,7 @@ class InfoChangeService:
         request_id: UUID,
         reviewer_id: UUID,
         *,
-        reviewer_notes: Optional[str] = None,
+        reviewer_notes: str | None = None,
     ) -> EmployeeInfoChangeRequest:
         """
         Reject a change request.
@@ -329,7 +329,7 @@ class InfoChangeService:
         request.status = InfoChangeStatus.REJECTED
         request.reviewer_id = reviewer_id
         request.reviewer_notes = reviewer_notes
-        request.reviewed_at = datetime.now(timezone.utc)
+        request.reviewed_at = datetime.now(UTC)
 
         self.db.flush()
 
@@ -353,7 +353,7 @@ class InfoChangeService:
 
         changes = request.proposed_changes
 
-        def _clean_text(value: object) -> Optional[str]:
+        def _clean_text(value: object) -> str | None:
             if value is None:
                 return None
             text = str(value).strip()
@@ -465,7 +465,7 @@ class InfoChangeService:
         self,
         organization_id: UUID,
         *,
-        employee_id: Optional[UUID] = None,
+        employee_id: UUID | None = None,
         limit: int = 100,
     ) -> list[EmployeeInfoChangeRequest]:
         """
@@ -496,7 +496,7 @@ class InfoChangeService:
 
     def get_request_by_id(
         self, organization_id: UUID, request_id: UUID
-    ) -> Optional[EmployeeInfoChangeRequest]:
+    ) -> EmployeeInfoChangeRequest | None:
         """Get a specific request by ID within organization scope."""
         request = self.db.get(EmployeeInfoChangeRequest, request_id)
         if request and request.organization_id != organization_id:
@@ -587,7 +587,7 @@ class InfoChangeService:
 
     def _send_email_safe(
         self,
-        to_email: Optional[str],
+        to_email: str | None,
         subject: str,
         body_html: str,
         body_text: str,
