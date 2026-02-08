@@ -14,12 +14,20 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/finance/ar/customers/new" class="btn btn-primary">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-    </svg>
-    New Customer
-</a>
+<div class="flex items-center gap-2">
+    <button onclick="exportAll('/finance/ar/customers/export')" class="btn btn-secondary">
+        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        Export
+    </button>
+    <a href="/finance/ar/customers/new" class="btn btn-primary">
+        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+        </svg>
+        New Customer
+    </a>
+</div>
 {% endblock %}
 
 {% block content %}
@@ -46,7 +54,7 @@
     <div id="results-container">
     {# Stats Summary #}
     {% if total_count > 0 %}
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div class="card p-4">
             <p class="text-sm text-slate-500 dark:text-slate-400">Total Customers</p>
             <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ total_count }}</p>
@@ -64,12 +72,12 @@
                             {{ bulk_select_header() }}
                             <th scope="col">Customer Code</th>
                             <th scope="col">Customer Name</th>
-                            <th scope="col">Tax ID</th>
-                            <th scope="col">Payment Terms</th>
+                            <th class="hidden sm:table-cell" scope="col">Tax ID</th>
+                            <th class="hidden sm:table-cell" scope="col">Payment Terms</th>
                             <th scope="col" class="text-right">Credit Limit</th>
                             <th scope="col" class="text-right">Balance</th>
                             <th scope="col" class="text-center">Status</th>
-                            <th scope="col">Created</th>
+                            <th class="hidden sm:table-cell" scope="col">Created</th>
                             <th scope="col" class="text-right">Actions</th>
                         </tr>
                     </thead>
@@ -88,14 +96,14 @@
                                 <div class="text-xs text-slate-500 dark:text-slate-400">{{ customer.legal_name }}</div>
                                 {% endif %}
                             </td>
-                            <td class="text-slate-600 dark:text-slate-400">{{ customer.tax_id | default("—") }}</td>
-                            <td class="text-slate-600 dark:text-slate-400">Net {{ customer.payment_terms_days | default(30) }}</td>
+                            <td class="hidden sm:table-cell text-slate-600 dark:text-slate-400">{{ customer.tax_id | default("—") }}</td>
+                            <td class="hidden sm:table-cell text-slate-600 dark:text-slate-400">Net {{ customer.payment_terms_days | default(30) }}</td>
                             <td class="text-right font-mono text-slate-600 dark:text-slate-400">{{ customer.credit_limit | default("—") }}</td>
                             <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ customer.balance | default("—") }}</td>
                             <td class="text-center">
                                 {{ status_badge('active' if customer.is_active else 'inactive', 'sm') }}
                             </td>
-                            <td>
+                            <td class="hidden sm:table-cell">
                                 <div class="text-sm text-slate-600 dark:text-slate-400">
                                     {% if customer.created_at %}
                                     {{ customer.created_at.strftime('%b %d, %Y') }}

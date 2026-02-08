@@ -14,12 +14,20 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/finance/ar/invoices/new" class="btn btn-primary">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-    </svg>
-    New Invoice
-</a>
+<div class="flex items-center gap-2">
+    <button onclick="exportAll('/finance/ar/invoices/export')" class="btn btn-secondary">
+        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        Export
+    </button>
+    <a href="/finance/ar/invoices/new" class="btn btn-primary">
+        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+        </svg>
+        New Invoice
+    </a>
+</div>
 {% endblock %}
 
 {% block content %}
@@ -53,7 +61,7 @@
         placeholder="Search invoices by number or reference..."
     ) %}
         {# Customer Filter (dynamic from context) #}
-        <select name="customer_id" class="form-select">
+        <select name="customer_id" class="form-select" {{ search_attrs }}>
             <option value="">All Customers</option>
             {% for c in customers_list %}
             <option value="{{ c.customer_id }}" {{ 'selected' if customer_id == c.customer_id|string else '' }}>{{ c.customer_name }}</option>
@@ -62,9 +70,9 @@
 
         {# Date Range #}
         <input type="date" name="start_date" value="{{ start_date if start_date else '' }}"
-               class="form-input" placeholder="Start Date">
+               class="form-input" placeholder="Start Date" {{ search_attrs }}>
         <input type="date" name="end_date" value="{{ end_date if end_date else '' }}"
-               class="form-input" placeholder="End Date">
+               class="form-input" placeholder="End Date" {{ search_attrs }}>
     {% endcall %}
 
     <div id="results-container">
@@ -78,8 +86,8 @@
                             {{ bulk_select_header() }}
                             <th scope="col">Invoice #</th>
                         <th scope="col">Customer</th>
-                        <th scope="col">Invoice Date</th>
-                        <th scope="col">Due Date</th>
+                        <th class="hidden sm:table-cell" scope="col">Invoice Date</th>
+                        <th class="hidden sm:table-cell" scope="col">Due Date</th>
                         <th scope="col" class="text-right">Amount</th>
                         <th scope="col" class="text-right">Balance</th>
                         <th scope="col" class="text-center">Status</th>
@@ -99,8 +107,8 @@
                         <td>
                             <p class="text-sm font-medium text-slate-900 dark:text-white">{{ invoice.customer_name }}</p>
                         </td>
-                        <td class="text-slate-600 dark:text-slate-400">{{ invoice.invoice_date }}</td>
-                        <td>
+                        <td class="hidden sm:table-cell text-slate-600 dark:text-slate-400">{{ invoice.invoice_date }}</td>
+                        <td class="hidden sm:table-cell">
                             {% if invoice.is_overdue %}
                             <span class="text-rose-600 dark:text-rose-400 font-medium">{{ invoice.due_date }}</span>
                             <span class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold uppercase tracking-wide bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400">Overdue</span>
@@ -163,14 +171,14 @@
                 {
                     "name": "export",
                     "label": "Export",
-                    "endpoint": "/ar/invoices/bulk-export",
+                    "endpoint": "/finance/ar/invoices/bulk-export",
                     "icon": bulk_icon_export(),
                     "class": "btn-secondary"
                 },
                 {
                     "name": "delete",
                     "label": "Delete",
-                    "endpoint": "/ar/invoices/bulk-delete",
+                    "endpoint": "/finance/ar/invoices/bulk-delete",
                     "icon": bulk_icon_delete(),
                     "class": "btn-bulk-danger",
                     "confirm": "Delete selected invoices? Only DRAFT invoices without payments can be deleted."

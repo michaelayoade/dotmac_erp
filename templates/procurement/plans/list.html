@@ -42,33 +42,28 @@
     </div>
     {% endif %}
 
-    <!-- Filters -->
-    <div class="card p-4">
-        <form method="get" class="flex flex-wrap gap-3 items-end">
-            <div>
-                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Status</label>
-                <select name="status" class="form-select text-sm">
-                    <option value="">All</option>
-                    {% for s in plan_statuses %}
-                    <option value="{{ s.value }}" {% if filter_status == s.value %}selected{% endif %}>{{ s.value }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <button type="submit" class="btn btn-secondary text-sm">Filter</button>
-        </form>
-    </div>
+    {% from "components/macros.html" import live_search %}
+    {% call(search_attrs) live_search(search=search, base_url="/procurement/plans", placeholder="Search plans...") %}
+        <select name="status" class="form-select" {{ search_attrs }}>
+            <option value="">All Status</option>
+            {% for s in plan_statuses %}
+            <option value="{{ s.value }}" {% if filter_status == s.value %}selected{% endif %}>{{ s.value | replace('_', ' ') | title }}</option>
+            {% endfor %}
+        </select>
+    {% endcall %}
 
+    <div id="results-container">
     <!-- Table -->
     <div class="card">
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 dark:bg-slate-800/50">
                     <tr>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Plan Number</th>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Title</th>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Fiscal Year</th>
-                        <th scope="col" class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Est. Value</th>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Status</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Plan Number</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Title</th>
+                        <th scope="col" class="hidden sm:table-cell px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Fiscal Year</th>
+                        <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Est. Value</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
@@ -76,7 +71,7 @@
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                         <td class="px-4 py-3"><a href="/procurement/plans/{{ plan.plan_id }}" class="font-medium text-blue-600 hover:underline dark:text-blue-400">{{ plan.plan_number }}</a></td>
                         <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ plan.title }}</td>
-                        <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ plan.fiscal_year }}</td>
+                        <td class="hidden sm:table-cell px-4 py-3 text-slate-600 dark:text-slate-400">{{ plan.fiscal_year }}</td>
                         <td class="px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(plan.total_estimated_value) }}</td>
                         <td class="px-4 py-3">
                             {% set label, classes = status_labels.get(plan.status, ("Unknown", "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-400")) %}
@@ -123,6 +118,7 @@
         </div>
         {% endif %}
     </div>
+    </div>{# /results-container #}
 </div>
 
 <!-- Import Modal -->
@@ -159,7 +155,7 @@
                 </div>
             </div>
             <div>
-                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">File</label>
+                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">File <span class="text-rose-500">*</span></label>
                 <input type="file" name="file" accept=".csv{% if xlsx_available %},.xlsx{% endif %}" class="form-input text-sm" required>
             </div>
             <div class="flex items-center justify-end gap-2">

@@ -14,16 +14,24 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/finance/ap/invoices/new" class="btn btn-primary">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-    </svg>
-    New Invoice
-</a>
+<div class="flex items-center gap-2">
+    <button onclick="exportAll('/finance/ap/invoices/export')" class="btn btn-secondary">
+        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        Export
+    </button>
+    <a href="/finance/ap/invoices/new" class="btn btn-primary">
+        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+        </svg>
+        New Invoice
+    </a>
+</div>
 {% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6 page-enter">
     {# Stats Summary #}
     <div class="grid gap-4 sm:grid-cols-4">
         {{ stats_card("Total Outstanding", stats.total_outstanding | default("₦0.00"), icon="currency", color="slate") }}
@@ -75,8 +83,8 @@
                             {{ bulk_select_header() }}
                             <th scope="col">Invoice #</th>
                         <th scope="col">Supplier</th>
-                        <th scope="col">Invoice Date</th>
-                        <th scope="col">Due Date</th>
+                        <th class="hidden sm:table-cell" scope="col">Invoice Date</th>
+                        <th class="hidden sm:table-cell" scope="col">Due Date</th>
                         <th scope="col" class="text-right">Amount</th>
                         <th scope="col" class="text-right">Balance</th>
                         <th scope="col" class="text-center">Status</th>
@@ -95,15 +103,17 @@
                         <td>
                             <p class="text-sm font-medium text-slate-900 dark:text-white">{{ invoice.supplier_name }}</p>
                         </td>
-                        <td class="text-slate-600 dark:text-slate-400">{{ invoice.invoice_date }}</td>
-                        <td class="{{ 'text-rose-600 dark:text-rose-400 font-medium' if invoice.is_overdue else 'text-slate-600 dark:text-slate-400' }}">
-                            {{ invoice.due_date }}
+                        <td class="hidden sm:table-cell text-slate-600 dark:text-slate-400">{{ invoice.invoice_date }}</td>
+                        <td class="hidden sm:table-cell">
                             {% if invoice.is_overdue %}
-                            <span class="text-xs">(Overdue)</span>
+                            <span class="text-rose-600 dark:text-rose-400 font-medium">{{ invoice.due_date }}</span>
+                            <span class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold uppercase tracking-wide bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-400">Overdue</span>
+                            {% else %}
+                            <span class="text-slate-600 dark:text-slate-400">{{ invoice.due_date }}</span>
                             {% endif %}
                         </td>
-                        <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ invoice.total_amount | default("₦0.00") }}</td>
-                        <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ invoice.balance | default("₦0.00") }}</td>
+                        <td class="text-right font-mono text-sm text-slate-500 dark:text-slate-400">{{ invoice.total_amount | default("₦0.00") }}</td>
+                        <td class="text-right font-mono font-semibold text-slate-900 dark:text-white">{{ invoice.balance | default("₦0.00") }}</td>
                         <td class="text-center">
                             {{ status_badge(invoice.status | default('draft'), 'sm') }}
                         </td>

@@ -7,7 +7,7 @@ Provides view-focused data for expense web routes.
 import logging
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import func
@@ -27,10 +27,10 @@ from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 from app.models.finance.tax.tax_code import TaxCode
 from app.services.common import coerce_uuid
 from app.services.finance.exp.expense import expense_service
-from app.services.formatters import format_currency as _format_currency
-from app.services.formatters import format_date as _format_date
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.platform.org_context import org_context_service
+from app.services.formatters import format_currency as _format_currency
+from app.services.formatters import format_date as _format_date
 
 logger = logging.getLogger(__name__)
 
@@ -42,11 +42,16 @@ class ExpenseWebService:
     def list_context(
         db: Session,
         organization_id: str,
-        status: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
+        status: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        search: str | None = None,
+        offset: int = 0,
+        limit: int = 25,
     ) -> dict:
         """Get context for expense list page."""
+        from sqlalchemy import or_
+
         org_id = coerce_uuid(organization_id)
 
         query = db.query(ExpenseEntry).filter(ExpenseEntry.organization_id == org_id)
@@ -60,7 +65,23 @@ class ExpenseWebService:
         if end_date:
             query = query.filter(ExpenseEntry.expense_date <= end_date)
 
-        expenses = query.order_by(ExpenseEntry.expense_date.desc()).limit(100).all()
+        if search:
+            term = f"%{search}%"
+            query = query.filter(
+                or_(
+                    ExpenseEntry.expense_number.ilike(term),
+                    ExpenseEntry.description.ilike(term),
+                    ExpenseEntry.payee.ilike(term),
+                )
+            )
+
+        total = query.count()
+        expenses = (
+            query.order_by(ExpenseEntry.expense_date.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
 
         items = []
         for exp in expenses:
@@ -95,18 +116,22 @@ class ExpenseWebService:
 
         return {
             "expenses": items,
+            "search": search or "",
             "filter_status": status,
             "filter_start_date": start_date,
             "filter_end_date": end_date,
             "status_counts": counts,
             "statuses": [s.value for s in ExpenseStatus],
+            "total": total,
+            "offset": offset,
+            "limit": limit,
         }
 
     @staticmethod
     def form_context(
         db: Session,
         organization_id: str,
-        expense_id: Optional[str] = None,
+        expense_id: str | None = None,
     ) -> dict:
         """Get context for expense form (new/edit)."""
         org_id = coerce_uuid(organization_id)
@@ -406,16 +431,16 @@ class ExpenseWebService:
         amount: str,
         description: str,
         payment_method: str,
-        payment_account_id: Optional[str] = None,
-        tax_code_id: Optional[str] = None,
-        tax_amount: Optional[str] = None,
-        currency_code: Optional[str] = None,
-        payee: Optional[str] = None,
-        receipt_reference: Optional[str] = None,
-        notes: Optional[str] = None,
-        project_id: Optional[str] = None,
-        cost_center_id: Optional[str] = None,
-        business_unit_id: Optional[str] = None,
+        payment_account_id: str | None = None,
+        tax_code_id: str | None = None,
+        tax_amount: str | None = None,
+        currency_code: str | None = None,
+        payee: str | None = None,
+        receipt_reference: str | None = None,
+        notes: str | None = None,
+        project_id: str | None = None,
+        cost_center_id: str | None = None,
+        business_unit_id: str | None = None,
     ) -> ExpenseEntry:
         """Create an expense from form data.
 

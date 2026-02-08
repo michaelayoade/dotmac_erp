@@ -1,5 +1,6 @@
 {% extends "expense/base_expense.html" %}
 
+{% from "components/macros.html" import status_badge, empty_state, live_search %}
 {% block page_title %}Expenses{% endblock %}
 
 {% block breadcrumbs %}
@@ -23,37 +24,19 @@
 
 {% block content %}
 <div class="space-y-6">
-    <!-- Filters -->
-    <div class="card p-4">
-        <form method="get" class="flex flex-wrap items-end gap-4">
-            <div class="min-w-[150px]">
-                <label class="form-label">Status</label>
-                <select name="status" class="form-input form-select">
-                    <option value="">All Statuses</option>
-                    {% for s in statuses %}
-                    <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="min-w-[150px]">
-                <label class="form-label">Start Date</label>
-                <input type="date" name="start_date" value="{{ filter_start_date or '' }}" class="form-input">
-            </div>
-            <div class="min-w-[150px]">
-                <label class="form-label">End Date</label>
-                <input type="date" name="end_date" value="{{ filter_end_date or '' }}" class="form-input">
-            </div>
-            <button type="submit" class="btn btn-secondary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                </svg>
-                Filter
-            </button>
-        </form>
-    </div>
+    {% call(search_attrs) live_search(search=search, base_url="/expense/list", placeholder="Search expenses...") %}
+        <select name="status" class="form-select" {{ search_attrs }}>
+            <option value="">All Status</option>
+            {% for s in statuses %}
+            <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
+            {% endfor %}
+        </select>
+        <input type="date" name="start_date" value="{{ filter_start_date or '' }}" class="form-input" {{ search_attrs }}>
+        <input type="date" name="end_date" value="{{ filter_end_date or '' }}" class="form-input" {{ search_attrs }}>
+    {% endcall %}
 
     <!-- Status Summary -->
-    <div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
+    <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         <div class="card p-4">
             <p class="text-sm text-slate-500 dark:text-slate-400">Draft</p>
             <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ status_counts.get('DRAFT', 0) }}</p>
@@ -80,6 +63,7 @@
         </div>
     </div>
 
+    <div id="results-container">
     <!-- Expense List -->
     <div class="card overflow-hidden">
         {% if expenses %}
@@ -90,10 +74,10 @@
                         <th scope="col">Number</th>
                         <th scope="col">Date</th>
                         <th scope="col">Description</th>
-                        <th scope="col">Payee</th>
-                        <th scope="col">Account</th>
+                        <th class="hidden sm:table-cell" scope="col">Payee</th>
+                        <th class="hidden sm:table-cell" scope="col">Account</th>
                         <th scope="col" class="text-right">Amount</th>
-                        <th scope="col">Method</th>
+                        <th class="hidden sm:table-cell" scope="col">Method</th>
                         <th scope="col">Status</th>
                         <th scope="col"></th>
                     </tr>
@@ -108,24 +92,12 @@
                         </td>
                         <td class="text-slate-500">{{ exp.expense_date }}</td>
                         <td class="text-slate-900 dark:text-white max-w-[200px] truncate">{{ exp.description }}</td>
-                        <td class="text-slate-500">{{ exp.payee }}</td>
-                        <td class="text-slate-500 text-sm">{{ exp.expense_account }}</td>
+                        <td class="hidden sm:table-cell text-slate-500">{{ exp.payee }}</td>
+                        <td class="hidden sm:table-cell text-slate-500 text-sm">{{ exp.expense_account }}</td>
                         <td class="text-right font-mono text-slate-900 dark:text-white">{{ exp.total_amount }}</td>
-                        <td><span class="badge badge-neutral">{{ exp.payment_method }}</span></td>
+                        <td class="hidden sm:table-cell"><span class="badge badge-neutral">{{ exp.payment_method | replace('_', ' ') | title }}</span></td>
                         <td>
-                            {% if exp.status == 'DRAFT' %}
-                            <span class="badge badge-neutral">Draft</span>
-                            {% elif exp.status == 'SUBMITTED' %}
-                            <span class="badge badge-warning">Submitted</span>
-                            {% elif exp.status == 'APPROVED' %}
-                            <span class="badge badge-info">Approved</span>
-                            {% elif exp.status == 'POSTED' %}
-                            <span class="badge badge-success">Posted</span>
-                            {% elif exp.status == 'REJECTED' %}
-                            <span class="badge badge-danger">Rejected</span>
-                            {% elif exp.status == 'VOID' %}
-                            <span class="badge badge-neutral">Void</span>
-                            {% endif %}
+                            {{ status_badge(exp.status) }}
                         </td>
                         <td>
                             <div class="table-actions">
@@ -136,6 +108,12 @@
                                     </svg>
                                 </a>
                             </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No expenses found", "There are no expenses to display.") }}
                         </td>
                     </tr>
                     {% endfor %}
@@ -160,5 +138,6 @@
         </div>
         {% endif %}
     </div>
+    </div>{# /results-container #}
 </div>
 {% endblock %}

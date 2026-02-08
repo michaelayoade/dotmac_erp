@@ -14,12 +14,20 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/inventory/items/new" class="btn btn-primary">
-    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-    </svg>
-    New Item
-</a>
+<div class="flex items-center gap-2">
+    <button onclick="exportAll('/inventory/items/export')" class="btn btn-secondary">
+        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        Export
+    </button>
+    <a href="/inventory/items/new" class="btn btn-primary">
+        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+        </svg>
+        New Item
+    </a>
+</div>
 {% endblock %}
 
 {% block content %}
@@ -120,8 +128,8 @@
                             {{ bulk_select_header() }}
                             <th scope="col">Item Code</th>
                             <th scope="col">Item Name</th>
-                            <th scope="col">Category</th>
-                            <th scope="col">Type</th>
+                            <th class="hidden sm:table-cell" scope="col">Category</th>
+                            <th class="hidden sm:table-cell" scope="col">Type</th>
                             <th scope="col" class="text-right">List Price</th>
                             <th scope="col" class="text-right">On Hand</th>
                             <th scope="col" class="text-right">Available</th>
@@ -143,12 +151,12 @@
                                     {{ item.item_name }}
                                 </a>
                             </td>
-                            <td>
+                            <td class="hidden sm:table-cell">
                                 <span class="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-300">
                                     {{ item.category_code }}
                                 </span>
                             </td>
-                            <td class="text-sm text-slate-600 dark:text-slate-400">{{ item.item_type | replace('_', ' ') | title }}</td>
+                            <td class="hidden sm:table-cell text-sm text-slate-600 dark:text-slate-400">{{ item.item_type | replace('_', ' ') | title }}</td>
                             <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ item.list_price | default("-") }}</td>
                             <td class="text-right">
                                 {% if item.track_inventory %}

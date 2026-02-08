@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from datetime import date as date_type
 from decimal import Decimal
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import quote
 
 from fastapi import Request
@@ -54,10 +54,15 @@ class ExpenseClaimsWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        status: Optional[str],
-        start_date: Optional[str],
-        end_date: Optional[str],
+        status: str | None,
+        start_date: str | None,
+        end_date: str | None,
+        search: str | None = None,
+        offset: int = 0,
+        limit: int = 25,
     ) -> HTMLResponse:
+        from sqlalchemy import or_
+
         org_id = coerce_uuid(auth.organization_id)
         status_value = None
         if status:
@@ -80,9 +85,23 @@ class ExpenseClaimsWebService:
             stmt = stmt.where(ExpenseClaim.claim_date >= start)
         if end:
             stmt = stmt.where(ExpenseClaim.claim_date <= end)
+        if search:
+            term = f"%{search}%"
+            stmt = stmt.where(
+                or_(
+                    ExpenseClaim.claim_number.ilike(term),
+                    ExpenseClaim.purpose.ilike(term),
+                )
+            )
+
+        total = db.scalar(select(func.count()).select_from(stmt.subquery()))
 
         claims = list(
-            db.scalars(stmt.order_by(ExpenseClaim.claim_date.desc()).limit(100))
+            db.scalars(
+                stmt.order_by(ExpenseClaim.claim_date.desc())
+                .offset(offset)
+                .limit(limit)
+            )
             .unique()
             .all()
         )
@@ -101,11 +120,15 @@ class ExpenseClaimsWebService:
         context.update(
             {
                 "claims": claims,
+                "search": search or "",
                 "statuses": [s.value for s in ExpenseClaimStatus],
                 "status_counts": counts,
                 "filter_status": status or "",
                 "filter_start_date": start_date or "",
                 "filter_end_date": end_date or "",
+                "total": total or 0,
+                "offset": offset,
+                "limit": limit,
             }
         )
         return templates.TemplateResponse(request, "expense/claims_list.html", context)
@@ -477,14 +500,14 @@ class ExpenseClaimsWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        search: Optional[str],
-        is_active: Optional[str],
+        search: str | None,
+        is_active: str | None,
         page: int,
     ) -> HTMLResponse:
         org_id = coerce_uuid(auth.organization_id)
         svc = ExpenseService(db)
 
-        is_active_value: Optional[bool] = None
+        is_active_value: bool | None = None
         if isinstance(is_active, str):
             lowered = is_active.strip().lower()
             if lowered in {"true", "1", "yes", "on"}:
@@ -839,8 +862,8 @@ class ExpenseClaimsWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        start_date: Optional[str],
-        end_date: Optional[str],
+        start_date: str | None,
+        end_date: str | None,
     ) -> HTMLResponse:
         org_id = coerce_uuid(auth.organization_id)
         svc = ExpenseService(db)
@@ -871,8 +894,8 @@ class ExpenseClaimsWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        start_date: Optional[str],
-        end_date: Optional[str],
+        start_date: str | None,
+        end_date: str | None,
     ) -> HTMLResponse:
         org_id = coerce_uuid(auth.organization_id)
         svc = ExpenseService(db)
@@ -903,9 +926,9 @@ class ExpenseClaimsWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        start_date: Optional[str],
-        end_date: Optional[str],
-        department_id: Optional[str],
+        start_date: str | None,
+        end_date: str | None,
+        department_id: str | None,
     ) -> HTMLResponse:
         from app.services.people.hr import DepartmentFilters, OrganizationService
 
@@ -971,7 +994,7 @@ class ExpenseClaimsWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
-        status: Optional[str],
+        status: str | None,
         page: int,
     ) -> HTMLResponse:
         from app.models.expense.cash_advance import CashAdvanceStatus
@@ -1083,7 +1106,7 @@ class ExpenseClaimsWebService:
         advance_id: str,
         bank_account_id: str,
         payment_mode: str,
-        payment_reference: Optional[str],
+        payment_reference: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:
@@ -1115,7 +1138,7 @@ class ExpenseClaimsWebService:
     def settle_cash_advance_response(
         advance_id: str,
         claim_id: str,
-        settlement_amount: Optional[str],
+        settlement_amount: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> RedirectResponse:

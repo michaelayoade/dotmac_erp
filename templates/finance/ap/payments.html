@@ -14,12 +14,20 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/finance/ap/payments/new" class="btn btn-primary">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-    </svg>
-    New Payment
-</a>
+<div class="flex items-center gap-2">
+    <button onclick="exportAll('/finance/ap/payments/export')" class="btn btn-secondary">
+        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        Export
+    </button>
+    <a href="/finance/ap/payments/new" class="btn btn-primary">
+        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+        </svg>
+        New Payment
+    </a>
+</div>
 {% endblock %}
 
 {% block content %}
@@ -74,9 +82,9 @@
                             {{ bulk_select_header() }}
                             <th scope="col">Payment #</th>
                         <th scope="col">Supplier</th>
-                        <th scope="col">Payment Date</th>
-                        <th scope="col">Method</th>
-                        <th scope="col">Reference</th>
+                        <th class="hidden sm:table-cell" scope="col">Payment Date</th>
+                        <th class="hidden sm:table-cell" scope="col">Method</th>
+                        <th class="hidden sm:table-cell" scope="col">Reference</th>
                         <th scope="col" class="text-right">Amount</th>
                         <th scope="col" class="text-center">Status</th>
                         <th scope="col" class="text-right">Actions</th>
@@ -94,13 +102,13 @@
                         <td>
                             <p class="text-sm font-medium text-slate-900 dark:text-white">{{ payment.supplier_name }}</p>
                         </td>
-                        <td class="text-slate-600 dark:text-slate-400">{{ payment.payment_date }}</td>
-                        <td>
+                        <td class="hidden sm:table-cell text-slate-600 dark:text-slate-400">{{ payment.payment_date }}</td>
+                        <td class="hidden sm:table-cell">
                             <span class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300">
                                 {{ payment.payment_method | replace('_', ' ') | title }}
                             </span>
                         </td>
-                        <td class="text-slate-600 dark:text-slate-400">{{ payment.reference_number | default("—") }}</td>
+                        <td class="hidden sm:table-cell text-slate-600 dark:text-slate-400">{{ payment.reference_number | default("—") }}</td>
                         <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ payment.amount | default("₦0.00") }}</td>
                         <td class="text-center">
                             {{ status_badge(payment.status | default('draft'), 'sm') }}

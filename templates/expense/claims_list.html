@@ -1,5 +1,6 @@
 {% extends "expense/base_expense.html" %}
 
+{% from "components/macros.html" import empty_state, live_search %}
 {% block page_title %}Expense Claims{% endblock %}
 
 {% block breadcrumbs %}
@@ -14,32 +15,19 @@
 
 {% block content %}
 <div class="space-y-6">
-    <!-- Filters -->
-    <div class="card p-4">
-        <form method="get" class="flex flex-wrap items-end gap-4">
-            <div class="min-w-[150px]">
-                <label class="form-label">Status</label>
-                <select name="status" class="form-input form-select">
-                    <option value="">All Statuses</option>
-                    {% for s in statuses %}
-                    <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="min-w-[150px]">
-                <label class="form-label">Start Date</label>
-                <input type="date" name="start_date" value="{{ filter_start_date }}" class="form-input">
-            </div>
-            <div class="min-w-[150px]">
-                <label class="form-label">End Date</label>
-                <input type="date" name="end_date" value="{{ filter_end_date }}" class="form-input">
-            </div>
-            <button type="submit" class="btn btn-secondary">Filter</button>
-        </form>
-    </div>
+    {% call(search_attrs) live_search(search=search, base_url="/expense/claims/list", placeholder="Search claims...") %}
+        <select name="status" class="form-select" {{ search_attrs }}>
+            <option value="">All Status</option>
+            {% for s in statuses %}
+            <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
+            {% endfor %}
+        </select>
+        <input type="date" name="start_date" value="{{ filter_start_date }}" class="form-input" {{ search_attrs }}>
+        <input type="date" name="end_date" value="{{ filter_end_date }}" class="form-input" {{ search_attrs }}>
+    {% endcall %}
 
     <!-- Status Summary -->
-    <div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
+    <div class="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {% for s in statuses %}
         <div class="card p-4">
             <p class="text-sm text-slate-500 dark:text-slate-400">{{ s | replace('_', ' ') | title }}</p>
@@ -48,6 +36,7 @@
         {% endfor %}
     </div>
 
+    <div id="results-container">
     <!-- Claims List -->
     <div class="card overflow-hidden">
         {% if claims %}
@@ -57,7 +46,7 @@
                     <tr>
                         <th scope="col">Claim</th>
                         <th scope="col">Employee</th>
-                        <th scope="col">Date</th>
+                        <th class="hidden sm:table-cell" scope="col">Date</th>
                         <th scope="col" class="text-right">Amount</th>
                         <th scope="col">Status</th>
                         <th scope="col"></th>
@@ -75,7 +64,7 @@
                         <td class="text-slate-600 dark:text-slate-300">
                             {{ claim.employee.full_name if claim.employee else '-' }}
                         </td>
-                        <td class="text-slate-500">{{ claim.claim_date }}</td>
+                        <td class="hidden sm:table-cell text-slate-500">{{ claim.claim_date }}</td>
                         <td class="text-right font-mono text-slate-900 dark:text-white">{{ claim.total_claimed_amount }}</td>
                         <td>
                             <span class="badge badge-neutral">{{ claim.status.value | replace('_', ' ') | title if claim.status else 'Draft' }}</span>
@@ -89,6 +78,12 @@
                             </a>
                         </td>
                     </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="99" class="p-0">
+                            {{ empty_state("No claims found", "There are no claims to display.") }}
+                        </td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -100,5 +95,6 @@
         </div>
         {% endif %}
     </div>
+    </div>{# /results-container #}
 </div>
 {% endblock %}

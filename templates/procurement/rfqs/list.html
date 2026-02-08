@@ -42,42 +42,34 @@
     </div>
     {% endif %}
 
-    <!-- Filters -->
-    <div class="card p-4">
-        <form method="get" class="flex flex-wrap gap-3 items-end">
-            <div>
-                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Status</label>
-                <select name="status" class="form-select text-sm">
-                    <option value="">All</option>
-                    {% for s in rfq_statuses %}
-                    <option value="{{ s.value }}" {% if filter_status == s.value %}selected{% endif %}>{{ s.value | replace('_', ' ') | title }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div>
-                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Method</label>
-                <select name="method" class="form-select text-sm">
-                    <option value="">All</option>
-                    {% for m in procurement_methods %}
-                    <option value="{{ m.value }}" {% if filter_method == m.value %}selected{% endif %}>{{ m.value | replace('_', ' ') | title }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <button type="submit" class="btn btn-secondary text-sm">Filter</button>
-        </form>
-    </div>
+    {% from "components/macros.html" import live_search %}
+    {% call(search_attrs) live_search(search=search, base_url="/procurement/rfqs", placeholder="Search RFQs...") %}
+        <select name="status" class="form-select" {{ search_attrs }}>
+            <option value="">All Status</option>
+            {% for s in rfq_statuses %}
+            <option value="{{ s.value }}" {% if filter_status == s.value %}selected{% endif %}>{{ s.value | replace('_', ' ') | title }}</option>
+            {% endfor %}
+        </select>
+        <select name="method" class="form-select" {{ search_attrs }}>
+            <option value="">All Methods</option>
+            {% for m in procurement_methods %}
+            <option value="{{ m.value }}" {% if filter_method == m.value %}selected{% endif %}>{{ m.value | replace('_', ' ') | title }}</option>
+            {% endfor %}
+        </select>
+    {% endcall %}
 
+    <div id="results-container">
     <!-- Table -->
     <div class="card">
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 dark:bg-slate-800/50">
                     <tr>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Number</th>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Title</th>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Closing Date</th>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Method</th>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Status</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Number</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Title</th>
+                        <th scope="col" class="hidden sm:table-cell px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Closing Date</th>
+                        <th scope="col" class="hidden sm:table-cell px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Method</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
@@ -87,8 +79,8 @@
                             <a href="/procurement/rfqs/{{ rfq.rfq_id }}" class="font-medium text-blue-600 hover:underline dark:text-blue-400">{{ rfq.rfq_number }}</a>
                         </td>
                         <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ rfq.title }}</td>
-                        <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ rfq.closing_date }}</td>
-                        <td class="px-4 py-3">
+                        <td class="hidden sm:table-cell px-4 py-3 text-slate-600 dark:text-slate-400">{{ rfq.closing_date }}</td>
+                        <td class="hidden sm:table-cell px-4 py-3">
                             <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">{{ rfq.procurement_method.value | replace('_', ' ') | title }}</span>
                         </td>
                         <td class="px-4 py-3">
@@ -136,6 +128,7 @@
         </div>
         {% endif %}
     </div>
+    </div>{# /results-container #}
 </div>
 
 <!-- Import Modal -->
@@ -172,7 +165,7 @@
                 </div>
             </div>
             <div>
-                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">File</label>
+                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">File <span class="text-rose-500">*</span></label>
                 <input type="file" name="file" accept=".csv{% if xlsx_available %},.xlsx{% endif %}" class="form-input text-sm" required>
             </div>
             <div class="flex items-center justify-end gap-2">

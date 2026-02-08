@@ -14,12 +14,20 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/fixed-assets/assets/new" class="btn btn-primary">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-    </svg>
-    New Asset
-</a>
+<div class="flex items-center gap-2">
+    <button onclick="exportAll('/fixed-assets/assets/export')" class="btn btn-secondary">
+        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+        </svg>
+        Export
+    </button>
+    <a href="/fixed-assets/assets/new" class="btn btn-primary">
+        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+        </svg>
+        New Asset
+    </a>
+</div>
 {% endblock %}
 
 {% block content %}
@@ -69,8 +77,8 @@
                             {{ bulk_select_header() }}
                             <th scope="col">Asset #</th>
                             <th scope="col">Asset Name</th>
-                            <th scope="col">Category</th>
-                            <th scope="col">Acquired</th>
+                            <th class="hidden sm:table-cell" scope="col">Category</th>
+                            <th class="hidden sm:table-cell" scope="col">Acquired</th>
                             <th scope="col" class="text-right">Cost</th>
                             <th scope="col" class="text-right">Net Book Value</th>
                             <th scope="col" class="text-center">Status</th>
@@ -92,8 +100,8 @@
                                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{{ asset.description | truncate(50) }}</p>
                                 {% endif %}
                             </td>
-                            <td class="text-slate-600 dark:text-slate-400">{{ asset.category_name }}</td>
-                            <td class="text-slate-600 dark:text-slate-400">{{ asset.acquisition_date }}</td>
+                            <td class="hidden sm:table-cell text-slate-600 dark:text-slate-400">{{ asset.category_name }}</td>
+                            <td class="hidden sm:table-cell text-slate-600 dark:text-slate-400">{{ asset.acquisition_date }}</td>
                             <td class="text-right font-mono text-slate-600 dark:text-slate-400">{{ asset.acquisition_cost }}</td>
                             <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ asset.net_book_value }}</td>
                             <td class="text-center">

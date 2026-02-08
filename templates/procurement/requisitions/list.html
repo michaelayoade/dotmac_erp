@@ -1,5 +1,6 @@
 {% extends "procurement/base_procurement.html" %}
 
+{% from "components/macros.html" import status_badge %}
 {% block page_title %}Purchase Requisitions{% endblock %}
 
 {% block breadcrumbs %}
@@ -42,52 +43,34 @@
     </div>
     {% endif %}
 
-    <!-- Filters -->
-    <div class="card p-4">
-        <form method="get" class="flex flex-wrap gap-3 items-end">
-            <div>
-                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Status</label>
-                <select name="status" class="form-select text-sm">
-                    <option value="">All</option>
-                    {% for s in req_statuses %}
-                    <option value="{{ s.value }}" {% if filter_status == s.value %}selected{% endif %}>{{ s.value | replace('_', ' ') | title }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div>
-                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Urgency</label>
-                <select name="urgency" class="form-select text-sm">
-                    <option value="">All</option>
-                    {% for u in urgency_levels %}
-                    <option value="{{ u.value }}" {% if filter_urgency == u.value %}selected{% endif %}>{{ u.value | replace('_', ' ') | title }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <button type="submit" class="btn btn-secondary text-sm">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                </svg>
-                Filter
-            </button>
-            {% if filter_status or filter_urgency %}
-            <a href="/procurement/requisitions" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
-                Clear
-            </a>
-            {% endif %}
-        </form>
-    </div>
+    {% from "components/macros.html" import live_search %}
+    {% call(search_attrs) live_search(search=search, base_url="/procurement/requisitions", placeholder="Search requisitions...") %}
+        <select name="status" class="form-select" {{ search_attrs }}>
+            <option value="">All Status</option>
+            {% for s in req_statuses %}
+            <option value="{{ s.value }}" {% if filter_status == s.value %}selected{% endif %}>{{ s.value | replace('_', ' ') | title }}</option>
+            {% endfor %}
+        </select>
+        <select name="urgency" class="form-select" {{ search_attrs }}>
+            <option value="">All Urgency</option>
+            {% for u in urgency_levels %}
+            <option value="{{ u.value }}" {% if filter_urgency == u.value %}selected{% endif %}>{{ u.value | replace('_', ' ') | title }}</option>
+            {% endfor %}
+        </select>
+    {% endcall %}
 
+    <div id="results-container">
     <!-- Table -->
     <div class="card">
-        <div class="overflow-x-auto">
+        <div class="table-container">
             <table class="w-full text-sm">
                 <thead class="bg-slate-50 dark:bg-slate-800/50">
                     <tr>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Number</th>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Date</th>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Urgency</th>
-                        <th scope="col" class="px-4 py-3 text-right font-medium text-slate-600 dark:text-slate-400">Amount</th>
-                        <th scope="col" class="px-4 py-3 text-left font-medium text-slate-600 dark:text-slate-400">Status</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Number</th>
+                        <th scope="col" class="hidden sm:table-cell px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Date</th>
+                        <th scope="col" class="hidden sm:table-cell px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Urgency</th>
+                        <th scope="col" class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Amount</th>
+                        <th scope="col" class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Status</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
@@ -96,9 +79,9 @@
                         <td class="px-4 py-3">
                             <a href="/procurement/requisitions/{{ req.requisition_id }}" class="font-medium text-blue-600 hover:underline dark:text-blue-400">{{ req.requisition_number }}</a>
                         </td>
-                        <td class="px-4 py-3 text-slate-600 dark:text-slate-400">{{ req.requisition_date }}</td>
-                        <td class="px-4 py-3">
-                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium {% if req.urgency.value == 'EMERGENCY' %}bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400{% elif req.urgency.value == 'URGENT' %}bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400{% else %}bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400{% endif %}">{{ req.urgency.value }}</span>
+                        <td class="hidden sm:table-cell px-4 py-3 text-slate-600 dark:text-slate-400">{{ req.requisition_date }}</td>
+                        <td class="hidden sm:table-cell px-4 py-3">
+                            {{ status_badge(req.urgency.value, size="sm") }}
                         </td>
                         <td class="px-4 py-3 text-right font-medium text-slate-900 dark:text-white">{{ "{:,.2f}".format(req.total_estimated_amount) }}</td>
                         <td class="px-4 py-3">
@@ -146,6 +129,7 @@
         </div>
         {% endif %}
     </div>
+    </div>{# /results-container #}
 </div>
 
 <!-- Import Modal -->
@@ -182,7 +166,7 @@
                 </div>
             </div>
             <div>
-                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">File</label>
+                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">File <span class="text-rose-500">*</span></label>
                 <input type="file" name="file" accept=".csv{% if xlsx_available %},.xlsx{% endif %}" class="form-input text-sm" required>
             </div>
             <div class="flex items-center justify-end gap-2">

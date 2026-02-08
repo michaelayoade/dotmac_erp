@@ -4,24 +4,23 @@ Expense Web Routes.
 HTML template routes for expense management.
 """
 
-from typing import Optional
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.services.expense.web import expense_claims_web_service
 from app.services.expense.dashboard_web import expense_dashboard_service
+from app.services.expense.web import expense_claims_web_service
 from app.services.finance.exp.expense import expense_service
 from app.services.finance.exp.web import expense_web_service
 from app.templates import templates
 from app.web.deps import (
+    WebAuthContext,
+    base_context,
     get_db,
     require_expense_access,
     require_web_permission,
-    WebAuthContext,
-    base_context,
 )
 from app.web.finance.exp_limits import router as limits_router
 
@@ -85,9 +84,12 @@ def expense_dashboard(
 @router.get("/list", response_class=HTMLResponse)
 def expense_list(
     request: Request,
-    status: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    search: str | None = None,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db),
 ):
@@ -100,6 +102,9 @@ def expense_list(
             status=status,
             start_date=start_date,
             end_date=end_date,
+            search=search,
+            offset=offset,
+            limit=limit,
         )
     )
     return templates.TemplateResponse(request, "expense/list.html", context)
@@ -130,9 +135,12 @@ def expense_claim_new_redirect(
 @router.get("/claims/list", response_class=HTMLResponse)
 def expense_claims_list(
     request: Request,
-    status: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    search: str | None = None,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db),
 ):
@@ -144,6 +152,9 @@ def expense_claims_list(
         status=status,
         start_date=start_date,
         end_date=end_date,
+        search=search,
+        offset=offset,
+        limit=limit,
     )
 
 
@@ -194,7 +205,7 @@ def approve_expense_claim(
 @router.post("/claims/{claim_id}/reject")
 def reject_expense_claim(
     claim_id: str,
-    reason: Optional[str] = Form(None),
+    reason: str | None = Form(None),
     auth: WebAuthContext = Depends(_require_claim_reject),
     db: Session = Depends(get_db),
 ):
@@ -207,12 +218,42 @@ def reject_expense_claim(
     )
 
 
+@router.post("/claims/{claim_id}/cancel")
+def cancel_expense_claim(
+    claim_id: str,
+    reason: str | None = Form(None),
+    auth: WebAuthContext = Depends(require_expense_access),
+    db: Session = Depends(get_db),
+):
+    """Cancel an expense claim."""
+    return expense_claims_web_service.cancel_claim_response(
+        claim_id=claim_id,
+        reason=reason,
+        auth=auth,
+        db=db,
+    )
+
+
+@router.post("/claims/{claim_id}/resubmit")
+def resubmit_expense_claim(
+    claim_id: str,
+    auth: WebAuthContext = Depends(require_expense_access),
+    db: Session = Depends(get_db),
+):
+    """Resubmit a rejected expense claim."""
+    return expense_claims_web_service.resubmit_claim_response(
+        claim_id=claim_id,
+        auth=auth,
+        db=db,
+    )
+
+
 @router.get("/advances", response_class=HTMLResponse)
 def expense_advances(
     request: Request,
-    status: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db),
 ):
@@ -233,9 +274,9 @@ def expense_advances(
 @router.get("/cards", response_class=HTMLResponse)
 def expense_cards(
     request: Request,
-    status: Optional[str] = None,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    status: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db),
 ):
@@ -256,8 +297,8 @@ def expense_cards(
 @router.get("/categories", response_class=HTMLResponse)
 def expense_categories(
     request: Request,
-    search: Optional[str] = None,
-    is_active: Optional[str] = None,
+    search: str | None = None,
+    is_active: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db),
@@ -379,17 +420,17 @@ def create_expense(
     amount: str = Form(...),
     description: str = Form(...),
     payment_method: str = Form(...),
-    payment_account_id: Optional[str] = Form(None),
-    tax_code_id: Optional[str] = Form(None),
+    payment_account_id: str | None = Form(None),
+    tax_code_id: str | None = Form(None),
     tax_amount: str = Form("0"),
-    currency_code: Optional[str] = Form(None),
-    payee: Optional[str] = Form(None),
-    receipt_reference: Optional[str] = Form(None),
-    notes: Optional[str] = Form(None),
-    project_id: Optional[str] = Form(None),
-    cost_center_id: Optional[str] = Form(None),
-    business_unit_id: Optional[str] = Form(None),
-    return_to: Optional[str] = Form(None),
+    currency_code: str | None = Form(None),
+    payee: str | None = Form(None),
+    receipt_reference: str | None = Form(None),
+    notes: str | None = Form(None),
+    project_id: str | None = Form(None),
+    cost_center_id: str | None = Form(None),
+    business_unit_id: str | None = Form(None),
+    return_to: str | None = Form(None),
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db),
 ):
@@ -581,8 +622,8 @@ def void_expense(
 @router.get("/reports/summary", response_class=HTMLResponse)
 def expense_summary_report(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db),
 ):
@@ -599,8 +640,8 @@ def expense_summary_report(
 @router.get("/reports/by-category", response_class=HTMLResponse)
 def expense_by_category_report(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db),
 ):
@@ -617,9 +658,9 @@ def expense_by_category_report(
 @router.get("/reports/by-employee", response_class=HTMLResponse)
 def expense_by_employee_report(
     request: Request,
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    department_id: Optional[str] = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    department_id: str | None = None,
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db),
 ):
@@ -658,7 +699,7 @@ def expense_trends_report(
 @router.get("/advances/list", response_class=HTMLResponse)
 def cash_advances_list(
     request: Request,
-    status: Optional[str] = None,
+    status: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_expense_access),
     db: Session = Depends(get_db),
@@ -695,7 +736,7 @@ def disburse_cash_advance(
     advance_id: str,
     bank_account_id: str = Form(...),
     payment_mode: str = Form("BANK_TRANSFER"),
-    payment_reference: Optional[str] = Form(None),
+    payment_reference: str | None = Form(None),
     auth: WebAuthContext = Depends(_require_advance_disburse),
     db: Session = Depends(get_db),
 ):
@@ -715,7 +756,7 @@ def settle_cash_advance(
     request: Request,
     advance_id: str,
     claim_id: str = Form(...),
-    settlement_amount: Optional[str] = Form(None),
+    settlement_amount: str | None = Form(None),
     auth: WebAuthContext = Depends(_require_advance_settle),
     db: Session = Depends(get_db),
 ):
