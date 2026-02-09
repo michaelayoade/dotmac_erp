@@ -633,6 +633,20 @@ def base_context(
 
     brand = resolve_brand_context(db, organization, auth.organization_id)
 
+    # Ensure csrf_form contains an HTML hidden input for template rendering.
+    # On POST requests, the CSRF middleware caches the parsed FormData object
+    # in request.state.csrf_form for handler consumption.  By this point all
+    # handlers have already read the form data, so it is safe to replace it
+    # with the HTML string that templates expect via {{ request.state.csrf_form | safe }}.
+    csrf_token = getattr(request.state, "csrf_token", "")
+    csrf_form_val = getattr(request.state, "csrf_form", None)
+    if not isinstance(csrf_form_val, str):
+        request.state.csrf_form = (
+            f'<input type="hidden" name="csrf_token" value="{csrf_token}">'
+            if csrf_token
+            else ""
+        )
+
     context = {
         "request": request,
         "title": page_title,
@@ -647,7 +661,7 @@ def base_context(
         "accessible_modules": auth.accessible_modules,
         "can_team_leave": can_team_leave,
         "can_team_expenses": can_team_expenses,
-        "csrf_token": getattr(request.state, "csrf_token", ""),
+        "csrf_token": csrf_token,
         "notifications": notifications or [],
         # Org formatting settings for JS / template use
         "org_date_format": getattr(organization, "date_format", None)
@@ -886,9 +900,13 @@ def _resolve_session_from_refresh_token(
         )
         if not session or is_session_inactive(session, now):
             return None
+        # Update session activity tracking
         if auth_db:
             session.last_seen_at = now
             auth_db.commit()
+        else:
+            session.last_seen_at = now
+            db.flush()
         return session.person_id, session.id
     finally:
         if auth_db:
@@ -1006,10 +1024,13 @@ def require_web_auth(
                     status_code=401, detail="Session expired due to inactivity"
                 )
 
-            # Update session activity in auth database
+            # Update session activity tracking
             if auth_db:
                 session.last_seen_at = now
                 auth_db.commit()
+            else:
+                session.last_seen_at = now
+                db.flush()
 
         finally:
             if auth_db:
@@ -1153,10 +1174,13 @@ def optional_web_auth(
             if is_session_inactive(session, now):
                 return WebAuthContext(is_authenticated=False)
 
-            # Update session activity in auth database
+            # Update session activity tracking
             if auth_db:
                 session.last_seen_at = now
                 auth_db.commit()
+            else:
+                session.last_seen_at = now
+                db.flush()
 
         finally:
             if auth_db:
