@@ -12,10 +12,11 @@ from typing import Any, cast
 from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import Request, UploadFile
+from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.datastructures import UploadFile
 
 from app.models.people.attendance.shift_type import ShiftType
 from app.models.people.hr.department import Department

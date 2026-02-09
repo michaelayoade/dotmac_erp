@@ -302,7 +302,10 @@ jobs:
         run: poetry run alembic upgrade head
 
       - name: Run integration tests
-        run: poetry run pytest tests/integration/ -v --tb=short
+        # -o addopts= clears pytest.ini's "-m not integration" filter
+        # confcutdir prevents loading tests/conftest.py which monkey-patches
+        # PostgreSQL UUID/JSONB types for SQLite compatibility
+        run: poetry run pytest tests/integration/ -v --tb=short -o "addopts=" -o "confcutdir=tests/integration"
 
   # ---------------------------------------------------------------------------
   # Publish Docker Image to GHCR

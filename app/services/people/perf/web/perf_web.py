@@ -10,9 +10,10 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from fastapi import Request, UploadFile
+from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
+from starlette.datastructures import UploadFile
 
 from app.models.people.perf import AppraisalStatus, KPIStatus
 from app.services.common import PaginationParams, coerce_uuid

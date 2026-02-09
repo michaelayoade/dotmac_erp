@@ -11,10 +11,11 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import Request, UploadFile
+from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from starlette.datastructures import UploadFile
 
 from app.models.finance.core_config.numbering_sequence import (
     NumberingSequence,

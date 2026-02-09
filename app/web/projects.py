@@ -3923,7 +3923,7 @@ async def upload_project_attachment(
     file = form.get("file")
     description = form.get("description", "")
 
-    from fastapi import UploadFile
+    from starlette.datastructures import UploadFile
 
     if not isinstance(file, UploadFile):
         return RedirectResponse(

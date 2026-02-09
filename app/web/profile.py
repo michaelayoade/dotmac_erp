@@ -6,9 +6,10 @@ Provides profile view and edit functionality for authenticated users.
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request, UploadFile
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
+from starlette.datastructures import UploadFile
 
 from app.schemas.person import PersonUpdate
 from app.services.person import people

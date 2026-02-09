@@ -8,10 +8,11 @@ from datetime import UTC
 from datetime import date as date_type
 from math import ceil
 
-from fastapi import HTTPException, Request, UploadFile
+from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
+from starlette.datastructures import UploadFile
 
 from app.services.inventory.material_request_web import MaterialRequestWebService
 from app.templates import templates
@@ -1278,8 +1279,8 @@ class OperationsInventoryWebService:
 
         # Attach item/warehouse to each line for template access
         for line in lines_raw:
-            line.item = items_map.get(line.item_id)
-            line.warehouse = wh_map.get(line.warehouse_id)
+            line.item = items_map.get(line.item_id)  # type: ignore[attr-defined]
+            line.warehouse = wh_map.get(line.warehouse_id)  # type: ignore[attr-defined]
 
         # Get summary stats
         try:
@@ -1490,10 +1491,10 @@ class OperationsInventoryWebService:
 
         # Load the finished item
         finished_item = db.get(Item, bom.item_id) if bom.item_id else None
-        bom.finished_item = finished_item
+        bom.finished_item = finished_item  # type: ignore[attr-defined]
 
         # Provide template-expected aliases
-        bom.quantity = bom.output_quantity
+        bom.quantity = bom.output_quantity  # type: ignore[attr-defined]
 
         # Load component items in batch
         comp_item_ids = {c.component_item_id for c in bom.components}
@@ -1510,15 +1511,15 @@ class OperationsInventoryWebService:
         estimated_cost = Decimal("0")
         for comp in bom.components:
             comp.component_item = comp_items_map.get(comp.component_item_id)
-            comp.scrap_percentage = comp.scrap_percent
+            comp.scrap_percentage = comp.scrap_percent  # type: ignore[attr-defined]
             if comp.component_item:
                 item_cost = getattr(
                     comp.component_item, "standard_cost", None
                 ) or Decimal("0")
                 estimated_cost += (comp.quantity or Decimal("0")) * item_cost
 
-        bom.estimated_cost = estimated_cost
-        bom.scrap_percentage = Decimal("0")
+        bom.estimated_cost = estimated_cost  # type: ignore[attr-defined]
+        bom.scrap_percentage = Decimal("0")  # type: ignore[attr-defined]
 
         # Recent transactions for the finished item
         recent_transactions: list = []

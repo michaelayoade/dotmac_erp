@@ -9,10 +9,11 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
-from fastapi import Request, Response, UploadFile
+from fastapi import Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
+from starlette.datastructures import UploadFile
 
 from app.models.people.hr.department import Department
 from app.models.people.hr.designation import Designation

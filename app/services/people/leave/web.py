@@ -8,10 +8,11 @@ from decimal import Decimal
 from typing import Any, cast
 from uuid import UUID
 
-from fastapi import Request, UploadFile
+from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
+from starlette.datastructures import UploadFile
 
 from app.models.people.hr import Employee, EmployeeStatus
 from app.models.people.leave import LeaveApplicationStatus

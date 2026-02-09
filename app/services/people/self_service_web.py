@@ -10,10 +10,11 @@ from decimal import Decimal, InvalidOperation
 from urllib.parse import urlencode
 from uuid import UUID
 
-from fastapi import HTTPException, Request, UploadFile
+from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
+from starlette.datastructures import UploadFile
 
 from app.models.finance.core_org.pfa_directory import PFADirectory
 from app.models.people.exp import ExpenseClaim, ExpenseClaimItem, ExpenseClaimStatus
@@ -1781,7 +1782,7 @@ class SelfServiceWebService:
 
         # Mark cases that need response
         for case in cases:
-            case.has_pending_response = (
+            case.has_pending_response = (  # type: ignore[attr-defined]
                 case.status.value == "QUERY_ISSUED"
                 and case.response_due_date is not None
             )

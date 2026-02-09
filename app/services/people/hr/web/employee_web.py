@@ -11,10 +11,11 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import UUID
 
-from fastapi import Request, UploadFile
+from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
+from starlette.datastructures import UploadFile
 
 from app.models.auth import Session as AuthSession
 from app.models.auth import SessionStatus, UserCredential

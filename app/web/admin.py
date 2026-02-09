@@ -7,9 +7,10 @@ Provides admin dashboard and management pages with admin role requirement.
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Form, Query, Request, UploadFile
+from fastapi import APIRouter, Depends, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
+from starlette.datastructures import UploadFile
 
 from app.services.admin.settings_web import admin_settings_web_service
 from app.services.admin.web import admin_web_service

@@ -9,9 +9,10 @@ from datetime import date
 from decimal import Decimal
 from typing import Any
 
-from fastapi import Request, UploadFile
+from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session, joinedload
+from starlette.datastructures import UploadFile
 
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile

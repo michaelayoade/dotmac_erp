@@ -12,11 +12,12 @@ import re
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import HTTPException, Request, UploadFile
+from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import ValidationError
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
+from starlette.datastructures import UploadFile
 
 from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus
 from app.models.finance.banking.bank_reconciliation import (
