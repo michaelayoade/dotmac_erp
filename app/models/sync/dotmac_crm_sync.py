@@ -31,6 +31,7 @@ class CRMEntityType(str, enum.Enum):
     PROJECT = "PROJECT"
     TICKET = "TICKET"
     WORK_ORDER = "WORK_ORDER"
+    MATERIAL_REQUEST = "MATERIAL_REQUEST"
 
 
 class CRMSyncStatus(str, enum.Enum):

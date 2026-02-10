@@ -6,12 +6,15 @@ Uses mocking for database operations since sync models use PostgreSQL-specific f
 """
 
 import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from app.schemas.sync.dotmac_crm import (
+    CRMMaterialRequestItemPayload,
+    CRMMaterialRequestPayload,
     CRMProjectPayload,
     CRMTicketPayload,
     CRMWorkOrderPayload,
@@ -866,3 +869,547 @@ class TestInventorySync:
         assert result[0]["code"] == "WH-MAIN"
         assert result[0]["name"] == "Main Warehouse"
         assert result[1]["code"] == "WH-FIELD"
+
+
+# ============ New CRM API Endpoint Tests ============
+
+
+class TestListDepartments:
+    """Test list_departments for CRM workforce sync."""
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_list_departments_empty(self, mock_select, service, org_id, mock_db):
+        """Should return empty list when no departments exist."""
+        mock_db.scalar.return_value = 0
+        mock_db.scalars.return_value.unique.return_value.all.return_value = []
+
+        result = service.list_departments(org_id)
+
+        assert result.departments == []
+        assert result.total == 0
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_list_departments_with_data(self, mock_select, service, org_id, mock_db):
+        """Should return departments with manager and members."""
+        from app.models.people.hr.employee import EmployeeStatus
+
+        # Create mock person
+        mock_person = MagicMock()
+        mock_person.first_name = "John"
+        mock_person.last_name = "Doe"
+        mock_person.email = "john@company.com"
+
+        mock_member_person = MagicMock()
+        mock_member_person.first_name = "Jane"
+        mock_member_person.last_name = "Smith"
+        mock_member_person.email = "jane@company.com"
+
+        # Create mock head employee
+        mock_head = MagicMock()
+        mock_head.employee_id = uuid.uuid4()
+        mock_head.person = mock_person
+        mock_head.status = EmployeeStatus.ACTIVE
+
+        # Create mock member employee
+        mock_member = MagicMock()
+        mock_member.employee_id = uuid.uuid4()
+        mock_member.person = mock_member_person
+        mock_member.status = EmployeeStatus.ACTIVE
+
+        # Create mock department
+        mock_dept = MagicMock()
+        mock_dept.department_code = "ENG"
+        mock_dept.department_name = "Engineering"
+        mock_dept.head = mock_head
+        mock_dept.employees = [mock_head, mock_member]
+
+        mock_db.scalar.return_value = 1
+        mock_db.scalars.return_value.unique.return_value.all.return_value = [mock_dept]
+
+        result = service.list_departments(org_id)
+
+        assert len(result.departments) == 1
+        dept = result.departments[0]
+        assert dept.department_id == "ENG"
+        assert dept.department_name == "Engineering"
+        assert dept.department_type == "operations"
+        assert dept.manager is not None
+        assert dept.manager.full_name == "John Doe"
+        assert dept.manager.email == "john@company.com"
+        assert dept.manager.role == "manager"
+        assert len(dept.members) == 2
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_list_departments_pagination(self, mock_select, service, org_id, mock_db):
+        """Should respect limit and offset parameters."""
+        mock_db.scalar.return_value = 5
+        mock_db.scalars.return_value.unique.return_value.all.return_value = []
+
+        result = service.list_departments(org_id, limit=2, offset=2)
+
+        assert result.total == 5
+        assert result.limit == 2
+        assert result.offset == 2
+
+
+class TestListCompanies:
+    """Test list_companies for CRM contacts sync."""
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_list_companies_empty(self, mock_select, service, org_id, mock_db):
+        """Should return empty list when no companies exist."""
+        mock_db.scalar.return_value = 0
+        mock_db.scalars.return_value.all.return_value = []
+
+        result = service.list_companies(org_id)
+
+        assert result.companies == []
+        assert result.total == 0
+        assert result.has_more is False
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_list_companies_with_data(self, mock_select, service, org_id, mock_db):
+        """Should return company contacts with correct mapping."""
+        mock_customer = MagicMock()
+        mock_customer.customer_id = uuid.uuid4()
+        mock_customer.customer_code = "CUST-001"
+        mock_customer.legal_name = "Acme Corp"
+        mock_customer.tax_identification_number = "12345678"
+        mock_customer.billing_address = {"city": "Lagos"}
+        mock_customer.primary_contact = {"name": "Boss", "email": "boss@acme.com"}
+        mock_customer.crm_id = "crm-abc-123"
+
+        mock_db.scalar.return_value = 1
+        mock_db.scalars.return_value.all.return_value = [mock_customer]
+
+        result = service.list_companies(org_id)
+
+        assert len(result.companies) == 1
+        company = result.companies[0]
+        assert company.customer_code == "CUST-001"
+        assert company.legal_name == "Acme Corp"
+        assert company.tax_id == "12345678"
+        assert company.crm_id == "crm-abc-123"
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_list_companies_has_more(self, mock_select, service, org_id, mock_db):
+        """Should set has_more when more results exist beyond limit."""
+        mock_c1 = MagicMock()
+        mock_c1.customer_id = uuid.uuid4()
+        mock_c1.customer_code = "C1"
+        mock_c1.legal_name = "Company 1"
+        mock_c1.tax_identification_number = None
+        mock_c1.billing_address = None
+        mock_c1.primary_contact = None
+        mock_c1.crm_id = None
+
+        mock_c2 = MagicMock()
+        mock_c2.customer_id = uuid.uuid4()
+        mock_c2.customer_code = "C2"
+        mock_c2.legal_name = "Company 2"
+        mock_c2.tax_identification_number = None
+        mock_c2.billing_address = None
+        mock_c2.primary_contact = None
+        mock_c2.crm_id = None
+
+        mock_db.scalar.return_value = 2
+        # Return limit+1 items to trigger has_more
+        mock_db.scalars.return_value.all.return_value = [mock_c1, mock_c2]
+
+        result = service.list_companies(org_id, limit=1)
+
+        assert result.has_more is True
+        assert len(result.companies) == 1
+
+
+class TestListPeopleContacts:
+    """Test list_people_contacts for CRM contacts sync."""
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_list_people_empty(self, mock_select, service, org_id, mock_db):
+        """Should return empty list when no individual customers exist."""
+        mock_db.scalar.return_value = 0
+        mock_db.scalars.return_value.all.return_value = []
+
+        result = service.list_people_contacts(org_id)
+
+        assert result.contacts == []
+        assert result.total == 0
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_list_people_extracts_email_phone(
+        self, mock_select, service, org_id, mock_db
+    ):
+        """Should extract email/phone from primary_contact JSONB."""
+        mock_customer = MagicMock()
+        mock_customer.customer_id = uuid.uuid4()
+        mock_customer.customer_code = "IND-001"
+        mock_customer.legal_name = "John Individual"
+        mock_customer.primary_contact = {
+            "email": "john@example.com",
+            "phone": "+2341234567",
+        }
+        mock_customer.crm_id = None
+
+        mock_db.scalar.return_value = 1
+        mock_db.scalars.return_value.all.return_value = [mock_customer]
+
+        result = service.list_people_contacts(org_id)
+
+        assert len(result.contacts) == 1
+        contact = result.contacts[0]
+        assert contact.legal_name == "John Individual"
+        assert contact.email == "john@example.com"
+        assert contact.phone == "+2341234567"
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_list_people_handles_null_primary_contact(
+        self, mock_select, service, org_id, mock_db
+    ):
+        """Should handle None primary_contact gracefully."""
+        mock_customer = MagicMock()
+        mock_customer.customer_id = uuid.uuid4()
+        mock_customer.customer_code = "IND-002"
+        mock_customer.legal_name = "No Contact Info"
+        mock_customer.primary_contact = None
+        mock_customer.crm_id = None
+
+        mock_db.scalar.return_value = 1
+        mock_db.scalars.return_value.all.return_value = [mock_customer]
+
+        result = service.list_people_contacts(org_id)
+
+        assert len(result.contacts) == 1
+        assert result.contacts[0].email is None
+        assert result.contacts[0].phone is None
+
+
+class TestCreateMaterialRequest:
+    """Test create_material_request for CRM material request sync."""
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_create_material_request_idempotent(
+        self, mock_select, service, org_id, mock_db
+    ):
+        """Should return existing request when omni_id already exists."""
+        from app.models.inventory.material_request import MaterialRequestStatus
+
+        existing_mr = MagicMock()
+        existing_mr.request_id = uuid.uuid4()
+        existing_mr.request_number = "MAT-MR-2026-00001"
+        existing_mr.status = MaterialRequestStatus.SUBMITTED
+
+        # First scalar call returns existing
+        mock_db.scalar.return_value = existing_mr
+
+        payload = CRMMaterialRequestPayload(
+            omni_id="crm-mr-123",
+            request_type="ISSUE",
+            items=[
+                CRMMaterialRequestItemPayload(
+                    item_code="ITEM001", quantity=Decimal("5")
+                )
+            ],
+        )
+
+        result = service.create_material_request(org_id, payload)
+
+        assert result.request_id == existing_mr.request_id
+        assert result.request_number == "MAT-MR-2026-00001"
+        assert result.omni_id == "crm-mr-123"
+        # Should not call flush (no new records created)
+        mock_db.add.assert_not_called()
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_create_material_request_happy_path(
+        self, mock_select, service, org_id, mock_db
+    ):
+        """Should create MR with items and return response."""
+
+        # No existing MR (first scalar returns None for idempotency check)
+        # Second scalar: item lookup returns mock item
+        mock_item = MagicMock()
+        mock_item.item_id = uuid.uuid4()
+
+        call_count = 0
+
+        def scalar_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return None  # No existing MR
+            return mock_item  # Item lookup
+
+        mock_db.scalar.side_effect = scalar_side_effect
+
+        # Simulate flush() populating request_id on added MR objects
+        added_objects: list = []
+        mock_db.add.side_effect = lambda obj: added_objects.append(obj)
+
+        def simulate_flush() -> None:
+            for obj in added_objects:
+                if hasattr(obj, "request_id") and obj.request_id is None:
+                    obj.request_id = uuid.uuid4()
+
+        mock_db.flush.side_effect = simulate_flush
+
+        # Mock numbering service
+        with patch(
+            "app.services.finance.common.numbering.SyncNumberingService"
+        ) as mock_numbering_cls:
+            mock_numbering = MagicMock()
+            mock_numbering.generate_next_number.return_value = "MAT-MR-2026-00001"
+            mock_numbering_cls.return_value = mock_numbering
+
+            payload = CRMMaterialRequestPayload(
+                omni_id="crm-mr-new-456",
+                request_type="ISSUE",
+                items=[
+                    CRMMaterialRequestItemPayload(
+                        item_code="CABLE-01", quantity=Decimal("10"), uom="METER"
+                    )
+                ],
+                remarks="Needed for installation",
+                schedule_date="2026-03-01",
+            )
+
+            result = service.create_material_request(org_id, payload)
+
+        assert result.request_number == "MAT-MR-2026-00001"
+        assert result.status == "SUBMITTED"
+        assert result.omni_id == "crm-mr-new-456"
+        assert result.request_id is not None
+        # Should add MR header + 1 line item
+        assert mock_db.add.call_count >= 2
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_create_material_request_invalid_item(
+        self, mock_select, service, org_id, mock_db
+    ):
+        """Should raise ValueError when item_code not found."""
+        call_count = 0
+
+        def scalar_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return None  # No existing MR
+            return None  # Item not found
+
+        mock_db.scalar.side_effect = scalar_side_effect
+
+        payload = CRMMaterialRequestPayload(
+            omni_id="crm-mr-bad-item",
+            request_type="ISSUE",
+            items=[
+                CRMMaterialRequestItemPayload(
+                    item_code="NONEXISTENT", quantity=Decimal("1")
+                )
+            ],
+        )
+
+        with pytest.raises(ValueError, match="Item not found: NONEXISTENT"):
+            service.create_material_request(org_id, payload)
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_create_material_request_invalid_type(
+        self, mock_select, service, org_id, mock_db
+    ):
+        """Should raise ValueError for unknown request_type."""
+        mock_db.scalar.return_value = None  # No existing MR
+
+        payload = CRMMaterialRequestPayload(
+            omni_id="crm-mr-bad-type",
+            request_type="UNKNOWN",
+            items=[
+                CRMMaterialRequestItemPayload(
+                    item_code="ITEM001", quantity=Decimal("1")
+                )
+            ],
+        )
+
+        with pytest.raises(ValueError, match="Invalid request_type"):
+            service.create_material_request(org_id, payload)
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_create_material_request_project_ticket_linking(
+        self, mock_select, service, org_id, mock_db
+    ):
+        """Should resolve project and ticket CRM IDs."""
+        mock_item = MagicMock()
+        mock_item.item_id = uuid.uuid4()
+        project_id = uuid.uuid4()
+        ticket_id = uuid.uuid4()
+
+        call_count = 0
+
+        def scalar_side_effect(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return None  # No existing MR
+            return mock_item  # Item lookup
+
+        mock_db.scalar.side_effect = scalar_side_effect
+
+        # Simulate flush() populating request_id on added MR objects
+        added_objects: list = []
+        mock_db.add.side_effect = lambda obj: added_objects.append(obj)
+
+        def simulate_flush() -> None:
+            for obj in added_objects:
+                if hasattr(obj, "request_id") and obj.request_id is None:
+                    obj.request_id = uuid.uuid4()
+
+        mock_db.flush.side_effect = simulate_flush
+
+        with patch.object(
+            service, "_resolve_project_id", return_value=project_id
+        ) as mock_resolve_proj:
+            with patch.object(
+                service, "_resolve_ticket_id", return_value=ticket_id
+            ) as mock_resolve_ticket:
+                with patch.object(service, "_resolve_employee_id", return_value=None):
+                    with patch(
+                        "app.services.finance.common.numbering.SyncNumberingService"
+                    ) as mock_numbering_cls:
+                        mock_numbering = MagicMock()
+                        mock_numbering.generate_next_number.return_value = (
+                            "MAT-MR-2026-00002"
+                        )
+                        mock_numbering_cls.return_value = mock_numbering
+
+                        payload = CRMMaterialRequestPayload(
+                            omni_id="crm-mr-linked",
+                            request_type="PURCHASE",
+                            items=[
+                                CRMMaterialRequestItemPayload(
+                                    item_code="ITEM001", quantity=Decimal("3")
+                                )
+                            ],
+                            project_crm_id="proj-crm-123",
+                            ticket_crm_id="ticket-crm-456",
+                        )
+
+                        service.create_material_request(org_id, payload)
+
+        mock_resolve_proj.assert_called_once_with(org_id, "proj-crm-123")
+        mock_resolve_ticket.assert_called_once_with(org_id, "ticket-crm-456")
+
+
+class TestGetMaterialRequestByCrmId:
+    """Test get_material_request_by_crm_id."""
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_not_found_returns_none(self, mock_select, service, org_id, mock_db):
+        """Should return None when no MR matches the omni_id."""
+        mock_db.scalar.return_value = None
+
+        result = service.get_material_request_by_crm_id(org_id, "nonexistent")
+
+        assert result is None
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_found_returns_status(self, mock_select, service, org_id, mock_db):
+        """Should return full status with items when found."""
+        from app.models.inventory.material_request import (
+            MaterialRequestStatus,
+            MaterialRequestType,
+        )
+
+        item_id = uuid.uuid4()
+
+        mock_line = MagicMock()
+        mock_line.inventory_item_id = item_id
+        mock_line.requested_qty = Decimal("10")
+        mock_line.ordered_qty = Decimal("0")
+        mock_line.uom = "PCS"
+
+        mock_mr = MagicMock()
+        mock_mr.request_id = uuid.uuid4()
+        mock_mr.request_number = "MAT-MR-2026-00001"
+        mock_mr.status = MaterialRequestStatus.SUBMITTED
+        mock_mr.request_type = MaterialRequestType.ISSUE
+        mock_mr.items = [mock_line]
+        mock_mr.created_at = datetime(2026, 2, 10, tzinfo=UTC)
+
+        # First scalar: MR lookup
+        # Then execute for item names
+        mock_db.scalar.return_value = mock_mr
+        mock_db.execute.return_value.all.return_value = [(item_id, "Fiber Cable")]
+
+        result = service.get_material_request_by_crm_id(org_id, "crm-mr-123")
+
+        assert result is not None
+        assert result.request_number == "MAT-MR-2026-00001"
+        assert result.status == "SUBMITTED"
+        assert result.request_type == "ISSUE"
+        assert len(result.items) == 1
+        assert result.items[0].item_name == "Fiber Cable"
+        assert result.items[0].requested_qty == Decimal("10")
+
+
+class TestEnhancedBulkPayloads:
+    """Test that enhanced payload fields are accepted."""
+
+    def test_project_payload_service_team_fields(self):
+        """CRMProjectPayload should accept new service team fields."""
+        payload = CRMProjectPayload(
+            crm_id="test-123",
+            name="Test Project",
+            status="active",
+            service_team_name="Team Alpha",
+            service_team_department_id="dept-123",
+        )
+        assert payload.service_team_name == "Team Alpha"
+        assert payload.service_team_department_id == "dept-123"
+
+    def test_project_payload_backward_compatible(self):
+        """CRMProjectPayload should work without new fields."""
+        payload = CRMProjectPayload(
+            crm_id="test-123",
+            name="Test Project",
+            status="active",
+        )
+        assert payload.service_team_name is None
+        assert payload.service_team_department_id is None
+
+    def test_ticket_payload_assigned_emails(self):
+        """CRMTicketPayload should accept assigned_employee_emails."""
+        payload = CRMTicketPayload(
+            crm_id="test-456",
+            subject="Test Ticket",
+            status="open",
+            service_team_name="Team Beta",
+            assigned_employee_emails=["john@co.com", "jane@co.com"],
+        )
+        assert payload.service_team_name == "Team Beta"
+        assert len(payload.assigned_employee_emails) == 2
+
+    def test_ticket_payload_backward_compatible(self):
+        """CRMTicketPayload should work without new fields."""
+        payload = CRMTicketPayload(
+            crm_id="test-456",
+            subject="Test Ticket",
+            status="open",
+        )
+        assert payload.assigned_employee_emails == []
+
+    def test_work_order_payload_assigned_emails(self):
+        """CRMWorkOrderPayload should accept assigned_employee_emails."""
+        payload = CRMWorkOrderPayload(
+            crm_id="test-789",
+            title="Test WO",
+            status="active",
+            assigned_employee_emails=["tech@co.com"],
+        )
+        assert len(payload.assigned_employee_emails) == 1
+
+    def test_work_order_payload_backward_compatible(self):
+        """CRMWorkOrderPayload should work without new fields."""
+        payload = CRMWorkOrderPayload(
+            crm_id="test-789",
+            title="Test WO",
+            status="active",
+        )
+        assert payload.assigned_employee_emails == []

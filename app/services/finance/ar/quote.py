@@ -68,11 +68,11 @@ class QuoteService:
     @staticmethod
     def create(
         db: Session,
-        organization_id: str,
-        customer_id: str,
+        organization_id: UUID | str,
+        customer_id: UUID | str,
         quote_date: date,
         valid_until: date,
-        created_by: str,
+        created_by: UUID | str,
         currency_code: str = settings.default_functional_currency_code,
         exchange_rate: Decimal = Decimal("1"),
         reference: str | None = None,
@@ -151,7 +151,11 @@ class QuoteService:
 
         customer_id = require_uuid(payload.get("customer_id"), "Customer")
         quote_date = parse_date_str(payload.get("quote_date"), "Quote date", True)
+        if quote_date is None:
+            raise ValueError("Quote date is required")
         valid_until = parse_date_str(payload.get("valid_until"), "Valid until", True)
+        if valid_until is None:
+            raise ValueError("Valid until is required")
         currency_code = resolve_currency_code(db, org_id, payload.get("currency_code"))
         lines = parse_json_list(payload.get("lines"), "Lines")
 
@@ -429,7 +433,7 @@ class QuoteService:
                 new_values={"status": "REJECTED"},
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         db.commit()
         db.refresh(quote)

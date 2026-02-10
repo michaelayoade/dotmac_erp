@@ -137,6 +137,12 @@ class MaterialRequest(Base):
 
     # ERPNext sync tracking
     erpnext_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    crm_id: Mapped[str | None] = mapped_column(
+        String(36),
+        nullable=True,
+        index=True,
+        comment="DotMac CRM material request ID (omni_id for idempotency)",
+    )
     last_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

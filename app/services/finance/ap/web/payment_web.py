@@ -504,8 +504,10 @@ class PaymentWebService:
         content_type = request.headers.get("content-type", "")
         org_id = auth.organization_id
         user_id = auth.person_id
-        assert org_id is not None
-        assert user_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         if "application/json" in content_type:
             data = await request.json()
@@ -639,7 +641,8 @@ class PaymentWebService:
     ) -> HTMLResponse:
         """Render new payment batch form."""
         org_id = auth.organization_id
-        assert org_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         bank_accounts = bank_account_service.list(
             db=db,
             organization_id=org_id,
@@ -691,8 +694,10 @@ class PaymentWebService:
         try:
             org_id = auth.organization_id
             user_id = auth.person_id
-            assert org_id is not None
-            assert user_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            if user_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             payment = supplier_payment_service.get(db, payment_id)
             if not payment or payment.organization_id != auth.organization_id:
                 return RedirectResponse(

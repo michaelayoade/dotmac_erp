@@ -229,7 +229,7 @@ class AssetDisposalService(ListResponseMixin):
                 user_id=user_id,
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         fire_audit_event(
             db,

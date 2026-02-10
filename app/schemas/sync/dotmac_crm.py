@@ -2,6 +2,8 @@
 DotMac CRM Sync Schemas - Pydantic models for CRM sync API.
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
@@ -26,6 +28,9 @@ class CRMProjectPayload(BaseModel):
     customer_name: str | None = Field(None, max_length=200)
     customer_crm_id: str | None = Field(None, max_length=36)
     metadata: dict | None = None
+    # Service team integration (optional, backward-compatible)
+    service_team_name: str | None = Field(None, max_length=200)
+    service_team_department_id: str | None = Field(None, max_length=36)
 
 
 class CRMTicketPayload(BaseModel):
@@ -40,6 +45,9 @@ class CRMTicketPayload(BaseModel):
     customer_name: str | None = Field(None, max_length=200)
     customer_crm_id: str | None = Field(None, max_length=36)
     metadata: dict | None = None
+    # Service team integration (optional, backward-compatible)
+    service_team_name: str | None = Field(None, max_length=200)
+    assigned_employee_emails: list[str] = Field(default_factory=list)
 
 
 class CRMWorkOrderPayload(BaseModel):
@@ -53,6 +61,7 @@ class CRMWorkOrderPayload(BaseModel):
     project_crm_id: str | None = Field(None, description="Links to CRM project")
     ticket_crm_id: str | None = Field(None, description="Links to CRM ticket")
     assigned_employee_email: str | None = Field(None, max_length=255)
+    assigned_employee_emails: list[str] = Field(default_factory=list)
     scheduled_start: datetime | None = None
     scheduled_end: datetime | None = None
     metadata: dict | None = None
@@ -248,3 +257,139 @@ class InventoryListResponse(BaseModel):
     items: list[InventoryItemStock] = Field(default_factory=list)
     total_count: int = 0
     has_more: bool = False
+
+
+# ============ Workforce / Department Sync (ERP → CRM) ============
+
+
+class DepartmentMemberRead(BaseModel):
+    """Member of a department for CRM workforce sync."""
+
+    employee_id: UUID
+    email: str | None = None
+    full_name: str
+    role: str | None = None
+    is_active: bool = True
+
+
+class DepartmentRead(BaseModel):
+    """Department data for CRM service team mapping."""
+
+    department_id: str
+    department_name: str
+    department_type: str = "operations"
+    manager: DepartmentMemberRead | None = None
+    members: list[DepartmentMemberRead] = Field(default_factory=list)
+
+
+class DepartmentListResponse(BaseModel):
+    """Response with departments and pagination."""
+
+    departments: list[DepartmentRead] = Field(default_factory=list)
+    total: int = 0
+    limit: int = 100
+    offset: int = 0
+
+
+# ============ Contact Sync (ERP → CRM) ============
+
+
+class CompanyContactRead(BaseModel):
+    """Company/government customer for CRM contacts sync."""
+
+    customer_id: UUID
+    customer_code: str
+    legal_name: str
+    tax_id: str | None = None
+    billing_address: dict | None = None
+    primary_contact: dict | None = None
+    crm_id: str | None = None
+
+
+class CompanyListResponse(BaseModel):
+    """Response with company contacts and pagination."""
+
+    companies: list[CompanyContactRead] = Field(default_factory=list)
+    total: int = 0
+    limit: int = 100
+    offset: int = 0
+    has_more: bool = False
+
+
+class PersonContactRead(BaseModel):
+    """Individual customer as a person contact for CRM sync."""
+
+    contact_id: UUID
+    customer_code: str
+    legal_name: str
+    email: str | None = None
+    phone: str | None = None
+    crm_id: str | None = None
+
+
+class PersonListResponse(BaseModel):
+    """Response with person contacts and pagination."""
+
+    contacts: list[PersonContactRead] = Field(default_factory=list)
+    total: int = 0
+    limit: int = 100
+    offset: int = 0
+    has_more: bool = False
+
+
+# ============ Material Request Sync (CRM → ERP) ============
+
+
+class CRMMaterialRequestItemPayload(BaseModel):
+    """Single item in a CRM material request."""
+
+    item_code: str = Field(..., max_length=50)
+    quantity: Decimal = Field(..., gt=0)
+    uom: str | None = Field(None, max_length=20)
+
+
+class CRMMaterialRequestPayload(BaseModel):
+    """Material request from DotMac CRM."""
+
+    omni_id: str = Field(
+        ..., max_length=36, description="CRM-side unique ID for idempotency"
+    )
+    request_type: str = Field(
+        "ISSUE", description="PURCHASE, TRANSFER, ISSUE, MANUFACTURE"
+    )
+    items: list[CRMMaterialRequestItemPayload] = Field(..., min_length=1)
+    project_crm_id: str | None = Field(None, max_length=36)
+    ticket_crm_id: str | None = Field(None, max_length=36)
+    requested_by_email: str | None = Field(None, max_length=255)
+    schedule_date: str | None = Field(None, description="YYYY-MM-DD schedule date")
+    remarks: str | None = None
+
+
+class CRMMaterialRequestResponse(BaseModel):
+    """Response after creating a material request from CRM."""
+
+    request_id: UUID
+    request_number: str
+    status: str
+    omni_id: str
+
+
+class CRMMaterialRequestItemRead(BaseModel):
+    """Item detail in a material request status response."""
+
+    item_code: str
+    item_name: str
+    requested_qty: Decimal
+    ordered_qty: Decimal
+    uom: str | None = None
+
+
+class CRMMaterialRequestStatusRead(BaseModel):
+    """Full status of a material request for CRM."""
+
+    request_id: UUID
+    request_number: str
+    status: str
+    request_type: str
+    items: list[CRMMaterialRequestItemRead] = Field(default_factory=list)
+    created_at: datetime

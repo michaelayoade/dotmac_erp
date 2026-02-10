@@ -385,7 +385,7 @@ class DisciplineService:
                 user_id=issued_by_id,
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         logger.info(
             "Query issued for case %s, response due %s",
@@ -538,7 +538,7 @@ class DisciplineService:
                 user_id=scheduled_by_id,
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         logger.info(
             "Hearing scheduled for case %s on %s",
@@ -655,7 +655,7 @@ class DisciplineService:
                 user_id=decided_by_id,
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         logger.info(
             "Decision recorded for case %s with %d action(s)",
@@ -733,7 +733,7 @@ class DisciplineService:
                 new_values={"status": "APPEAL_FILED"},
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         logger.info("Appeal filed for case %s", case.case_number)
 
@@ -848,7 +848,7 @@ class DisciplineService:
                 user_id=closed_by_id,
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         logger.info("Case %s closed", case.case_number)
         return case

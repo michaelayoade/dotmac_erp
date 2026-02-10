@@ -6,6 +6,7 @@ proper tenant context handling.
 """
 
 import json
+import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from uuid import UUID
@@ -30,6 +31,8 @@ from app.services.auth_flow import (
 from app.services.common import coerce_uuid
 from app.services.finance.branding import BrandingService, CSSGenerator
 from app.templates import templates  # noqa: F401 - re-exported for web routes
+
+logger = logging.getLogger(__name__)
 
 
 def _get_auth_db_for_sso() -> Session | None:
@@ -678,7 +681,7 @@ def base_context(
         try:
             context.update(get_currency_context(db, str(auth.organization_id)))
         except Exception:
-            pass
+            logger.exception("Ignored exception")
     return context
 
 

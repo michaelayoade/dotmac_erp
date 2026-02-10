@@ -535,7 +535,8 @@ class SupplierWebService:
 
         try:
             org_id = auth.organization_id
-            assert org_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             input_data = self.build_supplier_input(db, dict(form_data), org_id)
 
             supplier_service.create_supplier(
@@ -571,7 +572,8 @@ class SupplierWebService:
 
         try:
             org_id = auth.organization_id
-            assert org_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             input_data = self.build_supplier_input(db, dict(form_data), org_id)
 
             supplier_service.update_supplier(
@@ -636,8 +638,10 @@ class SupplierWebService:
         try:
             org_id = auth.organization_id
             user_id = auth.person_id
-            assert org_id is not None
-            assert user_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            if user_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             supplier = supplier_service.get(db, org_id, supplier_id)
             if not supplier or supplier.organization_id != auth.organization_id:
                 return RedirectResponse(

@@ -380,7 +380,7 @@ class RecruitmentService:
                 new_values={"status": "CLOSED"},
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         return opening
 

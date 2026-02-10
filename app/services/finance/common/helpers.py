@@ -258,7 +258,8 @@ def toggle_entity_status(
         org_id=org_id,
         entity_name=entity_name,
     )
-    assert entity is not None
+    if entity is None:
+        raise HTTPException(status_code=404, detail=f"{entity_name} not found")
 
     # Run pre-check if provided
     if pre_check is not None:

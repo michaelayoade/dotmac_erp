@@ -459,6 +459,7 @@ def _load_rbac_claims(db: Session, person_id: str) -> tuple[list[str], list[str]
         "expense:claims:approve:tier1",
         "expense:claims:approve:tier2",
         "expense:claims:approve:tier3",
+        "expense:claims:reject",
     }
     permissions = (
         db.query(Permission)
@@ -677,7 +678,8 @@ class AuthFlow(ListResponseMixin):
     ) -> Response:
         settings = AuthFlow.refresh_cookie_settings(db)
         access_settings = AuthFlow.access_cookie_settings(db)
-        payload_without_refresh = {**payload, "refresh_token": None}
+        # Explicitly omit refresh token from cookie payload.
+        payload_without_refresh = {**payload, "refresh_token": None}  # nosec B105
         body_content = model_cls(**payload_without_refresh).model_dump_json()
         response = Response(
             content=body_content,

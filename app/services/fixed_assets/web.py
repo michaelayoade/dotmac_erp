@@ -11,7 +11,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -258,8 +258,10 @@ class FixedAssetWebService:
         try:
             org_id = auth.organization_id
             user_id = auth.person_id
-            assert org_id is not None
-            assert user_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            if user_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             resolved_currency = (
                 currency_code
                 or org_context_service.get_functional_currency(
@@ -420,7 +422,8 @@ class FixedAssetWebService:
     ) -> HTMLResponse | RedirectResponse:
         form = await request.form()
         org_id = auth.organization_id
-        assert org_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         try:
             category_input = AssetCategoryInput(
@@ -509,7 +512,8 @@ class FixedAssetWebService:
     ) -> HTMLResponse | RedirectResponse:
         form = await request.form()
         org_id = auth.organization_id
-        assert org_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         try:
             category_input = AssetCategoryInput(
@@ -579,10 +583,11 @@ class FixedAssetWebService:
     ) -> RedirectResponse:
         try:
             org_id = auth.organization_id
-            assert org_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             asset_category_service.toggle_category(db, org_id, category_id)
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         return RedirectResponse(url="/fixed-assets/categories", status_code=303)
 
@@ -769,8 +774,10 @@ class FixedAssetWebService:
             form_data = await request.form()
             org_id = auth.organization_id
             user_id = auth.user_id
-            assert org_id is not None
-            assert user_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            if user_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             disposal_date = _safe_form_text(form_data.get("disposal_date"))
             proceeds = _safe_form_text(form_data.get("proceeds")) or "0"
             costs_of_disposal = (
@@ -829,8 +836,10 @@ class FixedAssetWebService:
             form_data = await request.form()
             org_id = auth.organization_id
             user_id = auth.user_id
-            assert org_id is not None
-            assert user_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            if user_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             revaluation_date = _safe_form_text(form_data.get("revaluation_date"))
             new_value = _safe_form_text(form_data.get("new_value")) or "0"
             valuation_method = (
@@ -910,8 +919,10 @@ class FixedAssetWebService:
             fiscal_period_id = _safe_form_text(form_data.get("fiscal_period_id"))
             org_id = auth.organization_id
             user_id = auth.user_id
-            assert org_id is not None
-            assert user_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            if user_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             if not fiscal_period_id:
                 raise ValueError("Fiscal period is required")
 

@@ -271,7 +271,7 @@ class MaintenanceService:
                 new_values={"status": "COMPLETED"},
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         fire_audit_event(
             self.db,
@@ -323,7 +323,7 @@ class MaintenanceService:
                 new_values={"status": "CANCELLED"},
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         fire_audit_event(
             self.db,

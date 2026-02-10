@@ -162,8 +162,8 @@
                     <table class="table-ledger">
                         <thead>
                             <tr>
-                                <th scope="col">#</th>
-                                <th scope="col">Date</th>
+                                <th scope="col" class="w-10 pr-2 text-center border-r border-slate-200 dark:border-slate-700">#</th>
+                                <th scope="col" class="pl-4">Date</th>
                                 <th scope="col">Description</th>
                                 <th scope="col">Reference</th>
                                 <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider">Amount</th>
@@ -175,8 +175,8 @@
                         <tbody>
                             {% for line in lines %}
                             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                                <td class="text-sm text-slate-500 dark:text-slate-400 tabular-nums">{{ line.line_number }}</td>
-                                <td class="text-sm text-slate-600 dark:text-slate-400">{{ line.transaction_date }}</td>
+                                <td class="w-10 pr-2 text-center text-xs text-slate-400 dark:text-slate-500 tabular-nums border-r border-slate-100 dark:border-slate-700/50">{{ line.line_number }}</td>
+                                <td class="pl-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">{{ line.transaction_date }}</td>
                                 <td>
                                     <p class="text-sm text-slate-900 dark:text-white">{{ line.description if line.description else "-" }}</p>
                                     {% if line.payee_payer %}

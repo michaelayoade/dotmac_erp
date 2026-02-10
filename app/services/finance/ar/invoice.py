@@ -646,9 +646,10 @@ class ARInvoiceService(ListResponseMixin):
                 raise ValueError("Line description is required")
 
             tax_code_ids: list[UUID] = []
-            if line.get("tax_code_ids"):
+            raw_tax_code_ids = line.get("tax_code_ids") or []
+            if isinstance(raw_tax_code_ids, list):
                 tax_code_ids = [
-                    coerce_uuid(tc_id) for tc_id in line.get("tax_code_ids") if tc_id
+                    coerce_uuid(tc_id) for tc_id in raw_tax_code_ids if tc_id
                 ]
             legacy_tax_code_id = (
                 coerce_uuid(line.get("tax_code_id"))
@@ -713,9 +714,10 @@ class ARInvoiceService(ListResponseMixin):
                 continue
 
             tax_code_ids: list[UUID] = []
-            if line.get("tax_code_ids"):
+            raw_tax_code_ids = line.get("tax_code_ids") or []
+            if isinstance(raw_tax_code_ids, list):
                 tax_code_ids = [
-                    coerce_uuid(tc_id) for tc_id in line.get("tax_code_ids") if tc_id
+                    coerce_uuid(tc_id) for tc_id in raw_tax_code_ids if tc_id
                 ]
             legacy_tax_code_id = (
                 coerce_uuid(line.get("tax_code_id"))
@@ -806,7 +808,7 @@ class ARInvoiceService(ListResponseMixin):
                 user_id=user_id,
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         fire_audit_event(
             db=db,
@@ -875,7 +877,7 @@ class ARInvoiceService(ListResponseMixin):
                 user_id=user_id,
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         fire_audit_event(
             db=db,
@@ -956,7 +958,7 @@ class ARInvoiceService(ListResponseMixin):
                 user_id=user_id,
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         fire_audit_event(
             db=db,
@@ -1092,7 +1094,7 @@ class ARInvoiceService(ListResponseMixin):
                 user_id=coerce_uuid(cancelled_by_user_id),
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         fire_audit_event(
             db=db,

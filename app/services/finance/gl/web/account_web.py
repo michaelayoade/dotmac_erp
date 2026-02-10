@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from decimal import Decimal
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -524,7 +524,8 @@ class AccountWebService:
     ) -> HTMLResponse | RedirectResponse:
         """Handle account creation form submission."""
         org_id = auth.organization_id
-        assert org_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         currency_code = (
             default_currency_code
             or org_context_service.get_functional_currency(
@@ -609,7 +610,8 @@ class AccountWebService:
     ) -> HTMLResponse | RedirectResponse:
         """Handle account update form submission."""
         org_id = auth.organization_id
-        assert org_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         currency_code = (
             default_currency_code
             or org_context_service.get_functional_currency(

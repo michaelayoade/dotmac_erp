@@ -534,7 +534,8 @@ class CustomerWebService:
 
         try:
             org_id = auth.organization_id
-            assert org_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             input_data = self.build_customer_input(db, dict(form_data), org_id)
 
             customer_service.create_customer(
@@ -570,7 +571,8 @@ class CustomerWebService:
 
         try:
             org_id = auth.organization_id
-            assert org_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             input_data = self.build_customer_input(db, dict(form_data), org_id)
 
             customer_service.update_customer(
@@ -635,8 +637,10 @@ class CustomerWebService:
         try:
             org_id = auth.organization_id
             user_id = auth.person_id
-            assert org_id is not None
-            assert user_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            if user_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             customer = customer_service.get(db, org_id, customer_id)
             if not customer or customer.organization_id != auth.organization_id:
                 return RedirectResponse(

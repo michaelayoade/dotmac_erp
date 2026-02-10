@@ -201,7 +201,10 @@ class TestApproverAuthorityValidation:
         svc._begin_action = MagicMock(return_value=True)
         svc._set_action_status = MagicMock()
 
-        with patch.object(svc, "_validate_approver_authority") as mock_validate:
+        with (
+            patch.object(svc, "_validate_approver_authority") as mock_validate,
+            patch.object(svc, "_validate_approver_monthly_budget"),
+        ):
             svc.approve_claim(org_id, claim_id, approver_id=approver_id)
             mock_validate.assert_called_once_with(org_id, claim, approver_id)
 
@@ -264,7 +267,10 @@ class TestSelfApprovalPrevention:
         svc._begin_action = MagicMock(return_value=True)
         svc._set_action_status = MagicMock()
 
-        with patch.object(svc, "_validate_approver_authority"):
+        with (
+            patch.object(svc, "_validate_approver_authority"),
+            patch.object(svc, "_validate_approver_monthly_budget"),
+        ):
             with pytest.raises(ExpenseServiceError, match="Cannot approve your own"):
                 svc.approve_claim(org_id, claim_id, approver_id=approver_id)
 
@@ -296,7 +302,10 @@ class TestSelfApprovalPrevention:
         svc._begin_action = MagicMock(return_value=True)
         svc._set_action_status = MagicMock()
 
-        with patch.object(svc, "_validate_approver_authority"):
+        with (
+            patch.object(svc, "_validate_approver_authority"),
+            patch.object(svc, "_validate_approver_monthly_budget"),
+        ):
             result = svc.approve_claim(org_id, claim_id, approver_id=approver_id)
             assert result.status == ExpenseClaimStatus.APPROVED
 

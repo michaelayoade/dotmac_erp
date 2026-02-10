@@ -35,6 +35,7 @@ from app.services.people.hr.employee_types import EmployeeFilters
 from app.services.people.hr.info_change_service import InfoChangeService
 from app.services.people.leave import LeaveService
 from app.services.people.payroll.paye_calculator import PAYECalculator
+from app.services.settings.bank_directory import OrgBankDirectoryService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -1149,6 +1150,8 @@ class SelfServiceWebService:
         tasks = self._get_tasks_for_dropdown(
             db, org_id, str(claim.project_id) if claim.project_id else None
         )
+        allowed_banks = OrgBankDirectoryService(db).list_active_banks(org_id)
+        allowed_bank_names = {bank.bank_name for bank in allowed_banks}
 
         context = base_context(
             request, auth, "Edit Expense Claim", "self-expenses", db=db
@@ -1162,6 +1165,8 @@ class SelfServiceWebService:
                 "projects": projects,
                 "tickets": tickets,
                 "tasks": tasks,
+                "allowed_banks": allowed_banks,
+                "allowed_bank_names": allowed_bank_names,
                 "expense_approver_options": self._get_expense_approver_options(
                     db, org_id
                 ),

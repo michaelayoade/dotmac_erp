@@ -8,7 +8,7 @@ Commitments, Virements, and Budget Comparison.
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -503,7 +503,8 @@ def create_virement(
 
     svc = VirementService(db)
     org_id = auth.organization_id
-    assert org_id is not None
+    if org_id is None:
+        raise HTTPException(status_code=401, detail="Authentication required")
     virement_number = (
         f"VIR-{org_id.hex[:6].upper()}-{svc.count_for_org(org_id) + 1:04d}"
     )

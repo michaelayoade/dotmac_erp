@@ -570,6 +570,7 @@ class ExpenseLimitWebService:
         scope_type = _safe_form_text(form.get("scope_type"))
         scope_id = _safe_form_text(form.get("scope_id"))
         max_approval_amount = _safe_form_text(form.get("max_approval_amount"))
+        monthly_approval_budget = _safe_form_text(form.get("monthly_approval_budget"))
         can_approve_own = _safe_form_text(form.get("can_approve_own_expenses")) in {
             "1",
             "true",
@@ -578,36 +579,46 @@ class ExpenseLimitWebService:
         }
         is_active = _safe_form_text(form.get("is_active")) in {"1", "true", "on", "yes"}
 
-        errors = {}
+        errors: dict[str, str] = {}
         if not scope_type:
             errors["scope_type"] = "Required"
         if not max_approval_amount:
             errors["max_approval_amount"] = "Required"
 
-        max_amount_value = None
+        max_amount_value: Decimal | None = None
         if max_approval_amount:
             try:
                 max_amount_value = Decimal(max_approval_amount)
-            except Exception:
+            except (ValueError, ArithmeticError):
                 errors["max_approval_amount"] = "Invalid amount"
         if max_amount_value is None:
             errors["max_approval_amount"] = (
                 errors.get("max_approval_amount") or "Required"
             )
 
+        monthly_budget_value: Decimal | None = None
+        if monthly_approval_budget:
+            try:
+                monthly_budget_value = Decimal(monthly_approval_budget)
+            except (ValueError, ArithmeticError):
+                errors["monthly_approval_budget"] = "Invalid amount"
+
         scope_options = self._get_scope_options(db, org_id)
+
+        form_data = {
+            "scope_type": scope_type,
+            "scope_id": scope_id,
+            "max_approval_amount": max_approval_amount,
+            "monthly_approval_budget": monthly_approval_budget,
+            "can_approve_own_expenses": can_approve_own,
+            "is_active": is_active,
+        }
 
         if errors:
             context = base_context(request, auth, "New Approver Limit", "limits")
             context.update(
                 {
-                    "approver_limit": {
-                        "scope_type": scope_type,
-                        "scope_id": scope_id,
-                        "max_approval_amount": max_approval_amount,
-                        "can_approve_own_expenses": can_approve_own,
-                        "is_active": is_active,
-                    },
+                    "approver_limit": form_data,
                     "scope_types": ["EMPLOYEE", "GRADE", "DESIGNATION", "ROLE"],
                     "scope_options": scope_options,
                     "errors": errors,
@@ -625,6 +636,7 @@ class ExpenseLimitWebService:
                 scope_type=scope_type,
                 scope_id=coerce_uuid(scope_id) if scope_id else None,
                 max_approval_amount=max_amount_value,
+                monthly_approval_budget=monthly_budget_value,
                 can_approve_own_expenses=can_approve_own,
                 is_active=is_active,
             )
@@ -636,13 +648,7 @@ class ExpenseLimitWebService:
             context = base_context(request, auth, "New Approver Limit", "limits")
             context.update(
                 {
-                    "approver_limit": {
-                        "scope_type": scope_type,
-                        "scope_id": scope_id,
-                        "max_approval_amount": max_approval_amount,
-                        "can_approve_own_expenses": can_approve_own,
-                        "is_active": is_active,
-                    },
+                    "approver_limit": form_data,
                     "scope_types": ["EMPLOYEE", "GRADE", "DESIGNATION", "ROLE"],
                     "scope_options": scope_options,
                     "errors": errors,
@@ -670,6 +676,7 @@ class ExpenseLimitWebService:
         scope_type = _safe_form_text(form.get("scope_type"))
         scope_id = _safe_form_text(form.get("scope_id"))
         max_approval_amount = _safe_form_text(form.get("max_approval_amount"))
+        monthly_approval_budget = _safe_form_text(form.get("monthly_approval_budget"))
         can_approve_own = _safe_form_text(form.get("can_approve_own_expenses")) in {
             "1",
             "true",
@@ -678,37 +685,47 @@ class ExpenseLimitWebService:
         }
         is_active = _safe_form_text(form.get("is_active")) in {"1", "true", "on", "yes"}
 
-        errors = {}
+        errors: dict[str, str] = {}
         if not scope_type:
             errors["scope_type"] = "Required"
         if not max_approval_amount:
             errors["max_approval_amount"] = "Required"
 
-        max_amount_value = None
+        max_amount_value: Decimal | None = None
         if max_approval_amount:
             try:
                 max_amount_value = Decimal(max_approval_amount)
-            except Exception:
+            except (ValueError, ArithmeticError):
                 errors["max_approval_amount"] = "Invalid amount"
         if max_amount_value is None:
             errors["max_approval_amount"] = (
                 errors.get("max_approval_amount") or "Required"
             )
 
+        monthly_budget_value: Decimal | None = None
+        if monthly_approval_budget:
+            try:
+                monthly_budget_value = Decimal(monthly_approval_budget)
+            except (ValueError, ArithmeticError):
+                errors["monthly_approval_budget"] = "Invalid amount"
+
         scope_options = self._get_scope_options(db, org_id)
+
+        form_data = {
+            "approver_limit_id": approver_limit_id,
+            "scope_type": scope_type,
+            "scope_id": scope_id,
+            "max_approval_amount": max_approval_amount,
+            "monthly_approval_budget": monthly_approval_budget,
+            "can_approve_own_expenses": can_approve_own,
+            "is_active": is_active,
+        }
 
         if errors:
             context = base_context(request, auth, "Edit Approver Limit", "limits")
             context.update(
                 {
-                    "approver_limit": {
-                        "approver_limit_id": approver_limit_id,
-                        "scope_type": scope_type,
-                        "scope_id": scope_id,
-                        "max_approval_amount": max_approval_amount,
-                        "can_approve_own_expenses": can_approve_own,
-                        "is_active": is_active,
-                    },
+                    "approver_limit": form_data,
                     "scope_types": ["EMPLOYEE", "GRADE", "DESIGNATION", "ROLE"],
                     "scope_options": scope_options,
                     "scope_label": None,
@@ -728,6 +745,7 @@ class ExpenseLimitWebService:
                 scope_type=scope_type,
                 scope_id=coerce_uuid(scope_id) if scope_id else None,
                 max_approval_amount=max_amount_value,
+                monthly_approval_budget=monthly_budget_value,
                 can_approve_own_expenses=can_approve_own,
                 is_active=is_active,
             )
@@ -739,14 +757,7 @@ class ExpenseLimitWebService:
             context = base_context(request, auth, "Edit Approver Limit", "limits")
             context.update(
                 {
-                    "approver_limit": {
-                        "approver_limit_id": approver_limit_id,
-                        "scope_type": scope_type,
-                        "scope_id": scope_id,
-                        "max_approval_amount": max_approval_amount,
-                        "can_approve_own_expenses": can_approve_own,
-                        "is_active": is_active,
-                    },
+                    "approver_limit": form_data,
                     "scope_types": ["EMPLOYEE", "GRADE", "DESIGNATION", "ROLE"],
                     "scope_options": scope_options,
                     "scope_label": None,
@@ -808,7 +819,7 @@ class ExpenseLimitWebService:
                 emp_uuid = coerce_uuid(employee_id)
                 usage_summary = service.get_employee_usage_summary(org_id, emp_uuid)
             except Exception:
-                pass
+                logger.exception("Ignored exception")
 
         context = base_context(request, auth, "Expense Usage", "limits")
         context.update(
@@ -849,14 +860,14 @@ class ExpenseLimitWebService:
             try:
                 from_date_parsed = date.fromisoformat(from_date)
             except Exception:
-                pass
+                logger.exception("Ignored exception")
 
         to_date_parsed = None
         if to_date:
             try:
                 to_date_parsed = date.fromisoformat(to_date)
             except Exception:
-                pass
+                logger.exception("Ignored exception")
 
         # Paginate
         per_page = 25

@@ -976,7 +976,9 @@ class MaterialRequestWebService:
                 user_id=user_id,
             )
         except Exception:
-            pass  # Side effect — never breaks the main operation
+            logger.exception(
+                "Ignored exception"
+            )  # Side effect — never breaks the main operation
 
         return request
 

@@ -98,7 +98,7 @@ class CustomerSyncService(BaseSyncService[Customer]):
 
     def create_entity(self, data: dict[str, Any]) -> Customer:
         """Create Customer entity."""
-        data.pop("_source_name", None)
+        source_name = data.pop("_source_name", None)
         data.pop("_source_modified", None)
 
         # Map customer type - stored as VARCHAR
@@ -113,6 +113,9 @@ class CustomerSyncService(BaseSyncService[Customer]):
 
         # Get required AR control account
         ar_account_id = self._get_ar_account_id()
+
+        # Store ERPNext name as erpnext_id for future sync lookups
+        erpnext_id = str(source_name)[:100] if source_name else customer_code[:100]
 
         customer = Customer(
             organization_id=self.organization_id,
@@ -129,12 +132,13 @@ class CustomerSyncService(BaseSyncService[Customer]):
             is_wht_applicable=False,
             is_active=data.get("is_active", True),
             created_by_user_id=self.user_id,
+            erpnext_id=erpnext_id,
         )
         return customer
 
     def update_entity(self, entity: Customer, data: dict[str, Any]) -> Customer:
         """Update existing Customer."""
-        data.pop("_source_name", None)
+        source_name = data.pop("_source_name", None)
         data.pop("_source_modified", None)
 
         entity.legal_name = (data.get("legal_name") or entity.legal_name)[:200]
@@ -147,6 +151,10 @@ class CustomerSyncService(BaseSyncService[Customer]):
         entity.tax_identification_number = str(data.get("tax_id") or "")[:50] or None
         entity.is_active = data.get("is_active", True)
 
+        # Backfill erpnext_id if not yet set
+        if not entity.erpnext_id and source_name:
+            entity.erpnext_id = str(source_name)[:100]
+
         return entity
 
     def get_entity_id(self, entity: Customer) -> uuid.UUID:
@@ -154,10 +162,24 @@ class CustomerSyncService(BaseSyncService[Customer]):
         return entity.customer_id
 
     def find_existing_entity(self, source_name: str) -> Customer | None:
-        """Find existing customer by code or name."""
+        """Find existing customer by erpnext_id, sync entity, or code."""
         if source_name in self._customer_cache:
             return self._customer_cache[source_name]
 
+        # Primary lookup: erpnext_id column (set by dedup migration)
+        if source_name:
+            erpnext_id_val = source_name[:100]
+            result = self.db.execute(
+                select(Customer).where(
+                    Customer.organization_id == self.organization_id,
+                    Customer.erpnext_id == erpnext_id_val,
+                )
+            ).scalar_one_or_none()
+            if result:
+                self._customer_cache[source_name] = result
+                return result
+
+        # Fallback: sync entity tracking table
         sync_entity = self.get_sync_entity(source_name)
         if sync_entity and sync_entity.target_id:
             customer = self.db.get(Customer, sync_entity.target_id)
@@ -165,7 +187,7 @@ class CustomerSyncService(BaseSyncService[Customer]):
                 self._customer_cache[source_name] = customer
                 return customer
 
-        # Try by code (truncated source_name)
+        # Fallback: by code (truncated source_name)
         code = source_name[:30] if source_name else None
         if code:
             result = self.db.execute(

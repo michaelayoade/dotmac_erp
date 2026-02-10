@@ -9,7 +9,7 @@ from __future__ import annotations
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import Request, UploadFile
+from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -531,8 +531,10 @@ class PurchaseOrderWebService:
         try:
             org_id = auth.organization_id
             user_id = auth.person_id
-            assert org_id is not None
-            assert user_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            if user_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             payload = dict(data)
             input_data = purchase_order_service.build_input_from_payload(
                 db=db,
@@ -587,8 +589,10 @@ class PurchaseOrderWebService:
         try:
             org_id = auth.organization_id
             user_id = auth.person_id
-            assert org_id is not None
-            assert user_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            if user_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             purchase_order_service.submit_for_approval(
                 db=db,
                 organization_id=org_id,
@@ -628,8 +632,10 @@ class PurchaseOrderWebService:
         try:
             org_id = auth.organization_id
             user_id = auth.person_id
-            assert org_id is not None
-            assert user_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            if user_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             purchase_order_service.approve_po(
                 db=db,
                 organization_id=org_id,
@@ -666,7 +672,8 @@ class PurchaseOrderWebService:
         """Handle purchase order cancellation."""
         try:
             org_id = auth.organization_id
-            assert org_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             purchase_order_service.cancel_po(
                 db=db,
                 organization_id=org_id,
@@ -704,8 +711,10 @@ class PurchaseOrderWebService:
         try:
             org_id = auth.organization_id
             user_id = auth.person_id
-            assert org_id is not None
-            assert user_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            if user_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             po = purchase_order_service.get(db, po_id)
             if not po or po.organization_id != auth.organization_id:
                 return RedirectResponse(

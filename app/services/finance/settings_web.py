@@ -35,6 +35,8 @@ from app.services.settings_spec import (
 
 logger = logging.getLogger(__name__)
 
+SMTP_PASSWORD_FIELD = "password"  # noqa: S105  # nosec B105
+
 
 class EmailModuleSetting(TypedDict):
     key: str
@@ -405,7 +407,7 @@ class SettingsWebService:
             "smtp_host": "host",
             "smtp_port": "port",
             "smtp_username": "username",
-            "smtp_password": "password",
+            "smtp_password": SMTP_PASSWORD_FIELD,
             "smtp_use_tls": "use_tls",
             "smtp_use_ssl": "use_ssl",
             "smtp_from_email": "from_email",

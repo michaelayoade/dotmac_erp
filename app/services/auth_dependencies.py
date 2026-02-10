@@ -549,10 +549,13 @@ def require_user_auth(
                 status_code=401, detail="Session expired due to inactivity"
             )
 
-        # Update session activity in auth database
+        # Update session activity tracking
         if auth_db:
             session.last_seen_at = now
             auth_db.commit()
+        else:
+            session.last_seen_at = now
+            db.flush()
 
     finally:
         if auth_db:
@@ -703,10 +706,13 @@ def require_tenant_auth(
                 status_code=401, detail="Session expired due to inactivity"
             )
 
-        # Update session activity in auth database
+        # Update session activity tracking
         if auth_db:
             session.last_seen_at = now
             auth_db.commit()
+        else:
+            session.last_seen_at = now
+            db.flush()
 
     finally:
         if auth_db:
@@ -878,6 +884,13 @@ def require_admin_bypass(
             raise HTTPException(
                 status_code=401, detail="Session expired due to inactivity"
             )
+        # Update session activity tracking
+        if auth_db:
+            session.last_seen_at = now
+            auth_db.commit()
+        else:
+            session.last_seen_at = now
+            db.flush()
     finally:
         if auth_db:
             auth_db.close()

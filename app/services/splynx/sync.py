@@ -314,6 +314,17 @@ class SplynxSyncService:
         )
         return self.db.scalar(stmt)
 
+    def _get_customer_by_splynx_id(self, splynx_id: int) -> Customer | None:
+        """Get existing customer by splynx_id column (set by dedup migration)."""
+        # Match exact ID or comma-separated list containing this ID
+        sid = str(splynx_id)
+        stmt = select(Customer).where(
+            Customer.organization_id == self.organization_id,
+            Customer.splynx_id.is_not(None),
+            Customer.splynx_id == sid,
+        )
+        return self.db.scalar(stmt)
+
     def _find_existing_customer(
         self, splynx_customer: SplynxCustomer
     ) -> Customer | None:
@@ -389,18 +400,36 @@ class SplynxSyncService:
 
     def _load_customer_cache(self) -> None:
         """Load customer ID mapping cache."""
+        # Primary: load from splynx_id column (set by dedup migration)
         stmt = select(Customer).where(
             Customer.organization_id == self.organization_id,
-            Customer.customer_code.like(f"{self.SOURCE_PREFIX}-%"),
+            Customer.splynx_id.is_not(None),
         )
         customers = self.db.scalars(stmt).all()
         for customer in customers:
-            # Extract Splynx ID from customer code
+            # splynx_id may be comma-separated after dedup merge
+            for sid in (customer.splynx_id or "").split(","):
+                sid = sid.strip()
+                if sid:
+                    try:
+                        self._customer_cache[int(sid)] = customer.customer_id
+                    except ValueError:
+                        pass
+
+        # Fallback: also load from old SPLYNX-{id} customer codes
+        stmt2 = select(Customer).where(
+            Customer.organization_id == self.organization_id,
+            Customer.customer_code.like(f"{self.SOURCE_PREFIX}-%"),
+            Customer.splynx_id.is_(None),  # Only if not already indexed above
+        )
+        customers2 = self.db.scalars(stmt2).all()
+        for customer in customers2:
             try:
                 splynx_id = int(
                     customer.customer_code.replace(f"{self.SOURCE_PREFIX}-", "")
                 )
-                self._customer_cache[splynx_id] = customer.customer_id
+                if splynx_id not in self._customer_cache:
+                    self._customer_cache[splynx_id] = customer.customer_id
             except ValueError:
                 pass
 
@@ -409,7 +438,13 @@ class SplynxSyncService:
         if splynx_customer_id in self._customer_cache:
             return self._customer_cache[splynx_customer_id]
 
-        # Try to find via sync tracking first
+        # Primary: look up by splynx_id column (set by dedup migration)
+        customer = self._get_customer_by_splynx_id(splynx_customer_id)
+        if customer:
+            self._customer_cache[splynx_customer_id] = customer.customer_id
+            return customer.customer_id
+
+        # Fallback: try sync tracking table
         local_id = self._get_synced_entity(EntityType.CUSTOMER, str(splynx_customer_id))
         if local_id:
             self._customer_cache[splynx_customer_id] = local_id
@@ -632,15 +667,15 @@ class SplynxSyncService:
             result.skipped += 1
             return
 
-        # Check for existing record via sync tracking or customer code
-        local_id = self._get_synced_entity(EntityType.CUSTOMER, external_id)
-        existing = None
-        if local_id:
-            existing = self.db.get(Customer, local_id)
-        else:
+        # Check for existing record: splynx_id column → sync tracking → code → name
+        existing = self._get_customer_by_splynx_id(splynx_customer.id)
+        if not existing:
+            local_id = self._get_synced_entity(EntityType.CUSTOMER, external_id)
+            if local_id:
+                existing = self.db.get(Customer, local_id)
+        if not existing:
             customer_code = self._make_customer_code(splynx_customer.id)
             existing = self._get_existing_customer(customer_code)
-
         if not existing:
             existing = self._find_existing_customer(splynx_customer)
 
@@ -662,6 +697,9 @@ class SplynxSyncService:
                 "city": splynx_customer.city,
                 "zip_code": splynx_customer.zip_code,
             }
+            # Backfill splynx_id if not yet set
+            if not existing.splynx_id:
+                existing.splynx_id = str(splynx_customer.id)
             result.updated += 1
             self._customer_cache[splynx_customer.id] = existing.customer_id
             # Record sync
@@ -692,6 +730,7 @@ class SplynxSyncService:
                     "city": splynx_customer.city,
                     "zip_code": splynx_customer.zip_code,
                 },
+                splynx_id=str(splynx_customer.id),
                 created_by_user_id=created_by_user_id,
             )
             self.db.add(customer)

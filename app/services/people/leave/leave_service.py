@@ -1144,7 +1144,7 @@ class LeaveService:
                 user_id=approver_id,
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         return application
 
@@ -1219,7 +1219,7 @@ class LeaveService:
                 user_id=approver_id,
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         return application
 
@@ -1307,7 +1307,7 @@ class LeaveService:
                 new_values={"status": "CANCELLED"},
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         return application
 

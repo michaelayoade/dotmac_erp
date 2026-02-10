@@ -227,6 +227,175 @@ class TestParseXlsxRows:
         assert "already exists" in exc.value.detail
 
 
+class TestParseDateOrgFormat:
+    """Tests for _parse_date with org-configured date formats."""
+
+    def test_parse_dd_mm_yyyy_slash(self, service):
+        """DD/MM/YYYY format common in UK/Nigeria."""
+        result = service._parse_date(
+            "15/01/2026", "transaction_date", 1, date_format="%d/%m/%Y"
+        )
+        assert result == date(2026, 1, 15)
+
+    def test_parse_mm_dd_yyyy_slash(self, service):
+        """MM/DD/YYYY format common in US."""
+        result = service._parse_date(
+            "01/15/2026", "transaction_date", 1, date_format="%m/%d/%Y"
+        )
+        assert result == date(2026, 1, 15)
+
+    def test_parse_dd_mm_yyyy_dash(self, service):
+        """DD-MM-YYYY format."""
+        result = service._parse_date(
+            "15-01-2026", "transaction_date", 1, date_format="%d-%m-%Y"
+        )
+        assert result == date(2026, 1, 15)
+
+    def test_parse_dd_mm_yyyy_dot(self, service):
+        """DD.MM.YYYY format common in Europe."""
+        result = service._parse_date(
+            "15.01.2026", "transaction_date", 1, date_format="%d.%m.%Y"
+        )
+        assert result == date(2026, 1, 15)
+
+    def test_iso_fallback_when_org_format_doesnt_match(self, service):
+        """ISO 8601 dates still work even when org uses a different format."""
+        result = service._parse_date(
+            "2026-01-15", "transaction_date", 1, date_format="%d/%m/%Y"
+        )
+        assert result == date(2026, 1, 15)
+
+    def test_no_date_format_keeps_iso_only(self, service):
+        """Without date_format, only ISO 8601 is accepted (backward compat)."""
+        result = service._parse_date("2026-01-15", "transaction_date", 1)
+        assert result == date(2026, 1, 15)
+
+    def test_no_date_format_rejects_dd_mm_yyyy(self, service):
+        """Without date_format, DD/MM/YYYY is rejected (backward compat)."""
+        with pytest.raises(ValueError, match="invalid transaction_date"):
+            service._parse_date("15/01/2026", "transaction_date", 1)
+
+    def test_error_message_includes_expected_format(self, service):
+        """Error message hints at the org's expected format."""
+        with pytest.raises(ValueError, match="expected format: %d/%m/%Y"):
+            service._parse_date(
+                "not-a-date", "transaction_date", 1, date_format="%d/%m/%Y"
+            )
+
+    def test_datetime_passthrough(self, service):
+        """datetime objects are converted to date regardless of format."""
+        from datetime import datetime
+
+        dt = datetime(2026, 1, 15, 10, 30)
+        result = service._parse_date(dt, "transaction_date", 1, date_format="%d/%m/%Y")
+        assert result == date(2026, 1, 15)
+
+    def test_date_passthrough(self, service):
+        """date objects are returned as-is regardless of format."""
+        d = date(2026, 1, 15)
+        result = service._parse_date(d, "transaction_date", 1, date_format="%d/%m/%Y")
+        assert result == date(2026, 1, 15)
+
+
+class TestParseCsvWithDateFormat:
+    """Tests for parse_csv_rows with org date format."""
+
+    def test_csv_with_dd_mm_yyyy_dates(self, service):
+        """CSV rows with DD/MM/YYYY are parsed correctly when format is set."""
+        csv_content = (
+            b"transaction_date,transaction_type,amount,description\n"
+            b"15/01/2026,credit,50000.00,Salary deposit\n"
+            b"20/01/2026,debit,2500.00,Office rent\n"
+        )
+
+        rows, errors = service.parse_csv_rows(
+            csv_content, "type", date_format="%d/%m/%Y"
+        )
+
+        assert errors == []
+        assert len(rows) == 2
+        assert rows[0]["transaction_date"] == date(2026, 1, 15)
+        assert rows[1]["transaction_date"] == date(2026, 1, 20)
+
+    def test_csv_with_iso_dates_and_no_format(self, service):
+        """CSV with ISO dates works without date_format (backward compat)."""
+        csv_content = (
+            b"transaction_date,transaction_type,amount,description\n"
+            b"2026-01-15,credit,50000.00,Salary\n"
+        )
+
+        rows, errors = service.parse_csv_rows(csv_content, "type")
+
+        assert errors == []
+        assert rows[0]["transaction_date"] == date(2026, 1, 15)
+
+    def test_csv_mixed_dates_iso_fallback(self, service):
+        """CSV with ISO dates still works even when org format is DD/MM/YYYY."""
+        csv_content = (
+            b"transaction_date,transaction_type,amount,description\n"
+            b"2026-01-15,credit,50000.00,Salary\n"
+        )
+
+        rows, errors = service.parse_csv_rows(
+            csv_content, "type", date_format="%d/%m/%Y"
+        )
+
+        assert errors == []
+        assert rows[0]["transaction_date"] == date(2026, 1, 15)
+
+    def test_csv_value_date_with_format(self, service):
+        """value_date column also respects org date format."""
+        csv_content = (
+            b"transaction_date,transaction_type,amount,value_date\n"
+            b"15/01/2026,credit,50000.00,17/01/2026\n"
+        )
+
+        rows, errors = service.parse_csv_rows(
+            csv_content, "type", date_format="%d/%m/%Y"
+        )
+
+        assert errors == []
+        assert rows[0]["value_date"] == date(2026, 1, 17)
+
+
+class TestParseXlsxWithDateFormat:
+    """Tests for parse_xlsx_rows with org date format."""
+
+    def _build_workbook_bytes(self, headers, rows):
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(headers)
+        for row in rows:
+            sheet.append(row)
+        buf = BytesIO()
+        workbook.save(buf)
+        return buf.getvalue()
+
+    def test_xlsx_string_dates_with_format(self, service):
+        """XLSX string dates parsed with org format."""
+        content = self._build_workbook_bytes(
+            headers=["transaction_date", "transaction_type", "amount"],
+            rows=[["15/01/2026", "credit", 50000.0]],
+        )
+
+        rows, errors = service.parse_xlsx_rows(content, "type", date_format="%d/%m/%Y")
+
+        assert errors == []
+        assert rows[0]["transaction_date"] == date(2026, 1, 15)
+
+    def test_xlsx_native_dates_ignore_format(self, service):
+        """XLSX native date objects don't need format parsing."""
+        content = self._build_workbook_bytes(
+            headers=["transaction_date", "transaction_type", "amount"],
+            rows=[[date(2026, 1, 15), "credit", 50000.0]],
+        )
+
+        rows, errors = service.parse_xlsx_rows(content, "type", date_format="%d/%m/%Y")
+
+        assert errors == []
+        assert rows[0]["transaction_date"] == date(2026, 1, 15)
+
+
 class TestGetStatement:
     """Tests for get method."""
 

@@ -2694,7 +2694,11 @@ def prequalification_create(
             status_code=303,
         )
 
-    assert supplier_uuid is not None
+    if supplier_uuid is None:
+        return RedirectResponse(
+            url="/procurement/vendors/prequalification/new?error=Missing+supplier",
+            status_code=303,
+        )
 
     service = VendorPrequalificationService(db)
     try:

@@ -59,9 +59,6 @@ router = APIRouter(
 )
 
 
-logger = logging.getLogger(__name__)
-
-
 def get_db():
     db = SessionLocal()
     try:
@@ -589,6 +586,8 @@ from app.services.inventory import (  # noqa: E402
     LotInput,
     lot_serial_service,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @router.post("/lots", response_model=LotRead, status_code=status.HTTP_201_CREATED)

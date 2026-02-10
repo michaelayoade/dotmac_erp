@@ -439,8 +439,10 @@ class InvoiceWebService:
         content_type = request.headers.get("content-type", "")
         org_id = auth.organization_id
         user_id = auth.user_id
-        assert org_id is not None
-        assert user_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         if "application/json" in content_type:
             data = await request.json()
@@ -449,7 +451,11 @@ class InvoiceWebService:
             data = dict(form_data)
 
         try:
-            input_data = self.build_invoice_input(data)
+            input_data = self.build_invoice_input(
+                db=db,
+                data=data,
+                organization_id=org_id,
+            )
 
             invoice = ar_invoice_service.create_invoice(
                 db=db,
@@ -540,8 +546,10 @@ class InvoiceWebService:
         try:
             org_id = auth.organization_id
             user_id = auth.person_id
-            assert org_id is not None
-            assert user_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            if user_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             invoice = ar_invoice_service.get(db, org_id, invoice_id)
             if not invoice or invoice.organization_id != auth.organization_id:
                 return RedirectResponse(

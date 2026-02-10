@@ -620,8 +620,8 @@ class AdminWebService:
         email: str,
         username: str,
         organization_id: str,
-        password: str = "",
-        password_confirm: str = "",
+        password: str | None = None,
+        password_confirm: str | None = None,
         display_name: str = "",
         phone: str = "",
         status: str = "active",
@@ -1807,6 +1807,12 @@ class AdminWebService:
                 is_active=is_active,
             )
             db.add(org)
+            db.flush()
+            from app.services.settings.bank_directory import (
+                OrgBankDirectoryService,
+            )
+
+            OrgBankDirectoryService(db).seed_defaults(org.organization_id)
             db.commit()
             return org, None
 
@@ -3630,7 +3636,8 @@ class AdminWebService:
             key=key,
             value_type=value_type,
             value=value,
-            is_secret=is_secret == "1",  # noqa: S105
+            # Flag values are not passwords.
+            is_secret=is_secret == "1",  # noqa: S105 # nosec B105
             is_active=is_active == "1",
         )
 
@@ -3707,7 +3714,8 @@ class AdminWebService:
             key=key,
             value_type=value_type,
             value=value,
-            is_secret=is_secret == "1",  # noqa: S105
+            # Flag values are not passwords.
+            is_secret=is_secret == "1",  # noqa: S105 # nosec B105
             is_active=is_active == "1",
         )
 

@@ -1374,7 +1374,9 @@ class PayrollService:
         try:
             org_id = coerce_uuid(org_id)
         except Exception:
-            pass  # Keep original value for mock testing
+            logger.exception(
+                "Ignored exception"
+            )  # Keep original value for mock testing
 
         if year is None:
             year = date.today().year

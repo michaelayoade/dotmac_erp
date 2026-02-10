@@ -234,7 +234,9 @@ class RateLimiter:
                 return self._redis.is_rate_limited(key, max_requests, window_seconds)
             except Exception:
                 # Fall back to in-memory on Redis failure
-                pass
+                logger.exception(
+                    "Redis rate limit check failed; falling back to memory"
+                )
         return self._memory.is_rate_limited(key, max_requests, window_seconds)
 
     def reset(self, key: str) -> None:

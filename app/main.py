@@ -369,7 +369,7 @@ app.include_router(admin_sync_router)  # Admin sync management UI
 app.include_router(admin_crm_sync_router)  # DotMac CRM sync management UI
 app.include_router(profile_web_router)
 app.include_router(finance_web_router, prefix="/finance")
-app.include_router(expense_web_router, prefix="/expense")
+app.include_router(expense_web_router)
 app.include_router(
     finance_settings_web_router
 )  # Has its own /settings prefix (finance)

@@ -164,7 +164,7 @@ async def _extract_csrf_token(request: Request) -> str | None:
             if getattr(request, "_body", None) is None:
                 await request.body()
         except Exception:
-            pass
+            logger.exception("Ignored exception")
         form = getattr(request.state, "csrf_form", None)
         if form is None:
             form = await request.form()

@@ -266,7 +266,8 @@ class SchedulingWebService:
             )
 
         try:
-            assert day_shift_type_id is not None
+            if day_shift_type_id is None:
+                raise ValueError("Day shift type is required")
             svc = SchedulingService(db)
             svc.create_pattern(
                 org_id=org_id,

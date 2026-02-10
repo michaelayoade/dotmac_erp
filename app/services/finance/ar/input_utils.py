@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 from app.services.common import coerce_uuid
@@ -62,7 +62,7 @@ def require_uuid(value: str | None, field_name: str) -> UUID:
     """Parse and require a UUID field."""
     if not value:
         raise ValueError(f"{field_name} is required")
-    return coerce_uuid(value)
+    return cast(UUID, coerce_uuid(value))
 
 
 def resolve_currency_code(db, organization_id: UUID, currency_code: str | None) -> str:

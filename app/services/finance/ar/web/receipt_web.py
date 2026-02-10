@@ -227,7 +227,7 @@ class ReceiptWebService:
                             }
                         )
             except Exception:
-                pass
+                logger.exception("Ignored exception")
 
         # Determine selected customer (if provided)
         selected_customer_id = None
@@ -572,8 +572,10 @@ class ReceiptWebService:
         content_type = request.headers.get("content-type", "")
         org_id = auth.organization_id
         user_id = auth.user_id
-        assert org_id is not None
-        assert user_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         if "application/json" in content_type:
             data = await request.json()
@@ -672,8 +674,10 @@ class ReceiptWebService:
         content_type = request.headers.get("content-type", "")
         org_id = auth.organization_id
         user_id = auth.user_id
-        assert org_id is not None
-        assert user_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         if "application/json" in content_type:
             data = await request.json()
@@ -754,8 +758,10 @@ class ReceiptWebService:
         try:
             org_id = auth.organization_id
             user_id = auth.person_id
-            assert org_id is not None
-            assert user_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            if user_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             receipt = customer_payment_service.get(db, receipt_id)
             if not receipt or receipt.organization_id != auth.organization_id:
                 return RedirectResponse(

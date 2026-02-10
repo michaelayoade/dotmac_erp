@@ -4,6 +4,7 @@ Discipline Management API Router.
 Thin API wrapper for Discipline Management endpoints. All business logic is in services.
 """
 
+import logging
 from datetime import date
 from uuid import UUID
 
@@ -46,6 +47,8 @@ from app.schemas.people.discipline import (
     ScheduleHearingRequest,
 )
 from app.services.people.discipline import DisciplineService
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/discipline",
@@ -399,9 +402,9 @@ def get_employee_active_actions(
         issued_by_name = getattr(action, "issued_by_name", None)
         if issued_by_name is not None and not isinstance(issued_by_name, str):
             try:
-                action.issued_by_name = None
+                action.issued_by_name = None  # type: ignore[attr-defined]
             except Exception:
-                pass
+                logger.exception("Ignored exception")
         normalized.append(CaseActionRead.model_validate(action))
     return normalized
 

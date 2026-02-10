@@ -17,7 +17,6 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger(__name__)
 
 # Suppress noisy loggers
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -39,6 +38,8 @@ from app.services.erpnext.sync.orchestrator import (
     SyncType,
 )
 from app.services.integration_config import IntegrationConfigService
+
+logger = logging.getLogger(__name__)
 
 # ERPNext credentials (from existing config)
 ERPNEXT_URL = "https://erp.dotmac.ng"

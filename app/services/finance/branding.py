@@ -521,7 +521,7 @@ class BrandingService:
 
             cache_service.delete(CacheKeys.org_branding_css(org_id))
         except Exception:
-            pass  # Cache invalidation is best-effort
+            logger.exception("Ignored exception")  # Cache invalidation is best-effort
 
     def generate_css(self, org_id: UUID) -> str:
         """Generate CSS for an organization's branding."""

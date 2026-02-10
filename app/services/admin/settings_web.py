@@ -214,7 +214,7 @@ class AdminSettingsWebService:
                     )
                 ).scalar_one_or_none()
             except Exception:
-                pass
+                logger.exception("Ignored exception")
 
         email_logo_url = get_cached_setting(
             db, SettingDomain.email, "email_logo_url", ""

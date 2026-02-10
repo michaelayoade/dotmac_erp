@@ -8,7 +8,7 @@ import logging
 from datetime import date
 from uuid import UUID
 
-from fastapi import Request, UploadFile
+from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -29,12 +29,14 @@ class HRHandbookWebService:
 
     @staticmethod
     def _require_org_id(auth: WebAuthContext) -> UUID:
-        assert auth.organization_id is not None
+        if auth.organization_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         return auth.organization_id
 
     @staticmethod
     def _require_user_id(auth: WebAuthContext) -> UUID:
-        assert auth.user_id is not None
+        if auth.user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         return auth.user_id
 
     def documents_list_response(

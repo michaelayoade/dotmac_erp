@@ -1,3 +1,4 @@
+import logging
 import os
 from urllib.parse import urlparse
 
@@ -6,6 +7,8 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models.domain_settings import DomainSetting, SettingDomain
+
+logger = logging.getLogger(__name__)
 
 
 def is_openbao_ref(value: str | None) -> bool:
@@ -47,7 +50,7 @@ def _openbao_allow_insecure(db: Session | None) -> bool:
                 )
                 return _coerce_bool(raw, default=False)
         except Exception:
-            pass
+            logger.exception("Ignored exception")
     return _coerce_bool(os.getenv("OPENBAO_ALLOW_INSECURE"), default=False)
 
 

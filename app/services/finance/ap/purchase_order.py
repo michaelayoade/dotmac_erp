@@ -23,6 +23,13 @@ from app.models.finance.ap.purchase_order_line import PurchaseOrderLine
 from app.models.finance.ap.supplier import Supplier
 from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.services.common import coerce_uuid
+from app.services.finance.ap.input_utils import (
+    parse_date_str,
+    parse_decimal,
+    parse_json_list,
+    require_uuid,
+    resolve_currency_code,
+)
 from app.services.finance.platform.sequence import SequenceService
 from app.services.response import ListResponseMixin
 
@@ -67,6 +74,85 @@ class PurchaseOrderService(ListResponseMixin):
     """
     Service for purchase order lifecycle management.
     """
+
+    @staticmethod
+    def build_input_from_payload(
+        db: Session,
+        organization_id: UUID,
+        payload: dict,
+    ) -> PurchaseOrderInput:
+        """Build PurchaseOrderInput from raw payload (strings or JSON)."""
+        org_id = coerce_uuid(organization_id)
+
+        supplier_id = require_uuid(payload.get("supplier_id"), "Supplier")
+        po_date = parse_date_str(payload.get("po_date"), "PO date", True)
+        if po_date is None:
+            raise ValueError("PO date is required")
+        currency_code = resolve_currency_code(db, org_id, payload.get("currency_code"))
+
+        lines_data = parse_json_list(payload.get("lines"), "Lines")
+        lines: list[POLineInput] = []
+        for line in lines_data:
+            if not line.get("description"):
+                raise ValueError("Line description is required")
+            quantity = parse_decimal(
+                line.get("quantity_ordered", line.get("quantity", 0)),
+                "Quantity ordered",
+            )
+            unit_price = parse_decimal(line.get("unit_price", 0), "Unit price")
+            lines.append(
+                POLineInput(
+                    description=line.get("description", ""),
+                    quantity_ordered=quantity,
+                    unit_price=unit_price,
+                    item_id=coerce_uuid(line.get("item_id"))
+                    if line.get("item_id")
+                    else None,
+                    tax_code_id=coerce_uuid(line.get("tax_code_id"))
+                    if line.get("tax_code_id")
+                    else None,
+                    tax_amount=parse_decimal(line.get("tax_amount", 0), "Tax amount"),
+                    expense_account_id=coerce_uuid(line.get("expense_account_id"))
+                    if line.get("expense_account_id")
+                    else None,
+                    asset_account_id=coerce_uuid(line.get("asset_account_id"))
+                    if line.get("asset_account_id")
+                    else None,
+                    cost_center_id=coerce_uuid(line.get("cost_center_id"))
+                    if line.get("cost_center_id")
+                    else None,
+                    project_id=coerce_uuid(line.get("project_id"))
+                    if line.get("project_id")
+                    else None,
+                    segment_id=coerce_uuid(line.get("segment_id"))
+                    if line.get("segment_id")
+                    else None,
+                    delivery_date=parse_date_str(
+                        line.get("delivery_date"), "Delivery date"
+                    ),
+                )
+            )
+
+        exchange_rate: Decimal | None = None
+        if payload.get("exchange_rate") not in (None, ""):
+            exchange_rate = parse_decimal(payload.get("exchange_rate"), "Exchange rate")
+
+        return PurchaseOrderInput(
+            supplier_id=supplier_id,
+            po_date=po_date,
+            currency_code=currency_code,
+            lines=lines,
+            expected_delivery_date=parse_date_str(
+                payload.get("expected_delivery_date"), "Expected delivery date"
+            ),
+            exchange_rate=exchange_rate,
+            shipping_address=payload.get("shipping_address"),
+            terms_and_conditions=payload.get("terms_and_conditions"),
+            budget_id=coerce_uuid(payload.get("budget_id"))
+            if payload.get("budget_id")
+            else None,
+            correlation_id=payload.get("correlation_id"),
+        )
 
     @staticmethod
     def create_po(

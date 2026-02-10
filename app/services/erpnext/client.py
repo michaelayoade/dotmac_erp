@@ -130,7 +130,7 @@ class ERPNextClient:
                     elif "_server_messages" in error_data:
                         error_msg = str(error_data["_server_messages"])
                 except Exception:
-                    pass
+                    logger.exception("Ignored exception")
                 raise ERPNextError(error_msg, response.status_code)
 
             except httpx.RequestError as e:

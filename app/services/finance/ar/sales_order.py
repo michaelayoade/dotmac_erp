@@ -24,6 +24,12 @@ from app.models.finance.ar.sales_order import (
 )
 from app.models.finance.core_config import SequenceType
 from app.services.common import coerce_uuid
+from app.services.finance.ar.input_utils import (
+    parse_date_str,
+    parse_json_list,
+    require_uuid,
+    resolve_currency_code,
+)
 from app.services.finance.common import SyncNumberingService
 
 logger = logging.getLogger(__name__)
@@ -44,10 +50,10 @@ class SalesOrderService:
     @staticmethod
     def create(
         db: Session,
-        organization_id: str,
-        customer_id: str,
+        organization_id: UUID | str,
+        customer_id: UUID | str,
         order_date: date,
-        created_by: str,
+        created_by: UUID | str,
         currency_code: str = settings.default_functional_currency_code,
         exchange_rate: Decimal = Decimal("1"),
         customer_po_number: str | None = None,
@@ -112,6 +118,84 @@ class SalesOrderService:
         db.refresh(so)
 
         return so
+
+    @staticmethod
+    def create_from_payload(
+        db: Session,
+        organization_id: UUID | str,
+        user_id: UUID | str,
+        payload: dict,
+    ) -> SalesOrder:
+        """Create a new sales order from raw payload (strings or JSON)."""
+        org_id = coerce_uuid(organization_id)
+
+        customer_id = require_uuid(payload.get("customer_id"), "Customer")
+        order_date = parse_date_str(payload.get("order_date"), "Order date", True)
+        if order_date is None:
+            raise ValueError("Order date is required")
+        currency_code = resolve_currency_code(db, org_id, payload.get("currency_code"))
+        lines = parse_json_list(
+            payload.get("lines") or payload.get("lines_json"), "Lines"
+        )
+        allow_partial = payload.get("allow_partial_shipment", True)
+        allow_partial_shipment = bool(allow_partial)
+
+        return SalesOrderService.create(
+            db=db,
+            organization_id=org_id,
+            customer_id=customer_id,
+            order_date=order_date,
+            created_by=user_id,
+            currency_code=currency_code,
+            customer_po_number=payload.get("customer_po_number"),
+            reference=payload.get("reference"),
+            requested_date=parse_date_str(
+                payload.get("requested_date"), "Requested date"
+            ),
+            promised_date=parse_date_str(payload.get("promised_date"), "Promised date"),
+            payment_terms_id=payload.get("payment_terms_id") or None,
+            ship_to_name=payload.get("ship_to_name"),
+            ship_to_address=payload.get("ship_to_address"),
+            ship_to_city=payload.get("ship_to_city"),
+            ship_to_state=payload.get("ship_to_state"),
+            ship_to_postal_code=payload.get("ship_to_postal_code"),
+            ship_to_country=payload.get("ship_to_country"),
+            shipping_method=payload.get("shipping_method"),
+            allow_partial_shipment=allow_partial_shipment,
+            internal_notes=payload.get("internal_notes"),
+            customer_notes=payload.get("customer_notes"),
+            lines=lines,
+        )
+
+    @staticmethod
+    def create_shipment_from_payload(
+        db: Session,
+        so_id: UUID | str,
+        user_id: UUID | str,
+        payload: dict,
+    ) -> Shipment:
+        """Create a shipment from raw payload (strings or JSON)."""
+        shipment_date = parse_date_str(
+            payload.get("shipment_date"), "Shipment date", True
+        )
+        if shipment_date is None:
+            raise ValueError("Shipment date is required")
+        line_quantities = parse_json_list(
+            payload.get("line_quantities") or payload.get("line_quantities_json"),
+            "Line quantities",
+        )
+
+        return SalesOrderService.create_shipment(
+            db=db,
+            so_id=str(so_id),
+            shipment_date=shipment_date,
+            created_by=str(user_id),
+            line_quantities=line_quantities,
+            carrier=payload.get("carrier"),
+            tracking_number=payload.get("tracking_number"),
+            shipping_method=payload.get("shipping_method"),
+            notes=payload.get("notes"),
+        )
 
     @staticmethod
     def _add_lines(db: Session, so: SalesOrder, lines: list[dict]) -> None:
@@ -219,7 +303,7 @@ class SalesOrderService:
                 user_id=coerce_uuid(submitted_by),
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         db.commit()
         db.refresh(so)
@@ -261,7 +345,7 @@ class SalesOrderService:
                 user_id=coerce_uuid(approved_by),
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         db.commit()
         db.refresh(so)

@@ -270,7 +270,7 @@ class PayrollLifecycle:
                 user_id=user_id,
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         # Commit before emitting event so handlers see committed state
         event_org_id = slip.organization_id
@@ -360,7 +360,7 @@ class PayrollLifecycle:
                 user_id=user_id,
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         # Commit before emitting event so handlers see committed state
         event_org_id = slip.organization_id
@@ -755,7 +755,7 @@ class PayrollLifecycle:
                 user_id=user_id,
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         # Commit before emitting event so handlers see committed state
         event_org_id = run.organization_id
@@ -843,7 +843,7 @@ class PayrollLifecycle:
                 user_id=user_id,
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         # Commit before emitting event so handlers see committed state
         event_org_id = run.organization_id

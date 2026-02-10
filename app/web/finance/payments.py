@@ -4,11 +4,13 @@ Payment Web Routes.
 HTML pages for payment flow.
 """
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.services.common import coerce_uuid
 from app.services.finance.payments.web import payment_web_service
+from app.services.finance.platform.authorization import AuthorizationService
 from app.templates import templates
 from app.web.deps import (
     WebAuthContext,
@@ -16,9 +18,31 @@ from app.web.deps import (
     get_db,
     optional_web_auth,
     require_finance_access,
+    require_web_auth,
 )
 
 router = APIRouter(prefix="/payments", tags=["payments-web"])
+
+
+def _require_expense_reimburse(
+    auth: WebAuthContext = Depends(require_web_auth),
+    db: Session = Depends(get_db),
+) -> WebAuthContext:
+    if auth.is_admin:
+        return auth
+    if auth.has_permission("expense:claims:reimburse"):
+        return auth
+    if auth.person_id and auth.organization_id:
+        if AuthorizationService.check_permission(
+            db,
+            coerce_uuid(auth.person_id),
+            "expense:claims:reimburse",
+            coerce_uuid(auth.organization_id),
+        ):
+            return auth
+    raise HTTPException(
+        status_code=403, detail="Permission 'expense:claims:reimburse' required"
+    )
 
 
 @router.get("/callback", response_class=HTMLResponse)
@@ -76,7 +100,7 @@ def pay_invoice_page(
 def reimburse_expense_page(
     request: Request,
     expense_claim_id: str,
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(_require_expense_reimburse),
     db: Session = Depends(get_db),
 ):
     """
@@ -108,7 +132,7 @@ def transfer_list(
     search: str | None = None,
     status: str | None = None,
     page: int = Query(default=1, ge=1),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(_require_expense_reimburse),
     db: Session = Depends(get_db),
 ):
     """
@@ -135,7 +159,7 @@ def payment_history(
     request: Request,
     status: str | None = None,
     page: int = Query(default=1, ge=1),
-    auth: WebAuthContext = Depends(require_finance_access),
+    auth: WebAuthContext = Depends(_require_expense_reimburse),
     db: Session = Depends(get_db),
 ):
     """

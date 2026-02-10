@@ -8,6 +8,7 @@ Provides:
 - Asset capitalization integration
 """
 
+import logging
 from decimal import Decimal
 from uuid import UUID
 
@@ -19,6 +20,8 @@ from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.inventory.item import Item
 from app.models.inventory.item_category import ItemCategory
 from app.services.finance.tax.tax_transaction import tax_transaction_service
+
+logger = logging.getLogger(__name__)
 
 
 def determine_debit_account(
@@ -159,7 +162,10 @@ def create_tax_transactions(
             tax_transaction_ids.append(tax_txn.transaction_id)
         except Exception:
             # Log error but don't fail the posting
-            pass
+            logger.exception(
+                "create_tax_transaction failed for AP invoice %s",
+                invoice.invoice_number,
+            )
 
     return tax_transaction_ids
 

@@ -361,7 +361,7 @@ class LifecycleWebService:
             try:
                 valid_ids.append(coerce_uuid(emp_id))
             except Exception:
-                pass
+                logger.exception("Ignored exception")
 
         if not valid_ids:
             return RedirectResponse(
@@ -404,7 +404,7 @@ class LifecycleWebService:
             try:
                 valid_ids.append(coerce_uuid(emp_id))
             except Exception:
-                pass
+                logger.exception("Ignored exception")
 
         if not valid_ids:
             return RedirectResponse(

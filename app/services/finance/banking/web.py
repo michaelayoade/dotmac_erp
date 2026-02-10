@@ -1336,7 +1336,8 @@ class BankingWebService:
         is_active = kwargs.pop("is_active", True)
 
         org_id = auth.organization_id
-        assert org_id is not None  # guaranteed by require_auth
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         service = TransactionCategorizationService()
         rule = service.create_rule(
@@ -1381,7 +1382,8 @@ class BankingWebService:
             )
 
         org_id = auth.organization_id
-        assert org_id is not None  # guaranteed by require_auth
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         service = TransactionCategorizationService()
         rule = service.update_rule(
@@ -1552,7 +1554,7 @@ class BankingWebService:
                 try:
                     upload_file.file.seek(0)
                 except Exception:
-                    pass
+                    logger.exception("Ignored exception")
             filename = upload_file.filename or ""
             lowered = filename.lower()
             if not (
@@ -1596,13 +1598,27 @@ class BankingWebService:
                         "Uploaded file appears empty. Please re-select the file and try again."
                     )
                 else:
+                    # Resolve the org's configured date strftime so the
+                    # parser can accept dates like DD/MM/YYYY, not just ISO.
+                    # NOTE: We read from the DB directly because base_context()
+                    # (which sets the formatting ContextVar) hasn't run yet.
+                    from app.models.finance.core_org.organization import (
+                        Organization,
+                    )
+                    from app.services.formatting_context import DATE_FORMAT_MAP
+
+                    org_date_fmt: str | None = None
+                    if auth.organization_id:
+                        org = db.get(Organization, auth.organization_id)
+                        if org and org.date_format:
+                            org_date_fmt = DATE_FORMAT_MAP.get(org.date_format)
                     if lowered.endswith(".csv"):
                         rows, parse_errors = bank_statement_service.parse_csv_rows(
-                            content, csv_format
+                            content, csv_format, date_format=org_date_fmt
                         )
                     else:
                         rows, parse_errors = bank_statement_service.parse_xlsx_rows(
-                            content, csv_format
+                            content, csv_format, date_format=org_date_fmt
                         )
                     lines_data = rows
                     errors.extend(parse_errors)
@@ -1786,7 +1802,8 @@ class BankingWebService:
         )
 
         org_id = auth.organization_id
-        assert org_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         service = TransactionCategorizationService()
         result = service.apply_rules_to_statement(db, org_id, coerce_uuid(statement_id))
@@ -1816,7 +1833,8 @@ class BankingWebService:
         )
 
         org_id = auth.organization_id
-        assert org_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         service = TransactionCategorizationService()
         try:
@@ -1850,7 +1868,8 @@ class BankingWebService:
         )
 
         org_id = auth.organization_id
-        assert org_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         service = TransactionCategorizationService()
         try:

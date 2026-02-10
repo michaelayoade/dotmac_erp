@@ -117,7 +117,7 @@
             <h3 class="mb-4 font-medium text-slate-900 dark:text-white">Approval Settings</h3>
             <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                    <label class="form-label">Maximum Approval Amount <span class="text-red-500">*</span></label>
+                    <label class="form-label">Maximum Approval Amount (per claim) <span class="text-rose-500">*</span></label>
                     <input type="number" name="max_approval_amount" step="0.01" min="0"
                            value="{{ approver_limit.max_approval_amount if approver_limit else '' }}"
                            class="form-input{% if errors.max_approval_amount %} border-red-300{% endif %}"
@@ -125,22 +125,33 @@
                     {% if errors.max_approval_amount %}
                     <p class="mt-1 text-sm text-red-500">{{ errors.max_approval_amount }}</p>
                     {% endif %}
-                    <p class="mt-1 text-xs text-slate-500">Maximum expense amount this approver can authorize</p>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Maximum amount this approver can authorize on a single claim</p>
                 </div>
-                <div class="flex flex-col justify-end gap-3">
-                    <label class="flex items-center gap-2">
-                        <input type="checkbox" name="can_approve_own_expenses" value="1"
-                               {% if approver_limit and approver_limit.can_approve_own_expenses %}checked{% endif %}
-                               class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">
-                        <span class="text-sm text-slate-700 dark:text-slate-300">Can approve own expenses</span>
-                    </label>
-                    <label class="flex items-center gap-2">
-                        <input type="checkbox" name="is_active" value="1"
-                               {% if (approver_limit and approver_limit.is_active) or not approver_limit %}checked{% endif %}
-                               class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">
-                        <span class="text-sm text-slate-700 dark:text-slate-300">Active</span>
-                    </label>
+                <div>
+                    <label class="form-label">Monthly Approval Budget</label>
+                    <input type="number" name="monthly_approval_budget" step="0.01" min="0"
+                           value="{{ approver_limit.monthly_approval_budget if approver_limit and approver_limit.monthly_approval_budget else '' }}"
+                           class="form-input{% if errors.monthly_approval_budget %} border-red-300{% endif %}"
+                           placeholder="Leave empty for unlimited">
+                    {% if errors.monthly_approval_budget %}
+                    <p class="mt-1 text-sm text-red-500">{{ errors.monthly_approval_budget }}</p>
+                    {% endif %}
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Total amount this approver can approve per calendar month. Resets automatically. Backdated expenses deduct from the expense month.</p>
                 </div>
+            </div>
+            <div class="mt-4 flex flex-col gap-3">
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" name="can_approve_own_expenses" value="1"
+                           {% if approver_limit and approver_limit.can_approve_own_expenses %}checked{% endif %}
+                           class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 dark:border-slate-600">
+                    <span class="text-sm text-slate-700 dark:text-slate-300">Can approve own expenses</span>
+                </label>
+                <label class="flex items-center gap-2">
+                    <input type="checkbox" name="is_active" value="1"
+                           {% if (approver_limit and approver_limit.is_active) or not approver_limit %}checked{% endif %}
+                           class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500 dark:border-slate-600">
+                    <span class="text-sm text-slate-700 dark:text-slate-300">Active</span>
+                </label>
             </div>
         </div>
 

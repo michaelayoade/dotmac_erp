@@ -1220,7 +1220,7 @@ class ARWebService:
                             }
                         )
             except Exception:
-                pass
+                logger.exception("Ignored exception")
 
         # Determine selected customer (if provided)
         selected_customer_id = None

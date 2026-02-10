@@ -24,16 +24,22 @@ from app.rls import set_current_organization_sync
 from app.schemas.sync.dotmac_crm import (
     BulkSyncRequest,
     BulkSyncResponse,
+    CompanyListResponse,
+    CRMMaterialRequestPayload,
+    CRMMaterialRequestResponse,
+    CRMMaterialRequestStatusRead,
     CRMProjectPayload,
     CRMProjectRead,
     CRMTicketPayload,
     CRMTicketRead,
     CRMWorkOrderPayload,
     CRMWorkOrderRead,
+    DepartmentListResponse,
     ExpenseTotalsRequest,
     ExpenseTotalsResponse,
     InventoryItemDetail,
     InventoryListResponse,
+    PersonListResponse,
     SyncError,
 )
 from app.services.auth import hash_api_key
@@ -444,3 +450,142 @@ def list_inventory(
         limit=limit,
         offset=offset,
     )
+
+
+# ============ Workforce / Department Endpoints (ERP → CRM) ============
+
+
+@router.get("/workforce/departments", response_model=DepartmentListResponse)
+def list_departments(
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(_get_db),
+    include_inactive: bool = False,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> DepartmentListResponse:
+    """
+    List departments with members for CRM service team mapping.
+
+    Returns active departments with their managers and employee members.
+    """
+    org_id = auth["organization_id"]
+    service = DotMacCRMSyncService(db)
+    return service.list_departments(
+        org_id,
+        include_inactive=include_inactive,
+        limit=limit,
+        offset=offset,
+    )
+
+
+# ============ Contact Sync Endpoints (ERP → CRM) ============
+
+
+@router.get("/contacts/companies", response_model=CompanyListResponse)
+def list_companies(
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(_get_db),
+    updated_since: datetime | None = None,
+    include_inactive: bool = False,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> CompanyListResponse:
+    """
+    List company/government customers for CRM contacts sync.
+
+    Supports incremental sync via updated_since parameter.
+    """
+    org_id = auth["organization_id"]
+    service = DotMacCRMSyncService(db)
+    return service.list_companies(
+        org_id,
+        updated_since=updated_since,
+        include_inactive=include_inactive,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/contacts/people", response_model=PersonListResponse)
+def list_people_contacts(
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(_get_db),
+    updated_since: datetime | None = None,
+    include_inactive: bool = False,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> PersonListResponse:
+    """
+    List individual customers as person contacts for CRM sync.
+
+    Extracts email/phone from the primary_contact JSONB.
+    """
+    org_id = auth["organization_id"]
+    service = DotMacCRMSyncService(db)
+    return service.list_people_contacts(
+        org_id,
+        updated_since=updated_since,
+        include_inactive=include_inactive,
+        limit=limit,
+        offset=offset,
+    )
+
+
+# ============ Material Request Endpoints (CRM → ERP) ============
+
+
+@router.post(
+    "/material-requests",
+    response_model=CRMMaterialRequestResponse,
+    status_code=201,
+)
+def create_material_request(
+    payload: CRMMaterialRequestPayload,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(_get_db),
+) -> CRMMaterialRequestResponse:
+    """
+    Create a material request from CRM.
+
+    Idempotent: if omni_id already exists, returns the existing request.
+    """
+    org_id = auth["organization_id"]
+    service = DotMacCRMSyncService(db)
+
+    try:
+        result = service.create_material_request(org_id, payload)
+        db.commit()
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        db.rollback()
+        logger.exception(
+            "Failed to create material request omni_id=%s", payload.omni_id
+        )
+        raise HTTPException(status_code=500, detail=_sanitize_error(e)) from e
+
+
+@router.get(
+    "/material-requests/{omni_id}",
+    response_model=CRMMaterialRequestStatusRead,
+)
+def get_material_request_status(
+    omni_id: str,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(_get_db),
+) -> CRMMaterialRequestStatusRead:
+    """
+    Get material request status by CRM omni_id.
+
+    Used by CRM to poll request status after creation.
+    """
+    org_id = auth["organization_id"]
+    service = DotMacCRMSyncService(db)
+
+    result = service.get_material_request_by_crm_id(org_id, omni_id)
+    if not result:
+        raise HTTPException(
+            status_code=404, detail=f"Material request not found: {omni_id}"
+        )
+    return result

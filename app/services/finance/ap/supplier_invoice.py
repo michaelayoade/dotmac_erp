@@ -124,9 +124,10 @@ class SupplierInvoiceService(ListResponseMixin):
                 continue
 
             tax_code_ids: list[UUID] = []
-            if line.get("tax_code_ids"):
+            raw_tax_code_ids = line.get("tax_code_ids") or []
+            if isinstance(raw_tax_code_ids, list):
                 tax_code_ids = [
-                    coerce_uuid(tc_id) for tc_id in line.get("tax_code_ids") if tc_id
+                    coerce_uuid(tc_id) for tc_id in raw_tax_code_ids if tc_id
                 ]
             legacy_tax_code_id = (
                 coerce_uuid(line.get("tax_code_id"))

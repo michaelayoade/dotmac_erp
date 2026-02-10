@@ -259,14 +259,14 @@ class ItemSyncService(BaseSyncService[Item]):
             try:
                 standard_cost = Decimal(str(data["standard_cost"]))
             except Exception:
-                pass
+                logger.exception("Ignored exception")
 
         last_purchase_cost = None
         if data.get("last_purchase_cost"):
             try:
                 last_purchase_cost = Decimal(str(data["last_purchase_cost"]))
             except Exception:
-                pass
+                logger.exception("Ignored exception")
 
         item = Item(
             organization_id=self.organization_id,

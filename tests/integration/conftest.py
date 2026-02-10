@@ -63,12 +63,23 @@ def get_test_database_url() -> str:
 
 
 # Create engine for tests
+_test_db_url = get_test_database_url()
 _test_engine = create_engine(
-    get_test_database_url(),
+    _test_db_url,
     pool_pre_ping=True,
     pool_size=5,
     max_overflow=10,
 )
+
+
+def pytest_collection_modifyitems(config, items):  # type: ignore[no-untyped-def]
+    """Skip all integration tests when PostgreSQL is not available."""
+    if "sqlite" in _test_db_url:
+        skip_marker = pytest.mark.skip(
+            reason="Integration tests require PostgreSQL (DATABASE_URL points to SQLite)"
+        )
+        for item in items:
+            item.add_marker(skip_marker)
 
 
 @pytest.fixture(scope="session")

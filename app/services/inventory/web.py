@@ -11,7 +11,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import case, func, or_
 from sqlalchemy.orm import Session
@@ -786,7 +786,8 @@ class InventoryWebService:
     ) -> HTMLResponse | RedirectResponse:
         try:
             org_id = auth.organization_id
-            assert org_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             resolved_currency = (
                 currency_code
                 or org_context_service.get_functional_currency(
@@ -892,7 +893,8 @@ class InventoryWebService:
             if not item_name or not category_id:
                 raise ValueError("Item name and category are required.")
             org_id = auth.organization_id
-            assert org_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             resolved_currency = (
                 currency_code
                 or org_context_service.get_functional_currency(
@@ -1153,7 +1155,8 @@ class InventoryWebService:
     ) -> HTMLResponse | RedirectResponse:
         try:
             org_id = auth.organization_id
-            assert org_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             input_data = ItemCategoryInput(
                 category_code=category_code,
                 category_name=category_name,
@@ -1203,7 +1206,8 @@ class InventoryWebService:
     ) -> HTMLResponse | RedirectResponse:
         try:
             org_id = auth.organization_id
-            assert org_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             updates = {
                 "category_name": category_name,
                 "inventory_account_id": UUID(inventory_account_id),
@@ -1247,7 +1251,8 @@ class InventoryWebService:
     ) -> RedirectResponse:
         try:
             org_id = auth.organization_id
-            assert org_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             category = item_category_service.get(db, category_id, auth.organization_id)
             if category.is_active:
                 item_category_service.deactivate_category(db, org_id, UUID(category_id))
@@ -1471,7 +1476,8 @@ class InventoryWebService:
     ) -> HTMLResponse | RedirectResponse:
         try:
             org_id = auth.organization_id
-            assert org_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             # Build address dict
             address = None
             if any([address_line1, address_city, address_state, address_country]):
@@ -1534,7 +1540,8 @@ class InventoryWebService:
     ) -> HTMLResponse | RedirectResponse:
         try:
             org_id = auth.organization_id
-            assert org_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             # Build address dict
             address = None
             if any([address_line1, address_city, address_state, address_country]):
@@ -1582,7 +1589,8 @@ class InventoryWebService:
     ) -> RedirectResponse:
         try:
             org_id = auth.organization_id
-            assert org_id is not None
+            if org_id is None:
+                raise HTTPException(status_code=401, detail="Authentication required")
             warehouse = warehouse_service.get(db, warehouse_id, auth.organization_id)
             if warehouse.is_active:
                 warehouse_service.deactivate_warehouse(db, org_id, UUID(warehouse_id))
@@ -1831,8 +1839,10 @@ class InventoryTransactionWebService:
 
         org_id = auth.organization_id
         user_id = auth.user_id
-        assert org_id is not None
-        assert user_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         try:
             # Parse inputs
@@ -1914,8 +1924,10 @@ class InventoryTransactionWebService:
 
         org_id = auth.organization_id
         user_id = auth.user_id
-        assert org_id is not None
-        assert user_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         try:
             qty = Decimal(quantity)
@@ -1998,8 +2010,10 @@ class InventoryTransactionWebService:
 
         org_id = auth.organization_id
         user_id = auth.user_id
-        assert org_id is not None
-        assert user_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         try:
             qty = Decimal(quantity)

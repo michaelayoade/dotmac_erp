@@ -353,6 +353,11 @@ class ExpenseApproverLimit(Base, AuditMixin):
         Numeric(15, 2),
         nullable=False,
     )
+    monthly_approval_budget: Mapped[Decimal | None] = mapped_column(
+        Numeric(15, 2),
+        nullable=True,
+        comment="Monthly budget cap for total approvals. NULL = unlimited.",
+    )
     currency_code: Mapped[str] = mapped_column(
         String(3),
         default="NGN",

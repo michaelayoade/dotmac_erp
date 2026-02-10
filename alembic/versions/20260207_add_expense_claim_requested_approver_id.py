@@ -34,15 +34,26 @@ def upgrade() -> None:
             ),
             schema="expense",
         )
-        op.execute(
-            """
-            ALTER TABLE expense.expense_claim
-            ADD CONSTRAINT fk_expense_claim_requested_approver
-            FOREIGN KEY (requested_approver_id)
-            REFERENCES hr.employee(employee_id)
-            ON DELETE SET NULL
-            """
+
+    columns = {
+        col["name"] for col in inspector.get_columns("expense_claim", schema="expense")
+    }
+    if "requested_approver_id" in columns:
+        fks = inspector.get_foreign_keys("expense_claim", schema="expense")
+        has_fk = any(
+            fk.get("name") == "fk_expense_claim_requested_approver" for fk in fks
         )
+        if not has_fk:
+            op.create_foreign_key(
+                "fk_expense_claim_requested_approver",
+                "expense_claim",
+                "employee",
+                ["requested_approver_id"],
+                ["employee_id"],
+                source_schema="expense",
+                referent_schema="hr",
+                ondelete="SET NULL",
+            )
 
 
 def downgrade() -> None:

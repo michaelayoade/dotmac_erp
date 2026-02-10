@@ -73,7 +73,7 @@ def _estimate_entropy_bytes(secret: str) -> int:
                 decoded = base64.b64decode(secret + "==")
                 return len(decoded)
             except Exception:
-                pass
+                logger.exception("Ignored exception")
 
     # For non-base64 secrets, estimate based on character set
     has_upper = bool(re.search(r"[A-Z]", secret))

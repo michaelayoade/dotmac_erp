@@ -342,7 +342,7 @@ class LoanService:
                 user_id=user_id,
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         logger.info("Approved loan %s", loan.loan_number)
         return loan
@@ -389,7 +389,7 @@ class LoanService:
                 user_id=coerce_uuid(rejected_by_id),
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         logger.info("Rejected loan %s: %s", loan.loan_number, reason)
         return loan

@@ -42,6 +42,9 @@ from app.models.notification import (  # noqa: F401
 from app.models.person import ContactMethod, Gender, Person, PersonStatus  # noqa: F401
 from app.models.rbac import Permission, PersonRole, Role, RolePermission  # noqa: F401
 from app.models.scheduler import ScheduledTask, ScheduleType  # noqa: F401
+from app.models.settings.org_bank_directory import (  # noqa: F401
+    OrgBankDirectory,
+)
 
 # Sync Models - External system sync state tracking
 from app.models.sync import (  # noqa: F401

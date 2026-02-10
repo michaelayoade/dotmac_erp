@@ -263,7 +263,7 @@ class AttendanceWebService:
             try:
                 valid_ids.append(coerce_uuid(emp_id))
             except Exception:
-                pass
+                logger.exception("Ignored exception")
 
         if not valid_ids:
             return RedirectResponse(
@@ -1151,7 +1151,7 @@ class AttendanceWebService:
             try:
                 valid_ids.append(coerce_uuid(req_id))
             except Exception:
-                pass
+                logger.exception("Ignored exception")
 
         if not valid_ids:
             return RedirectResponse(
@@ -1192,7 +1192,7 @@ class AttendanceWebService:
             try:
                 valid_ids.append(coerce_uuid(req_id))
             except Exception:
-                pass
+                logger.exception("Ignored exception")
 
         if not valid_ids:
             return RedirectResponse(

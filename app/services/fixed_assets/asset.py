@@ -27,6 +27,8 @@ from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
 
+ASSET_STATUS_UPDATE_ERROR = "Cannot update '{key}' after asset activation"
+
 
 @dataclass
 class AssetCategoryInput:
@@ -483,7 +485,7 @@ class AssetService(ListResponseMixin):
                 if asset.status != AssetStatus.DRAFT:
                     raise HTTPException(
                         status_code=400,
-                        detail=f"Cannot update '{key}' after asset activation",
+                        detail=ASSET_STATUS_UPDATE_ERROR.format(key=key),
                     )
                 setattr(asset, key, value)
 

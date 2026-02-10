@@ -1,5 +1,8 @@
+import logging
 from collections.abc import Callable
 from typing import Any, ClassVar
+
+logger = logging.getLogger(__name__)
 
 
 def list_response(
@@ -64,6 +67,6 @@ class ListResponseMixin:
                 )
             except Exception:
                 # Fall back to len(items) if count fails
-                pass
+                logger.exception("count failed for %s", cls.__name__)
 
         return list_response(items, limit, offset, total)

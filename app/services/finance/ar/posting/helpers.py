@@ -5,6 +5,7 @@ Provides:
 - Tax transaction creation for AR invoices
 """
 
+import logging
 from decimal import Decimal
 from uuid import UUID
 
@@ -14,6 +15,8 @@ from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.invoice import Invoice
 from app.models.finance.ar.invoice_line import InvoiceLine
 from app.services.finance.tax.tax_transaction import tax_transaction_service
+
+logger = logging.getLogger(__name__)
 
 
 def create_tax_transactions(
@@ -86,6 +89,9 @@ def create_tax_transactions(
             tax_transaction_ids.append(tax_txn.transaction_id)
         except Exception:
             # Log error but don't fail the posting
-            pass
+            logger.exception(
+                "create_tax_transaction failed for AR invoice %s",
+                invoice.invoice_number,
+            )
 
     return tax_transaction_ids

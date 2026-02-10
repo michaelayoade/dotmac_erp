@@ -942,7 +942,7 @@ class ExpenseService:
                 message="Your expense claim has been submitted for approval.",
                 channel=NotificationChannel.IN_APP,
                 action_url=f"/expense/claims/{claim.claim_id}",
-                actor_id=claim.employee_id,
+                actor_id=claim.employee.person_id,
             )
         except Exception as e:
             logger.exception("Submission confirmation notification failed: %s", e)
@@ -988,7 +988,9 @@ class ExpenseService:
                             recipient_id=approver.person_id,
                             submitter_name=submitter_name,
                             amount=str(claim.total_claimed_amount),
-                            actor_id=claim.employee_id,
+                            actor_id=claim.employee.person_id
+                            if claim.employee
+                            else None,
                         )
                     except Exception as e:
                         logger.exception(
@@ -1043,6 +1045,7 @@ class ExpenseService:
             # Validate approver authority before allowing approval
             if approver_id:
                 self._validate_approver_authority(org_id, claim, approver_id)
+                self._validate_approver_monthly_budget(org_id, claim, approver_id)
 
                 # Self-approval prevention (separation of duties)
                 if claim.employee_id:
@@ -1129,6 +1132,7 @@ class ExpenseService:
 
             # Send notifications if requested
             if send_notification:
+                approver = None
                 approver_name = None
                 if approver_id:
                     from app.models.people.hr.employee import Employee
@@ -1162,7 +1166,7 @@ class ExpenseService:
                             claim_number=claim.claim_number,
                             recipient_id=claim.employee.person_id,
                             approver_name=approver_name or "Manager",
-                            actor_id=approver_id,
+                            actor_id=approver.person_id if approver else None,
                         )
                     except Exception as e:
                         logger.exception("In-app approval notification failed: %s", e)
@@ -1259,6 +1263,27 @@ class ExpenseService:
             )
             raise ApproverAuthorityError(claim_amount, max_amount)
 
+    def _validate_approver_monthly_budget(
+        self,
+        org_id: UUID,
+        claim: ExpenseClaim,
+        approver_id: UUID,
+    ) -> None:
+        """Validate the approver has remaining monthly budget for the expense month.
+
+        Delegates to ``ExpenseLimitService.check_approver_monthly_budget``
+        which raises ``ApproverBudgetExhaustedError`` on failure.
+        When no monthly budget is configured the check passes silently.
+        """
+        from app.services.expense.limit_service import ExpenseLimitService
+
+        limit_svc = ExpenseLimitService(self.db, self.ctx)
+        claim_amount = claim.total_claimed_amount or Decimal("0")
+        expense_date = claim.claim_date or date.today()
+        limit_svc.check_approver_monthly_budget(
+            org_id, approver_id, claim_amount, expense_date
+        )
+
     def reject_claim(
         self,
         org_id: UUID,
@@ -1302,6 +1327,7 @@ class ExpenseService:
 
             # Send notifications if requested
             if send_notification:
+                approver = None
                 approver_name = None
                 if approver_id:
                     from app.models.people.hr.employee import Employee
@@ -1338,7 +1364,7 @@ class ExpenseService:
                             recipient_id=claim.employee.person_id,
                             rejector_name=approver_name or "Manager",
                             reason=reason,
-                            actor_id=approver_id,
+                            actor_id=approver.person_id if approver else None,
                         )
                     except Exception as e:
                         logger.exception("In-app rejection notification failed: %s", e)

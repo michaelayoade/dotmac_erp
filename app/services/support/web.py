@@ -280,7 +280,7 @@ def _format_ticket_for_detail(
                     or "Unknown"
                 )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
     if db and ticket.updated_by_id:
         try:
             updater = db.get(Person, ticket.updated_by_id)
@@ -290,7 +290,7 @@ def _format_ticket_for_detail(
                     or "Unknown"
                 )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
     return base
 

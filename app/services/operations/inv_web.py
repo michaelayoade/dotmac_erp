@@ -54,7 +54,8 @@ class OperationsInventoryWebService:
     @staticmethod
     def _org_id_str(auth: WebAuthContext) -> str:
         """Get organization ID as string for view helpers."""
-        assert auth.organization_id is not None
+        if auth.organization_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         return str(auth.organization_id)
 
     def material_request_list_response(
@@ -114,8 +115,10 @@ class OperationsInventoryWebService:
         """Create new material request from parsed form data."""
         org_id = auth.organization_id
         user_id = auth.user_id
-        assert org_id is not None
-        assert user_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         request_type = _safe_form_text(
             _form_value(form_data, "request_type") or "PURCHASE"
@@ -250,8 +253,10 @@ class OperationsInventoryWebService:
         """Update material request from parsed form data."""
         org_id = auth.organization_id
         user_id = auth.user_id
-        assert org_id is not None
-        assert user_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         request_type = _safe_form_text(
             _form_value(form_data, "request_type") or "PURCHASE"
@@ -320,8 +325,10 @@ class OperationsInventoryWebService:
         """Submit material request."""
         org_id = auth.organization_id
         user_id = auth.user_id
-        assert org_id is not None
-        assert user_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         try:
             MaterialRequestWebService.submit_request(
                 db,
@@ -347,8 +354,10 @@ class OperationsInventoryWebService:
         """Cancel material request."""
         org_id = auth.organization_id
         user_id = auth.user_id
-        assert org_id is not None
-        assert user_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         try:
             MaterialRequestWebService.cancel_request(
                 db,
@@ -374,8 +383,10 @@ class OperationsInventoryWebService:
         """Approve material request and auto-deduct stock."""
         org_id = auth.organization_id
         user_id = auth.user_id
-        assert org_id is not None
-        assert user_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         try:
             MaterialRequestWebService.approve_request(
                 db,
@@ -399,7 +410,8 @@ class OperationsInventoryWebService:
     ) -> RedirectResponse:
         """Delete a material request."""
         org_id = auth.organization_id
-        assert org_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         try:
             MaterialRequestWebService.delete_request(db, org_id, request_id)
             db.commit()
@@ -1016,8 +1028,10 @@ class OperationsInventoryWebService:
 
         org_id = auth.organization_id
         user_id = auth.user_id
-        assert org_id is not None
-        assert user_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         form = await request.form()
 
@@ -1114,7 +1128,8 @@ class OperationsInventoryWebService:
         from app.models.inventory.bom import BillOfMaterials, BOMComponent, BOMType
 
         org_id = auth.organization_id
-        assert org_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         form = await request.form()
 
@@ -1326,8 +1341,10 @@ class OperationsInventoryWebService:
 
         org_id = auth.organization_id
         user_id = auth.user_id
-        assert org_id is not None
-        assert user_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         try:
             InventoryCountService.start_count(
                 db,
@@ -1350,7 +1367,8 @@ class OperationsInventoryWebService:
         from app.services.inventory.count import InventoryCountService
 
         org_id = auth.organization_id
-        assert org_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         try:
             InventoryCountService.complete_count(
                 db,
@@ -1373,8 +1391,10 @@ class OperationsInventoryWebService:
 
         org_id = auth.organization_id
         user_id = auth.user_id
-        assert org_id is not None
-        assert user_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         try:
             InventoryCountService.post_count(
                 db,
@@ -1404,8 +1424,10 @@ class OperationsInventoryWebService:
 
         org_id = auth.organization_id
         user_id = auth.user_id
-        assert org_id is not None
-        assert user_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         form = await request.form()
         counted_qty_str = _safe_form_text(form.get("counted_quantity"))
@@ -1625,7 +1647,8 @@ class OperationsInventoryWebService:
         from app.models.inventory.inventory_lot import InventoryLot
 
         org_id = auth.organization_id
-        assert org_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         try:
             lid = UUID_Type(lot_id)
@@ -1707,7 +1730,8 @@ class OperationsInventoryWebService:
         )
 
         org_id = auth.organization_id
-        assert org_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
 
         form = await request.form()
 

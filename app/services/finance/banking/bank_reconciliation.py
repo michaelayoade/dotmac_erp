@@ -570,7 +570,7 @@ class BankReconciliationService:
                         }
                     )
                 except Exception:
-                    pass  # Skip failed matches
+                    logger.exception("Ignored exception")  # Skip failed matches
 
         # Count remaining unmatched
         result.unmatched_statement_lines = len(
@@ -712,7 +712,7 @@ class BankReconciliationService:
                 new_values={"status": "pending_review"},
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         db.commit()
         db.refresh(reconciliation)
@@ -774,7 +774,7 @@ class BankReconciliationService:
                 user_id=approved_by,
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         db.commit()
         db.refresh(reconciliation)
@@ -848,7 +848,7 @@ class BankReconciliationService:
                 user_id=rejected_by,
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         db.commit()
         db.refresh(reconciliation)

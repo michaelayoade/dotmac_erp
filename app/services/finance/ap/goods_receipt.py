@@ -25,6 +25,12 @@ from app.models.finance.core_config.numbering_sequence import SequenceType
 from app.models.inventory.inventory_transaction import TransactionType
 from app.models.inventory.item import Item
 from app.services.common import coerce_uuid
+from app.services.finance.ap.input_utils import (
+    parse_date_str,
+    parse_decimal,
+    parse_json_list,
+    require_uuid,
+)
 from app.services.finance.platform.sequence import SequenceService
 from app.services.inventory.transaction import (
     InventoryTransactionService,
@@ -71,6 +77,59 @@ class GoodsReceiptService(ListResponseMixin):
     """
     Service for goods receipt lifecycle management.
     """
+
+    @staticmethod
+    def build_input_from_payload(
+        db: Session,
+        organization_id: UUID,
+        payload: dict,
+    ) -> GoodsReceiptInput:
+        """Build GoodsReceiptInput from raw payload (strings or JSON)."""
+        _ = db
+        _ = organization_id
+
+        receipt_date = parse_date_str(payload.get("receipt_date"), "Receipt date", True)
+        if receipt_date is None:
+            raise ValueError("Receipt date is required")
+
+        lines_data = parse_json_list(payload.get("lines"), "Lines")
+        lines: list[GRLineInput] = []
+        for line in lines_data:
+            po_line_id = require_uuid(line.get("po_line_id"), "PO line")
+            quantity_received = parse_decimal(
+                line.get("quantity_received", line.get("quantity", 0)),
+                "Quantity received",
+            )
+            serial_numbers = line.get("serial_numbers")
+            if isinstance(serial_numbers, str):
+                serial_numbers = [
+                    s.strip() for s in serial_numbers.split(",") if s.strip()
+                ]
+            if serial_numbers is not None and not isinstance(serial_numbers, list):
+                serial_numbers = None
+
+            lines.append(
+                GRLineInput(
+                    po_line_id=po_line_id,
+                    quantity_received=quantity_received,
+                    location_id=coerce_uuid(line.get("location_id"))
+                    if line.get("location_id")
+                    else None,
+                    lot_number=line.get("lot_number"),
+                    serial_numbers=serial_numbers,
+                )
+            )
+
+        po_id = require_uuid(payload.get("po_id"), "Purchase order")
+        return GoodsReceiptInput(
+            po_id=po_id,
+            receipt_date=receipt_date,
+            lines=lines,
+            warehouse_id=coerce_uuid(payload.get("warehouse_id"))
+            if payload.get("warehouse_id")
+            else None,
+            notes=payload.get("notes"),
+        )
 
     @staticmethod
     def create_receipt(

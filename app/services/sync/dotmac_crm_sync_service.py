@@ -5,16 +5,20 @@ Handles:
 - Syncing projects, tickets, and work orders from DotMac CRM
 - Mapping CRM entities to local ERP entities
 - Providing expense totals for CRM entities
+- Workforce/department, company/person contacts for CRM
+- Material request creation from CRM
 """
+
+from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
 from app.models.finance.core_org.project import Project, ProjectStatus, ProjectType
@@ -28,16 +32,27 @@ from app.models.sync.dotmac_crm_sync import (
     CRMSyncStatus,
 )
 from app.schemas.sync.dotmac_crm import (
+    CompanyContactRead,
+    CompanyListResponse,
+    CRMMaterialRequestItemRead,
+    CRMMaterialRequestPayload,
+    CRMMaterialRequestResponse,
+    CRMMaterialRequestStatusRead,
     CRMProjectPayload,
     CRMProjectRead,
     CRMTicketPayload,
     CRMTicketRead,
     CRMWorkOrderPayload,
     CRMWorkOrderRead,
+    DepartmentListResponse,
+    DepartmentMemberRead,
+    DepartmentRead,
     ExpenseTotals,
     InventoryItemDetail,
     InventoryItemStock,
     InventoryListResponse,
+    PersonContactRead,
+    PersonListResponse,
     WarehouseStock,
 )
 
@@ -439,7 +454,6 @@ class DotMacCRMSyncService:
             .where(
                 Item.organization_id == org_id,
                 Item.is_active.is_(True),
-                Item.track_inventory.is_(True),
             )
         )
 
@@ -826,6 +840,393 @@ class DotMacCRMSyncService:
                     result[crm_id] = totals
 
         return result
+
+    # ============ Workforce / Department Endpoints ============
+
+    def list_departments(
+        self,
+        org_id: UUID,
+        *,
+        include_inactive: bool = False,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> DepartmentListResponse:
+        """List departments with members for CRM service-team mapping."""
+        from app.models.people.hr.department import Department
+        from app.models.people.hr.employee import Employee, EmployeeStatus
+
+        stmt = select(Department).where(Department.organization_id == org_id)
+        if not include_inactive:
+            stmt = stmt.where(Department.is_active.is_(True))
+
+        # Count total before pagination
+        count_stmt = select(func.count()).select_from(
+            stmt.with_only_columns(Department.department_id).subquery()
+        )
+        total = self.db.scalar(count_stmt) or 0
+
+        stmt = (
+            stmt.options(
+                selectinload(Department.head).joinedload(Employee.person),
+                selectinload(Department.employees).joinedload(Employee.person),
+            )
+            .order_by(Department.department_name)
+            .offset(offset)
+            .limit(limit)
+        )
+        departments = list(self.db.scalars(stmt).unique().all())
+
+        result: list[DepartmentRead] = []
+        for dept in departments:
+            # Build manager from head relationship
+            manager = None
+            if dept.head and dept.head.person:
+                p = dept.head.person
+                manager = DepartmentMemberRead(
+                    employee_id=dept.head.employee_id,
+                    email=p.email,
+                    full_name=f"{p.first_name} {p.last_name}".strip(),
+                    role="manager",
+                    is_active=dept.head.status == EmployeeStatus.ACTIVE,
+                )
+
+            # Build members from employees relationship
+            members: list[DepartmentMemberRead] = []
+            for emp in dept.employees:
+                if not include_inactive and emp.status != EmployeeStatus.ACTIVE:
+                    continue
+                if emp.person:
+                    ep = emp.person
+                    members.append(
+                        DepartmentMemberRead(
+                            employee_id=emp.employee_id,
+                            email=ep.email,
+                            full_name=f"{ep.first_name} {ep.last_name}".strip(),
+                            role=None,
+                            is_active=emp.status == EmployeeStatus.ACTIVE,
+                        )
+                    )
+
+            result.append(
+                DepartmentRead(
+                    department_id=dept.department_code,
+                    department_name=dept.department_name,
+                    department_type="operations",
+                    manager=manager,
+                    members=members,
+                )
+            )
+
+        return DepartmentListResponse(
+            departments=result,
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
+
+    # ============ Contact Sync (ERP → CRM) ============
+
+    def list_companies(
+        self,
+        org_id: UUID,
+        *,
+        updated_since: datetime | None = None,
+        include_inactive: bool = False,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> CompanyListResponse:
+        """List company/government customers for CRM contacts sync."""
+        from app.models.finance.ar.customer import Customer, CustomerType
+
+        stmt = select(Customer).where(
+            Customer.organization_id == org_id,
+            Customer.customer_type.in_([CustomerType.COMPANY, CustomerType.GOVERNMENT]),
+        )
+        if not include_inactive:
+            stmt = stmt.where(Customer.is_active.is_(True))
+        if updated_since:
+            stmt = stmt.where(
+                func.coalesce(Customer.updated_at, Customer.created_at) >= updated_since
+            )
+
+        count_stmt = select(func.count()).select_from(
+            stmt.with_only_columns(Customer.customer_id).subquery()
+        )
+        total = self.db.scalar(count_stmt) or 0
+
+        stmt = stmt.order_by(Customer.legal_name).offset(offset).limit(limit + 1)
+        customers = list(self.db.scalars(stmt).all())
+        has_more = len(customers) > limit
+        if has_more:
+            customers = customers[:limit]
+
+        companies = [
+            CompanyContactRead(
+                customer_id=c.customer_id,
+                customer_code=c.customer_code,
+                legal_name=c.legal_name,
+                tax_id=c.tax_identification_number,
+                billing_address=c.billing_address,
+                primary_contact=c.primary_contact,
+                crm_id=c.crm_id,
+            )
+            for c in customers
+        ]
+
+        return CompanyListResponse(
+            companies=companies,
+            total=total,
+            limit=limit,
+            offset=offset,
+            has_more=has_more,
+        )
+
+    def list_people_contacts(
+        self,
+        org_id: UUID,
+        *,
+        updated_since: datetime | None = None,
+        include_inactive: bool = False,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> PersonListResponse:
+        """List individual customers as person contacts for CRM sync."""
+        from app.models.finance.ar.customer import Customer, CustomerType
+
+        stmt = select(Customer).where(
+            Customer.organization_id == org_id,
+            Customer.customer_type == CustomerType.INDIVIDUAL,
+        )
+        if not include_inactive:
+            stmt = stmt.where(Customer.is_active.is_(True))
+        if updated_since:
+            stmt = stmt.where(
+                func.coalesce(Customer.updated_at, Customer.created_at) >= updated_since
+            )
+
+        count_stmt = select(func.count()).select_from(
+            stmt.with_only_columns(Customer.customer_id).subquery()
+        )
+        total = self.db.scalar(count_stmt) or 0
+
+        stmt = stmt.order_by(Customer.legal_name).offset(offset).limit(limit + 1)
+        customers = list(self.db.scalars(stmt).all())
+        has_more = len(customers) > limit
+        if has_more:
+            customers = customers[:limit]
+
+        contacts: list[PersonContactRead] = []
+        for c in customers:
+            # Extract email/phone from primary_contact JSONB
+            email = None
+            phone = None
+            if c.primary_contact and isinstance(c.primary_contact, dict):
+                email = c.primary_contact.get("email")
+                phone = c.primary_contact.get("phone")
+
+            contacts.append(
+                PersonContactRead(
+                    contact_id=c.customer_id,
+                    customer_code=c.customer_code,
+                    legal_name=c.legal_name,
+                    email=email,
+                    phone=phone,
+                    crm_id=c.crm_id,
+                )
+            )
+
+        return PersonListResponse(
+            contacts=contacts,
+            total=total,
+            limit=limit,
+            offset=offset,
+            has_more=has_more,
+        )
+
+    # ============ Material Request (CRM → ERP) ============
+
+    def create_material_request(
+        self,
+        org_id: UUID,
+        data: CRMMaterialRequestPayload,
+    ) -> CRMMaterialRequestResponse:
+        """
+        Create a material request from CRM.
+
+        Idempotent: if a request with the same omni_id already exists, return it.
+
+        Raises:
+            ValueError: If an item_code is not found or request_type is invalid.
+        """
+        from app.models.finance.core_config.numbering_sequence import SequenceType
+        from app.models.inventory.item import Item
+        from app.models.inventory.material_request import (
+            MaterialRequest,
+            MaterialRequestItem,
+            MaterialRequestStatus,
+            MaterialRequestType,
+        )
+        from app.services.finance.common.numbering import SyncNumberingService
+
+        # Idempotency check — return existing if already created
+        existing_stmt = select(MaterialRequest).where(
+            MaterialRequest.organization_id == org_id,
+            MaterialRequest.crm_id == data.omni_id,
+        )
+        existing = self.db.scalar(existing_stmt)
+        if existing:
+            logger.info(
+                "Material request already exists for omni_id=%s, returning existing",
+                data.omni_id,
+            )
+            return CRMMaterialRequestResponse(
+                request_id=existing.request_id,
+                request_number=existing.request_number,
+                status=existing.status.value,
+                omni_id=data.omni_id,
+            )
+
+        # Resolve cross-references
+        project_id = self._resolve_project_id(org_id, data.project_crm_id)
+        ticket_id = self._resolve_ticket_id(org_id, data.ticket_crm_id)
+        employee_id = self._resolve_employee_id(org_id, data.requested_by_email)
+
+        # Map request type
+        request_type_map = {
+            "PURCHASE": MaterialRequestType.PURCHASE,
+            "TRANSFER": MaterialRequestType.TRANSFER,
+            "ISSUE": MaterialRequestType.ISSUE,
+            "MANUFACTURE": MaterialRequestType.MANUFACTURE,
+        }
+        request_type = request_type_map.get(data.request_type.upper())
+        if not request_type:
+            raise ValueError(
+                f"Invalid request_type: {data.request_type}. "
+                f"Must be one of: {', '.join(request_type_map)}"
+            )
+
+        # Parse schedule date
+        schedule_date_val: date | None = None
+        if data.schedule_date:
+            try:
+                schedule_date_val = date.fromisoformat(data.schedule_date)
+            except ValueError as exc:
+                raise ValueError(
+                    f"Invalid schedule_date format: {data.schedule_date}. Use YYYY-MM-DD."
+                ) from exc
+
+        # Resolve items and validate
+        resolved_items: list[tuple] = []
+        for item_payload in data.items:
+            item_stmt = select(Item).where(
+                Item.organization_id == org_id,
+                Item.item_code == item_payload.item_code,
+            )
+            item = self.db.scalar(item_stmt)
+            if not item:
+                raise ValueError(f"Item not found: {item_payload.item_code}")
+            resolved_items.append((item.item_id, item_payload))
+
+        # Generate request number
+        numbering = SyncNumberingService(self.db)
+        request_number = numbering.generate_next_number(
+            org_id, SequenceType.MATERIAL_REQUEST
+        )
+
+        # Create header
+        mr = MaterialRequest(
+            organization_id=org_id,
+            request_number=request_number,
+            request_type=request_type,
+            status=MaterialRequestStatus.SUBMITTED,
+            schedule_date=schedule_date_val,
+            requested_by_id=employee_id,
+            project_id=project_id,
+            ticket_id=ticket_id,
+            remarks=data.remarks,
+            crm_id=data.omni_id,
+        )
+        self.db.add(mr)
+        self.db.flush()  # get request_id
+
+        # Create line items
+        for seq, (inv_item_id, item_payload) in enumerate(resolved_items, start=1):
+            line = MaterialRequestItem(
+                organization_id=org_id,
+                request_id=mr.request_id,
+                inventory_item_id=inv_item_id,
+                requested_qty=item_payload.quantity,
+                uom=item_payload.uom,
+                sequence=seq,
+                project_id=project_id,
+                ticket_id=ticket_id,
+            )
+            self.db.add(line)
+
+        self.db.flush()
+
+        logger.info(
+            "Created material request %s (crm_id=%s) with %d items",
+            request_number,
+            data.omni_id,
+            len(resolved_items),
+        )
+
+        return CRMMaterialRequestResponse(
+            request_id=mr.request_id,
+            request_number=mr.request_number,
+            status=mr.status.value,
+            omni_id=data.omni_id,
+        )
+
+    def get_material_request_by_crm_id(
+        self,
+        org_id: UUID,
+        omni_id: str,
+    ) -> CRMMaterialRequestStatusRead | None:
+        """Get material request status by CRM omni_id."""
+        from app.models.inventory.material_request import MaterialRequest
+
+        stmt = (
+            select(MaterialRequest)
+            .options(joinedload(MaterialRequest.items))
+            .where(
+                MaterialRequest.organization_id == org_id,
+                MaterialRequest.crm_id == omni_id,
+            )
+        )
+        mr = self.db.scalar(stmt)
+        if not mr:
+            return None
+
+        # Resolve item names for the response
+        from app.models.inventory.item import Item
+
+        item_ids = [line.inventory_item_id for line in mr.items]
+        items_map: dict[UUID, str] = {}
+        if item_ids:
+            items_stmt = select(Item.item_id, Item.item_name).where(
+                Item.item_id.in_(item_ids)
+            )
+            items_map = {row[0]: row[1] for row in self.db.execute(items_stmt).all()}
+
+        return CRMMaterialRequestStatusRead(
+            request_id=mr.request_id,
+            request_number=mr.request_number,
+            status=mr.status.value,
+            request_type=mr.request_type.value,
+            items=[
+                CRMMaterialRequestItemRead(
+                    item_code=items_map.get(line.inventory_item_id, ""),
+                    item_name=items_map.get(line.inventory_item_id, ""),
+                    requested_qty=line.requested_qty,
+                    ordered_qty=line.ordered_qty,
+                    uom=line.uom,
+                )
+                for line in mr.items
+            ],
+            created_at=mr.created_at,
+        )
 
     # ============ Lookup Helpers ============
 

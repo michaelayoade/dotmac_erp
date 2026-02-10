@@ -54,9 +54,6 @@ from app.services.finance.ap import (
     supplier_service,
 )
 
-logger = logging.getLogger(__name__)
-
-
 router = APIRouter(
     prefix="/ap",
     tags=["accounts-payable"],
@@ -750,6 +747,8 @@ from app.services.finance.ap import (  # noqa: E402
     PaymentBatchInput,
     payment_batch_service,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @router.post(

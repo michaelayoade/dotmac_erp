@@ -78,6 +78,28 @@ class ExpenseLimitExceededError(ExpenseLimitServiceError):
         super().__init__(message)
 
 
+class ApproverBudgetExhaustedError(ExpenseLimitServiceError):
+    """Approver's monthly approval budget is exhausted."""
+
+    def __init__(
+        self,
+        budget: Decimal,
+        used: Decimal,
+        claim_amount: Decimal,
+        expense_month: str,
+    ):
+        self.budget = budget
+        self.used = used
+        self.claim_amount = claim_amount
+        self.expense_month = expense_month
+        remaining = budget - used
+        super().__init__(
+            f"Monthly approval budget for {expense_month} exhausted. "
+            f"Budget: {budget:,.2f}, Used: {used:,.2f}, "
+            f"Remaining: {remaining:,.2f}, Claim: {claim_amount:,.2f}."
+        )
+
+
 # =============================================================================
 # Data Classes
 # =============================================================================
@@ -326,6 +348,7 @@ class ExpenseLimitService:
         scope_type: str,
         max_approval_amount: Decimal,
         scope_id: UUID | None = None,
+        monthly_approval_budget: Decimal | None = None,
         currency_code: str = "NGN",
         dimension_filters: dict | None = None,
         escalate_to_employee_id: UUID | None = None,
@@ -339,6 +362,7 @@ class ExpenseLimitService:
             scope_type=scope_type,
             scope_id=scope_id,
             max_approval_amount=max_approval_amount,
+            monthly_approval_budget=monthly_approval_budget,
             currency_code=currency_code,
             dimension_filters=dimension_filters or {},
             escalate_to_employee_id=escalate_to_employee_id,
@@ -1101,6 +1125,136 @@ class ExpenseLimitService:
             offset=pagination.offset if pagination else 0,
             limit=pagination.limit if pagination else len(items),
         )
+
+    # =========================================================================
+    # Approver Monthly Budget
+    # =========================================================================
+
+    def check_approver_monthly_budget(
+        self,
+        org_id: UUID,
+        approver_id: UUID,
+        claim_amount: Decimal,
+        expense_date: date,
+    ) -> None:
+        """Check if approver has remaining monthly budget for the expense month.
+
+        Looks up the approver's ``monthly_approval_budget`` (via the most
+        specific matching ``ExpenseApproverLimit``).  When set, sums all
+        amounts this approver has already approved for the **expense month**
+        (keyed on ``claim_date``, not the current date) and raises
+        ``ApproverBudgetExhaustedError`` if the new claim would exceed the
+        budget.
+
+        If no ``monthly_approval_budget`` is configured the check passes
+        silently (backward compatible).
+
+        Args:
+            org_id: Organization ID
+            approver_id: Employee ID of the approver
+            claim_amount: Amount being approved
+            expense_date: The claim's expense date (determines which month's budget)
+
+        Raises:
+            ApproverBudgetExhaustedError: when budget would be exceeded
+        """
+        from app.models.people.hr.employee import Employee
+
+        approver = self.db.get(Employee, approver_id)
+        if not approver:
+            return  # Unknown approver — skip
+
+        budget = self._get_approver_monthly_budget(org_id, approver)
+        if budget is None:
+            return  # No monthly budget configured — unlimited
+
+        # Calculate period bounds for the expense month
+        month_start = expense_date.replace(day=1)
+        if month_start.month == 12:
+            next_month = date(month_start.year + 1, 1, 1)
+        else:
+            next_month = date(month_start.year, month_start.month + 1, 1)
+
+        # Sum already-approved claims for this approver in the expense month
+        approved_statuses = [
+            ExpenseClaimStatus.APPROVED,
+            ExpenseClaimStatus.PAID,
+        ]
+        used = self.db.scalar(
+            select(
+                func.coalesce(
+                    func.sum(ExpenseClaim.total_approved_amount), Decimal("0")
+                )
+            ).where(
+                ExpenseClaim.organization_id == org_id,
+                ExpenseClaim.approver_id == approver_id,
+                ExpenseClaim.status.in_(approved_statuses),
+                ExpenseClaim.claim_date >= month_start,
+                ExpenseClaim.claim_date < next_month,
+            )
+        ) or Decimal("0")
+
+        if used + claim_amount > budget:
+            expense_month_label = expense_date.strftime("%B %Y")
+            raise ApproverBudgetExhaustedError(
+                budget=budget,
+                used=used,
+                claim_amount=claim_amount,
+                expense_month=expense_month_label,
+            )
+
+    def _get_approver_monthly_budget(
+        self,
+        org_id: UUID,
+        employee: Employee,
+    ) -> Decimal | None:
+        """Get the monthly approval budget for an employee.
+
+        Checks in priority order: employee-specific → grade → designation.
+        Returns ``None`` when no budget is configured.
+        """
+        # Employee-specific limit
+        emp_budget = self.db.scalar(
+            select(ExpenseApproverLimit.monthly_approval_budget).where(
+                ExpenseApproverLimit.organization_id == org_id,
+                ExpenseApproverLimit.is_active == True,
+                ExpenseApproverLimit.scope_type == "EMPLOYEE",
+                ExpenseApproverLimit.scope_id == employee.employee_id,
+                ExpenseApproverLimit.monthly_approval_budget.isnot(None),
+            )
+        )
+        if emp_budget is not None:
+            return emp_budget
+
+        # Grade-based limit
+        if employee.grade_id:
+            grade_budget = self.db.scalar(
+                select(ExpenseApproverLimit.monthly_approval_budget).where(
+                    ExpenseApproverLimit.organization_id == org_id,
+                    ExpenseApproverLimit.is_active == True,
+                    ExpenseApproverLimit.scope_type == "GRADE",
+                    ExpenseApproverLimit.scope_id == employee.grade_id,
+                    ExpenseApproverLimit.monthly_approval_budget.isnot(None),
+                )
+            )
+            if grade_budget is not None:
+                return grade_budget
+
+        # Designation-based limit
+        if employee.designation_id:
+            desig_budget = self.db.scalar(
+                select(ExpenseApproverLimit.monthly_approval_budget).where(
+                    ExpenseApproverLimit.organization_id == org_id,
+                    ExpenseApproverLimit.is_active == True,
+                    ExpenseApproverLimit.scope_type == "DESIGNATION",
+                    ExpenseApproverLimit.scope_id == employee.designation_id,
+                    ExpenseApproverLimit.monthly_approval_budget.isnot(None),
+                )
+            )
+            if desig_budget is not None:
+                return desig_budget
+
+        return None
 
     # =========================================================================
     # Usage Summary

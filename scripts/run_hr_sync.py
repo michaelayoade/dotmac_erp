@@ -15,7 +15,6 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
-logger = logging.getLogger(__name__)
 
 # Suppress noisy loggers
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -30,6 +29,8 @@ from app.services.erpnext.sync.orchestrator import (
     MigrationConfig,
     SyncType,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _get_erpnext_config(db, org):

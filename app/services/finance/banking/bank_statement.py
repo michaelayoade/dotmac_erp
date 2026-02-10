@@ -102,7 +102,12 @@ class BankStatementService:
         return amount
 
     @staticmethod
-    def _parse_date(value: str | None, field: str, row: int) -> date:
+    def _parse_date(
+        value: str | None,
+        field: str,
+        row: int,
+        date_format: str | None = None,
+    ) -> date:
         if isinstance(value, datetime):
             return value.date()
         if isinstance(value, date):
@@ -110,14 +115,25 @@ class BankStatementService:
         text = "" if value is None else str(value).strip()
         if not text:
             raise ValueError(f"Row {row}: {field} is required")
-        # Accept YYYY-MM-DD and YYYY/MM/DD
+        # 1. Try org's configured date format first (e.g. DD/MM/YYYY → %d/%m/%Y)
+        if date_format:
+            try:
+                return datetime.strptime(text, date_format).date()
+            except ValueError:
+                pass
+        # 2. Fallback: ISO 8601 (YYYY-MM-DD and YYYY/MM/DD)
         try:
             return date.fromisoformat(text.replace("/", "-"))
-        except ValueError as exc:
-            raise ValueError(f"Row {row}: invalid {field} '{text}'") from exc
+        except ValueError:
+            pass
+        fmt_hint = f" (expected format: {date_format})" if date_format else ""
+        raise ValueError(f"Row {row}: invalid {field} '{text}'{fmt_hint}")
 
     def parse_csv_rows(
-        self, content: bytes, csv_format: str
+        self,
+        content: bytes,
+        csv_format: str,
+        date_format: str | None = None,
     ) -> tuple[list[dict], list[str]]:
         errors: list[str] = []
         if csv_format not in ("type", "debit_credit"):
@@ -132,7 +148,7 @@ class BankStatementService:
             header_line = next((line for line in text.splitlines() if line.strip()), "")
             candidates = [",", "\t", ";", "|"]
             counts = {d: header_line.count(d) for d in candidates}
-            best = max(counts, key=counts.get)
+            best = max(counts, key=counts.__getitem__)
             if counts.get(best, 0) > 0:
                 delimiter = best
             else:
@@ -176,6 +192,7 @@ class BankStatementService:
                         normalized_row.get("transaction_date"),
                         "transaction_date",
                         row_index,
+                        date_format=date_format,
                     ),
                     "description": (normalized_row.get("description") or "").strip()
                     or None,
@@ -201,7 +218,7 @@ class BankStatementService:
                 value_date = normalized_row.get("value_date")
                 if value_date:
                     line_data["value_date"] = self._parse_date(
-                        value_date, "value_date", row_index
+                        value_date, "value_date", row_index, date_format=date_format
                     )
                 running_balance = self._parse_decimal(
                     normalized_row.get("running_balance"), "running_balance", row_index
@@ -237,7 +254,10 @@ class BankStatementService:
         return rows, errors
 
     def parse_xlsx_rows(
-        self, content: bytes, csv_format: str
+        self,
+        content: bytes,
+        csv_format: str,
+        date_format: str | None = None,
     ) -> tuple[list[dict], list[str]]:
         errors: list[str] = []
         if csv_format not in ("type", "debit_credit"):
@@ -285,7 +305,10 @@ class BankStatementService:
                     line_data: dict = {
                         "line_number": row_index - 1,
                         "transaction_date": self._parse_date(
-                            row.get("transaction_date"), "transaction_date", row_index
+                            row.get("transaction_date"),
+                            "transaction_date",
+                            row_index,
+                            date_format=date_format,
                         ),
                         "description": (
                             (row.get("description") or "").strip()
@@ -339,7 +362,7 @@ class BankStatementService:
                     value_date = row.get("value_date")
                     if value_date:
                         line_data["value_date"] = self._parse_date(
-                            value_date, "value_date", row_index
+                            value_date, "value_date", row_index, date_format=date_format
                         )
                     running_balance = self._parse_decimal(
                         row.get("running_balance"), "running_balance", row_index

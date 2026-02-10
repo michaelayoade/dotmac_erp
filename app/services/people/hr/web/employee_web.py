@@ -11,7 +11,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 from uuid import UUID
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
@@ -489,7 +489,8 @@ class HRWebService:
             notes=notes or None,
         )
 
-        assert person is not None
+        if person is None:
+            raise HTTPException(status_code=400, detail="Person not found")
         employee = svc.create_employee(person.id, data)
         db.commit()
 

@@ -183,6 +183,26 @@ class Customer(Base):
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
+    # External system references (for dedup and sync)
+    erpnext_id: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        index=True,
+        comment="ERPNext customer name/ID (for sync lookup)",
+    )
+    splynx_id: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        index=True,
+        comment="Splynx customer ID (for sync lookup)",
+    )
+    crm_id: Mapped[str | None] = mapped_column(
+        String(36),
+        nullable=True,
+        index=True,
+        comment="DotMac CRM customer/company ID (for sync lookup)",
+    )
+
     # Audit fields
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

@@ -1125,7 +1125,7 @@ class TaxWebService:
                 return_id=coerce_uuid(return_id),
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         return RedirectResponse(
             url=f"/finance/tax/returns/{return_id}",
@@ -1152,7 +1152,7 @@ class TaxWebService:
                 reviewed_by_user_id=coerce_uuid(auth.person_id),
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         return RedirectResponse(
             url=f"/finance/tax/returns/{return_id}",
@@ -1179,7 +1179,7 @@ class TaxWebService:
                 filed_by_user_id=coerce_uuid(auth.person_id),
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         return RedirectResponse(
             url=f"/finance/tax/returns/{return_id}",

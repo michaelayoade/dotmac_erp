@@ -258,7 +258,7 @@ class IncidentService:
                 new_values={"status": "RESOLVED"},
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         fire_audit_event(
             self.db,
@@ -302,7 +302,7 @@ class IncidentService:
                 new_values={"status": "CLOSED"},
             )
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
         fire_audit_event(
             self.db,

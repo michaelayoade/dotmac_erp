@@ -160,7 +160,9 @@ class TestProtocolCompliance:
         assert not is_tax_calculator("string")
         assert not is_tax_calculator(123)
         assert not is_tax_calculator({})
-        assert not is_tax_calculator(MagicMock())  # MagicMock without calculate
+        # NOTE: MagicMock() passes @runtime_checkable Protocol checks because
+        # it auto-creates any attribute on access — this is a known Python
+        # limitation, not a bug in is_tax_calculator.
 
 
 # ---------------------------------------------------------------------------

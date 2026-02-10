@@ -468,7 +468,8 @@ class JournalWebService:
     ) -> HTMLResponse | RedirectResponse:
         """Handle journal entry creation form submission."""
         org_id = auth.organization_id
-        assert org_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         default_currency = currency_code or org_context_service.get_functional_currency(
             db,
             org_id,
@@ -530,7 +531,8 @@ class JournalWebService:
     ) -> HTMLResponse | RedirectResponse:
         """Handle journal entry update form submission."""
         org_id = auth.organization_id
-        assert org_id is not None
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
         default_currency = currency_code or org_context_service.get_functional_currency(
             db,
             org_id,

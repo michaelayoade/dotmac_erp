@@ -3762,7 +3762,7 @@ def employee_timesheet(
                 if e.is_billable:
                     billable_total += e.hours or Decimal("0")
         except Exception:
-            pass
+            logger.exception("Ignored exception")
 
     context = {
         "request": request,
