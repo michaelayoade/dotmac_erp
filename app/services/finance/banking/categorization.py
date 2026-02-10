@@ -12,7 +12,7 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.banking.bank_statement import (
@@ -299,7 +299,7 @@ class TransactionCategorizationService:
                         TransactionRule.bank_account_id == bank_account_id,
                     ),
                 )
-                .order_by(TransactionRule.priority.desc())
+                .order_by(TransactionRule.sort_order.asc())
             )
             .scalars()
             .all()
@@ -931,7 +931,6 @@ class TransactionCategorizationService:
         tax_code_id: UUID | None = None,
         bank_account_id: UUID | None = None,
         payee_id: UUID | None = None,
-        priority: int = 100,
         auto_apply: bool = False,
         min_confidence: int = 80,
         applies_to_credits: bool = True,
@@ -940,7 +939,19 @@ class TransactionCategorizationService:
         description: str | None = None,
         created_by: UUID | None = None,
     ) -> TransactionRule:
-        """Create a new categorization rule."""
+        """Create a new categorization rule.
+
+        The rule is placed at the end of the evaluation order
+        (sort_order = max existing + 1).
+        """
+        # Auto-assign sort_order: append after the last rule for this org
+        max_order = db.scalar(
+            select(func.max(TransactionRule.sort_order)).where(
+                TransactionRule.organization_id == organization_id,
+            )
+        )
+        next_order = (max_order + 1) if max_order is not None else 0
+
         rule = TransactionRule(
             organization_id=organization_id,
             rule_name=rule_name,
@@ -951,7 +962,7 @@ class TransactionCategorizationService:
             tax_code_id=tax_code_id,
             bank_account_id=bank_account_id,
             payee_id=payee_id,
-            priority=priority,
+            sort_order=next_order,
             auto_apply=auto_apply,
             min_confidence=min_confidence,
             applies_to_credits=applies_to_credits,
@@ -996,7 +1007,6 @@ class TransactionCategorizationService:
             "tax_code_id",
             "bank_account_id",
             "payee_id",
-            "priority",
             "auto_apply",
             "min_confidence",
             "applies_to_credits",
@@ -1042,7 +1052,7 @@ class TransactionCategorizationService:
         return list(
             db.execute(
                 stmt.order_by(
-                    TransactionRule.priority.desc(), TransactionRule.rule_name
+                    TransactionRule.sort_order.asc(), TransactionRule.rule_name
                 )
                 .offset(offset)
                 .limit(limit)
@@ -1050,6 +1060,85 @@ class TransactionCategorizationService:
             .scalars()
             .all()
         )
+
+    def swap_rule_order(
+        self,
+        db: Session,
+        organization_id: UUID,
+        rule_id: UUID,
+        direction: str,
+    ) -> bool:
+        """Swap a rule's sort_order with its neighbor.
+
+        Args:
+            db: Database session
+            organization_id: Organization UUID
+            rule_id: The rule to move
+            direction: "up" (lower sort_order) or "down" (higher sort_order)
+
+        Returns:
+            True if the swap succeeded, False if the rule is already at the boundary.
+        """
+        org_id = coerce_uuid(organization_id)
+        rule = (
+            db.execute(
+                select(TransactionRule).where(
+                    TransactionRule.rule_id == coerce_uuid(rule_id),
+                    TransactionRule.organization_id == org_id,
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if not rule:
+            return False
+
+        # Find the neighbor to swap with
+        if direction == "up":
+            neighbor = (
+                db.execute(
+                    select(TransactionRule)
+                    .where(
+                        TransactionRule.organization_id == org_id,
+                        TransactionRule.sort_order < rule.sort_order,
+                    )
+                    .order_by(TransactionRule.sort_order.desc())
+                    .limit(1)
+                )
+                .scalars()
+                .first()
+            )
+        elif direction == "down":
+            neighbor = (
+                db.execute(
+                    select(TransactionRule)
+                    .where(
+                        TransactionRule.organization_id == org_id,
+                        TransactionRule.sort_order > rule.sort_order,
+                    )
+                    .order_by(TransactionRule.sort_order.asc())
+                    .limit(1)
+                )
+                .scalars()
+                .first()
+            )
+        else:
+            return False
+
+        if not neighbor:
+            return False
+
+        # Swap sort_order values
+        rule.sort_order, neighbor.sort_order = neighbor.sort_order, rule.sort_order
+        db.flush()
+        logger.info(
+            "Swapped rule %s (order %d) with %s (order %d)",
+            rule.rule_id,
+            rule.sort_order,
+            neighbor.rule_id,
+            neighbor.sort_order,
+        )
+        return True
 
     def record_rule_feedback(
         self,

@@ -318,6 +318,25 @@ async def create_rule(
     return banking_web_service.create_rule_response(request, auth, db, form_data)
 
 
+@router.post("/rules/reorder")
+async def reorder_rule(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Swap a rule's position up or down in evaluation order."""
+    form = await request.form()
+    rule_id = str(form.get("rule_id", ""))
+    direction = str(form.get("direction", ""))
+    if not rule_id or direction not in ("up", "down"):
+        from fastapi import HTTPException
+
+        raise HTTPException(status_code=400, detail="rule_id and direction required")
+    return banking_web_service.reorder_rules_response(
+        request, auth, db, rule_id, direction
+    )
+
+
 @router.get("/rules/{rule_id}", response_class=HTMLResponse)
 def view_rule(
     request: Request,

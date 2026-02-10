@@ -1016,7 +1016,7 @@ class BankingWebService:
 
         total = query.count()
         rules = (
-            query.order_by(TransactionRule.priority.desc(), TransactionRule.rule_name)
+            query.order_by(TransactionRule.sort_order.asc(), TransactionRule.rule_name)
             .offset((page - 1) * per_page)
             .limit(per_page)
             .all()
@@ -1034,7 +1034,7 @@ class BankingWebService:
             }
 
         rule_list = []
-        for r in rules:
+        for idx, r in enumerate(rules):
             target_account_id = r.target_account_id
             rule_list.append(
                 {
@@ -1046,10 +1046,12 @@ class BankingWebService:
                     "target_account": account_map.get(target_account_id, "")
                     if target_account_id
                     else "",
-                    "priority": r.priority,
+                    "sort_order": r.sort_order,
+                    "position": idx + 1,
                     "auto_apply": r.auto_apply,
                     "is_active": r.is_active,
                     "match_count": r.match_count,
+                    "success_count": r.success_count,
                     "success_rate": f"{r.success_rate:.0f}%"
                     if r.success_count + r.reject_count > 0
                     else "N/A",
@@ -1201,7 +1203,6 @@ class BankingWebService:
                 if rule.bank_account_id
                 else "",
                 "payee_id": str(rule.payee_id) if rule.payee_id else "",
-                "priority": rule.priority,
                 "auto_apply": rule.auto_apply,
                 "min_confidence": rule.min_confidence,
                 "applies_to_credits": rule.applies_to_credits,
@@ -1288,8 +1289,6 @@ class BankingWebService:
         if raw_ba:
             bank_account_id = UUID(raw_ba)
 
-        priority = int(form_data.get("priority", 100))
-
         return {
             "rule_name": rule_name,
             "description": (form_data.get("description") or "").strip() or None,
@@ -1299,7 +1298,6 @@ class BankingWebService:
             "target_account_id": target_account_id,
             "tax_code_id": tax_code_id,
             "bank_account_id": bank_account_id,
-            "priority": priority,
             "auto_apply": form_data.get("auto_apply") == "on",
             "min_confidence": int(form_data.get("min_confidence", 80)),
             "applies_to_credits": form_data.get("applies_to_credits") == "on",
@@ -2080,6 +2078,46 @@ class BankingWebService:
         )
         return templates.TemplateResponse(
             request, "finance/banking/rule_form.html", context
+        )
+
+    def reorder_rules_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        rule_id: str,
+        direction: str,
+    ) -> HTMLResponse | RedirectResponse:
+        """Handle POST to reorder a rule up or down.
+
+        Returns the #results-container partial for HTMX swap.
+        """
+        from app.services.finance.banking.categorization import (
+            TransactionCategorizationService,
+        )
+
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        service = TransactionCategorizationService()
+        service.swap_rule_order(db, org_id, UUID(rule_id), direction)
+        db.commit()
+
+        # Check if this is an HTMX request — return partial
+        if request.headers.get("HX-Request"):
+            context = base_context(request, auth, "Transaction Rules", "banking", db=db)
+            context.update(self.list_rules_context(db, str(org_id)))
+            return templates.TemplateResponse(
+                request,
+                "finance/banking/_rules_table.html",
+                context,
+            )
+
+        # Fallback: full redirect
+        return RedirectResponse(
+            url="/finance/banking/rules",
+            status_code=303,
         )
 
 

@@ -159,8 +159,13 @@ class TransactionRule(Base):
         nullable=True,
     )
 
-    # Priority (higher = checked first)
-    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
+    # Execution order (0 = evaluated first, auto-managed)
+    sort_order: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        comment="Execution order (0 = evaluated first, auto-managed)",
+    )
 
     # Auto-apply or suggest
     auto_apply: Mapped[bool] = mapped_column(

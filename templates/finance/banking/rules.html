@@ -1,5 +1,4 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import status_badge %}
 {% from "components/macros.html" import live_search, empty_state, status_badge, pagination %}
 
 {% block page_title %}Transaction Rules{% endblock %}
@@ -7,11 +6,11 @@
 {% block breadcrumbs %}
 <nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
     <a href="/finance/banking/accounts" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Banking</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
     <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Transaction Rules</span>
@@ -20,7 +19,7 @@
 
 {% block header_actions %}
 <a href="/finance/banking/rules/new" data-testid="rules-new" class="btn btn-primary">
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
     </svg>
     New Rule
@@ -52,12 +51,12 @@
     <!-- Info Banner -->
     <div class="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
         <div class="flex items-start gap-3">
-            <svg class="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
             <div class="text-sm text-blue-700 dark:text-blue-300">
                 <p class="font-medium">How Transaction Rules Work</p>
-                <p class="mt-1">Rules are evaluated in priority order (lowest number first). When a transaction matches a rule's conditions, the specified action is applied. Rules can auto-categorize transactions, flag them for review, or split them across multiple accounts.</p>
+                <p class="mt-1">Rules are evaluated top-to-bottom. Use the arrow buttons to reorder. When a transaction matches a rule's conditions, the specified action is applied. Rules can auto-categorize transactions, flag them for review, or split them across multiple accounts.</p>
             </div>
         </div>
     </div>
@@ -77,116 +76,7 @@
     {% endcall %}
 
     <div id="results-container">
-    <!-- Rules Table -->
-    <div class="card">
-        <div class="table-container">
-            <table class="table" data-testid="rules-table">
-                <thead>
-                    <tr>
-                        <th scope="col">Priority</th>
-                        <th scope="col">Rule</th>
-                        <th scope="col">Type</th>
-                        <th scope="col">Action</th>
-                        <th scope="col">Target Account</th>
-                        <th scope="col" class="text-right">Matches</th>
-                        <th scope="col" class="text-center">Auto</th>
-                        <th scope="col">Status</th>
-                        <th scope="col" class="text-right">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for rule in rules %}
-                    <tr class="group">
-                        <td class="whitespace-nowrap">
-                            {{ status_badge(rule.priority, size="sm") }}
-                        </td>
-                        <td>
-                            <a href="/finance/banking/rules/{{ rule.rule_id }}" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">
-                                {{ rule.rule_name }}
-                            </a>
-                            {% if rule.description %}
-                            <p class="text-xs text-slate-500 dark:text-slate-400 truncate max-w-xs">{{ rule.description | sanitize_html }}</p>
-                            {% endif %}
-                        </td>
-                        <td class="whitespace-nowrap">
-                            {% set type_colors = {
-                                'PAYEE_MATCH': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-                                'DESCRIPTION_CONTAINS': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-                                'DESCRIPTION_REGEX': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-                                'AMOUNT_RANGE': 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
-                                'REFERENCE_MATCH': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
-                                'COMBINED': 'bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400'
-                            } %}
-                            {{ status_badge(rule.rule_type, size="sm") }}
-                        </td>
-                        <td class="whitespace-nowrap">
-                            {% set action_colors = {
-                                'CATEGORIZE': 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-                                'FLAG_REVIEW': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-                                'SPLIT': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-                                'IGNORE': 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-400'
-                            } %}
-                            {{ status_badge(rule.action, size="sm") }}
-                        </td>
-                        <td class="text-sm text-slate-600 dark:text-slate-400">
-                            {% if rule.target_account %}
-                            {{ rule.target_account.account_code }} - {{ rule.target_account.account_name }}
-                            {% else %}
-                            <span class="text-slate-400">-</span>
-                            {% endif %}
-                        </td>
-                        <td class="whitespace-nowrap text-right">
-                            <span class="text-sm font-medium text-slate-900 dark:text-white">{{ rule.match_count | default(0) }}</span>
-                            {% if rule.success_count %}
-                            <p class="text-xs text-emerald-600 dark:text-emerald-400">{{ rule.success_count }} applied</p>
-                            {% endif %}
-                        </td>
-                        <td class="whitespace-nowrap text-center">
-                            {% if rule.auto_apply %}
-                            <svg class="mx-auto h-5 w-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                            </svg>
-                            {% else %}
-                            <svg class="mx-auto h-5 w-5 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                            </svg>
-                            {% endif %}
-                        </td>
-                        <td class="whitespace-nowrap">
-                            {{ status_badge('active' if rule.is_active else 'inactive', 'sm') }}
-                        </td>
-                        <td class="whitespace-nowrap text-right">
-                            <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <a href="/finance/banking/rules/{{ rule.rule_id }}"
-                                   class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
-                                   title="Edit" aria-label="Edit">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                                    </svg>
-                                </a>
-                            </div>
-                        </td>
-                    </tr>
-                    {% else %}
-                    <tr>
-                        <td colspan="9" class="py-12">
-                            {{ empty_state('No transaction rules found', 'Create a rule to automate categorization.', 'document', 'New Rule', '/finance/banking/rules/new') }}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        {{ pagination(
-            page=page | default(1),
-            total_pages=total_pages | default(1),
-            total_count=total_count | default(rules | length if rules else 0),
-            limit=limit | default(50),
-            search=search,
-            filters={"rule_type": rule_type}
-        ) }}
-    </div>
+    {% include "finance/banking/_rules_table.html" %}
     </div>{# /results-container #}
 </div>
 {% endblock %}
