@@ -303,12 +303,25 @@
                     <select id="currency_code"
                             name="currency_code"
                             x-model="form.currency_code"
+                            @change="FXRateLookup.onCurrencyChange($data, 'form.currency_code', 'form.exchange_rate', 'form.quote_date', functionalCurrency)"
                             required
                             class="form-input form-select">
                         {% for currency in currencies %}
                         <option value="{{ currency.code }}">{{ currency.code }} - {{ currency.name }}</option>
                         {% endfor %}
                     </select>
+                </div>
+
+                <!-- Exchange Rate -->
+                <div>
+                    <label for="exchange_rate" class="form-label">Exchange Rate</label>
+                    <input type="text"
+                           id="exchange_rate"
+                           name="exchange_rate"
+                           x-model="form.exchange_rate"
+                           class="form-input font-mono tabular-nums"
+                           placeholder="1.0">
+                    <p class="form-hint" x-show="form.currency_code === functionalCurrency">Same as functional currency</p>
                 </div>
 
                 <!-- Quote Date -->
@@ -617,6 +630,7 @@ function quoteForm() {
             quote_date: '{{ today }}',
             valid_until: '{{ default_valid_until }}',
             currency_code: '{{ default_currency_code }}',
+            exchange_rate: '{{ quote.exchange_rate if quote and quote.exchange_rate else "1" }}',
             contact_name: '',
             contact_email: '',
             payment_terms_id: '',
@@ -627,6 +641,7 @@ function quoteForm() {
                 { item_code: '', revenue_account_id: '', description: '', quantity: 1, unit_price: 0, discount_amount: 0, tax_code_id: '', tax_amount: 0, line_total: 0 }
             ]
         },
+        functionalCurrency: '{{ default_currency_code }}',
         defaultTaxCodeId: '',
         taxRates: {
             {% for tax in tax_codes %}

@@ -159,6 +159,11 @@ class QuoteService:
         currency_code = resolve_currency_code(db, org_id, payload.get("currency_code"))
         lines = parse_json_list(payload.get("lines"), "Lines")
 
+        exchange_rate = Decimal("1")
+        raw_rate = payload.get("exchange_rate")
+        if raw_rate not in (None, ""):
+            exchange_rate = Decimal(str(raw_rate))
+
         return QuoteService.create(
             db=db,
             organization_id=org_id,
@@ -167,6 +172,7 @@ class QuoteService:
             valid_until=valid_until,
             created_by=created_by,
             currency_code=currency_code,
+            exchange_rate=exchange_rate,
             contact_name=payload.get("contact_name"),
             contact_email=payload.get("contact_email"),
             payment_terms_id=payload.get("payment_terms_id") or None,

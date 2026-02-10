@@ -67,6 +67,12 @@ async def settings_index(
                     "url": "/settings/payroll",
                     "icon": "cog",
                 },
+                {
+                    "title": "Exchange Rates",
+                    "description": "View, add, and auto-fetch currency exchange rates.",
+                    "url": "/settings/exchange-rates",
+                    "icon": "currency",
+                },
             ],
             "admin_settings_url": "/admin/settings/hub",
         }
@@ -331,6 +337,112 @@ async def update_report_settings(
         )
 
     return RedirectResponse(url="/settings/reports?saved=1", status_code=303)
+
+
+# ========== Exchange Rates ==========
+
+
+@router.get("/exchange-rates", response_class=HTMLResponse)
+async def exchange_rates_list(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """List exchange rates."""
+    from app.services.finance.platform.fx_settings_web import FXSettingsWebService
+
+    ws = FXSettingsWebService(db)
+    search = request.query_params.get("search")
+    offset = int(request.query_params.get("offset", "0"))
+
+    context = base_context(request, auth, "Exchange Rates", "settings", db=db)
+    context.update(
+        ws.rates_list_context(auth.organization_id, search=search, offset=offset)
+    )
+
+    return templates.TemplateResponse(
+        request, "finance/settings/exchange_rates.html", context
+    )
+
+
+@router.post("/exchange-rates", response_class=HTMLResponse)
+async def create_exchange_rate(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Create a manual exchange rate."""
+    from app.services.finance.platform.fx_settings_web import FXSettingsWebService
+
+    form_data = await request.form()
+    ws = FXSettingsWebService(db)
+
+    success, error = ws.create_manual_rate(
+        auth.organization_id, dict(form_data), auth.person_id
+    )
+
+    if not success:
+        context = base_context(request, auth, "Exchange Rates", "settings", db=db)
+        context.update(ws.rates_list_context(auth.organization_id))
+        context["error"] = error
+        return templates.TemplateResponse(
+            request, "finance/settings/exchange_rates.html", context
+        )
+
+    db.commit()
+    return RedirectResponse(
+        url="/settings/exchange-rates?saved=Rate+saved+successfully", status_code=303
+    )
+
+
+@router.post("/exchange-rates/fetch", response_class=HTMLResponse)
+async def fetch_exchange_rates(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Trigger exchange rate fetch from Currency API."""
+    from app.services.finance.platform.fx_settings_web import FXSettingsWebService
+
+    ws = FXSettingsWebService(db)
+    fetch_result = ws.fetch_latest(auth.organization_id, auth.person_id)
+
+    db.commit()
+
+    context = base_context(request, auth, "Exchange Rates", "settings", db=db)
+    context.update(ws.rates_list_context(auth.organization_id))
+    context["fetch_result"] = fetch_result
+
+    return templates.TemplateResponse(
+        request, "finance/settings/exchange_rates.html", context
+    )
+
+
+@router.post("/exchange-rates/{rate_id}/delete", response_class=HTMLResponse)
+async def delete_exchange_rate(
+    request: Request,
+    rate_id: uuid.UUID,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Delete an exchange rate."""
+    from app.services.finance.platform.fx_settings_web import FXSettingsWebService
+
+    ws = FXSettingsWebService(db)
+    success, error = ws.delete_rate(auth.organization_id, rate_id)
+
+    if not success:
+        context = base_context(request, auth, "Exchange Rates", "settings", db=db)
+        context.update(ws.rates_list_context(auth.organization_id))
+        context["error"] = error
+        return templates.TemplateResponse(
+            request, "finance/settings/exchange_rates.html", context
+        )
+
+    db.commit()
+    return RedirectResponse(
+        url="/settings/exchange-rates?saved=Rate+deleted", status_code=303
+    )
 
 
 # ========== Legacy Route Redirects ==========

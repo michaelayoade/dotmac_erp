@@ -92,13 +92,21 @@
                 <div>
                     <label class="form-label">Currency</label>
                     <select class="form-select form-input" name="currency_code"
-                            x-model="form.currency_code">
+                            x-model="form.currency_code"
+                            @change="FXRateLookup.onCurrencyChange($data, 'form.currency_code', 'form.exchange_rate', 'form.payment_date', functionalCurrency)">
                         {% for currency in currencies %}
                         <option value="{{ currency.code }}" {% if currency.code == default_currency_code %}selected{% endif %}>
                             {{ currency.code }} - {{ currency.name }}
                         </option>
                         {% endfor %}
                     </select>
+                </div>
+                <div>
+                    <label class="form-label">Exchange Rate</label>
+                    <input type="text" class="form-input font-mono tabular-nums" name="exchange_rate"
+                           x-model="form.exchange_rate"
+                           placeholder="1.0">
+                    <p class="form-hint" x-show="form.currency_code === functionalCurrency">Same as functional currency</p>
                 </div>
                 <div>
                     <label class="form-label">Reference</label>
@@ -326,6 +334,7 @@ function receiptForm() {
             payment_method: '{{ receipt.payment_method | replace('_', ' ') | title }}',
             bank_account_id: '{{ receipt.bank_account_id or "" }}',
             currency_code: '{{ receipt.currency_code }}',
+            exchange_rate: '{{ receipt.exchange_rate if receipt.exchange_rate else "1" }}',
             reference: '{{ receipt.reference or "" }}',
             description: '{{ receipt.description or "" }}',
             gross_amount: {{ receipt.gross_amount or receipt.amount or 0 }},
@@ -339,6 +348,7 @@ function receiptForm() {
             payment_method: '',
             bank_account_id: '',
             currency_code: '{{ default_currency_code }}',
+            exchange_rate: '1',
             reference: '',
             description: '',
             gross_amount: {{ invoice.balance_raw }},
@@ -352,6 +362,7 @@ function receiptForm() {
             payment_method: '',
             bank_account_id: '',
             currency_code: '{{ default_currency_code }}',
+            exchange_rate: '1',
             reference: '',
             description: '',
             gross_amount: 0,
@@ -361,6 +372,7 @@ function receiptForm() {
             wht_certificate_number: '',
             {% endif %}
         },
+        functionalCurrency: '{{ default_currency_code }}',
         whtApplied: {{ 'true' if receipt and receipt.has_wht else 'false' }},
         showWhtSection: {{ 'true' if receipt and receipt.has_wht else 'false' }},
         customerWhtApplicable: false,

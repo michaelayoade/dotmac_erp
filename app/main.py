@@ -29,6 +29,7 @@ from app.api.finance import (
     ar_router,
     banking_router,
     cons_router,
+    fx_router,
     gl_router,
     import_export_router,
     ipsas_router,
@@ -392,6 +393,7 @@ _include_api_router(import_export_router, dependencies=[Depends(require_tenant_a
 _include_api_router(opening_balance_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(search_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(payments_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(fx_router, dependencies=[Depends(require_tenant_auth)])
 # Payments webhook router - NO authentication (uses signature verification)
 _include_api_router(payments_webhook_router)
 

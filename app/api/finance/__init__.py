@@ -8,6 +8,7 @@ from app.api.finance.ap import router as ap_router
 from app.api.finance.ar import router as ar_router
 from app.api.finance.banking import router as banking_router
 from app.api.finance.cons import router as cons_router
+from app.api.finance.fx import router as fx_router
 from app.api.finance.gl import router as gl_router
 from app.api.finance.import_export import router as import_export_router
 from app.api.finance.ipsas import router as ipsas_router
@@ -34,4 +35,5 @@ __all__ = [
     "payments_router",
     "payments_webhook_router",
     "ipsas_router",
+    "fx_router",
 ]

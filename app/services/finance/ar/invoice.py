@@ -688,12 +688,17 @@ class ARInvoiceService(ListResponseMixin):
             db, coerce_uuid(organization_id), payload.get("currency_code")
         )
 
+        exchange_rate: Decimal | None = None
+        if payload.get("exchange_rate") not in (None, ""):
+            exchange_rate = parse_decimal(payload.get("exchange_rate"), "Exchange rate")
+
         return ARInvoiceInput(
             customer_id=customer_id,
             invoice_type=InvoiceType.STANDARD,
             invoice_date=invoice_date,
             due_date=due_date,
             currency_code=currency_code,
+            exchange_rate=exchange_rate,
             notes=payload.get("terms"),
             internal_notes=payload.get("notes"),
             lines=lines,

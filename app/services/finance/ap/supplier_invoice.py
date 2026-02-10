@@ -163,6 +163,10 @@ class SupplierInvoiceService(ListResponseMixin):
         )
         due_date = parse_date_str(payload.get("due_date"), "Due date") or invoice_date
 
+        exchange_rate: Decimal | None = None
+        if payload.get("exchange_rate") not in (None, ""):
+            exchange_rate = parse_decimal(payload.get("exchange_rate"), "Exchange rate")
+
         return SupplierInvoiceInput(
             supplier_id=require_uuid(payload.get("supplier_id"), "Supplier"),
             invoice_type=SupplierInvoiceType.STANDARD,
@@ -172,6 +176,7 @@ class SupplierInvoiceService(ListResponseMixin):
             currency_code=resolve_currency_code(
                 db, org_id, payload.get("currency_code")
             ),
+            exchange_rate=exchange_rate,
             supplier_invoice_number=payload.get("invoice_number"),
             lines=lines,
         )

@@ -65,11 +65,21 @@
                     <label for="currency_code" class="form-label">
                         Currency <span class="text-rose-500">*</span>
                     </label>
-                    <select id="currency_code" name="currency_code" x-model="form.currency_code" required class="form-input form-select">
+                    <select id="currency_code" name="currency_code" x-model="form.currency_code"
+                            @change="FXRateLookup.onCurrencyChange($data, 'form.currency_code', 'form.exchange_rate', 'form.order_date', functionalCurrency)"
+                            required class="form-input form-select">
                         {% for currency in currencies %}
                         <option value="{{ currency.code }}">{{ currency.code }} - {{ currency.name }}</option>
                         {% endfor %}
                     </select>
+                </div>
+
+                <!-- Exchange Rate -->
+                <div>
+                    <label for="exchange_rate" class="form-label">Exchange Rate</label>
+                    <input type="text" id="exchange_rate" name="exchange_rate" x-model="form.exchange_rate"
+                           class="form-input font-mono tabular-nums" placeholder="1.0">
+                    <p class="form-hint" x-show="form.currency_code === functionalCurrency">Same as functional currency</p>
                 </div>
 
                 <!-- Order Date -->
@@ -351,6 +361,7 @@ function soForm() {
             customer_id: '{{ selected_customer_id or "" }}',
             order_date: '{{ today }}',
             currency_code: '{{ default_currency_code }}',
+            exchange_rate: '{{ order.exchange_rate if order and order.exchange_rate else "1" }}',
             customer_po_number: '',
             requested_date: '',
             promised_date: '',
@@ -369,6 +380,7 @@ function soForm() {
                 { item_code: '', revenue_account_id: '', description: '', quantity: 1, unit_price: 0, tax_code_id: '', tax_amount: 0, line_total: 0 }
             ]
         },
+        functionalCurrency: '{{ default_currency_code }}',
         defaultTaxCodeId: '',
         taxRates: {
             {% for tax in tax_codes %}

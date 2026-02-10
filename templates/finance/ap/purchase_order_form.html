@@ -114,7 +114,9 @@
                     <label class="form-label">
                         Currency <span class="text-rose-500">*</span>
                     </label>
-                    <select x-model="formData.currency_code" required class="form-select">
+                    <select x-model="formData.currency_code"
+                            @change="FXRateLookup.onCurrencyChange($data, 'formData.currency_code', 'formData.exchange_rate', 'formData.po_date', functionalCurrency)"
+                            required class="form-select">
                         {% set selected_currency = order.currency_code if order else default_currency_code %}
                         {% for currency in currencies %}
                         <option value="{{ currency.code }}" {% if currency.code == selected_currency %}selected{% endif %}>
@@ -122,6 +124,13 @@
                         </option>
                         {% endfor %}
                     </select>
+                </div>
+
+                <div>
+                    <label class="form-label">Exchange Rate</label>
+                    <input type="text" name="exchange_rate" x-model="formData.exchange_rate"
+                           class="form-input font-mono tabular-nums" placeholder="1.0">
+                    <p class="form-hint" x-show="formData.currency_code === functionalCurrency">Same as functional currency</p>
                 </div>
 
                 <div>
@@ -307,10 +316,12 @@ function purchaseOrderForm() {
         formData: {
             supplier_id: existingOrder?.supplier_id || '',
             currency_code: existingOrder?.currency_code || '{{ default_currency_code }}',
+            exchange_rate: existingOrder?.exchange_rate || '1',
             po_date: existingOrder?.po_date || today,
             expected_delivery_date: existingOrder?.expected_delivery_date || '',
             terms_and_conditions: existingOrder?.terms_and_conditions || '',
         },
+        functionalCurrency: '{{ default_currency_code }}',
         lines: existingLines.length > 0 ? existingLines : [
             { item_id: '', description: '', quantity: 1, unit_price: 0, expense_account_id: '' }
         ],

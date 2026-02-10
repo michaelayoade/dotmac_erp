@@ -58,7 +58,8 @@
                     <div>
                         <label class="form-label">Entry Date <span class="text-rose-500">*</span></label>
                         <input type="date" name="entry_date" class="form-input"
-                               value="{{ form_data.entry_date if form_data else (entry.entry_date if entry else '') }}" required>
+                               x-model="journalDate"
+                               required>
                     </div>
                     <div>
                         <label class="form-label">Posting Date <span class="text-rose-500">*</span></label>
@@ -80,13 +81,14 @@
                     <div>
                         <label class="form-label">Currency</label>
                         <input type="text" name="currency_code" class="form-input"
-                               value="{{ form_data.currency_code if form_data else (entry.currency_code if entry else default_currency_code) }}"
+                               x-model="currencyCode"
+                               @change="FXRateLookup.onCurrencyChange($data, 'currencyCode', 'exchangeRate', 'journalDate', functionalCurrency)"
                                placeholder="{{ default_currency_code }}">
                     </div>
                     <div>
                         <label class="form-label">Exchange Rate</label>
-                        <input type="text" name="exchange_rate" class="form-input"
-                               value="{{ form_data.exchange_rate if form_data else (entry.exchange_rate if entry else '1.0') }}">
+                        <input type="text" name="exchange_rate" class="form-input font-mono tabular-nums"
+                               x-model="exchangeRate">
                     </div>
                 </div>
             </div>
@@ -222,6 +224,10 @@ function journalForm() {
     }
 
     return {
+        journalDate: '{{ form_data.entry_date if form_data else (entry.entry_date if entry else "") }}' || new Date().toISOString().split('T')[0],
+        currencyCode: '{{ form_data.currency_code if form_data else (entry.currency_code if entry else default_currency_code) }}',
+        exchangeRate: '{{ form_data.exchange_rate if form_data else (entry.exchange_rate if entry else "1.0") }}',
+        functionalCurrency: '{{ default_currency_code }}',
         lines: initialLines.length > 0 ? initialLines : [],
 
         get totalDebit() {

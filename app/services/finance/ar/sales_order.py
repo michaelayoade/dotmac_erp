@@ -140,6 +140,11 @@ class SalesOrderService:
         allow_partial = payload.get("allow_partial_shipment", True)
         allow_partial_shipment = bool(allow_partial)
 
+        exchange_rate = Decimal("1")
+        raw_rate = payload.get("exchange_rate")
+        if raw_rate not in (None, ""):
+            exchange_rate = Decimal(str(raw_rate))
+
         return SalesOrderService.create(
             db=db,
             organization_id=org_id,
@@ -147,6 +152,7 @@ class SalesOrderService:
             order_date=order_date,
             created_by=user_id,
             currency_code=currency_code,
+            exchange_rate=exchange_rate,
             customer_po_number=payload.get("customer_po_number"),
             reference=payload.get("reference"),
             requested_date=parse_date_str(

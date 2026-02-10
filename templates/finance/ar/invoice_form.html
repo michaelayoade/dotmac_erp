@@ -576,12 +576,25 @@
                     <select id="currency_code"
                             name="currency_code"
                             x-model="form.currency_code"
+                            @change="FXRateLookup.onCurrencyChange($data, 'form.currency_code', 'form.exchange_rate', 'form.invoice_date', functionalCurrency)"
                             required
                             class="form-input">
                         {% for currency in currencies %}
                         <option value="{{ currency.code }}">{{ currency.code }} - {{ currency.name }}</option>
                         {% endfor %}
                     </select>
+                </div>
+
+                <!-- Exchange Rate -->
+                <div>
+                    <label for="exchange_rate" class="form-label">Exchange Rate</label>
+                    <input type="text"
+                           id="exchange_rate"
+                           name="exchange_rate"
+                           x-model="form.exchange_rate"
+                           class="form-input font-mono tabular-nums"
+                           placeholder="1.0">
+                    <p class="form-hint" x-show="form.currency_code === functionalCurrency">Same as functional currency</p>
                 </div>
 
                 <!-- Invoice Date -->
@@ -933,10 +946,12 @@ function invoiceForm() {
             project_id: '{{ invoice.project_id if invoice else "" }}',
             terms: '{{ invoice.terms if invoice else "" }}',
             notes: '{{ invoice.notes if invoice else "" }}',
+            exchange_rate: '{{ invoice.exchange_rate if invoice and invoice.exchange_rate else "1" }}',
             lines: [
                 { item_id: '', revenue_account_id: '', description: '', quantity: 1, unit_price: 0, amount: 0, tax_code_ids: [], tax_amount: 0, tax_details: [] }
             ]
         },
+        functionalCurrency: '{{ default_currency_code }}',
         paymentTermsDays: 30,
         customerCreditLimit: 0,
         customerBalance: 0,

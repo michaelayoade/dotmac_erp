@@ -583,12 +583,25 @@
                     <select id="currency_code"
                             name="currency_code"
                             x-model="form.currency_code"
+                            @change="FXRateLookup.onCurrencyChange($data, 'form.currency_code', 'form.exchange_rate', 'form.invoice_date', functionalCurrency)"
                             required
                             class="form-input">
                         {% for currency in currencies %}
                         <option value="{{ currency.code }}">{{ currency.code }} - {{ currency.name }}</option>
                         {% endfor %}
                     </select>
+                </div>
+
+                <!-- Exchange Rate -->
+                <div>
+                    <label for="exchange_rate" class="form-label">Exchange Rate</label>
+                    <input type="text"
+                           id="exchange_rate"
+                           name="exchange_rate"
+                           x-model="form.exchange_rate"
+                           class="form-input font-mono tabular-nums"
+                           placeholder="1.0">
+                    <p class="form-hint" x-show="form.currency_code === functionalCurrency">Same as functional currency</p>
                 </div>
 
                 <!-- Invoice Date -->
@@ -815,11 +828,13 @@ function invoiceForm() {
             received_date: '{{ invoice.received_date if invoice else "" }}',
             due_date: '{{ invoice.due_date if invoice else "" }}',
             currency_code: '{{ invoice.currency_code if invoice else "" }}' || (selectedSupplier?.currency_code || selectedPO?.currency_code || '{{ default_currency_code }}'),
+            exchange_rate: '{{ invoice.exchange_rate if invoice and invoice.exchange_rate else "1" }}',
             po_id: selectedPO?.po_id || '',
             lines: [
                 { expense_account_id: '', description: '', quantity: 1, unit_price: 0, amount: 0, tax_code_id: '', tax_amount: 0 }
             ]
         },
+        functionalCurrency: '{{ default_currency_code }}',
         paymentTermsDays: selectedSupplier?.payment_terms_days || 30,
 
         init() {

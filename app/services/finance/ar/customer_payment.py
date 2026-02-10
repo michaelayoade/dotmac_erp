@@ -270,11 +270,16 @@ class CustomerPaymentService(ListResponseMixin):
             db, coerce_uuid(organization_id), payload.get("currency_code")
         )
 
+        exchange_rate: Decimal | None = None
+        if payload.get("exchange_rate") not in (None, ""):
+            exchange_rate = parse_decimal(payload.get("exchange_rate"), "Exchange rate")
+
         return CustomerPaymentInput(
             customer_id=customer_id,
             payment_date=payment_date,
             payment_method=payment_method,
             currency_code=currency_code,
+            exchange_rate=exchange_rate,
             amount=parse_decimal(payload.get("amount", 0), "Amount"),
             bank_account_id=coerce_uuid(payload.get("bank_account_id"))
             if payload.get("bank_account_id")
