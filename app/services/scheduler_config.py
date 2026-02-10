@@ -140,6 +140,10 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "task": "app.tasks.exchange_rates.fetch_daily_exchange_rates",
             "schedule": crontab(hour=14, minute=0),  # 2 PM UTC daily
         },
+        "daily-leave-attendance-sync": {
+            "task": "app.tasks.hr.sync_leave_attendance",
+            "schedule": crontab(hour=0, minute=30),  # 12:30 AM daily
+        },
     }
 
 

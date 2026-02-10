@@ -976,6 +976,118 @@ def process_onboarding_reminders() -> dict:
 
 
 @shared_task
+def sync_leave_attendance() -> dict:
+    """Mark attendance as ON_LEAVE for employees with approved leave today.
+
+    Runs daily via Celery beat. For each organisation:
+    1. Find LeaveApplications where status=APPROVED and date range covers today.
+    2. For each employee on leave, check if an attendance record already exists.
+    3. If none exists → create with status=ON_LEAVE and link leave_application_id.
+    4. If a record exists with a different status → skip (manual override respected).
+
+    Returns:
+        Dict with processing statistics.
+    """
+    from app.models.people.attendance.attendance import Attendance, AttendanceStatus
+    from app.models.people.leave.leave_application import (
+        LeaveApplication,
+        LeaveApplicationStatus,
+    )
+
+    logger.info("Starting daily leave → attendance sync")
+
+    results: dict[str, Any] = {
+        "synced": 0,
+        "already_marked": 0,
+        "errors": [],
+    }
+
+    with SessionLocal() as db:
+        today = date.today()
+
+        # Get all orgs
+        organizations = db.scalars(select(Organization)).all()
+
+        for org in organizations:
+            try:
+                # Find approved leave applications covering today
+                approved_leaves = db.scalars(
+                    select(LeaveApplication).where(
+                        LeaveApplication.organization_id == org.organization_id,
+                        LeaveApplication.status == LeaveApplicationStatus.APPROVED,
+                        LeaveApplication.from_date <= today,
+                        LeaveApplication.to_date >= today,
+                    )
+                ).all()
+
+                for leave in approved_leaves:
+                    try:
+                        # Check if attendance record already exists
+                        existing = db.scalar(
+                            select(Attendance).where(
+                                Attendance.employee_id == leave.employee_id,
+                                Attendance.attendance_date == today,
+                            )
+                        )
+
+                        if existing:
+                            results["already_marked"] += 1
+                            continue
+
+                        # Create ON_LEAVE attendance record
+                        attendance = Attendance(
+                            organization_id=org.organization_id,
+                            employee_id=leave.employee_id,
+                            attendance_date=today,
+                            status=AttendanceStatus.ON_LEAVE,
+                            leave_application_id=leave.application_id,
+                            marked_by="SYSTEM",
+                        )
+                        db.add(attendance)
+                        db.flush()
+                        results["synced"] += 1
+
+                    except Exception as e:
+                        logger.exception(
+                            "Failed to sync attendance for employee %s, leave %s: %s",
+                            leave.employee_id,
+                            leave.application_id,
+                            e,
+                        )
+                        results["errors"].append(
+                            {
+                                "employee_id": str(leave.employee_id),
+                                "leave_id": str(leave.application_id),
+                                "error": str(e),
+                            }
+                        )
+
+            except Exception as e:
+                logger.exception(
+                    "Failed to process leave sync for org %s: %s",
+                    org.organization_id,
+                    e,
+                )
+                results["errors"].append(
+                    {
+                        "organization_id": str(org.organization_id),
+                        "error": str(e),
+                    }
+                )
+
+        db.commit()
+
+    logger.info(
+        "Leave → attendance sync complete: %d synced, %d already marked, %d errors",
+        results["synced"],
+        results["already_marked"],
+        len(results["errors"]),
+    )
+
+    return results
+
+
+@shared_task
 def send_welcome_email(onboarding_id: str) -> dict:
     """
     Send welcome email to a new hire with self-service portal link.
