@@ -75,14 +75,16 @@ class ApplicantWebService:
         return {
             "applicants": result.items,
             "job_openings": job_openings,
-            "search": search,
-            "status": status,
-            "job_opening_id": job_opening_id,
-            "source": source,
+            "search": search or "",
+            "status": status or "",
+            "job_opening_id": job_opening_id or "",
+            "source": source or "",
             "statuses": [s.value for s in ApplicantStatus],
             "page": result.page,
             "total_pages": result.total_pages,
+            "total_count": result.total,
             "total": result.total,
+            "limit": pagination.limit,
             "has_prev": result.has_prev,
             "has_next": result.has_next,
         }
@@ -253,7 +255,10 @@ class ApplicantWebService:
         )
 
         if not ctx.get("applicant"):
-            return RedirectResponse(url="/people/recruit/applicants", status_code=303)
+            return RedirectResponse(
+                url="/people/recruit/applicants?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         context = base_context(
             request, auth, ctx["applicant"].full_name, "recruit", db=db
@@ -277,7 +282,10 @@ class ApplicantWebService:
         )
 
         if not ctx.get("applicant"):
-            return RedirectResponse(url="/people/recruit/applicants", status_code=303)
+            return RedirectResponse(
+                url="/people/recruit/applicants?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         context = base_context(request, auth, "Edit Applicant", "recruit", db=db)
         context["request"] = request
@@ -307,7 +315,7 @@ class ApplicantWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/recruit/applicants/{applicant.applicant_id}",
+                url=f"/people/recruit/applicants/{applicant.applicant_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
@@ -345,7 +353,7 @@ class ApplicantWebService:
             svc.update_applicant(org_id, coerce_uuid(applicant_id), **input_kwargs)
             db.commit()
             return RedirectResponse(
-                url=f"/people/recruit/applicants/{applicant_id}",
+                url=f"/people/recruit/applicants/{applicant_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
@@ -383,7 +391,7 @@ class ApplicantWebService:
             db.rollback()
 
         return RedirectResponse(
-            url=f"/people/recruit/applicants/{applicant_id}", status_code=303
+            url=f"/people/recruit/applicants/{applicant_id}?saved=1", status_code=303
         )
 
     async def reject_applicant_response(
@@ -406,7 +414,7 @@ class ApplicantWebService:
             db.rollback()
 
         return RedirectResponse(
-            url=f"/people/recruit/applicants/{applicant_id}", status_code=303
+            url=f"/people/recruit/applicants/{applicant_id}?saved=1", status_code=303
         )
 
     def delete_applicant_response(
@@ -422,7 +430,10 @@ class ApplicantWebService:
         try:
             svc.delete_applicant(org_id, coerce_uuid(applicant_id))
             db.commit()
-            return RedirectResponse(url="/people/recruit/applicants", status_code=303)
+            return RedirectResponse(
+                url="/people/recruit/applicants?success=Record+deleted+successfully",
+                status_code=303,
+            )
         except Exception:
             db.rollback()
             return RedirectResponse(

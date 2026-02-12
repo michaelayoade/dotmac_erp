@@ -33,6 +33,7 @@ class IncidentCreate(IncidentBase):
     """Create incident request."""
 
     reported_by_id: UUID
+    expense_claim_id: UUID | None = None
 
 
 class IncidentUpdate(BaseModel):

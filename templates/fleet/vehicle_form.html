@@ -139,6 +139,14 @@
                                class="form-input">
                     </div>
                 </div>
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="license_expiry_date" class="form-label">License Expiry Date</label>
+                        <input type="date" id="license_expiry_date" name="license_expiry_date"
+                               value="{{ vehicle.license_expiry_date.strftime('%Y-%m-%d') if vehicle and vehicle.license_expiry_date else '' }}"
+                               class="form-input">
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -176,12 +184,37 @@
                                class="form-input">
                     </div>
                     <div>
+                        <label for="location_id" class="form-label">Location (Branch)</label>
+                        <select id="location_id" name="location_id" class="form-select">
+                            <option value="">Select location...</option>
+                            {% for loc in locations %}
+                            <option value="{{ loc.location_id }}" {{ 'selected' if vehicle and vehicle.location_id == loc.location_id else '' }}>
+                                {{ loc.location_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <div>
                         <label for="supplier_id" class="form-label">Supplier/Vendor</label>
                         <select id="supplier_id" name="supplier_id" class="form-select">
                             <option value="">Select supplier...</option>
                             {% for supplier in suppliers %}
                             <option value="{{ supplier.supplier_id }}" {{ 'selected' if vehicle and vehicle.supplier_id == supplier.supplier_id else '' }}>
                                 {{ supplier.supplier_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="assigned_employee_id" class="form-label">Assigned Employee</label>
+                        <select id="assigned_employee_id" name="assigned_employee_id" class="form-select">
+                            <option value="">Select employee...</option>
+                            {% for emp in employees %}
+                            <option value="{{ emp.employee_id }}" {{ 'selected' if vehicle and vehicle.assigned_employee_id == emp.employee_id else '' }}>
+                                {{ emp.full_name }}{% if emp.employee_code %} ({{ emp.employee_code }}){% endif %}
                             </option>
                             {% endfor %}
                         </select>

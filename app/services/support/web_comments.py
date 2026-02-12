@@ -77,7 +77,7 @@ class CommentWebService:
             logger.exception("Failed to add comment")
 
         return RedirectResponse(
-            url=f"/support/tickets/{ticket.ticket_number}#comments",
+            url=f"/support/tickets/{ticket.ticket_number}#comments?saved=1",
             status_code=303,
         )
 
@@ -101,7 +101,7 @@ class CommentWebService:
             logger.exception("Failed to delete comment")
 
         return RedirectResponse(
-            url=f"/support/tickets/{ticket_id}#comments",
+            url=f"/support/tickets/{ticket_id}#comments?saved=1",
             status_code=303,
         )
 

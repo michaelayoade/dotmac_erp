@@ -578,7 +578,10 @@ class CreditNoteWebService:
                 request, "finance/ar/credit_note_detail.html", context
             )
 
-        return RedirectResponse(url="/finance/ar/credit-notes", status_code=303)
+        return RedirectResponse(
+            url="/finance/ar/credit-notes?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     async def upload_credit_note_attachment_response(
         self,

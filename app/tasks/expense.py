@@ -640,8 +640,10 @@ def poll_stuck_expense_transfers() -> dict:
     """
     Poll Paystack for status of stuck expense reimbursement transfers.
 
-    Checks transfers in PROCESSING state for more than 1 hour and
-    updates their status via direct API query.
+    Checks active transfer intents older than 2 minutes and updates their
+    status via direct API query. Includes:
+    - PROCESSING intents
+    - PENDING intents that already have transfer_code
 
     Returns:
         Dict with polling results
@@ -669,13 +671,44 @@ def poll_stuck_expense_transfers() -> dict:
     }
 
     with SessionLocal() as db:
-        # Find transfers stuck in PROCESSING for more than 1 hour
-        cutoff = datetime.now(UTC) - timedelta(hours=1)
+        # Expire PENDING intents that never had a transfer initiated
+        # (step 2 was never called) and are past their expires_at
+        now = datetime.now(UTC)
+        stale_pending = db.scalars(
+            select(PaymentIntent).where(
+                PaymentIntent.direction == PaymentDirection.OUTBOUND,
+                PaymentIntent.status == PaymentIntentStatus.PENDING,
+                PaymentIntent.source_type == "EXPENSE_CLAIM",
+                PaymentIntent.transfer_code.is_(None),
+                PaymentIntent.expires_at.isnot(None),
+                PaymentIntent.expires_at <= now,
+            )
+        ).all()
+
+        for intent in stale_pending:
+            intent.status = PaymentIntentStatus.EXPIRED
+            logger.info(
+                "Expired stale PENDING transfer intent %s (created %s)",
+                intent.intent_id,
+                intent.created_at,
+            )
+            results["expired"] = results.get("expired", 0) + 1
+
+        if stale_pending:
+            db.commit()
+
+        # Fast fallback: check PROCESSING transfers older than 2 minutes.
+        cutoff = now - timedelta(minutes=2)
 
         stuck_intents = db.scalars(
             select(PaymentIntent).where(
                 PaymentIntent.direction == PaymentDirection.OUTBOUND,
-                PaymentIntent.status == PaymentIntentStatus.PROCESSING,
+                PaymentIntent.status.in_(
+                    [
+                        PaymentIntentStatus.PROCESSING,
+                        PaymentIntentStatus.PENDING,
+                    ]
+                ),
                 PaymentIntent.source_type == "EXPENSE_CLAIM",
                 PaymentIntent.transfer_code.isnot(None),
                 PaymentIntent.created_at < cutoff,
@@ -716,6 +749,12 @@ def poll_stuck_expense_transfers() -> dict:
             for intent in intents:
                 try:
                     results["intents_checked"] += 1
+
+                    # Some intents can remain PENDING despite having a transfer_code.
+                    # Promote to PROCESSING so poll_transfer_status can reconcile them.
+                    if intent.status == PaymentIntentStatus.PENDING:
+                        intent.status = PaymentIntentStatus.PROCESSING
+                        db.flush()
 
                     svc.poll_transfer_status(intent, config)
 

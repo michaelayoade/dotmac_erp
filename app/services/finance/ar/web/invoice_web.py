@@ -532,7 +532,10 @@ class InvoiceWebService:
                 request, "finance/ar/invoice_detail.html", context
             )
 
-        return RedirectResponse(url="/finance/ar/invoices", status_code=303)
+        return RedirectResponse(
+            url="/finance/ar/invoices?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     async def upload_invoice_attachment_response(
         self,

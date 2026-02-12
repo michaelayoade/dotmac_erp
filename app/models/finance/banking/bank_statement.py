@@ -96,20 +96,20 @@ class BankStatement(Base):
         nullable=False,
     )
 
-    # Statement identification
-    statement_number: Mapped[str] = mapped_column(String(50), nullable=False)
-    statement_date: Mapped[date] = mapped_column(Date, nullable=False)
+    # Statement identification (optional — auto-generated if blank)
+    statement_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    statement_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     period_start: Mapped[date] = mapped_column(Date, nullable=False)
     period_end: Mapped[date] = mapped_column(Date, nullable=False)
 
-    # Balances
-    opening_balance: Mapped[Decimal] = mapped_column(
+    # Balances (optional — not all bank exports include these)
+    opening_balance: Mapped[Decimal | None] = mapped_column(
         Numeric(19, 4),
-        nullable=False,
+        nullable=True,
     )
-    closing_balance: Mapped[Decimal] = mapped_column(
+    closing_balance: Mapped[Decimal | None] = mapped_column(
         Numeric(19, 4),
-        nullable=False,
+        nullable=True,
     )
     total_credits: Mapped[Decimal] = mapped_column(
         Numeric(19, 4),
@@ -189,7 +189,12 @@ class BankStatement(Base):
 
     @property
     def is_balanced(self) -> bool:
-        """Check if statement balances correctly."""
+        """Check if statement balances correctly.
+
+        Returns True when either balance is None (cannot verify).
+        """
+        if self.opening_balance is None or self.closing_balance is None:
+            return True
         calculated = self.opening_balance + self.total_credits - self.total_debits
         return calculated == self.closing_balance
 

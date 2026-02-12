@@ -10,12 +10,13 @@ from uuid import UUID
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 from starlette.datastructures import UploadFile
 
 from app.models.people.hr import Employee, EmployeeStatus
 from app.models.people.leave import LeaveApplicationStatus
+from app.models.person import Person
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.people.leave import LeaveAllocationExistsError, LeaveService
 from app.services.people.leave.leave_service import (
@@ -102,6 +103,61 @@ class LeaveWebService:
                 .order_by(Employee.employee_code)
             ).all()
         )
+
+    @staticmethod
+    def _resolve_employee_filter(
+        db: Session, org_id: UUID, value: str | None
+    ) -> tuple[UUID | None, list[UUID] | None]:
+        """Resolve employee filter from UUID, employee code, name, or email.
+
+        Returns:
+            - (employee_id, None) for exact UUID/code match
+            - (None, [ids...]) for name/email/code partial matches
+            - (None, [UUID(0)]) for non-empty unmatched terms (forces empty result)
+            - (None, None) when no filter value is provided
+        """
+        raw = (value or "").strip()
+        if not raw:
+            return None, None
+
+        parsed_uuid = LeaveWebService._parse_uuid(raw)
+        if parsed_uuid:
+            return parsed_uuid, None
+
+        employee = db.scalar(
+            select(Employee).where(
+                Employee.organization_id == org_id,
+                Employee.employee_code.ilike(raw),
+            )
+        )
+        if employee:
+            return employee.employee_id, None
+
+        term = f"%{raw}%"
+        matching_ids = list(
+            db.scalars(
+                select(Employee.employee_id)
+                .join(Person, Person.id == Employee.person_id)
+                .where(
+                    Employee.organization_id == org_id,
+                    or_(
+                        Employee.employee_code.ilike(term),
+                        Person.first_name.ilike(term),
+                        Person.last_name.ilike(term),
+                        Person.display_name.ilike(term),
+                        Person.email.ilike(term),
+                        func.concat(Person.first_name, " ", Person.last_name).ilike(
+                            term
+                        ),
+                    ),
+                )
+                .limit(500)
+            ).all()
+        )
+        if matching_ids:
+            return None, matching_ids
+
+        return None, [UUID(int=0)]
 
     def leave_overview_response(
         self,
@@ -229,9 +285,13 @@ class LeaveWebService:
         effective_per_page = per_page if per_page in allowed_sizes else 25
         pagination = PaginationParams.from_page(page, per_page=effective_per_page)
         svc = LeaveService(db, auth)
+        resolved_employee_id, resolved_employee_ids = self._resolve_employee_filter(
+            db, org_id, employee_id
+        )
         result = svc.list_allocations(
             org_id,
-            employee_id=self._parse_uuid(employee_id),
+            employee_id=resolved_employee_id,
+            employee_ids=resolved_employee_ids,
             leave_type_id=self._parse_uuid(leave_type_id),
             year=parsed_year,
             is_active=parsed_is_active,
@@ -1016,6 +1076,8 @@ class LeaveWebService:
         self,
         request: Request,
         application_id: str,
+        success: str | None,
+        error: str | None,
         auth: WebAuthContext,
         db: Session,
     ) -> HTMLResponse | RedirectResponse:
@@ -1036,13 +1098,15 @@ class LeaveWebService:
 
         approver = None
         if application.approved_by_id:
-            approver = db.get(Employee, application.approved_by_id)
+            approver = db.get(Person, application.approved_by_id)
 
         context = base_context(request, auth, "Leave Application", "leave", db=db)
         context["application"] = application
         context["employee"] = employee
         context["leave_type"] = leave_type
         context["approver"] = approver
+        context["success"] = success
+        context["error"] = error
         return templates.TemplateResponse(
             request, "people/leave/application_detail.html", context
         )
@@ -1132,32 +1196,37 @@ class LeaveWebService:
         db: Session,
     ) -> RedirectResponse:
         """Approve a leave application."""
+        from urllib.parse import quote
+
         org_id = coerce_uuid(auth.organization_id)
         svc = LeaveService(db, auth)
         try:
-            # Get current user's employee ID for approver
-            approver_id = None
-            if auth.person_id:
-                emp = db.scalar(
-                    select(Employee).where(
-                        Employee.person_id == coerce_uuid(auth.person_id),
-                        Employee.organization_id == org_id,
-                    )
-                )
-                if emp:
-                    approver_id = emp.employee_id
-
+            approver_id = coerce_uuid(auth.person_id) if auth.person_id else None
             svc.approve_application(
                 org_id,
                 coerce_uuid(application_id),
                 approver_id=approver_id,
             )
             db.commit()
-        except LeaveServiceError:
+            success_msg = quote("Application approved")
+            return RedirectResponse(
+                f"/people/leave/applications/{application_id}?success={success_msg}",
+                status_code=303,
+            )
+        except LeaveServiceError as exc:
             db.rollback()
-        return RedirectResponse(
-            f"/people/leave/applications/{application_id}", status_code=303
-        )
+            error_msg = quote(str(exc))
+            return RedirectResponse(
+                f"/people/leave/applications/{application_id}?error={error_msg}",
+                status_code=303,
+            )
+        except Exception as exc:
+            db.rollback()
+            error_msg = quote(str(exc))
+            return RedirectResponse(
+                f"/people/leave/applications/{application_id}?error={error_msg}",
+                status_code=303,
+            )
 
     async def reject_application_response(
         self,
@@ -1167,6 +1236,8 @@ class LeaveWebService:
         db: Session,
     ) -> RedirectResponse:
         """Reject a leave application."""
+        from urllib.parse import quote
+
         form = getattr(request.state, "csrf_form", None)
         if form is None:
             form = await request.form()
@@ -1174,17 +1245,7 @@ class LeaveWebService:
         org_id = coerce_uuid(auth.organization_id)
         svc = LeaveService(db, auth)
         try:
-            approver_id = None
-            if auth.person_id:
-                emp = db.scalar(
-                    select(Employee).where(
-                        Employee.person_id == coerce_uuid(auth.person_id),
-                        Employee.organization_id == org_id,
-                    )
-                )
-                if emp:
-                    approver_id = emp.employee_id
-
+            approver_id = coerce_uuid(auth.person_id) if auth.person_id else None
             svc.reject_application(
                 org_id,
                 coerce_uuid(application_id),
@@ -1192,11 +1253,25 @@ class LeaveWebService:
                 reason=LeaveWebService._get_form_str(form, "reason") or "Rejected",
             )
             db.commit()
-        except LeaveServiceError:
+            success_msg = quote("Application rejected")
+            return RedirectResponse(
+                f"/people/leave/applications/{application_id}?success={success_msg}",
+                status_code=303,
+            )
+        except LeaveServiceError as exc:
             db.rollback()
-        return RedirectResponse(
-            f"/people/leave/applications/{application_id}", status_code=303
-        )
+            error_msg = quote(str(exc))
+            return RedirectResponse(
+                f"/people/leave/applications/{application_id}?error={error_msg}",
+                status_code=303,
+            )
+        except Exception as exc:
+            db.rollback()
+            error_msg = quote(str(exc))
+            return RedirectResponse(
+                f"/people/leave/applications/{application_id}?error={error_msg}",
+                status_code=303,
+            )
 
     def cancel_application_response(
         self,
@@ -1603,7 +1678,7 @@ class LeaveWebService:
         result = svc.bulk_approve_applications(
             org_id,
             application_ids=valid_ids,
-            approver_id=coerce_uuid(auth.user_id) if auth.user_id else None,
+            approver_id=coerce_uuid(auth.person_id) if auth.person_id else None,
         )
         db.commit()
 
@@ -1657,7 +1732,7 @@ class LeaveWebService:
         result = svc.bulk_reject_applications(
             org_id,
             application_ids=valid_ids,
-            approver_id=coerce_uuid(auth.user_id) if auth.user_id else None,
+            approver_id=coerce_uuid(auth.person_id) if auth.person_id else None,
             reason=rejection_reason,
         )
         db.commit()

@@ -28,6 +28,7 @@ from app.web.finance.exp_limits import router as limits_router
 _require_claim_approve = require_web_permission("expense:claims:approve:tier1")
 _require_claim_reject = require_web_permission("expense:claims:reject")
 _require_claim_submit = require_web_permission("expense:claims:submit")
+_require_claim_delete = require_web_permission("expense:claims:delete")
 _require_claim_post = require_web_permission("expense:claims:post")
 _require_claim_reimburse = require_web_permission("expense:claims:reimburse")
 _require_category_manage = require_web_permission("expense:categories:manage")
@@ -135,6 +136,7 @@ def expense_claim_new_redirect(
 @router.get("/claims/list", response_class=HTMLResponse)
 def expense_claims_list(
     request: Request,
+    view: str | None = None,
     status: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
@@ -149,6 +151,7 @@ def expense_claims_list(
         request=request,
         auth=auth,
         db=db,
+        view=view,
         status=status,
         start_date=start_date,
         end_date=end_date,
@@ -171,6 +174,24 @@ def expense_claim_detail(
         auth=auth,
         db=db,
         claim_id=claim_id,
+    )
+
+
+@router.get("/claims/{claim_id}/items/{item_id}/receipt")
+def expense_claim_item_receipt(
+    claim_id: str,
+    item_id: str,
+    index: int = Query(default=0, ge=0),
+    auth: WebAuthContext = Depends(require_expense_access),
+    db: Session = Depends(get_db),
+):
+    """Open receipt content for a claim item in the browser."""
+    return expense_claims_web_service.claim_receipt_response(
+        claim_id=claim_id,
+        item_id=item_id,
+        index=index,
+        auth=auth,
+        db=db,
     )
 
 
@@ -242,6 +263,20 @@ def resubmit_expense_claim(
 ):
     """Resubmit a rejected expense claim."""
     return expense_claims_web_service.resubmit_claim_response(
+        claim_id=claim_id,
+        auth=auth,
+        db=db,
+    )
+
+
+@router.post("/claims/{claim_id}/delete")
+def delete_expense_claim(
+    claim_id: str,
+    auth: WebAuthContext = Depends(_require_claim_delete),
+    db: Session = Depends(get_db),
+):
+    """Delete an expense claim (DRAFT only)."""
+    return expense_claims_web_service.delete_claim_response(
         claim_id=claim_id,
         auth=auth,
         db=db,

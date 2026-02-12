@@ -13,75 +13,94 @@
 {% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="max-w-3xl">
     {% if error %}
-    <div class="card border border-rose-200 bg-rose-50 text-rose-900 dark:border-rose-900/40 dark:bg-rose-900/20 dark:text-rose-100 p-4 text-sm">
-        {{ error }}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
     </div>
     {% endif %}
-    <div class="card p-6">
-        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Prequalify Vendor</h2>
-        <form method="post" action="/procurement/vendors/prequalification" class="space-y-6">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Supplier <span class="text-rose-500">*</span></label>
-                    <select name="supplier_id" class="form-select" required>
-                        <option value="">Select supplier</option>
-                        {% for supplier in suppliers %}
-                        <option value="{{ supplier.supplier_id }}">
-                            {{ supplier.trading_name or supplier.legal_name }}
-                        </option>
+
+    <form method="post" action="/procurement/vendors/prequalification" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Prequalification Details</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div>
+                        <label for="supplier_id" class="form-label required">Supplier</label>
+                        <select id="supplier_id" name="supplier_id" class="form-select w-full" required>
+                            <option value="">Select supplier</option>
+                            {% for supplier in suppliers %}
+                            <option value="{{ supplier.supplier_id }}">
+                                {{ supplier.trading_name or supplier.legal_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <label for="application_date" class="form-label required">Application Date</label>
+                        <input type="date" id="application_date" name="application_date" class="form-input w-full" required>
+                    </div>
+                </div>
+
+                <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/40">
+                    <div class="pb-2 border-b border-slate-200 dark:border-slate-700">
+                        <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-900 dark:text-white">Categories</h4>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Optional. Select all categories that apply.</p>
+                    </div>
+                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 pt-3">
+                        {% for category in prequalification_categories %}
+                        <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                            <input type="checkbox" name="categories" value="{{ category }}" class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">
+                            {{ category }}
+                        </label>
                         {% endfor %}
-                    </select>
+                    </div>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Application Date <span class="text-rose-500">*</span></label>
-                    <input type="date" name="application_date" class="input-field" required>
-                </div>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Categories</label>
-                <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {% for category in prequalification_categories %}
-                    <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                        <input type="checkbox" name="categories" value="{{ category }}" class="form-checkbox">
-                        {{ category }}
-                    </label>
-                    {% endfor %}
-                </div>
-                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">Optional. Select all categories that apply.</p>
-            </div>
-            <div>
-                <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-2">Compliance Checklist</h3>
-                <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                    <input type="checkbox" name="documents_verified" class="form-checkbox">
-                    Documents verified
-                </label>
-                <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                    <input type="checkbox" name="tax_clearance_valid" class="form-checkbox">
-                    Tax clearance valid
-                </label>
-                <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                    <input type="checkbox" name="pension_compliance" class="form-checkbox">
-                    Pension compliance
-                </label>
-                <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                    <input type="checkbox" name="itf_compliance" class="form-checkbox">
-                    ITF compliance
-                </label>
-                <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
-                    <input type="checkbox" name="nsitf_compliance" class="form-checkbox">
-                    NSITF compliance
-                </label>
+
+                <div class="pt-2 rounded-lg border border-slate-200 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/40">
+                    <div class="pb-2 border-b border-slate-200 dark:border-slate-700">
+                        <h4 class="text-sm font-semibold uppercase tracking-wide text-slate-900 dark:text-white">Compliance Checklist</h4>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Mark each compliance item confirmed for this supplier.</p>
+                    </div>
+                    <div class="grid grid-cols-1 gap-3 md:grid-cols-2 pt-3">
+                        <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                            <input type="checkbox" name="documents_verified" class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">
+                            Documents verified
+                        </label>
+                        <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                            <input type="checkbox" name="tax_clearance_valid" class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">
+                            Tax clearance valid
+                        </label>
+                        <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                            <input type="checkbox" name="pension_compliance" class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">
+                            Pension compliance
+                        </label>
+                        <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                            <input type="checkbox" name="itf_compliance" class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">
+                            ITF compliance
+                        </label>
+                        <label class="inline-flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                            <input type="checkbox" name="nsitf_compliance" class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">
+                            NSITF compliance
+                        </label>
+                    </div>
                 </div>
             </div>
-            <div class="flex items-center gap-3">
-                <a href="/procurement/vendors/prequalification" class="btn btn-secondary">Cancel</a>
-                <button type="submit" class="btn btn-primary">Create Prequalification</button>
-            </div>
-        </form>
-    </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
+            <a href="/procurement/vendors/prequalification" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Create Prequalification</button>
+        </div>
+    </form>
 </div>
 {% endblock %}

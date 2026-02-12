@@ -164,7 +164,7 @@ class PerfWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/perf/appraisals/{appraisal.appraisal_id}",
+                url=f"/people/perf/appraisals/{appraisal.appraisal_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
@@ -282,7 +282,7 @@ class PerfWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/perf/appraisals/{appraisal_id}",
+                url=f"/people/perf/appraisals/{appraisal_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
@@ -329,7 +329,7 @@ class PerfWebService:
             db.rollback()
 
         return RedirectResponse(
-            url=f"/people/perf/appraisals/{appraisal_id}", status_code=303
+            url=f"/people/perf/appraisals/{appraisal_id}?saved=1", status_code=303
         )
 
     def start_self_assessment_response(
@@ -353,7 +353,7 @@ class PerfWebService:
             db.rollback()
 
         return RedirectResponse(
-            url=f"/people/perf/appraisals/{appraisal_id}", status_code=303
+            url=f"/people/perf/appraisals/{appraisal_id}?saved=1", status_code=303
         )
 
     def self_assessment_form_response(
@@ -866,7 +866,10 @@ class PerfWebService:
         try:
             svc.delete_feedback(org_id, coerce_uuid(feedback_id))
             db.commit()
-            return RedirectResponse(url="/people/perf/feedback", status_code=303)
+            return RedirectResponse(
+                url="/people/perf/feedback?success=Record+deleted+successfully",
+                status_code=303,
+            )
         except Exception:
             db.rollback()
             return RedirectResponse(
@@ -1012,7 +1015,7 @@ class PerfWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/perf/goals/{kpi.kpi_id}",
+                url=f"/people/perf/goals/{kpi.kpi_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
@@ -1144,7 +1147,7 @@ class PerfWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/perf/goals/{kpi_id}",
+                url=f"/people/perf/goals/{kpi_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
@@ -1199,7 +1202,9 @@ class PerfWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url=f"/people/perf/goals/{kpi_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/perf/goals/{kpi_id}?saved=1", status_code=303
+        )
 
     def delete_goal_response(
         self,
@@ -1214,7 +1219,10 @@ class PerfWebService:
         try:
             svc.delete_kpi(org_id, coerce_uuid(kpi_id))
             db.commit()
-            return RedirectResponse(url="/people/perf/goals", status_code=303)
+            return RedirectResponse(
+                url="/people/perf/goals?success=Record+deleted+successfully",
+                status_code=303,
+            )
         except Exception:
             db.rollback()
             return RedirectResponse(url=f"/people/perf/goals/{kpi_id}", status_code=303)

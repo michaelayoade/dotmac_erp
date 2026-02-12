@@ -824,7 +824,10 @@ class InventoryWebService:
             )
 
             item_service.create_item(db, org_id, input_data)
-            return RedirectResponse(url="/inventory/items", status_code=303)
+            return RedirectResponse(
+                url="/inventory/items?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         except Exception as e:
             context = base_context(request, auth, "New Item", "items")
@@ -857,7 +860,10 @@ class InventoryWebService:
         context = base_context(request, auth, "Edit Item", "items")
         context.update(self.item_form_context(db, str(auth.organization_id), item_id))
         if not context.get("item"):
-            return RedirectResponse(url="/inventory/items", status_code=303)
+            return RedirectResponse(
+                url="/inventory/items?success=Record+updated+successfully",
+                status_code=303,
+            )
         return templates.TemplateResponse(request, "inventory/item_form.html", context)
 
     def update_item_response(
@@ -930,7 +936,9 @@ class InventoryWebService:
             }
 
             item_service.update_item(db, org_id, UUID(item_id), updates)
-            return RedirectResponse(url=f"/inventory/items/{item_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/inventory/items/{item_id}?saved=1", status_code=303
+            )
 
         except Exception as e:
             context = base_context(request, auth, "Edit Item", "items")
@@ -1131,7 +1139,10 @@ class InventoryWebService:
             self.category_form_context(db, str(auth.organization_id), category_id)
         )
         if not context.get("category"):
-            return RedirectResponse(url="/inventory/categories", status_code=303)
+            return RedirectResponse(
+                url="/inventory/categories?success=Record+updated+successfully",
+                status_code=303,
+            )
         return templates.TemplateResponse(
             request, "inventory/category_form.html", context
         )
@@ -1176,7 +1187,10 @@ class InventoryWebService:
             )
 
             item_category_service.create_category(db, org_id, input_data)
-            return RedirectResponse(url="/inventory/categories", status_code=303)
+            return RedirectResponse(
+                url="/inventory/categories?success=Record+created+successfully",
+                status_code=303,
+            )
 
         except Exception as e:
             context = base_context(request, auth, "New Category", "categories")
@@ -1230,7 +1244,10 @@ class InventoryWebService:
             item_category_service.update_category(
                 db, org_id, UUID(category_id), updates
             )
-            return RedirectResponse(url="/inventory/categories", status_code=303)
+            return RedirectResponse(
+                url="/inventory/categories?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         except Exception as e:
             context = base_context(request, auth, "Edit Category", "categories")
@@ -1263,7 +1280,10 @@ class InventoryWebService:
                 )
         except Exception as e:
             logger.exception("Failed to toggle category %s: %s", category_id, e)
-        return RedirectResponse(url="/inventory/categories", status_code=303)
+        return RedirectResponse(
+            url="/inventory/categories?success=Record+saved+successfully",
+            status_code=303,
+        )
 
     # ========================================================================
     # Warehouses
@@ -1430,7 +1450,10 @@ class InventoryWebService:
             self.warehouse_form_context(db, str(auth.organization_id), warehouse_id)
         )
         if not context.get("warehouse"):
-            return RedirectResponse(url="/inventory/warehouses", status_code=303)
+            return RedirectResponse(
+                url="/inventory/warehouses?success=Record+updated+successfully",
+                status_code=303,
+            )
         return templates.TemplateResponse(
             request, "inventory/warehouse_form.html", context
         )
@@ -1447,7 +1470,10 @@ class InventoryWebService:
             self.warehouse_detail_context(db, str(auth.organization_id), warehouse_id)
         )
         if not context.get("warehouse"):
-            return RedirectResponse(url="/inventory/warehouses", status_code=303)
+            return RedirectResponse(
+                url="/inventory/warehouses?success=Record+saved+successfully",
+                status_code=303,
+            )
         return templates.TemplateResponse(
             request, "inventory/warehouse_detail.html", context
         )
@@ -1505,7 +1531,10 @@ class InventoryWebService:
             )
 
             warehouse_service.create_warehouse(db, org_id, input_data)
-            return RedirectResponse(url="/inventory/warehouses", status_code=303)
+            return RedirectResponse(
+                url="/inventory/warehouses?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         except Exception as e:
             context = base_context(request, auth, "New Warehouse", "warehouses")
@@ -1568,7 +1597,10 @@ class InventoryWebService:
             }
 
             warehouse_service.update_warehouse(db, org_id, UUID(warehouse_id), updates)
-            return RedirectResponse(url="/inventory/warehouses", status_code=303)
+            return RedirectResponse(
+                url="/inventory/warehouses?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         except Exception as e:
             context = base_context(request, auth, "Edit Warehouse", "warehouses")
@@ -1601,7 +1633,10 @@ class InventoryWebService:
                 )
         except Exception as e:
             logger.exception("Failed to toggle warehouse %s: %s", warehouse_id, e)
-        return RedirectResponse(url="/inventory/warehouses", status_code=303)
+        return RedirectResponse(
+            url="/inventory/warehouses?success=Record+saved+successfully",
+            status_code=303,
+        )
 
     @staticmethod
     def transaction_form_response(
@@ -1895,7 +1930,10 @@ class InventoryTransactionWebService:
             else:
                 InventoryTransactionService.create_issue(db, org_id, txn_input, user_id)
 
-            return RedirectResponse(url="/inventory/transactions", status_code=303)
+            return RedirectResponse(
+                url="/inventory/transactions?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         except Exception as e:
             return RedirectResponse(
@@ -1977,7 +2015,10 @@ class InventoryTransactionWebService:
                 created_by_user_id=user_id,
             )
 
-            return RedirectResponse(url="/inventory/transactions", status_code=303)
+            return RedirectResponse(
+                url="/inventory/transactions?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         except Exception as e:
             return RedirectResponse(
@@ -2055,7 +2096,10 @@ class InventoryTransactionWebService:
                 db, org_id, txn_input, user_id
             )
 
-            return RedirectResponse(url="/inventory/transactions", status_code=303)
+            return RedirectResponse(
+                url="/inventory/transactions?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         except Exception as e:
             return RedirectResponse(

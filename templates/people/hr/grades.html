@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import live_search %}
+{% from "components/macros.html" import live_search, pagination %}
 
 {% block page_title %}Employee Grades{% endblock %}
 
@@ -88,21 +88,13 @@
         </div>
 
         {# Pagination #}
-        {% if total_pages > 1 %}
-        <div class="px-4 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
-            <div class="text-sm text-slate-500 dark:text-slate-400">
-                Showing page {{ page }} of {{ total_pages }} ({{ total }} total)
-            </div>
-            <div class="flex gap-2">
-                {% if has_prev %}
-                <a href="?page={{ page - 1 }}&search={{ search }}" class="btn btn-secondary btn-sm">Previous</a>
-                {% endif %}
-                {% if has_next %}
-                <a href="?page={{ page + 1 }}&search={{ search }}" class="btn btn-secondary btn-sm">Next</a>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
+        {{ pagination(
+            page=page,
+            total_pages=total_pages,
+            total_count=total_count,
+            limit=limit,
+            search=search
+        ) }}
     </div>
     </div>{# /results-container #}
 </div>

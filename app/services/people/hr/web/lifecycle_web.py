@@ -122,7 +122,7 @@ class LifecycleWebService:
         db.commit()
 
         return RedirectResponse(
-            url=f"/people/hr/employees/{employee_id}", status_code=303
+            url=f"/people/hr/employees/{employee_id}?saved=1", status_code=303
         )
 
     @staticmethod
@@ -140,7 +140,7 @@ class LifecycleWebService:
             db.commit()
 
         return RedirectResponse(
-            url=f"/people/hr/employees/{employee_id}", status_code=303
+            url=f"/people/hr/employees/{employee_id}?saved=1", status_code=303
         )
 
     @staticmethod
@@ -171,7 +171,7 @@ class LifecycleWebService:
             db.commit()
 
         return RedirectResponse(
-            url=f"/people/hr/employees/{employee_id}", status_code=303
+            url=f"/people/hr/employees/{employee_id}?saved=1", status_code=303
         )
 
     @staticmethod
@@ -189,7 +189,7 @@ class LifecycleWebService:
             db.commit()
 
         return RedirectResponse(
-            url=f"/people/hr/employees/{employee_id}", status_code=303
+            url=f"/people/hr/employees/{employee_id}?saved=1", status_code=303
         )
 
     @staticmethod
@@ -222,7 +222,7 @@ class LifecycleWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/hr/employees/{employee_id}", status_code=303
+                url=f"/people/hr/employees/{employee_id}?saved=1", status_code=303
             )
         except ValidationError as exc:
             db.rollback()
@@ -276,7 +276,7 @@ class LifecycleWebService:
             svc.link_employee_to_person(employee_id, person_uuid)
             db.commit()
             return RedirectResponse(
-                url=f"/people/hr/employees/{employee_id}", status_code=303
+                url=f"/people/hr/employees/{employee_id}?saved=1", status_code=303
             )
         except ValidationError as exc:
             db.rollback()
@@ -342,7 +342,10 @@ class LifecycleWebService:
         status = LifecycleWebService._form_str(form, "status")
 
         if not employee_ids:
-            return RedirectResponse(url="/people/hr/employees", status_code=303)
+            return RedirectResponse(
+                url="/people/hr/employees?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         status_enum = None
         if status:
@@ -397,7 +400,10 @@ class LifecycleWebService:
 
         employee_ids = form.getlist("employee_ids")
         if not employee_ids:
-            return RedirectResponse(url="/people/hr/employees", status_code=303)
+            return RedirectResponse(
+                url="/people/hr/employees?success=Record+deleted+successfully",
+                status_code=303,
+            )
 
         valid_ids = []
         for emp_id in employee_ids:

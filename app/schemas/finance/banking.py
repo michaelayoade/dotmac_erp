@@ -160,12 +160,12 @@ class BankStatementImport(BaseModel):
     """Import bank statement request."""
 
     bank_account_id: UUID
-    statement_number: str = Field(max_length=50)
-    statement_date: date
+    statement_number: str | None = Field(default=None, max_length=50)
+    statement_date: date | None = None
     period_start: date
     period_end: date
-    opening_balance: Decimal
-    closing_balance: Decimal
+    opening_balance: Decimal | None = None
+    closing_balance: Decimal | None = None
     lines: list[StatementLineCreate]
     import_source: str | None = Field(default=None, max_length=50)
     import_filename: str | None = Field(default=None, max_length=255)
@@ -205,12 +205,12 @@ class BankStatementRead(BaseModel):
     statement_id: UUID
     organization_id: UUID
     bank_account_id: UUID
-    statement_number: str
-    statement_date: date
+    statement_number: str | None = None
+    statement_date: date | None = None
     period_start: date
     period_end: date
-    opening_balance: Decimal
-    closing_balance: Decimal
+    opening_balance: Decimal | None = None
+    closing_balance: Decimal | None = None
     total_credits: Decimal
     total_debits: Decimal
     currency_code: str

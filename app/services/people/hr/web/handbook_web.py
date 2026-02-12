@@ -176,7 +176,7 @@ class HRHandbookWebService:
                 )
                 db.commit()
                 return RedirectResponse(
-                    url=f"/people/hr/handbook/{document_id}",
+                    url=f"/people/hr/handbook/{document_id}?saved=1",
                     status_code=303,
                 )
             else:
@@ -230,7 +230,7 @@ class HRHandbookWebService:
                 db.commit()
 
                 return RedirectResponse(
-                    url=f"/people/hr/handbook/{document.document_id}",
+                    url=f"/people/hr/handbook/{document.document_id}?saved=1",
                     status_code=303,
                 )
 
@@ -299,7 +299,7 @@ class HRHandbookWebService:
         service.activate_document(org_id, document_id, user_id)
         db.commit()
         return RedirectResponse(
-            url=f"/people/hr/handbook/{document_id}",
+            url=f"/people/hr/handbook/{document_id}?saved=1",
             status_code=303,
         )
 
@@ -317,7 +317,7 @@ class HRHandbookWebService:
         service.archive_document(org_id, document_id, user_id)
         db.commit()
         return RedirectResponse(
-            url=f"/people/hr/handbook/{document_id}",
+            url=f"/people/hr/handbook/{document_id}?saved=1",
             status_code=303,
         )
 

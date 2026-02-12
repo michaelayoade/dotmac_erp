@@ -78,9 +78,54 @@ class StatementImportResult:
 class BankStatementService:
     """Service for managing bank statements."""
 
+    # Aliases for auto-detecting CSV format from column headers.
+    _DEBIT_ALIASES = frozenset(
+        {"debit", "dr", "withdrawal", "withdrawals", "debit_amount"}
+    )
+    _CREDIT_ALIASES = frozenset(
+        {"credit", "cr", "deposit", "deposits", "credit_amount"}
+    )
+    _TYPE_ALIASES = frozenset(
+        {
+            "transaction_type",
+            "txn_type",
+            "type",
+            "trans_type",
+            "tran_type",
+        }
+    )
+    _AMOUNT_ALIASES = frozenset(
+        {"amount", "value", "amt", "transaction_amount", "txn_amount"}
+    )
+
     @staticmethod
     def _normalize_header(value: str) -> str:
         return value.strip().lower().replace(" ", "_")
+
+    @staticmethod
+    def auto_detect_csv_format(headers: set[str]) -> str:
+        """Detect CSV format from normalized column headers.
+
+        Returns ``"debit_credit"`` or ``"type"``.
+        Raises ``ValueError`` when format cannot be determined.
+        """
+        has_debit = bool(headers & BankStatementService._DEBIT_ALIASES)
+        has_credit = bool(headers & BankStatementService._CREDIT_ALIASES)
+        has_type = bool(headers & BankStatementService._TYPE_ALIASES)
+        has_amount = bool(headers & BankStatementService._AMOUNT_ALIASES)
+
+        if has_debit and has_credit:
+            return "debit_credit"
+        if has_type and has_amount:
+            return "type"
+        if has_debit or has_credit:
+            # Only one of debit/credit present — still treat as debit_credit
+            return "debit_credit"
+        raise ValueError(
+            "Cannot detect CSV format. Expected columns like "
+            "'debit'+'credit' or 'transaction_type'+'amount'. "
+            f"Found: {', '.join(sorted(headers))}"
+        )
 
     @staticmethod
     def _parse_decimal(value: str | None, field: str, row: int) -> Decimal | None:
@@ -129,14 +174,80 @@ class BankStatementService:
         fmt_hint = f" (expected format: {date_format})" if date_format else ""
         raise ValueError(f"Row {row}: invalid {field} '{text}'{fmt_hint}")
 
+    # Map common bank column aliases → canonical internal names.
+    _HEADER_ALIAS_MAP: dict[str, str] = {
+        # Date
+        "date": "transaction_date",
+        "txn_date": "transaction_date",
+        "posting_date": "transaction_date",
+        "trans_date": "transaction_date",
+        "tran_date": "transaction_date",
+        "book_date": "transaction_date",
+        # Debit / Credit
+        "dr": "debit",
+        "withdrawal": "debit",
+        "withdrawals": "debit",
+        "debit_amount": "debit",
+        "cr": "credit",
+        "deposit": "credit",
+        "deposits": "credit",
+        "credit_amount": "credit",
+        # Type + Amount
+        "txn_type": "transaction_type",
+        "trans_type": "transaction_type",
+        "tran_type": "transaction_type",
+        "type": "transaction_type",
+        "amt": "amount",
+        "value": "amount",
+        "transaction_amount": "amount",
+        "txn_amount": "amount",
+        # Description
+        "narration": "description",
+        "narrative": "description",
+        "particulars": "description",
+        "details": "description",
+        "memo": "description",
+        "remark": "description",
+        "remarks": "description",
+        # Reference
+        "ref": "reference",
+        "ref_no": "reference",
+        "reference_number": "reference",
+        # Payee
+        "payee": "payee_payer",
+        "payer": "payee_payer",
+        "beneficiary": "payee_payer",
+        "party": "payee_payer",
+        "counterparty": "payee_payer",
+        # Check
+        "cheque": "check_number",
+        "check": "check_number",
+        "chq_no": "check_number",
+        "cheque_number": "check_number",
+        "cheque_no": "check_number",
+        # Balance
+        "balance": "running_balance",
+        "closing_balance": "running_balance",
+        # Value date
+        "val_date": "value_date",
+        # Transaction ID
+        "txn_id": "transaction_id",
+        "trans_id": "transaction_id",
+    }
+
+    @classmethod
+    def _remap_header(cls, normalized: str) -> str:
+        """Remap a normalized header to its canonical name via alias map."""
+        return cls._HEADER_ALIAS_MAP.get(normalized, normalized)
+
     def parse_csv_rows(
         self,
         content: bytes,
-        csv_format: str,
+        csv_format: str | None = None,
         date_format: str | None = None,
     ) -> tuple[list[dict], list[str]]:
         errors: list[str] = []
-        if csv_format not in ("type", "debit_credit"):
+        if csv_format is not None and csv_format not in ("type", "debit_credit"):
             return [], [f"Unsupported CSV format '{csv_format}'."]
         try:
             text = content.decode("utf-8-sig")
@@ -164,9 +275,19 @@ class BankStatementService:
             return [], ["CSV file must include a header row."]
 
         header_map = {
-            name: self._normalize_header(name) for name in reader.fieldnames if name
+            name: self._remap_header(self._normalize_header(name))
+            for name in reader.fieldnames
+            if name
         }
         fields = set(header_map.values())
+
+        # Auto-detect format from column headers when not specified.
+        if csv_format is None:
+            try:
+                csv_format = self.auto_detect_csv_format(fields)
+            except ValueError as exc:
+                return [], [str(exc)]
+
         required = (
             {"transaction_date", "debit", "credit"}
             if csv_format == "debit_credit"
@@ -256,11 +377,11 @@ class BankStatementService:
     def parse_xlsx_rows(
         self,
         content: bytes,
-        csv_format: str,
+        csv_format: str | None = None,
         date_format: str | None = None,
     ) -> tuple[list[dict], list[str]]:
         errors: list[str] = []
-        if csv_format not in ("type", "debit_credit"):
+        if csv_format is not None and csv_format not in ("type", "debit_credit"):
             return [], [f"Unsupported CSV format '{csv_format}'."]
 
         workbook = load_workbook(
@@ -278,9 +399,20 @@ class BankStatementService:
                 return [], ["XLSX file must include a header row."]
 
             header_map = [
-                self._normalize_header(str(h)) if h is not None else "" for h in headers
+                self._remap_header(self._normalize_header(str(h)))
+                if h is not None
+                else ""
+                for h in headers
             ]
             fields = {name for name in header_map if name}
+
+            # Auto-detect format from column headers when not specified.
+            if csv_format is None:
+                try:
+                    csv_format = self.auto_detect_csv_format(fields)
+                except ValueError as exc:
+                    return [], [str(exc)]
+
             required = (
                 {"transaction_date", "debit", "credit"}
                 if csv_format == "debit_credit"
@@ -546,12 +678,12 @@ class BankStatementService:
         db: Session,
         organization_id: UUID,
         bank_account_id: UUID,
-        statement_number: str,
-        statement_date: date,
+        statement_number: str | None,
+        statement_date: date | None,
         period_start: date,
         period_end: date,
-        opening_balance: Decimal,
-        closing_balance: Decimal,
+        opening_balance: Decimal | None,
+        closing_balance: Decimal | None,
         lines: list[StatementLineInput],
         import_source: str | None = None,
         import_filename: str | None = None,
@@ -573,21 +705,22 @@ class BankStatementService:
                 detail="Bank account does not belong to this organization",
             )
 
-        # Check for duplicate statement
-        existing = db.execute(
-            select(BankStatement).where(
-                and_(
-                    BankStatement.bank_account_id == bank_account_id,
-                    BankStatement.statement_number == statement_number,
+        # Check for duplicate statement (only when number is provided)
+        if statement_number:
+            existing = db.execute(
+                select(BankStatement).where(
+                    and_(
+                        BankStatement.bank_account_id == bank_account_id,
+                        BankStatement.statement_number == statement_number,
+                    )
                 )
-            )
-        ).scalar_one_or_none()
+            ).scalar_one_or_none()
 
-        if existing:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Statement {statement_number} already exists for this account",
-            )
+            if existing:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Statement {statement_number} already exists for this account",
+                )
 
         # Calculate totals
         total_credits = Decimal("0")
@@ -680,22 +813,25 @@ class BankStatementService:
                 result.errors.append(f"Line {line_input.line_number}: {str(e)}")
 
         # Update bank account with latest statement info
-        bank_account.last_statement_date = datetime.combine(
-            statement_date,
-            datetime.min.time(),
-            tzinfo=UTC,
-        )
-        bank_account.last_statement_balance = closing_balance
+        if statement_date is not None:
+            bank_account.last_statement_date = datetime.combine(
+                statement_date,
+                datetime.min.time(),
+                tzinfo=UTC,
+            )
+        if closing_balance is not None:
+            bank_account.last_statement_balance = closing_balance
 
         db.flush()
 
-        # Validate statement balance
-        if not statement.is_balanced:
-            result.warnings.append(
-                f"Statement does not balance: "
-                f"Opening ({opening_balance}) + Credits ({total_credits}) - "
-                f"Debits ({total_debits}) != Closing ({closing_balance})"
-            )
+        # Validate statement balance (only when both balances provided)
+        if opening_balance is not None and closing_balance is not None:
+            if not statement.is_balanced:
+                result.warnings.append(
+                    f"Statement does not balance: "
+                    f"Opening ({opening_balance}) + Credits ({total_credits}) - "
+                    f"Debits ({total_debits}) != Closing ({closing_balance})"
+                )
 
         db.commit()
         return result

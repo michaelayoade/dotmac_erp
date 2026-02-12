@@ -99,17 +99,29 @@
                         <td class="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">{{ claim.claim_date }}</td>
                         <td class="px-4 py-3 text-right text-sm text-slate-700 dark:text-slate-300 font-mono tabular-nums">{{ claim.total_claimed_amount | format_currency }}</td>
                         <td class="px-4 py-3 text-sm">{{ status_badge(status_text | upper, 'sm') }}</td>
-                        <td class="px-4 py-3 text-right text-sm space-x-3">
-                            <a href="/people/self/expenses/claims/{{ claim.claim_id }}/edit"
-                               class="text-slate-600 hover:text-slate-800 dark:text-slate-300 dark:hover:text-white font-medium">
-                                View
-                            </a>
-                            {% if status_text|upper == "DRAFT" %}
-                            <a href="/people/self/expenses/claims/{{ claim.claim_id }}/edit"
-                               class="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 font-medium">
-                                Edit
-                            </a>
-                            {% endif %}
+                        <td class="px-4 py-3 text-right text-sm">
+                            <div class="inline-flex items-center gap-3">
+                                <a href="/people/self/expenses/claims/{{ claim.claim_id }}/edit"
+                                   class="text-slate-600 hover:text-slate-800 dark:text-slate-300 dark:hover:text-white font-medium">
+                                    View
+                                </a>
+                                {% if status_text|upper == "DRAFT" %}
+                                <a href="/people/self/expenses/claims/{{ claim.claim_id }}/edit"
+                                   class="text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 font-medium">
+                                    Edit
+                                </a>
+                                <form method="post"
+                                      action="/people/self/expenses/claims/{{ claim.claim_id }}/delete"
+                                      class="inline-block"
+                                      onsubmit="return confirm('Delete this draft claim permanently? This cannot be undone.');">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                    <button type="submit"
+                                            class="text-rose-600 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300 font-medium">
+                                        Delete
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% else %}
@@ -168,6 +180,7 @@
                         <select name="category_id" id="category_id" class="form-select w-full" required onchange="updateReceiptRequirement()">
                             {% for cat in categories %}
                             <option value="{{ cat.category_id }}"
+                                    data-category-code="{{ cat.category_code }}"
                                     data-requires-receipt="{{ 'true' if cat.requires_receipt else 'false' }}"
                                     data-max-amount="{{ cat.max_amount_per_claim or '' }}">
                                 {{ cat.category_name }}{% if cat.requires_receipt %} *{% endif %}
@@ -203,9 +216,36 @@
                         <p class="mt-1 text-xs text-slate-400">Who should receive the reimbursement</p>
                     </div>
                     <div>
-                        <label for="recipient_bank_name" class="form-label">Bank Name</label>
-                        <input type="text" name="recipient_bank_name" id="recipient_bank_name" class="form-input w-full" placeholder="e.g. Access Bank" value="{{ employee_bank_name }}">
+                        <label for="recipient_bank_name_input" class="form-label">Bank Name</label>
+                        {% if allowed_banks %}
+                        <div id="recipient_bank_name_input_wrap">
+                            <input type="text"
+                                   name="recipient_bank_name"
+                                   id="recipient_bank_name_input"
+                                   class="form-input w-full"
+                                   placeholder="e.g. Access Bank"
+                                   value="{{ employee_bank_name }}"
+                                   data-initial-value="{{ employee_bank_name }}">
+                            <p class="mt-1 text-xs text-slate-400">Use when reimbursing a third party</p>
+                        </div>
+                        <div id="recipient_bank_name_select_wrap" class="hidden">
+                            <select name="recipient_bank_name"
+                                    id="recipient_bank_name_select"
+                                    class="form-select w-full"
+                                    disabled>
+                                <option value="">-- Select Bank --</option>
+                                {% for bank in allowed_banks %}
+                                <option value="{{ bank.bank_name }}" data-sort-code="{{ bank.bank_sort_code }}">
+                                    {{ bank.bank_name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <p class="mt-1 text-xs text-slate-400">Select a bank from your organization list</p>
+                        </div>
+                        {% else %}
+                        <input type="text" name="recipient_bank_name" id="recipient_bank_name_input" class="form-input w-full" placeholder="e.g. Access Bank" value="{{ employee_bank_name }}">
                         <p class="mt-1 text-xs text-slate-400">Use when reimbursing a third party</p>
+                        {% endif %}
                     </div>
                     <div>
                         <label for="recipient_bank_code" class="form-label">Bank Code <span class="text-rose-500">*</span></label>
@@ -230,8 +270,9 @@
                         <input type="url" name="receipt_url" id="receipt_url" class="form-input w-full">
                     </div>
                     <div class="sm:col-span-2">
-                        <label for="receipt_file" class="form-label">Receipt File</label>
-                        <input type="file" name="receipt_file" id="receipt_file" class="form-input w-full">
+                        <label for="receipt_file" class="form-label">Receipt Files</label>
+                        <input type="file" name="receipt_file" id="receipt_file" class="form-input w-full" multiple>
+                        <p class="mt-1 text-xs text-slate-400">You can select multiple files.</p>
                     </div>
                     <div>
                         <label for="project_id" class="form-label">Project (Optional)</label>
@@ -295,7 +336,7 @@ function updateReceiptRequirement() {
     const amountInput = document.getElementById('claimed_amount');
 
     const option = select.options[select.selectedIndex];
-    const requiresReceipt = option.dataset.requiresReceipt === 'true';
+    const requiresReceipt = categoryRequiresReceipt(option);
     const maxAmount = option.dataset.maxAmount;
 
     if (requiresReceipt) {
@@ -313,12 +354,27 @@ function updateReceiptRequirement() {
     }
 }
 
+function normalizeCategoryToken(value) {
+    return (value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function isFuelMileageCategory(option) {
+    const normalizedName = normalizeCategoryToken(option && option.textContent);
+    const normalizedCode = normalizeCategoryToken(option && option.dataset && option.dataset.categoryCode);
+    return ['fuelmileage', 'fuelmileageexpense', 'fuelmileageexpenses'].includes(normalizedName)
+        || ['fuelmileage', 'fuelmileageexpense', 'fuelmileageexpenses'].includes(normalizedCode);
+}
+
+function categoryRequiresReceipt(option) {
+    return option.dataset.requiresReceipt === 'true' && !isFuelMileageCategory(option);
+}
+
 const claimForm = document.getElementById('expense-claim-form');
 if (claimForm) {
     claimForm.addEventListener('submit', function(e) {
         const select = document.getElementById('category_id');
         const option = select.options[select.selectedIndex];
-        const requiresReceipt = option.dataset.requiresReceipt === 'true';
+        const requiresReceipt = categoryRequiresReceipt(option);
 
         const receiptUrl = document.getElementById('receipt_url').value.trim();
         const receiptFile = document.getElementById('receipt_file').files.length > 0;
@@ -401,6 +457,58 @@ function refreshTable() {
     applyFilters();
 }
 
+function setupBankListToggle() {
+    const inputWrap = document.getElementById('recipient_bank_name_input_wrap');
+    const selectWrap = document.getElementById('recipient_bank_name_select_wrap');
+    const nameInput = document.getElementById('recipient_bank_name_input');
+    const nameSelect = document.getElementById('recipient_bank_name_select');
+    const codeInput = document.getElementById('recipient_bank_code');
+    if (!inputWrap || !selectWrap || !nameInput || !nameSelect) return;
+
+    const initialValue = nameInput.dataset.initialValue || '';
+
+    const ensureCustomOption = (value) => {
+        if (!value) return;
+        let option = Array.from(nameSelect.options).find((opt) => opt.value === value);
+        if (!option) {
+            option = document.createElement('option');
+            option.value = value;
+            option.textContent = value + ' (not in list)';
+            nameSelect.insertBefore(option, nameSelect.options[1] || null);
+        }
+        option.selected = true;
+    };
+
+    const syncSortCode = () => {
+        const selected = nameSelect.options[nameSelect.selectedIndex];
+        const sortCode = selected ? selected.dataset.sortCode : '';
+        if (sortCode && codeInput) {
+            codeInput.value = sortCode;
+        }
+    };
+
+    const showSelect = (currentValue) => {
+        inputWrap.classList.add('hidden');
+        selectWrap.classList.remove('hidden');
+        nameInput.disabled = true;
+        nameSelect.disabled = false;
+        if (currentValue) {
+            ensureCustomOption(currentValue);
+        }
+        syncSortCode();
+    };
+
+    const maybeSwitch = () => {
+        const currentValue = nameInput.value || '';
+        if (currentValue !== initialValue) {
+            showSelect(currentValue);
+        }
+    };
+
+    nameInput.addEventListener('input', maybeSwitch);
+    nameSelect.addEventListener('change', syncSortCode);
+}
+
 if (searchInput) searchInput.addEventListener('input', applyFilters);
 if (statusFilter) statusFilter.addEventListener('change', applyFilters);
 if (sortSelect) sortSelect.addEventListener('change', refreshTable);
@@ -416,6 +524,7 @@ coinParticles.forEach((particle) => {
 document.addEventListener('DOMContentLoaded', function() {
     updateReceiptRequirement();
     refreshTable();
+    setupBankListToggle();
 });
 </script>
 

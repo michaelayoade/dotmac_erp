@@ -1,6 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import status_badge %}
-{% from "components/macros.html" import live_search %}
+{%- from "components/macros.html" import status_badge, pagination, live_search %}
 
 {% block page_title %}Employee Loans{% endblock %}
 
@@ -116,21 +115,13 @@
     </div>
 
     {# Pagination #}
-    {% if total_pages > 1 %}
-    <div class="flex items-center justify-between">
-        <p class="text-sm text-slate-600 dark:text-slate-400">
-            Showing page {{ page }} of {{ total_pages }} ({{ total }} loans)
-        </p>
-        <div class="flex gap-2">
-            {% if has_prev %}
-            <a href="?page={{ page - 1 }}&search={{ search }}&status={{ status }}" class="btn btn-secondary btn-sm">Previous</a>
-            {% endif %}
-            {% if has_next %}
-            <a href="?page={{ page + 1 }}&search={{ search }}&status={{ status }}" class="btn btn-secondary btn-sm">Next</a>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
+    {{ pagination(
+        page=page,
+        total_pages=total_pages,
+        total_count=total_count,
+        limit=limit,
+        search=search
+    ) }}
 
     {% else %}
     <div class="card p-12 text-center">

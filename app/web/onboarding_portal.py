@@ -229,7 +229,7 @@ def complete_onboarding_task(
     if activity.activity_status in ("COMPLETED", "SKIPPED"):
         # Already complete, redirect back
         return RedirectResponse(
-            url=f"/onboarding/start/{token}",
+            url=f"/onboarding/start/{token}?saved=1",
             status_code=303,
         )
 
@@ -283,7 +283,7 @@ def complete_onboarding_task(
         logger.info("Employee completed onboarding task %s", activity_id)
 
         return RedirectResponse(
-            url=f"/onboarding/start/{token}?completed={activity_id}",
+            url=f"/onboarding/start/{token}?completed={activity_id}&saved=1",
             status_code=303,
         )
 

@@ -624,7 +624,7 @@ class SupportWebService:
             db.commit()
 
             return RedirectResponse(
-                url=self._ticket_url(ticket),
+                url=self._ticket_url(ticket) + "?saved=1",
                 status_code=303,
             )
 
@@ -683,7 +683,7 @@ class SupportWebService:
         ticket_ref = self._resolve_ticket_ref(db, org_id, ticket_id)
         if not ticket_ref:
             return RedirectResponse(
-                url="/support/tickets",
+                url="/support/tickets?success=Record+updated+successfully",
                 status_code=303,
             )
 
@@ -709,7 +709,7 @@ class SupportWebService:
 
             if not ticket:
                 return RedirectResponse(
-                    url="/support/tickets",
+                    url="/support/tickets?success=Record+saved+successfully",
                     status_code=303,
                 )
 
@@ -727,7 +727,7 @@ class SupportWebService:
             db.commit()
 
             return RedirectResponse(
-                url=self._ticket_url(ticket),
+                url=self._ticket_url(ticket) + "?saved=1",
                 status_code=303,
             )
 
@@ -753,7 +753,7 @@ class SupportWebService:
         ticket_ref = self._resolve_ticket_ref(db, org_id, ticket_id)
         if not ticket_ref:
             return RedirectResponse(
-                url="/support/tickets",
+                url="/support/tickets?success=Record+updated+successfully",
                 status_code=303,
             )
 
@@ -769,7 +769,7 @@ class SupportWebService:
             db.commit()
 
         return RedirectResponse(
-            url=self._ticket_url(ticket_ref),
+            url=self._ticket_url(ticket_ref) + "?saved=1",
             status_code=303,
         )
 
@@ -787,7 +787,7 @@ class SupportWebService:
         ticket_ref = self._resolve_ticket_ref(db, org_id, ticket_id)
         if not ticket_ref:
             return RedirectResponse(
-                url="/support/tickets",
+                url="/support/tickets?success=Record+saved+successfully",
                 status_code=303,
             )
 
@@ -799,7 +799,7 @@ class SupportWebService:
             db.commit()
 
         return RedirectResponse(
-            url=self._ticket_url(ticket_ref),
+            url=self._ticket_url(ticket_ref) + "?saved=1",
             status_code=303,
         )
 
@@ -817,7 +817,7 @@ class SupportWebService:
         ticket_ref = self._resolve_ticket_ref(db, org_id, ticket_id)
         if not ticket_ref:
             return RedirectResponse(
-                url="/support/tickets",
+                url="/support/tickets?success=Record+saved+successfully",
                 status_code=303,
             )
 
@@ -829,7 +829,7 @@ class SupportWebService:
             db.commit()
 
         return RedirectResponse(
-            url=self._ticket_url(ticket_ref),
+            url=self._ticket_url(ticket_ref) + "?saved=1",
             status_code=303,
         )
 
@@ -846,7 +846,7 @@ class SupportWebService:
         ticket_ref = self._resolve_ticket_ref(db, org_id, ticket_id)
         if not ticket_ref:
             return RedirectResponse(
-                url="/support/tickets",
+                url="/support/tickets?success=Record+saved+successfully",
                 status_code=303,
             )
 
@@ -857,7 +857,7 @@ class SupportWebService:
         if success:
             db.commit()
             return RedirectResponse(
-                url="/support/tickets?archived=success",
+                url="/support/tickets?archived=success&success=Record+saved+successfully",
                 status_code=303,
             )
 
@@ -879,7 +879,7 @@ class SupportWebService:
         ticket_ref = self._resolve_ticket_ref(db, org_id, ticket_id)
         if not ticket_ref:
             return RedirectResponse(
-                url="/support/tickets",
+                url="/support/tickets?success=Record+deleted+successfully",
                 status_code=303,
             )
 
@@ -923,7 +923,7 @@ class SupportWebService:
         if ticket:
             db.commit()
             return RedirectResponse(
-                url=self._ticket_url(ticket_ref),
+                url=self._ticket_url(ticket_ref) + "?saved=1",
                 status_code=303,
             )
 
@@ -1652,7 +1652,7 @@ class SupportWebService:
             db.commit()
 
             return RedirectResponse(
-                url=f"/support/tickets?bulk_status=success&updated={result['success']}&errors={result['error']}",
+                url=f"/support/tickets?bulk_status=success&updated={result['success']}&errors={result['error']}&saved=1",
                 status_code=303,
             )
         except Exception:
@@ -1718,7 +1718,7 @@ class SupportWebService:
             db.commit()
 
             return RedirectResponse(
-                url=f"/support/tickets?bulk_assign=success&updated={result['success']}&errors={result['error']}",
+                url=f"/support/tickets?bulk_assign=success&updated={result['success']}&errors={result['error']}&saved=1",
                 status_code=303,
             )
         except Exception:
@@ -1766,7 +1766,7 @@ class SupportWebService:
             db.commit()
 
             return RedirectResponse(
-                url=f"/support/tickets?bulk_archive=success&archived={result['success']}&errors={result['error']}",
+                url=f"/support/tickets?bulk_archive=success&archived={result['success']}&errors={result['error']}&saved=1",
                 status_code=303,
             )
         except Exception:

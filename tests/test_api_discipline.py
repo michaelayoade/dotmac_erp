@@ -349,6 +349,39 @@ class TestDisciplineWorkflow:
         assert response.status_code in (400, 422, 500)
 
 
+class TestDisciplineDeleteCase:
+    """Tests for DELETE /discipline/cases/{case_id} endpoint."""
+
+    def test_delete_case_success(
+        self, client, auth_headers, mock_discipline_service, test_case
+    ):
+        """Test deleting a draft case."""
+        mock_discipline_service.get_case_or_404.return_value = test_case
+
+        response = client.delete(
+            f"/api/v1/people/discipline/cases/{test_case.case_id}",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 204
+        mock_discipline_service.delete_case.assert_called_once()
+
+    def test_delete_case_wrong_organization_returns_404(
+        self, client, auth_headers, mock_discipline_service
+    ):
+        """Test deleting case from different organization returns 404."""
+        case = MockCase(organization_id=uuid.uuid4())
+        mock_discipline_service.get_case_or_404.return_value = case
+
+        response = client.delete(
+            f"/api/v1/people/discipline/cases/{case.case_id}",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 404
+        mock_discipline_service.delete_case.assert_not_called()
+
+
 class TestEmployeeActions:
     """Tests for employee action query endpoints."""
 

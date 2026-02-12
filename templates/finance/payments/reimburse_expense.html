@@ -63,7 +63,7 @@
         </div>
 
         <!-- Status Messages -->
-        {% if has_active_payment %}
+        {% if has_active_payment and not can_retry_transfer %}
         <div class="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-900/20">
             <div class="flex items-center gap-3">
                 <svg class="h-5 w-5 flex-shrink-0 text-blue-500 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -77,6 +77,27 @@
                     <a href="/finance/payments/transfers" class="mt-2 inline-flex items-center text-xs font-medium text-blue-700 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
                         View transfers &rarr;
                     </a>
+                </div>
+            </div>
+        </div>
+        {% elif can_retry_transfer %}
+        <div class="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+            <div class="flex items-start gap-3">
+                <svg class="h-5 w-5 flex-shrink-0 text-amber-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-amber-700 dark:text-amber-400">Transfer not completed</p>
+                    <p class="mt-1 text-xs text-amber-600 dark:text-amber-500">
+                        A payment intent was created but the transfer was never sent. Click below to retry.
+                    </p>
+                    <button type="button" id="retryTransferBtn" onclick="retryTransfer('{{ active_intent_id }}')"
+                            class="mt-3 inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-violet-500/25 transition-all hover:from-violet-700 hover:to-purple-700 hover:shadow-xl hover:shadow-violet-500/30 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        <span id="retryBtnText">Retry Transfer</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -198,6 +219,51 @@
         </div>
     </div>
 </div>
+
+{% if can_retry_transfer %}
+<script>
+async function retryTransfer(intentId) {
+    const btn = document.getElementById('retryTransferBtn');
+    const btnText = document.getElementById('retryBtnText');
+
+    btn.disabled = true;
+    btnText.textContent = 'Initiating transfer...';
+
+    try {
+        const response = await fetch(`/api/v1/payments/transfers/${intentId}/initiate`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': '{{ csrf_token }}'
+            }
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to initiate transfer');
+        }
+
+        const result = await response.json();
+
+        if (result.status === 'COMPLETED') {
+            btnText.textContent = 'Payment Complete!';
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: result.message || 'Transfer completed successfully!', type: 'success' } }));
+            window.location.href = '/expense/claims/{{ expense_claim.claim_id }}';
+        } else if (result.status === 'FAILED') {
+            throw new Error(result.message || 'Transfer failed');
+        } else {
+            window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: result.message || 'Transfer initiated and processing.', type: 'info' } }));
+            window.location.href = '/finance/payments/transfers';
+        }
+    } catch (error) {
+        console.error('Retry transfer error:', error);
+        window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'Transfer failed: ' + error.message, type: 'error' } }));
+        btn.disabled = false;
+        btnText.textContent = 'Retry Transfer';
+    }
+}
+</script>
+{% endif %}
 
 {% if can_reimburse and paystack_enabled and transfers_enabled %}
 <script>

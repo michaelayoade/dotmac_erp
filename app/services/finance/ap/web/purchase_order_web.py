@@ -508,7 +508,10 @@ class PurchaseOrderWebService:
             self.purchase_order_form_context(db, str(auth.organization_id), po_id)
         )
         if not context.get("order"):
-            return RedirectResponse(url="/finance/ap/purchase-orders", status_code=303)
+            return RedirectResponse(
+                url="/finance/ap/purchase-orders?success=Record+updated+successfully",
+                status_code=303,
+            )
         return templates.TemplateResponse(
             request, "finance/ap/purchase_order_form.html", context
         )
@@ -559,7 +562,7 @@ class PurchaseOrderWebService:
                 return {"success": True, "po_id": str(po.po_id)}
 
             return RedirectResponse(
-                url=f"/finance/ap/purchase-orders/{po.po_id}",
+                url=f"/finance/ap/purchase-orders/{po.po_id}?saved=1",
                 status_code=303,
             )
 

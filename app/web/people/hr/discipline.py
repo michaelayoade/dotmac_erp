@@ -350,6 +350,20 @@ def withdraw_case(
     )
 
 
+@router.post("/{case_id}/delete")
+def delete_case(
+    case_id: UUID,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+):
+    """Delete a draft disciplinary case."""
+    return discipline_web_service.delete_case_response(
+        auth=auth,
+        db=db,
+        case_id=case_id,
+    )
+
+
 # =============================================================================
 # Witnesses
 # =============================================================================

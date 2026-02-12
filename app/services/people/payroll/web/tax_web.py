@@ -141,7 +141,10 @@ class TaxWebService:
             db.add_all(bands)
             db.commit()
 
-        return RedirectResponse(url="/people/payroll/tax/bands", status_code=303)
+        return RedirectResponse(
+            url="/people/payroll/tax/bands?success=Record+saved+successfully",
+            status_code=303,
+        )
 
     def tax_calculator_form_response(
         self,
@@ -281,9 +284,12 @@ class TaxWebService:
         context.update(
             {
                 "profiles": profiles,
+                "search": "",
                 "page": page,
                 "total_pages": total_pages,
+                "total_count": total,
                 "total": total,
+                "limit": per_page,
                 "has_prev": page > 1,
                 "has_next": page < total_pages,
             }
@@ -395,7 +401,8 @@ class TaxWebService:
             db.add(profile)
             db.commit()
             return RedirectResponse(
-                url=f"/people/payroll/tax/profiles/{employee_id}", status_code=303
+                url=f"/people/payroll/tax/profiles/{employee_id}?saved=1",
+                status_code=303,
             )
 
         except Exception as e:
@@ -430,11 +437,17 @@ class TaxWebService:
         e_id = parse_uuid(employee_id)
 
         if not e_id:
-            return RedirectResponse(url="/people/payroll/tax/profiles", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/tax/profiles?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         employee = db.get(Employee, e_id)
         if not employee or employee.organization_id != org_id:
-            return RedirectResponse(url="/people/payroll/tax/profiles", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/tax/profiles?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         profile = (
             db.query(EmployeeTaxProfile)
@@ -472,11 +485,17 @@ class TaxWebService:
         e_id = parse_uuid(employee_id)
 
         if not e_id:
-            return RedirectResponse(url="/people/payroll/tax/profiles", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/tax/profiles?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         employee = db.get(Employee, e_id)
         if not employee or employee.organization_id != org_id:
-            return RedirectResponse(url="/people/payroll/tax/profiles", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/tax/profiles?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         profile = (
             db.query(EmployeeTaxProfile)
@@ -489,7 +508,10 @@ class TaxWebService:
         )
 
         if not profile:
-            return RedirectResponse(url="/people/payroll/tax/profiles", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/tax/profiles?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         context = base_context(
             request, auth, f"Edit Tax Profile - {employee.full_name}", "payroll", db=db
@@ -522,7 +544,10 @@ class TaxWebService:
         e_id = parse_uuid(employee_id)
 
         if not e_id:
-            return RedirectResponse(url="/people/payroll/tax/profiles", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/tax/profiles?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         profile = (
             db.query(EmployeeTaxProfile)
@@ -535,7 +560,10 @@ class TaxWebService:
         )
 
         if not profile:
-            return RedirectResponse(url="/people/payroll/tax/profiles", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/tax/profiles?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         form = getattr(request.state, "csrf_form", None)
         if form is None:
@@ -561,7 +589,8 @@ class TaxWebService:
 
             db.commit()
             return RedirectResponse(
-                url=f"/people/payroll/tax/profiles/{employee_id}", status_code=303
+                url=f"/people/payroll/tax/profiles/{employee_id}?saved=1",
+                status_code=303,
             )
 
         except Exception as e:

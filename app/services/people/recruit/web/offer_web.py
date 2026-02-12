@@ -265,7 +265,10 @@ class OfferWebService:
         ctx = self.offer_detail_context(db, coerce_uuid(auth.organization_id), offer_id)
 
         if not ctx.get("offer"):
-            return RedirectResponse(url="/people/recruit/offers", status_code=303)
+            return RedirectResponse(
+                url="/people/recruit/offers?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         context = base_context(
             request, auth, f"Offer {ctx['offer'].offer_number}", "recruit", db=db
@@ -287,7 +290,10 @@ class OfferWebService:
         ctx = self.offer_form_context(db, coerce_uuid(auth.organization_id), offer_id)
 
         if not ctx.get("offer"):
-            return RedirectResponse(url="/people/recruit/offers", status_code=303)
+            return RedirectResponse(
+                url="/people/recruit/offers?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         context = base_context(request, auth, "Edit Job Offer", "recruit", db=db)
         context["request"] = request
@@ -319,7 +325,7 @@ class OfferWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/recruit/offers/{offer.offer_id}",
+                url=f"/people/recruit/offers/{offer.offer_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
@@ -351,7 +357,7 @@ class OfferWebService:
             svc.update_job_offer(org_id, coerce_uuid(offer_id), **input_kwargs)
             db.commit()
             return RedirectResponse(
-                url=f"/people/recruit/offers/{offer_id}",
+                url=f"/people/recruit/offers/{offer_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
@@ -382,7 +388,7 @@ class OfferWebService:
             db.rollback()
 
         return RedirectResponse(
-            url=f"/people/recruit/offers/{offer_id}", status_code=303
+            url=f"/people/recruit/offers/{offer_id}?saved=1", status_code=303
         )
 
     def accept_offer_response(
@@ -402,7 +408,7 @@ class OfferWebService:
             db.rollback()
 
         return RedirectResponse(
-            url=f"/people/recruit/offers/{offer_id}", status_code=303
+            url=f"/people/recruit/offers/{offer_id}?saved=1", status_code=303
         )
 
     async def decline_offer_response(
@@ -425,7 +431,7 @@ class OfferWebService:
             db.rollback()
 
         return RedirectResponse(
-            url=f"/people/recruit/offers/{offer_id}", status_code=303
+            url=f"/people/recruit/offers/{offer_id}?saved=1", status_code=303
         )
 
     async def withdraw_offer_response(
@@ -446,5 +452,5 @@ class OfferWebService:
             db.rollback()
 
         return RedirectResponse(
-            url=f"/people/recruit/offers/{offer_id}", status_code=303
+            url=f"/people/recruit/offers/{offer_id}?saved=1", status_code=303
         )

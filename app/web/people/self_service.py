@@ -396,6 +396,7 @@ async def create_expense_claim(
     requested_approver_id = _safe_form_text(form.get("requested_approver_id"))
     receipt_url = _safe_form_text(form.get("receipt_url"))
     receipt_number = _safe_form_text(form.get("receipt_number"))
+    receipt_files = form.getlist("receipt_file")
     receipt_file = form.get("receipt_file")
     submit_now = form.get("submit_now")
     project_id = _safe_form_text(form.get("project_id"))
@@ -439,6 +440,7 @@ async def create_expense_claim(
         requested_approver_id=requested_approver_id or None,
         receipt_url=receipt_url or None,
         receipt_number=receipt_number or None,
+        receipt_files=receipt_files,
         receipt_file=receipt_file,
         submit_now=submit_now,
         project_id=project_id or None,
@@ -575,6 +577,25 @@ async def submit_expense_claim(
         form = await request.form()
 
     return self_service_web_service.expense_claim_submit_response(
+        auth,
+        db,
+        claim_id=claim_id,
+    )
+
+
+@router.post("/expenses/claims/{claim_id}/delete")
+async def delete_expense_claim(
+    claim_id: UUID,
+    request: Request,
+    auth: WebAuthContext = Depends(require_self_service_access),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Delete a draft expense claim owned by the current employee."""
+    form = getattr(request.state, "csrf_form", None)
+    if form is None:
+        await request.form()
+
+    return self_service_web_service.expense_claim_delete_response(
         auth,
         db,
         claim_id=claim_id,

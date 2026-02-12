@@ -6,15 +6,18 @@ Provides view-focused data and operations for expense claim-related web routes.
 
 from __future__ import annotations
 
+import json
 import logging
+import mimetypes
 from datetime import date as date_type
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from fastapi import Request
-from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func, select
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from sqlalchemy import and_, false, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.domain_settings import SettingDomain
@@ -31,6 +34,7 @@ from app.services.expense.expense_service import (
     ExpenseService,
     ExpenseServiceError,
 )
+from app.services.file_upload import get_expense_receipt_upload, resolve_safe_path
 from app.services.finance.platform.authorization import AuthorizationService
 from app.services.settings_spec import resolve_value
 from app.templates import templates
@@ -50,10 +54,41 @@ class ExpenseClaimsWebService:
         return str(value).strip()
 
     @staticmethod
+    def _resolve_claim_receipt_path(receipt_url: str) -> Path:
+        upload_base = get_expense_receipt_upload().base_path
+        raw = receipt_url.strip()
+        candidate = Path(raw)
+
+        if candidate.is_absolute():
+            resolved = candidate.resolve(strict=True)
+            if resolved != upload_base and upload_base not in resolved.parents:
+                raise ValueError("Receipt path is outside configured upload directory")
+            return resolved
+
+        return resolve_safe_path(upload_base, raw).resolve(strict=True)
+
+    @staticmethod
+    def _parse_receipt_urls(receipt_url: str | None) -> list[str]:
+        if not receipt_url:
+            return []
+        raw = receipt_url.strip()
+        if not raw:
+            return []
+        if raw.startswith("["):
+            try:
+                decoded = json.loads(raw)
+            except Exception:
+                return [raw]
+            if isinstance(decoded, list):
+                return [str(entry).strip() for entry in decoded if str(entry).strip()]
+        return [raw]
+
+    @staticmethod
     def claims_list_response(
         request: Request,
         auth: WebAuthContext,
         db: Session,
+        view: str | None,
         status: str | None,
         start_date: str | None,
         end_date: str | None,
@@ -61,9 +96,9 @@ class ExpenseClaimsWebService:
         offset: int = 0,
         limit: int = 25,
     ) -> HTMLResponse:
-        from sqlalchemy import or_
-
         org_id = coerce_uuid(auth.organization_id)
+        employee_id = coerce_uuid(auth.employee_id)
+        filter_view = "submitted_to_me" if view == "submitted_to_me" else "all"
         status_value = None
         if status:
             try:
@@ -79,6 +114,19 @@ class ExpenseClaimsWebService:
             .options(joinedload(ExpenseClaim.employee))
             .where(ExpenseClaim.organization_id == org_id)
         )
+        if filter_view == "submitted_to_me":
+            if employee_id:
+                stmt = stmt.where(
+                    or_(
+                        ExpenseClaim.requested_approver_id == employee_id,
+                        and_(
+                            ExpenseClaim.requested_approver_id.is_(None),
+                            ExpenseClaim.approver_id == employee_id,
+                        ),
+                    )
+                )
+            else:
+                stmt = stmt.where(false())
         if status_value:
             stmt = stmt.where(ExpenseClaim.status == status_value)
         if start:
@@ -115,6 +163,11 @@ class ExpenseClaimsWebService:
             row[0]: row[1] for row in status_rows
         }
         counts = {s.value if s else "UNKNOWN": c for s, c in status_counts.items()}
+        can_delete_claim = auth.is_admin
+        if not can_delete_claim and auth.person_id:
+            can_delete_claim = AuthorizationService.check_permission(
+                db, auth.person_id, "expense:claims:delete", org_id
+            )
 
         context = base_context(request, auth, "Expense Claims", "claims")
         context.update(
@@ -124,11 +177,13 @@ class ExpenseClaimsWebService:
                 "statuses": [s.value for s in ExpenseClaimStatus],
                 "status_counts": counts,
                 "filter_status": status or "",
+                "filter_view": filter_view,
                 "filter_start_date": start_date or "",
                 "filter_end_date": end_date or "",
                 "total": total or 0,
                 "offset": offset,
                 "limit": limit,
+                "can_delete_claim": can_delete_claim,
             }
         )
         return templates.TemplateResponse(request, "expense/claims_list.html", context)
@@ -159,7 +214,6 @@ class ExpenseClaimsWebService:
         )
         if not claim:
             return RedirectResponse("/expense/claims/list", status_code=302)
-
         approve_perms = [
             "expense:claims:approve:tier1",
             "expense:claims:approve:tier2",
@@ -178,6 +232,12 @@ class ExpenseClaimsWebService:
             can_reject = AuthorizationService.check_permission(
                 db, auth.person_id, "expense:claims:reject", org_id
             )
+        can_delete = auth.is_admin
+        if not can_delete and auth.person_id:
+            can_delete = AuthorizationService.check_permission(
+                db, auth.person_id, "expense:claims:delete", org_id
+            )
+        can_delete = can_delete and claim.status == ExpenseClaimStatus.DRAFT
         can_act = (can_approve or can_reject) and claim.status in {
             ExpenseClaimStatus.SUBMITTED,
             ExpenseClaimStatus.PENDING_APPROVAL,
@@ -226,6 +286,7 @@ class ExpenseClaimsWebService:
                 "can_act": can_act,
                 "can_approve": can_approve,
                 "can_reject": can_reject,
+                "can_delete": can_delete,
                 "can_paystack": can_paystack,
                 "has_active_payment": has_active_payment,
                 "action": request.query_params.get("action"),
@@ -233,6 +294,70 @@ class ExpenseClaimsWebService:
             }
         )
         return templates.TemplateResponse(request, "expense/claim_detail.html", context)
+
+    @staticmethod
+    def claim_receipt_response(
+        claim_id: str,
+        item_id: str,
+        auth: WebAuthContext,
+        db: Session,
+        index: int = 0,
+    ) -> FileResponse | RedirectResponse:
+        org_id = coerce_uuid(auth.organization_id)
+        claim_uuid = coerce_uuid(claim_id)
+        item_uuid = coerce_uuid(item_id)
+
+        item = db.scalar(
+            select(ExpenseClaimItem)
+            .join(ExpenseClaim, ExpenseClaim.claim_id == ExpenseClaimItem.claim_id)
+            .where(
+                ExpenseClaim.organization_id == org_id,
+                ExpenseClaim.claim_id == claim_uuid,
+                ExpenseClaimItem.item_id == item_uuid,
+            )
+        )
+        if not item or not item.receipt_url:
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=Receipt+not+found",
+                status_code=303,
+            )
+        receipt_urls = ExpenseClaimsWebService._parse_receipt_urls(item.receipt_url)
+        if not receipt_urls or index < 0 or index >= len(receipt_urls):
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=Receipt+not+found",
+                status_code=303,
+            )
+        receipt_url = receipt_urls[index]
+
+        parsed = urlparse(receipt_url)
+        if parsed.scheme in {"http", "https"} and parsed.netloc:
+            return RedirectResponse(receipt_url, status_code=302)
+
+        try:
+            receipt_path = ExpenseClaimsWebService._resolve_claim_receipt_path(
+                receipt_url
+            )
+        except Exception:
+            logger.warning(
+                "Invalid receipt path for claim item",
+                extra={
+                    "claim_id": claim_id,
+                    "item_id": item_id,
+                    "organization_id": str(org_id),
+                },
+            )
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=Receipt+file+is+unavailable",
+                status_code=303,
+            )
+
+        media_type = mimetypes.guess_type(receipt_path.name)[0]
+        return FileResponse(
+            path=str(receipt_path),
+            media_type=media_type or "application/octet-stream",
+            filename=receipt_path.name,
+            content_disposition_type="inline",
+        )
 
     @staticmethod
     def submit_claim_response(
@@ -496,6 +621,37 @@ class ExpenseClaimsWebService:
         )
 
     @staticmethod
+    def delete_claim_response(
+        claim_id: str,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> RedirectResponse:
+        """Delete a draft expense claim."""
+        org_id = coerce_uuid(auth.organization_id)
+        claim_uuid = coerce_uuid(claim_id)
+        svc = ExpenseService(db)
+
+        try:
+            svc.delete_claim(org_id, claim_uuid)
+            db.commit()
+        except ExpenseClaimStatusError:
+            db.rollback()
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=invalid_status", status_code=303
+            )
+        except Exception:
+            db.rollback()
+            logger.exception(
+                "Expense claim delete failed",
+                extra={"claim_id": claim_id},
+            )
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=delete_failed", status_code=303
+            )
+
+        return RedirectResponse("/expense/claims/list?saved=1", status_code=303)
+
+    @staticmethod
     def categories_list_response(
         request: Request,
         auth: WebAuthContext,
@@ -705,7 +861,9 @@ class ExpenseClaimsWebService:
                 request, "expense/category_form.html", context
             )
 
-        return RedirectResponse(url="/expense/categories", status_code=303)
+        return RedirectResponse(
+            url="/expense/categories?success=Record+saved+successfully", status_code=303
+        )
 
     @staticmethod
     def edit_category_form_response(
@@ -843,7 +1001,9 @@ class ExpenseClaimsWebService:
         )
         db.commit()
 
-        return RedirectResponse(url="/expense/categories", status_code=303)
+        return RedirectResponse(
+            url="/expense/categories?success=Record+saved+successfully", status_code=303
+        )
 
     @staticmethod
     def delete_category_response(
@@ -855,7 +1015,10 @@ class ExpenseClaimsWebService:
         svc = ExpenseService(db)
         svc.update_category(org_id, coerce_uuid(category_id), is_active=False)
         db.commit()
-        return RedirectResponse(url="/expense/categories", status_code=303)
+        return RedirectResponse(
+            url="/expense/categories?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     @staticmethod
     def expense_summary_report_response(

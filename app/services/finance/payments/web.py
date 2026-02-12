@@ -175,6 +175,14 @@ class PaymentWebService:
             db, SettingDomain.payments, "paystack_transfers_enabled"
         )
 
+        # A PENDING intent with no transfer_code means step 2 (initiate)
+        # was never completed — allow the user to retry.
+        can_retry_transfer = (
+            active_intent is not None
+            and active_intent.status == PaymentIntentStatus.PENDING
+            and not active_intent.transfer_code
+        )
+
         return {
             "context": {
                 "page_title": f"Reimburse {expense_claim.claim_number}",
@@ -191,6 +199,10 @@ class PaymentWebService:
                 "active_intent_status": active_intent.status.value
                 if active_intent
                 else None,
+                "active_intent_id": str(active_intent.intent_id)
+                if active_intent
+                else None,
+                "can_retry_transfer": can_retry_transfer,
             }
         }
 

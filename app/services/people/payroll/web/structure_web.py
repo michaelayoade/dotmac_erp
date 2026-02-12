@@ -96,10 +96,12 @@ class StructureWebService:
         context.update(
             {
                 "structures": structures,
-                "search": search,
+                "search": search or "",
                 "page": page,
                 "total_pages": total_pages,
+                "total_count": total,
                 "total": total,
+                "limit": per_page,
                 "has_prev": page > 1,
                 "has_next": page < total_pages,
             }
@@ -156,11 +158,17 @@ class StructureWebService:
         s_id = parse_uuid(structure_id)
 
         if not s_id:
-            return RedirectResponse(url="/people/payroll/structures", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/structures?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         structure = db.get(SalaryStructure, s_id)
         if not structure or structure.organization_id != org_id:
-            return RedirectResponse(url="/people/payroll/structures", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/structures?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         components = (
             db.query(SalaryComponent)
@@ -303,7 +311,7 @@ class StructureWebService:
             structure.is_active = is_active
             db.commit()
             return RedirectResponse(
-                url=f"/people/payroll/structures/{structure.structure_id}",
+                url=f"/people/payroll/structures/{structure.structure_id}?saved=1",
                 status_code=303,
             )
 
@@ -369,11 +377,17 @@ class StructureWebService:
         s_id = parse_uuid(structure_id)
 
         if not s_id:
-            return RedirectResponse(url="/people/payroll/structures", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/structures?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         structure = db.get(SalaryStructure, s_id)
         if not structure or structure.organization_id != org_id:
-            return RedirectResponse(url="/people/payroll/structures", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/structures?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         context = base_context(
             request, auth, structure.structure_name, "payroll", db=db
@@ -396,11 +410,17 @@ class StructureWebService:
         s_id = parse_uuid(structure_id)
 
         if not s_id:
-            return RedirectResponse(url="/people/payroll/structures", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/structures?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         structure = db.get(SalaryStructure, s_id)
         if not structure or structure.organization_id != org_id:
-            return RedirectResponse(url="/people/payroll/structures", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/structures?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         form = getattr(request.state, "csrf_form", None)
         if form is None:
@@ -488,7 +508,8 @@ class StructureWebService:
             updated.is_active = is_active
             db.commit()
             return RedirectResponse(
-                url=f"/people/payroll/structures/{structure_id}", status_code=303
+                url=f"/people/payroll/structures/{structure_id}?saved=1",
+                status_code=303,
             )
 
         except Exception as e:
@@ -552,11 +573,17 @@ class StructureWebService:
         s_id = parse_uuid(structure_id)
 
         if not s_id:
-            return RedirectResponse(url="/people/payroll/structures", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/structures?success=Record+deleted+successfully",
+                status_code=303,
+            )
 
         structure = db.get(SalaryStructure, s_id)
         if not structure or structure.organization_id != org_id:
-            return RedirectResponse(url="/people/payroll/structures", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/structures?success=Record+deleted+successfully",
+                status_code=303,
+            )
 
         in_assignments = (
             db.query(SalaryStructureAssignment)
@@ -578,7 +605,10 @@ class StructureWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url="/people/payroll/structures", status_code=303)
+        return RedirectResponse(
+            url="/people/payroll/structures?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     # =========================================================================
     # Salary Structure Assignments
@@ -635,10 +665,12 @@ class StructureWebService:
         context.update(
             {
                 "assignments": assignments,
-                "search": search,
+                "search": search or "",
                 "page": page,
                 "total_pages": total_pages,
+                "total_count": total,
                 "total": total,
+                "limit": per_page,
                 "has_prev": page > 1,
                 "has_next": page < total_pages,
                 "bulk_created": bulk_created,
@@ -755,7 +787,10 @@ class StructureWebService:
 
             db.add(assignment)
             db.commit()
-            return RedirectResponse(url="/people/payroll/assignments", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/assignments?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         except Exception as e:
             db.rollback()
@@ -909,7 +944,7 @@ class StructureWebService:
             db.commit()
             skipped = len(employee_ids) - created
             return RedirectResponse(
-                url=f"/people/payroll/assignments?bulk_created={created}&bulk_skipped={skipped}",
+                url=f"/people/payroll/assignments?bulk_created={created}&bulk_skipped={skipped}&saved=1",
                 status_code=303,
             )
 
@@ -999,7 +1034,10 @@ class StructureWebService:
         a_id = parse_uuid(assignment_id)
 
         if not a_id:
-            return RedirectResponse(url="/people/payroll/assignments", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/assignments?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         assignment = (
             db.query(SalaryStructureAssignment)
@@ -1009,7 +1047,10 @@ class StructureWebService:
         )
 
         if not assignment or assignment.organization_id != org_id:
-            return RedirectResponse(url="/people/payroll/assignments", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/assignments?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         employees = (
             db.query(Employee)
@@ -1062,11 +1103,17 @@ class StructureWebService:
         a_id = parse_uuid(assignment_id)
 
         if not a_id:
-            return RedirectResponse(url="/people/payroll/assignments", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/assignments?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         assignment = db.get(SalaryStructureAssignment, a_id)
         if not assignment or assignment.organization_id != org_id:
-            return RedirectResponse(url="/people/payroll/assignments", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/assignments?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         form = getattr(request.state, "csrf_form", None)
         if form is None:
@@ -1101,7 +1148,10 @@ class StructureWebService:
             assignment.income_tax_slab = income_tax_slab or None
 
             db.commit()
-            return RedirectResponse(url="/people/payroll/assignments", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/assignments?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         except Exception as e:
             db.rollback()
@@ -1138,7 +1188,10 @@ class StructureWebService:
                 assignment.to_date = parse_date(end_date) or date.today()
                 db.commit()
 
-        return RedirectResponse(url="/people/payroll/assignments", status_code=303)
+        return RedirectResponse(
+            url="/people/payroll/assignments?success=Record+saved+successfully",
+            status_code=303,
+        )
 
     def delete_assignment_response(
         self,
@@ -1151,11 +1204,17 @@ class StructureWebService:
         a_id = parse_uuid(assignment_id)
 
         if not a_id:
-            return RedirectResponse(url="/people/payroll/assignments", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/assignments?success=Record+deleted+successfully",
+                status_code=303,
+            )
 
         assignment = db.get(SalaryStructureAssignment, a_id)
         if not assignment or assignment.organization_id != org_id:
-            return RedirectResponse(url="/people/payroll/assignments", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/assignments?success=Record+deleted+successfully",
+                status_code=303,
+            )
 
         try:
             db.delete(assignment)
@@ -1163,7 +1222,10 @@ class StructureWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url="/people/payroll/assignments", status_code=303)
+        return RedirectResponse(
+            url="/people/payroll/assignments?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     def _render_assignment_form_with_error(
         self,

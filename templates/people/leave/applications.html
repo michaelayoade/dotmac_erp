@@ -57,7 +57,7 @@
     </div>
 
     <div class="card">
-        <form method="get" class="p-4">
+        <form method="get" class="p-4" id="leave-applications-filters" action="/people/leave/applications">
             <div class="flex flex-wrap items-end gap-4">
                 <div class="w-44">
                     <label for="status" class="form-label">Status</label>
@@ -84,7 +84,8 @@
                     <label for="end_date" class="form-label">To</label>
                     <input type="date" name="end_date" id="end_date" value="{{ end_date | default('', true) }}" class="form-input w-full">
                 </div>
-                <button type="submit" class="btn btn-secondary h-10">Filter</button>
+                <button type="submit" class="btn btn-primary h-10">Apply</button>
+                <button type="button" class="btn btn-secondary h-10" id="leave-applications-clear-filters">Clear</button>
             </div>
         </form>
     </div>
@@ -243,6 +244,59 @@
         <p class="text-slate-500 dark:text-slate-400">No leave applications found.</p>
     </div>
     {% endif %}
+
+    {% if total and total > 0 %}
+    <div class="card px-4 py-3 sm:px-6">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p class="text-sm text-slate-600 dark:text-slate-400">
+                Showing
+                <span class="font-medium text-slate-900 dark:text-white">{{ ((page - 1) * 20) + 1 }}</span>
+                to
+                <span class="font-medium text-slate-900 dark:text-white">{{ [page * 20, total] | min }}</span>
+                of
+                <span class="font-medium text-slate-900 dark:text-white">{{ total }}</span>
+                applications
+            </p>
+
+            {% if total_pages > 1 %}
+            <nav class="flex items-center gap-1" aria-label="Pagination">
+                {% if has_prev %}
+                <a
+                    href="/people/leave/applications?page={{ page - 1 }}{% if employee_id %}&employee_id={{ employee_id }}{% endif %}{% if leave_type_id %}&leave_type_id={{ leave_type_id }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}"
+                    class="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/70"
+                >
+                    Previous
+                </a>
+                {% endif %}
+
+                {% for p in range(1, total_pages + 1) %}
+                    {% if p == page %}
+                    <span class="rounded-lg bg-violet-50 px-3 py-1.5 text-sm font-medium text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">{{ p }}</span>
+                    {% elif p == 1 or p == total_pages or (p >= page - 1 and p <= page + 1) %}
+                    <a
+                        href="/people/leave/applications?page={{ p }}{% if employee_id %}&employee_id={{ employee_id }}{% endif %}{% if leave_type_id %}&leave_type_id={{ leave_type_id }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}"
+                        class="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/70"
+                    >
+                        {{ p }}
+                    </a>
+                    {% elif p == page - 2 or p == page + 2 %}
+                    <span class="px-1 text-slate-400">...</span>
+                    {% endif %}
+                {% endfor %}
+
+                {% if has_next %}
+                <a
+                    href="/people/leave/applications?page={{ page + 1 }}{% if employee_id %}&employee_id={{ employee_id }}{% endif %}{% if leave_type_id %}&leave_type_id={{ leave_type_id }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if start_date %}&start_date={{ start_date }}{% endif %}{% if end_date %}&end_date={{ end_date }}{% endif %}"
+                    class="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800/70"
+                >
+                    Next
+                </a>
+                {% endif %}
+            </nav>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 <script>
@@ -299,5 +353,76 @@ function leaveApplicationsBulk() {
         }
     };
 }
+
+(function persistLeaveApplicationFilters() {
+    const form = document.getElementById('leave-applications-filters');
+    const clearBtn = document.getElementById('leave-applications-clear-filters');
+    if (!form || !clearBtn) {
+        return;
+    }
+
+    const storageKey = 'leave_applications_filters_v1';
+    const fieldNames = ['status', 'employee_id', 'leave_type_id', 'start_date', 'end_date'];
+
+    function getCurrentValues() {
+        const values = {};
+        for (const name of fieldNames) {
+            const input = form.elements.namedItem(name);
+            values[name] = input ? String(input.value || '') : '';
+        }
+        return values;
+    }
+
+    function saveCurrentValues() {
+        try {
+            localStorage.setItem(storageKey, JSON.stringify(getCurrentValues()));
+        } catch (_) {
+            // Ignore storage failures to avoid breaking page interactions.
+        }
+    }
+
+    function hasQueryFilters(params) {
+        return fieldNames.some((name) => params.has(name));
+    }
+
+    const searchParams = new URLSearchParams(window.location.search);
+    const hasQuery = hasQueryFilters(searchParams);
+
+    if (hasQuery) {
+        saveCurrentValues();
+    } else {
+        try {
+            const raw = localStorage.getItem(storageKey);
+            if (raw) {
+                const stored = JSON.parse(raw);
+                const restoreParams = new URLSearchParams();
+                for (const name of fieldNames) {
+                    const value = stored[name];
+                    if (value !== undefined && value !== null && String(value).trim() !== '') {
+                        restoreParams.set(name, String(value));
+                    }
+                }
+                if (restoreParams.toString()) {
+                    window.location.replace(`/people/leave/applications?${restoreParams.toString()}`);
+                    return;
+                }
+            }
+        } catch (_) {
+            // Ignore parsing/storage errors and continue with normal page load.
+        }
+    }
+
+    form.addEventListener('submit', saveCurrentValues);
+    form.addEventListener('change', saveCurrentValues);
+
+    clearBtn.addEventListener('click', () => {
+        try {
+            localStorage.removeItem(storageKey);
+        } catch (_) {
+            // Ignore storage failures.
+        }
+        window.location.assign('/people/leave/applications');
+    });
+})();
 </script>
 {% endblock %}

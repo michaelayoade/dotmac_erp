@@ -150,7 +150,7 @@ class TeamWebService:
                 )
 
             return RedirectResponse(
-                url=f"/support/teams/{team.team_id}",
+                url=f"/support/teams/{team.team_id}?saved=1",
                 status_code=303,
             )
 
@@ -188,14 +188,14 @@ class TeamWebService:
 
             if not team:
                 return RedirectResponse(
-                    url="/support/teams",
+                    url="/support/teams?success=Record+updated+successfully",
                     status_code=303,
                 )
 
             db.commit()
 
             return RedirectResponse(
-                url=f"/support/teams/{team_id}",
+                url=f"/support/teams/{team_id}?saved=1",
                 status_code=303,
             )
 
@@ -335,7 +335,7 @@ class TeamWebService:
             logger.exception("Failed to add team member")
 
         return RedirectResponse(
-            url=f"/support/teams/{team_id}",
+            url=f"/support/teams/{team_id}?saved=1",
             status_code=303,
         )
 
@@ -365,7 +365,7 @@ class TeamWebService:
                 logger.exception("Failed to remove team member")
 
         return RedirectResponse(
-            url=f"/support/teams/{team_id}",
+            url=f"/support/teams/{team_id}?saved=1",
             status_code=303,
         )
 
@@ -395,7 +395,7 @@ class TeamWebService:
                 logger.exception("Failed to toggle member availability")
 
         return RedirectResponse(
-            url=f"/support/teams/{team_id}",
+            url=f"/support/teams/{team_id}?saved=1",
             status_code=303,
         )
 
@@ -426,7 +426,7 @@ class TeamWebService:
                 logger.exception("Failed to update member weight")
 
         return RedirectResponse(
-            url=f"/support/teams/{team_id}",
+            url=f"/support/teams/{team_id}?saved=1",
             status_code=303,
         )
 

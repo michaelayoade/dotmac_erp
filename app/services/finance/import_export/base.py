@@ -413,6 +413,236 @@ COLUMN_ALIASES: dict[str, list[str]] = {
         "Contact",
         "ContactName",
     ],
+    # Fleet fields
+    "vehicle_code": [
+        "Vehicle Code",
+        "Fleet Code",
+        "Vehicle ID",
+        "Fleet ID",
+        "Vehicle Number",
+        "Vehicle No",
+        "Code",
+    ],
+    "registration_number": [
+        "Registration Number",
+        "Reg Number",
+        "Registration No",
+        "Plate Number",
+        "License Plate",
+        "License Plate Number",
+    ],
+    "vehicle_make": [
+        "Make",
+        "Manufacturer",
+        "Brand",
+    ],
+    "vehicle_model": [
+        "Model",
+        "Model Name",
+    ],
+    "vehicle_year": [
+        "Year",
+        "Model Year",
+        "Manufacture Year",
+        "Manufacturing Year",
+    ],
+    "vehicle_type": [
+        "Vehicle Type",
+        "Body Type",
+        "Type",
+    ],
+    "fuel_type": [
+        "Fuel Type",
+        "Fuel",
+        "Fuel Type Code",
+    ],
+    "ownership_type": [
+        "Ownership Type",
+        "Ownership",
+        "Ownership Model",
+    ],
+    "assignment_type": [
+        "Assignment Type",
+        "Assigned To Type",
+    ],
+    "current_odometer": [
+        "Current Odometer",
+        "Odometer",
+        "Current Mileage",
+        "Mileage",
+    ],
+    "purchase_date": [
+        "Purchase Date",
+        "Acquisition Date",
+        "Date Purchased",
+    ],
+    "purchase_price": [
+        "Purchase Price",
+        "Acquisition Cost",
+        "Purchase Cost",
+        "Cost",
+    ],
+    "lease_start_date": [
+        "Lease Start Date",
+        "Lease Start",
+    ],
+    "lease_end_date": [
+        "Lease End Date",
+        "Lease End",
+    ],
+    "lease_monthly_cost": [
+        "Lease Monthly Cost",
+        "Lease Cost",
+        "Monthly Lease Cost",
+    ],
+    "seating_capacity": [
+        "Seating Capacity",
+        "Seats",
+    ],
+    "fuel_tank_capacity_liters": [
+        "Fuel Tank Capacity",
+        "Fuel Tank (Liters)",
+        "Tank Capacity",
+    ],
+    "expected_fuel_efficiency": [
+        "Expected Fuel Efficiency",
+        "Fuel Efficiency",
+        "KM/L",
+        "Miles per Gallon",
+    ],
+    "engine_capacity_cc": [
+        "Engine Capacity",
+        "Engine Capacity (CC)",
+        "Engine CC",
+    ],
+    "vehicle_status": [
+        "Vehicle Status",
+        "Status",
+    ],
+    # Project fields
+    "project_code": [
+        "Project Code",
+        "Code",
+        "Project ID",
+    ],
+    "project_name": [
+        "Project Name",
+        "Name",
+        "Project",
+    ],
+    "project_status": [
+        "Project Status",
+        "Status",
+    ],
+    "project_priority": [
+        "Project Priority",
+        "Priority",
+    ],
+    "project_type": [
+        "Project Type",
+        "Type",
+    ],
+    "project_manager": [
+        "Project Manager",
+        "Project Manager Email",
+        "Manager Email",
+    ],
+    "business_unit_code": [
+        "Business Unit Code",
+        "Business Unit",
+        "Unit Code",
+    ],
+    "segment_code": [
+        "Segment Code",
+        "Segment",
+    ],
+    "cost_center_code": [
+        "Cost Center Code",
+        "Cost Center",
+    ],
+    "start_date": [
+        "Start Date",
+        "Begin Date",
+    ],
+    "end_date": [
+        "End Date",
+        "Finish Date",
+    ],
+    "budget_amount": [
+        "Budget Amount",
+        "Budget",
+    ],
+    "budget_currency_code": [
+        "Budget Currency",
+        "Budget Currency Code",
+        "Currency",
+    ],
+    "is_capitalizable": [
+        "Capitalizable",
+        "Is Capitalizable",
+    ],
+    # HR fields
+    "department_code": [
+        "Department Code",
+        "Department ID",
+        "Dept Code",
+    ],
+    "department_name": [
+        "Department Name",
+        "Department",
+        "Dept Name",
+    ],
+    "designation_code": [
+        "Designation Code",
+        "Title Code",
+    ],
+    "designation_name": [
+        "Designation Name",
+        "Designation",
+        "Job Title",
+        "Title",
+    ],
+    "employment_type_code": [
+        "Employment Type Code",
+        "Employment Type ID",
+    ],
+    "employment_type_name": [
+        "Employment Type",
+        "Employment Type Name",
+    ],
+    "employee_code": [
+        "Employee Code",
+        "Employee ID",
+        "Staff ID",
+        "Staff Code",
+    ],
+    "first_name": [
+        "First Name",
+        "First",
+        "Given Name",
+    ],
+    "last_name": [
+        "Last Name",
+        "Last",
+        "Surname",
+        "Family Name",
+    ],
+    "work_email": [
+        "Work Email",
+        "Email",
+        "Company Email",
+        "Official Email",
+    ],
+    "date_of_joining": [
+        "Date of Joining",
+        "Join Date",
+        "Employment Date",
+        "Start Date",
+    ],
+    "employee_status": [
+        "Employee Status",
+        "Status",
+    ],
 }
 
 

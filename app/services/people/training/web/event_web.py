@@ -225,7 +225,10 @@ class EventWebService:
         ctx = self.event_detail_context(db, coerce_uuid(auth.organization_id), event_id)
 
         if not ctx.get("event"):
-            return RedirectResponse(url="/people/training/events", status_code=303)
+            return RedirectResponse(
+                url="/people/training/events?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         context = base_context(
             request, auth, ctx["event"].event_name, "training", db=db
@@ -248,7 +251,10 @@ class EventWebService:
         ctx = self.event_form_context(db, coerce_uuid(auth.organization_id), event_id)
 
         if not ctx.get("event"):
-            return RedirectResponse(url="/people/training/events", status_code=303)
+            return RedirectResponse(
+                url="/people/training/events?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         context = base_context(
             request, auth, f"Edit {ctx['event'].event_name}", "training", db=db

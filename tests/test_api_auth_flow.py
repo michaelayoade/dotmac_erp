@@ -411,8 +411,8 @@ class TestRefreshAPI:
         data = response.json()
         assert "access_token" in data
 
-    def test_refresh_reuse_detected(self, client, db_session, person):
-        """Test refresh token reuse detection via API."""
+    def test_refresh_reuse_within_grace_period(self, client, db_session, person):
+        """Test that concurrent refresh (within grace period) succeeds instead of revoking."""
         credential = UserCredential(
             person_id=person.id,
             username=f"reuseuser_{uuid.uuid4().hex[:8]}",
@@ -430,23 +430,74 @@ class TestRefreshAPI:
         old_refresh = client.cookies.get(cookie_name)
         assert old_refresh
 
+        # First refresh rotates the token
         refresh_response = client.post("/auth/refresh", json={})
         assert refresh_response.status_code == 200
-        new_refresh = client.cookies.get(cookie_name)
-        assert new_refresh
-        assert new_refresh != old_refresh
 
+        # Immediate reuse of old token — within 30s grace period, should succeed
+        reuse_response = client.post(
+            "/auth/refresh", json={"refresh_token": old_refresh}
+        )
+        assert reuse_response.status_code == 200
+
+        # Session should still be active (not revoked)
+        session = (
+            db_session.query(AuthSession)
+            .filter(AuthSession.person_id == person.id)
+            .order_by(AuthSession.created_at.desc())
+            .first()
+        )
+        assert session is not None
+        assert session.status == SessionStatus.active
+        assert session.revoked_at is None
+
+    def test_refresh_reuse_after_grace_period(self, client, db_session, person):
+        """Test that refresh token reuse after grace period revokes session."""
+        credential = UserCredential(
+            person_id=person.id,
+            username=f"reuseuser2_{uuid.uuid4().hex[:8]}",
+            password_hash=hash_password("password123"),
+            is_active=True,
+        )
+        db_session.add(credential)
+        db_session.commit()
+
+        login_payload = {"username": credential.username, "password": "password123"}
+        login_response = client.post("/auth/login", json=login_payload)
+        assert login_response.status_code == 200
+
+        cookie_name = auth_flow_service.AuthFlow.refresh_cookie_settings()["key"]
+        old_refresh = client.cookies.get(cookie_name)
+        assert old_refresh
+
+        # First refresh rotates the token
+        refresh_response = client.post("/auth/refresh", json={})
+        assert refresh_response.status_code == 200
+
+        # Simulate the grace period having passed by backdating token_rotated_at
+        session = (
+            db_session.query(AuthSession)
+            .filter(AuthSession.person_id == person.id)
+            .order_by(AuthSession.created_at.desc())
+            .first()
+        )
+        assert session is not None
+        session.token_rotated_at = datetime.now(UTC) - timedelta(seconds=60)
+        db_session.commit()
+
+        # Now reuse old token — outside grace period, should be revoked
         reuse_response = client.post(
             "/auth/refresh", json={"refresh_token": old_refresh}
         )
         assert reuse_response.status_code == 401
         data = reuse_response.json()
-        # Error handler transforms response to {"code": ..., "message": ..., "details": ...}
         assert "reuse" in data["message"].lower()
 
+        db_session.expire_all()
         session = (
             db_session.query(AuthSession)
             .filter(AuthSession.person_id == person.id)
+            .order_by(AuthSession.created_at.desc())
             .first()
         )
         assert session is not None

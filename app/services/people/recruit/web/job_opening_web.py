@@ -12,6 +12,7 @@ from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.models.people.hr.employee import EmployeeStatus
 from app.models.people.recruit import JobOpeningStatus
 from app.services.common import PaginationParams, coerce_uuid
@@ -199,6 +200,13 @@ class JobOpeningWebService:
         """Render job openings list page."""
         context = base_context(request, auth, "Job Openings", "recruit", db=db)
         context["request"] = request
+        organization = context.get("organization")
+        if organization is not None:
+            public_identifier = getattr(organization, "slug", None) or str(
+                organization.organization_id
+            )
+            app_url = settings.app_url.rstrip("/")
+            context["careers_portal_short_url"] = f"{app_url}/c/{public_identifier}"
         context.update(
             self.list_job_openings_context(
                 db,
@@ -242,7 +250,10 @@ class JobOpeningWebService:
         )
 
         if not ctx.get("opening"):
-            return RedirectResponse(url="/people/recruit/jobs", status_code=303)
+            return RedirectResponse(
+                url="/people/recruit/jobs?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         context = base_context(
             request, auth, ctx["opening"].job_title, "recruit", db=db
@@ -266,7 +277,10 @@ class JobOpeningWebService:
         )
 
         if not ctx.get("opening"):
-            return RedirectResponse(url="/people/recruit/jobs", status_code=303)
+            return RedirectResponse(
+                url="/people/recruit/jobs?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         context = base_context(request, auth, "Edit Job Opening", "recruit", db=db)
         context["request"] = request
@@ -291,7 +305,7 @@ class JobOpeningWebService:
             opening = svc.create_job_opening(org_id, **input_kwargs)
             db.commit()
             return RedirectResponse(
-                url=f"/people/recruit/jobs/{opening.job_opening_id}",
+                url=f"/people/recruit/jobs/{opening.job_opening_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
@@ -323,7 +337,7 @@ class JobOpeningWebService:
             svc.update_job_opening(org_id, coerce_uuid(job_opening_id), **input_kwargs)
             db.commit()
             return RedirectResponse(
-                url=f"/people/recruit/jobs/{job_opening_id}",
+                url=f"/people/recruit/jobs/{job_opening_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
@@ -354,7 +368,7 @@ class JobOpeningWebService:
             db.rollback()
 
         return RedirectResponse(
-            url=f"/people/recruit/jobs/{job_opening_id}", status_code=303
+            url=f"/people/recruit/jobs/{job_opening_id}?saved=1", status_code=303
         )
 
     def hold_job_opening_response(
@@ -376,7 +390,7 @@ class JobOpeningWebService:
             db.rollback()
 
         return RedirectResponse(
-            url=f"/people/recruit/jobs/{job_opening_id}", status_code=303
+            url=f"/people/recruit/jobs/{job_opening_id}?saved=1", status_code=303
         )
 
     def reopen_job_opening_response(
@@ -398,7 +412,7 @@ class JobOpeningWebService:
             db.rollback()
 
         return RedirectResponse(
-            url=f"/people/recruit/jobs/{job_opening_id}", status_code=303
+            url=f"/people/recruit/jobs/{job_opening_id}?saved=1", status_code=303
         )
 
     def close_job_opening_response(
@@ -420,7 +434,7 @@ class JobOpeningWebService:
             db.rollback()
 
         return RedirectResponse(
-            url=f"/people/recruit/jobs/{job_opening_id}", status_code=303
+            url=f"/people/recruit/jobs/{job_opening_id}?saved=1", status_code=303
         )
 
     def delete_job_opening_response(
@@ -446,7 +460,10 @@ class JobOpeningWebService:
                 )
             svc.delete_job_opening(org_id, coerce_uuid(job_opening_id))
             db.commit()
-            return RedirectResponse(url="/people/recruit/jobs", status_code=303)
+            return RedirectResponse(
+                url="/people/recruit/jobs?success=Record+deleted+successfully",
+                status_code=303,
+            )
         except Exception:
             db.rollback()
             return RedirectResponse(

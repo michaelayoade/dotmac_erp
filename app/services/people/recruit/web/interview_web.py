@@ -261,7 +261,10 @@ class InterviewWebService:
         )
 
         if not ctx.get("interview"):
-            return RedirectResponse(url="/people/recruit/interviews", status_code=303)
+            return RedirectResponse(
+                url="/people/recruit/interviews?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         context = base_context(request, auth, "Interview Details", "recruit", db=db)
         context["request"] = request
@@ -283,7 +286,10 @@ class InterviewWebService:
         )
 
         if not ctx.get("interview"):
-            return RedirectResponse(url="/people/recruit/interviews", status_code=303)
+            return RedirectResponse(
+                url="/people/recruit/interviews?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         context = base_context(request, auth, "Edit Interview", "recruit", db=db)
         context["request"] = request
@@ -313,7 +319,7 @@ class InterviewWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/recruit/interviews/{interview.interview_id}",
+                url=f"/people/recruit/interviews/{interview.interview_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
@@ -347,7 +353,7 @@ class InterviewWebService:
             svc.update_interview(org_id, coerce_uuid(interview_id), **input_kwargs)
             db.commit()
             return RedirectResponse(
-                url=f"/people/recruit/interviews/{interview_id}",
+                url=f"/people/recruit/interviews/{interview_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
@@ -381,7 +387,7 @@ class InterviewWebService:
             db.rollback()
 
         return RedirectResponse(
-            url=f"/people/recruit/interviews/{interview_id}", status_code=303
+            url=f"/people/recruit/interviews/{interview_id}?saved=1", status_code=303
         )
 
     async def record_interview_feedback_response(
@@ -412,5 +418,5 @@ class InterviewWebService:
             db.rollback()
 
         return RedirectResponse(
-            url=f"/people/recruit/interviews/{interview_id}", status_code=303
+            url=f"/people/recruit/interviews/{interview_id}?saved=1", status_code=303
         )

@@ -555,7 +555,7 @@ class GoodsReceiptWebService:
                 return {"success": True, "receipt_id": str(receipt.receipt_id)}
 
             return RedirectResponse(
-                url=f"/finance/ap/goods-receipts/{receipt.receipt_id}",
+                url=f"/finance/ap/goods-receipts/{receipt.receipt_id}?saved=1",
                 status_code=303,
             )
 

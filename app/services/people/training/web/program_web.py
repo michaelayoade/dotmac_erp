@@ -185,7 +185,10 @@ class ProgramWebService:
         )
 
         if not ctx.get("program"):
-            return RedirectResponse(url="/people/training/programs", status_code=303)
+            return RedirectResponse(
+                url="/people/training/programs?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         context = base_context(
             request, auth, ctx["program"].program_name, "training", db=db
@@ -210,7 +213,10 @@ class ProgramWebService:
         )
 
         if not ctx.get("program"):
-            return RedirectResponse(url="/people/training/programs", status_code=303)
+            return RedirectResponse(
+                url="/people/training/programs?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         context = base_context(
             request, auth, f"Edit {ctx['program'].program_code}", "training", db=db

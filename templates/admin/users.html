@@ -1,5 +1,5 @@
 {% extends "admin/base_admin.html" %}
-{% from "components/macros.html" import live_search %}
+{% from "components/macros.html" import live_search, pagination as render_pagination %}
 
 {% block page_title %}Users{% endblock %}
 {% block page_subtitle %}Manage user accounts and permissions{% endblock %}
@@ -228,46 +228,14 @@
             </table>
         </div>
 
-        <!-- Pagination -->
-        {% if pagination.total_pages > 1 %}
-        <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-            <div class="flex items-center justify-between">
-                <p class="text-sm text-slate-600 dark:text-slate-400">
-                    Showing {{ pagination.start }} to {{ pagination.end }} of {{ pagination.total }} users
-                </p>
-                <div class="flex items-center gap-2">
-                    {% if pagination.has_prev %}
-                    <a href="/admin/users?page={{ pagination.page - 1 }}{% if search %}&search={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
-                       class="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700 transition-colors">
-                        Previous
-                    </a>
-                    {% endif %}
-
-                    <div class="flex items-center gap-1">
-                        {% for p in pagination.pages %}
-                        {% if p == '...' %}
-                        <span class="px-2 py-1 text-slate-400">...</span>
-                        {% elif p == pagination.page %}
-                        <span class="px-3 py-1.5 rounded-lg text-sm font-medium bg-accent-500 text-white">{{ p }}</span>
-                        {% else %}
-                        <a href="/admin/users?page={{ p }}{% if search %}&search={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
-                           class="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700 transition-colors">
-                            {{ p }}
-                        </a>
-                        {% endif %}
-                        {% endfor %}
-                    </div>
-
-                    {% if pagination.has_next %}
-                    <a href="/admin/users?page={{ pagination.page + 1 }}{% if search %}&search={{ search }}{% endif %}{% if status_filter %}&status={{ status_filter }}{% endif %}"
-                       class="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-700 transition-colors">
-                        Next
-                    </a>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-        {% endif %}
+        {# Pagination #}
+        {{ render_pagination(
+            page=page,
+            total_pages=total_pages,
+            total_count=total_count,
+            limit=limit,
+            search=search
+        ) }}
     </div>
     </div>
 </div>

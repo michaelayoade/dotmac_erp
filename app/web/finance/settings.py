@@ -160,7 +160,9 @@ async def update_numbering_sequence(
         reset_frequency=reset_frequency,
     )
 
-    return RedirectResponse(url="/settings/numbering", status_code=303)
+    return RedirectResponse(
+        url="/settings/numbering?success=Record+updated+successfully", status_code=303
+    )
 
 
 @router.post("/numbering/{sequence_id}/reset", response_class=HTMLResponse)
@@ -174,7 +176,9 @@ async def reset_numbering_sequence(
     """Reset a sequence counter to a specific value."""
     await settings_web_service.reset_numbering_sequence(db, sequence_id, new_value)
 
-    return RedirectResponse(url="/settings/numbering", status_code=303)
+    return RedirectResponse(
+        url="/settings/numbering?success=Record+saved+successfully", status_code=303
+    )
 
 
 # ========== Automation Settings ==========

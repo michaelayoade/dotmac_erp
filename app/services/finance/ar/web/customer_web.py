@@ -623,7 +623,10 @@ class CustomerWebService:
                 request, "finance/ar/customer_detail.html", context
             )
 
-        return RedirectResponse(url="/finance/ar/customers", status_code=303)
+        return RedirectResponse(
+            url="/finance/ar/customers?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     async def upload_customer_attachment_response(
         self,

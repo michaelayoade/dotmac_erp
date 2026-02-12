@@ -1,6 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import status_badge %}
-{% from "components/macros.html" import live_search, status_badge %}
+{%- from "components/macros.html" import status_badge, pagination, live_search %}
 
 {% block page_title %}Journal Entries{% endblock %}
 
@@ -136,22 +135,14 @@
             </table>
         </div>
 
-        <!-- Pagination -->
-        {% if total_pages > 1 %}
-        <div class="flex items-center justify-between border-t border-slate-200 px-6 py-4 dark:border-slate-700">
-            <p class="text-sm text-slate-500 dark:text-slate-400">
-                Showing {{ offset + 1 }} to {{ offset + entries | length }} of {{ total_count }} entries
-            </p>
-            <div class="flex items-center gap-2">
-                {% if page > 1 %}
-                <a href="?page={{ page - 1 }}" class="rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800">Previous</a>
-                {% endif %}
-                {% if page < total_pages %}
-                <a href="?page={{ page + 1 }}" class="rounded-lg border border-slate-300 px-3 py-1 text-sm hover:bg-slate-50 dark:border-slate-600 dark:hover:bg-slate-800">Next</a>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
+        {# Pagination #}
+        {{ pagination(
+            page=page,
+            total_pages=total_pages,
+            total_count=total_count,
+            limit=limit,
+            search=search
+        ) }}
     </div>
     </div>{# /results-container #}
 </div>

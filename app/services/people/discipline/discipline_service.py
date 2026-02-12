@@ -104,7 +104,10 @@ class DisciplineService:
 
     def get_case(self, case_id: UUID) -> DisciplinaryCase | None:
         """Get a single case by ID."""
-        return self.db.get(DisciplinaryCase, case_id)
+        case = self.db.get(DisciplinaryCase, case_id)
+        if case and case.is_deleted:
+            return None
+        return case
 
     def get_case_or_404(self, case_id: UUID) -> DisciplinaryCase:
         """Get case or raise NotFoundError."""
@@ -128,6 +131,7 @@ class DisciplineService:
                 selectinload(DisciplinaryCase.responses),
             )
             .where(DisciplinaryCase.case_id == case_id)
+            .where(DisciplinaryCase.is_deleted == False)
         )
         case = self.db.scalar(stmt)
         if not case:
@@ -309,6 +313,40 @@ class DisciplineService:
         self.db.flush()
 
         logger.info("Updated disciplinary case %s", case.case_number)
+        return case
+
+    def delete_case(
+        self,
+        case_id: UUID,
+        deleted_by_id: UUID | None = None,
+    ) -> DisciplinaryCase:
+        """Soft delete a case (only allowed in DRAFT status)."""
+        case = self.get_case_or_404(case_id)
+
+        if case.status != CaseStatus.DRAFT:
+            raise ValidationError("Can only delete case in DRAFT status")
+
+        if case.is_deleted:
+            raise ValidationError("Case is already deleted")
+
+        case.is_deleted = True
+        case.deleted_at = datetime.now(UTC)
+        case.deleted_by_id = deleted_by_id
+        self.db.flush()
+
+        fire_audit_event(
+            self.db,
+            case.organization_id,
+            "discipline",
+            "disciplinary_case",
+            str(case.case_id),
+            AuditAction.DELETE,
+            old_values={"status": case.status.value, "is_deleted": False},
+            new_values={"is_deleted": True},
+            user_id=deleted_by_id,
+        )
+
+        logger.info("Deleted disciplinary case %s", case.case_number)
         return case
 
     # =========================================================================

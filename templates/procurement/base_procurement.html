@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "components/macros.html" import topbar %}
+{% from "components/macros.html" import topbar, success_banner %}
 
 {% block head %}
 <meta name="currency" content="{{ presentation_currency_code | default('USD') }}">
@@ -209,6 +209,7 @@
         <!-- Page Content -->
         <main class="min-h-[calc(100vh-4rem)] bg-dashboard">
             <div class="app-page">
+                {% if saved %}{{ success_banner("Record saved successfully.") }}{% endif %}
                 {% block content %}{% endblock %}
             </div>
         </main>

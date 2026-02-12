@@ -357,6 +357,8 @@ async def create_application(
 def view_application(
     request: Request,
     application_id: str,
+    success: str | None = None,
+    error: str | None = None,
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
 ):
@@ -364,6 +366,8 @@ def view_application(
     return leave_web_service.view_application_response(
         request=request,
         application_id=application_id,
+        success=success,
+        error=error,
         auth=auth,
         db=db,
     )

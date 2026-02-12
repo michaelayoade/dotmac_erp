@@ -171,7 +171,7 @@ class CategoryWebService:
                 )
 
             return RedirectResponse(
-                url="/support/categories",
+                url="/support/categories?success=Record+created+successfully",
                 status_code=303,
             )
 
@@ -218,7 +218,7 @@ class CategoryWebService:
             db.commit()
 
             return RedirectResponse(
-                url="/support/categories",
+                url="/support/categories?success=Record+updated+successfully",
                 status_code=303,
             )
 

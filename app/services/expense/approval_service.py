@@ -121,6 +121,24 @@ class ExpenseApprovalService:
     ) -> None:
         self.db = db
         self.ctx = ctx
+        self._receipt_optional_category_tokens = {
+            "fuelmileage",
+            "fuelmileageexpense",
+            "fuelmileageexpenses",
+        }
+
+    @staticmethod
+    def _normalize_category_token(value: str | None) -> str:
+        if not value:
+            return ""
+        return "".join(ch for ch in value.lower() if ch.isalnum())
+
+    def _is_receipt_optional_category(self, category: ExpenseCategory) -> bool:
+        return any(
+            self._normalize_category_token(candidate)
+            in self._receipt_optional_category_tokens
+            for candidate in (category.category_name, category.category_code)
+        )
 
     # =========================================================================
     # Approval Chain Management
@@ -468,8 +486,12 @@ class ExpenseApprovalService:
                 else None
             )
 
-            # Check if receipt is required
-            if category and category.requires_receipt:
+            # Check if receipt is required unless category is explicitly exempted.
+            if (
+                category is not None
+                and category.requires_receipt
+                and not self._is_receipt_optional_category(category)
+            ):
                 if not item.receipt_url and not item.receipt_number:
                     missing_receipts.append(
                         f"Item '{item.description[:50]}' ({category.category_name}): Receipt required"

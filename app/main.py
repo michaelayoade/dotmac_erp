@@ -71,6 +71,7 @@ from app.web.admin_crm_sync import router as admin_crm_sync_router
 from app.web.admin_sync import router as admin_sync_router
 from app.web.auth import router as auth_web_router
 from app.web.careers import router as careers_web_router
+from app.web.careers import short_router as careers_short_web_router
 from app.web.csrf import csrf_middleware
 from app.web.finance import automation_router as automation_web_router
 from app.web.finance import expense_router as expense_web_router
@@ -436,6 +437,7 @@ _include_api_router(crm_sync_router)
 # Serve API under /api/v1 to avoid clashing with web UI routes.
 app.include_router(careers_api_router, prefix="/api/v1")  # API endpoints
 app.include_router(careers_web_router)  # Web UI routes
+app.include_router(careers_short_web_router)  # Short careers links
 
 # Public Onboarding Self-Service Portal (token-based auth, no login required)
 app.include_router(onboarding_portal_router)  # Web UI routes

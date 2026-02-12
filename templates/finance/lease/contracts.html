@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import status_badge, live_search %}
+{% from "components/macros.html" import status_badge, live_search, pagination %}
 
 {% block page_title %}Lease Contracts{% endblock %}
 
@@ -91,6 +91,15 @@
                 </tbody>
             </table>
         </div>
+
+            {# Pagination #}
+            {{ pagination(
+                page=page,
+                total_pages=total_pages,
+                total_count=total_count,
+                limit=limit,
+                search=search
+            ) }}
     </div>
     </div>{# /results-container #}
 </div>

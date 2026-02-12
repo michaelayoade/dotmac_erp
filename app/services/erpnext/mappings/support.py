@@ -88,6 +88,13 @@ class TicketMapping(DocTypeMapping):
                     default=TicketPriority.MEDIUM.value,
                     transformer=map_ticket_priority,
                 ),
+                # Issue/ticket type (for category resolution)
+                # HD Ticket uses "ticket_type"; Issue uses "issue_type"
+                FieldMapping(
+                    source="ticket_type" if doctype == "HD Ticket" else "issue_type",
+                    target="_issue_type",
+                    required=False,
+                ),
                 # Raised by (email or user)
                 FieldMapping(
                     source="raised_by",
@@ -160,3 +167,98 @@ class HDTicketMapping(TicketMapping):
 
     def __init__(self):
         super().__init__(doctype="HD Ticket")
+
+
+class CommunicationToCommentMapping:
+    """
+    Map ERPNext Comment and Communication records to TicketComment data.
+
+    ERPNext stores ticket conversations in two DocTypes:
+    - Comment: inline notes on the Issue form (comment_type field)
+    - Communication: email threads linked to the Issue
+
+    Both map to DotMac TicketComment with appropriate comment_type.
+    """
+
+    # ERPNext Comment.comment_type → DotMac CommentType
+    COMMENT_TYPE_MAP: dict[str, str] = {
+        "Comment": "COMMENT",
+        "Info": "SYSTEM",
+        "Edit": "SYSTEM",
+        "Created": "SYSTEM",
+        "Deleted": "SYSTEM",
+        "Label": "SYSTEM",
+        "Assignment Completed": "SYSTEM",
+        "Assigned": "SYSTEM",
+        "Shared": "SYSTEM",
+        "Unshared": "SYSTEM",
+        "Attachment": "SYSTEM",
+        "Attachment Removed": "SYSTEM",
+        "Relinked": "SYSTEM",
+        "Bot": "SYSTEM",
+    }
+
+    @staticmethod
+    def map_comment(record: dict[str, Any]) -> dict[str, Any]:
+        """
+        Transform an ERPNext Comment record to TicketComment data.
+
+        Args:
+            record: ERPNext Comment document
+
+        Returns:
+            Dict with: content, comment_type, sender_email, created_at,
+                       source_doctype, source_name
+        """
+        comment_type_raw = record.get("comment_type", "Comment")
+        mapped_type = CommunicationToCommentMapping.COMMENT_TYPE_MAP.get(
+            str(comment_type_raw), "SYSTEM"
+        )
+
+        content = record.get("content") or ""
+        # Strip HTML tags for plain-text rendering if needed
+        if isinstance(content, str):
+            content = content.strip()
+
+        return {
+            "content": content or f"[{comment_type_raw}]",
+            "comment_type": mapped_type,
+            "sender_email": record.get("comment_email"),
+            "created_at": record.get("creation"),
+            "source_doctype": "Comment",
+            "source_name": record.get("name", ""),
+        }
+
+    @staticmethod
+    def map_communication(record: dict[str, Any]) -> dict[str, Any]:
+        """
+        Transform an ERPNext Communication record to TicketComment data.
+
+        Communications are email threads — always mapped to COMMENT type
+        (they're customer-visible correspondence).
+
+        Args:
+            record: ERPNext Communication document
+
+        Returns:
+            Dict with: content, comment_type, sender_email, created_at,
+                       source_doctype, source_name
+        """
+        content = record.get("content") or ""
+        subject = record.get("subject") or ""
+
+        # Prepend subject if present and different from content
+        if subject and subject not in content:
+            content = f"**{subject}**\n\n{content}"
+
+        if isinstance(content, str):
+            content = content.strip()
+
+        return {
+            "content": content or "[Communication]",
+            "comment_type": "COMMENT",
+            "sender_email": record.get("sender"),
+            "created_at": record.get("creation"),
+            "source_doctype": "Communication",
+            "source_name": record.get("name", ""),
+        }

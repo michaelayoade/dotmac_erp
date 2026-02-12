@@ -26,6 +26,8 @@ def patterns_list(
     request: Request,
     search: str | None = None,
     is_active: str | None = None,
+    success: str | None = None,
+    error: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -37,6 +39,8 @@ def patterns_list(
         db=db,
         search=search,
         is_active=is_active,
+        success=success,
+        error=error,
         page=page,
     )
 
@@ -101,6 +105,22 @@ async def update_pattern(
     )
 
 
+@router.post("/patterns/{pattern_id}/delete")
+async def delete_pattern(
+    request: Request,
+    pattern_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Deactivate a shift pattern."""
+    return await scheduling_web_service.delete_pattern_response(
+        request=request,
+        auth=auth,
+        db=db,
+        pattern_id=pattern_id,
+    )
+
+
 # =============================================================================
 # Pattern Assignments
 # =============================================================================
@@ -110,6 +130,8 @@ async def update_pattern(
 def assignments_list(
     request: Request,
     department_id: str | None = None,
+    success: str | None = None,
+    error: str | None = None,
     page: int = Query(default=1, ge=1),
     auth: WebAuthContext = Depends(require_hr_access),
     db: Session = Depends(get_db),
@@ -120,6 +142,8 @@ def assignments_list(
         auth=auth,
         db=db,
         department_id=department_id,
+        success=success,
+        error=error,
         page=page,
     )
 
@@ -149,6 +173,22 @@ async def create_assignment(
         request=request,
         auth=auth,
         db=db,
+    )
+
+
+@router.post("/assignments/{assignment_id}/delete")
+async def delete_assignment(
+    request: Request,
+    assignment_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Delete (end) a pattern assignment."""
+    return await scheduling_web_service.delete_assignment_response(
+        request=request,
+        auth=auth,
+        db=db,
+        assignment_id=assignment_id,
     )
 
 
@@ -216,6 +256,22 @@ async def publish_schedule(
         request=request,
         auth=auth,
         db=db,
+    )
+
+
+@router.post("/schedules/{schedule_id}/delete")
+async def delete_schedule(
+    request: Request,
+    schedule_id: str,
+    auth: WebAuthContext = Depends(require_hr_access),
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
+    """Delete a draft schedule entry."""
+    return await scheduling_web_service.delete_schedule_response(
+        request=request,
+        auth=auth,
+        db=db,
+        schedule_id=schedule_id,
     )
 
 

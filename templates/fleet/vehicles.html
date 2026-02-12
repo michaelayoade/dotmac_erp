@@ -14,12 +14,30 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/fleet/vehicles/new" class="btn btn-primary">
-    <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-    </svg>
-    Add Vehicle
-</a>
+<div class="flex flex-wrap items-center gap-2">
+    {% if auth.has_all_permissions(["fleet:access", "fleet:dashboard"]) %}
+    <a href="/fleet/import/vehicles" class="btn btn-secondary">
+        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+        </svg>
+        Import CSV
+    </a>
+    {% endif %}
+    {% if auth.has_all_permissions(["fleet:access", "fleet:dashboard"]) %}
+    <a href="/fleet/vehicles/template-csv" class="btn btn-secondary">
+        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0l-4 4m4-4v12"/>
+        </svg>
+        CSV Template
+    </a>
+    {% endif %}
+    <a href="/fleet/vehicles/new" class="btn btn-primary">
+        <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+        </svg>
+        Add Vehicle
+    </a>
+</div>
 {% endblock %}
 
 {% block content %}
@@ -140,11 +158,13 @@
                         </td>
                         <td class="text-sm text-slate-600 dark:text-slate-400">{{ vehicle.year }}</td>
                         <td class="text-right font-mono text-sm text-slate-900 dark:text-white">
-                            {{ "{:,.0f}".format(vehicle.current_odometer_km) }} km
+                            {{ "{:,.0f}".format(vehicle.current_odometer if vehicle.current_odometer is not none else 0) }} km
                         </td>
                         <td>
-                            {% if vehicle.assigned_employee_id %}
-                            <span class="text-sm text-slate-900 dark:text-white">{{ vehicle.assigned_employee_name | default('Assigned') }}</span>
+                            {% if vehicle.assigned_employee %}
+                            <span class="text-sm text-slate-900 dark:text-white">
+                                {{ vehicle.assigned_employee.display_name or vehicle.assigned_employee.full_name or vehicle.assigned_employee.employee_code }}
+                            </span>
                             {% elif vehicle.assigned_department_id %}
                             <span class="text-sm text-slate-600 dark:text-slate-400">{{ vehicle.assigned_department_name | default('Department') }}</span>
                             {% else %}

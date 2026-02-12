@@ -152,7 +152,7 @@ class CycleWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/perf/cycles/{cycle.cycle_id}",
+                url=f"/people/perf/cycles/{cycle.cycle_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
@@ -284,7 +284,7 @@ class CycleWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/perf/cycles/{cycle_id}",
+                url=f"/people/perf/cycles/{cycle_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
@@ -325,7 +325,9 @@ class CycleWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url=f"/people/perf/cycles/{cycle_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/perf/cycles/{cycle_id}?saved=1", status_code=303
+        )
 
     def advance_cycle_response(
         self,
@@ -352,7 +354,9 @@ class CycleWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url=f"/people/perf/cycles/{cycle_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/perf/cycles/{cycle_id}?saved=1", status_code=303
+        )
 
     def cancel_cycle_response(
         self,
@@ -374,7 +378,9 @@ class CycleWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url=f"/people/perf/cycles/{cycle_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/perf/cycles/{cycle_id}?saved=1", status_code=303
+        )
 
     def delete_cycle_response(
         self,
@@ -389,7 +395,10 @@ class CycleWebService:
         try:
             svc.delete_cycle(org_id, coerce_uuid(cycle_id))
             db.commit()
-            return RedirectResponse(url="/people/perf/cycles", status_code=303)
+            return RedirectResponse(
+                url="/people/perf/cycles?success=Record+deleted+successfully",
+                status_code=303,
+            )
         except Exception:
             db.rollback()
             return RedirectResponse(
@@ -511,7 +520,7 @@ class CycleWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/perf/kras/{kra.kra_id}",
+                url=f"/people/perf/kras/{kra.kra_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
@@ -625,7 +634,7 @@ class CycleWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/perf/kras/{kra_id}",
+                url=f"/people/perf/kras/{kra_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
@@ -665,7 +674,9 @@ class CycleWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url=f"/people/perf/kras/{kra_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/perf/kras/{kra_id}?saved=1", status_code=303
+        )
 
     def delete_kra_response(
         self,
@@ -680,7 +691,10 @@ class CycleWebService:
         try:
             svc.delete_kra(org_id, coerce_uuid(kra_id))
             db.commit()
-            return RedirectResponse(url="/people/perf/kras", status_code=303)
+            return RedirectResponse(
+                url="/people/perf/kras?success=Record+deleted+successfully",
+                status_code=303,
+            )
         except Exception:
             db.rollback()
             return RedirectResponse(url=f"/people/perf/kras/{kra_id}", status_code=303)
@@ -808,7 +822,7 @@ class CycleWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/perf/templates/{template.template_id}",
+                url=f"/people/perf/templates/{template.template_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
@@ -929,7 +943,7 @@ class CycleWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/perf/templates/{template_id}",
+                url=f"/people/perf/templates/{template_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
@@ -979,7 +993,7 @@ class CycleWebService:
             db.rollback()
 
         return RedirectResponse(
-            url=f"/people/perf/templates/{template_id}", status_code=303
+            url=f"/people/perf/templates/{template_id}?saved=1", status_code=303
         )
 
     def delete_template_response(
@@ -995,7 +1009,10 @@ class CycleWebService:
         try:
             svc.delete_template(org_id, coerce_uuid(template_id))
             db.commit()
-            return RedirectResponse(url="/people/perf/templates", status_code=303)
+            return RedirectResponse(
+                url="/people/perf/templates?success=Record+deleted+successfully",
+                status_code=303,
+            )
         except Exception:
             db.rollback()
             return RedirectResponse(
@@ -1120,7 +1137,7 @@ class CycleWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/perf/scorecards/{scorecard.scorecard_id}",
+                url=f"/people/perf/scorecards/{scorecard.scorecard_id}?saved=1",
                 status_code=303,
             )
         except Exception as e:
@@ -1199,7 +1216,8 @@ class CycleWebService:
             item = next((i for i in scorecard.items if str(i.item_id) == item_id), None)
             if not item:
                 return RedirectResponse(
-                    url=f"/people/perf/scorecards/{scorecard_id}", status_code=303
+                    url=f"/people/perf/scorecards/{scorecard_id}?saved=1",
+                    status_code=303,
                 )
         except Exception:
             return RedirectResponse(url="/people/perf/scorecards", status_code=303)

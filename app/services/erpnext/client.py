@@ -1383,6 +1383,7 @@ class ERPNextClient:
             fields=[
                 "name",
                 "project_name",
+                # "description" excluded — Frappe blocks Text Editor fields in list queries
                 "status",
                 "is_active",
                 "expected_start_date",
@@ -1392,6 +1393,8 @@ class ERPNextClient:
                 "estimated_costing",
                 "total_costing_amount",
                 "percent_complete",
+                "priority",
+                "project_type",
                 "company",
                 "cost_center",
                 "customer",  # Customer link for client projects
@@ -1433,6 +1436,7 @@ class ERPNextClient:
                     "description",
                     "status",
                     "priority",
+                    "ticket_type",  # HD Ticket uses ticket_type (not issue_type)
                     "raised_by",
                     "owner",
                     "opening_date",
@@ -1455,6 +1459,7 @@ class ERPNextClient:
                         "description",
                         "status",
                         "priority",
+                        "issue_type",  # Issue DocType uses issue_type
                         "raised_by",
                         "owner",
                         "opening_date",
@@ -1468,6 +1473,125 @@ class ERPNextClient:
                 )
             else:
                 raise
+
+    def get_comments_for_doc(
+        self,
+        doctype: str,
+        name: str,
+    ) -> list[dict[str, Any]]:
+        """
+        Get Comment records linked to a document.
+
+        ERPNext stores inline form comments as Comment DocType records
+        with reference_doctype/reference_name pointing to the parent.
+
+        Args:
+            doctype: Parent DocType (e.g., "Issue", "HD Ticket")
+            name: Parent document name
+
+        Returns:
+            List of Comment documents
+        """
+        try:
+            return self.list_documents(
+                doctype="Comment",
+                filters={
+                    "reference_doctype": doctype,
+                    "reference_name": name,
+                    "comment_type": ["not in", ["Like", "Workflow"]],
+                },
+                fields=[
+                    "name",
+                    "comment_type",
+                    "comment_email",
+                    "content",
+                    "creation",
+                    "modified",
+                ],
+                limit_page_length=200,
+            )
+        except ERPNextError as e:
+            logger.warning(
+                "Could not fetch comments for %s/%s: %s", doctype, name, e.message
+            )
+            return []
+
+    def get_communications_for_doc(
+        self,
+        doctype: str,
+        name: str,
+    ) -> list[dict[str, Any]]:
+        """
+        Get Communication records linked to a document.
+
+        ERPNext stores email threads as Communication DocType records
+        with reference_doctype/reference_name pointing to the parent.
+
+        Args:
+            doctype: Parent DocType (e.g., "Issue", "HD Ticket")
+            name: Parent document name
+
+        Returns:
+            List of Communication documents
+        """
+        try:
+            return self.list_documents(
+                doctype="Communication",
+                filters={
+                    "reference_doctype": doctype,
+                    "reference_name": name,
+                },
+                fields=[
+                    "name",
+                    "communication_type",
+                    "subject",
+                    "content",
+                    "sender",
+                    "sent_or_received",
+                    "creation",
+                    "modified",
+                ],
+                limit_page_length=200,
+            )
+        except ERPNextError as e:
+            logger.warning(
+                "Could not fetch communications for %s/%s: %s",
+                doctype,
+                name,
+                e.message,
+            )
+            return []
+
+    def get_task_dependencies(
+        self,
+        task_name: str,
+    ) -> list[dict[str, Any]]:
+        """
+        Get Task Depends On child table entries for a task.
+
+        Args:
+            task_name: ERPNext Task document name
+
+        Returns:
+            List of dependency records with 'task' field (predecessor name)
+        """
+        try:
+            return self.list_documents(
+                doctype="Task Depends On",
+                filters={"parent": task_name},
+                fields=[
+                    "name",
+                    "task",
+                    "modified",
+                ],
+            )
+        except ERPNextError as e:
+            logger.warning(
+                "Could not fetch dependencies for task %s: %s",
+                task_name,
+                e.message,
+            )
+            return []
 
     def get_material_requests(
         self,

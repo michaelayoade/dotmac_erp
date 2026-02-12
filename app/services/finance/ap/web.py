@@ -2431,7 +2431,10 @@ class APWebService:
                 request, "finance/ap/supplier_detail.html", context
             )
 
-        return RedirectResponse(url="/finance/ap/suppliers", status_code=303)
+        return RedirectResponse(
+            url="/finance/ap/suppliers?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     def list_invoices_response(
         self,
@@ -2570,7 +2573,10 @@ class APWebService:
                 request, "finance/ap/invoice_detail.html", context
             )
 
-        return RedirectResponse(url="/finance/ap/invoices", status_code=303)
+        return RedirectResponse(
+            url="/finance/ap/invoices?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     def invoice_edit_form_response(
         self,
@@ -2585,7 +2591,10 @@ class APWebService:
 
         invoice = db.get(SupplierInvoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            return RedirectResponse(url="/finance/ap/invoices", status_code=303)
+            return RedirectResponse(
+                url="/finance/ap/invoices?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         if invoice.status != SupplierInvoiceStatus.DRAFT:
             return RedirectResponse(
@@ -2922,7 +2931,10 @@ class APWebService:
                 request, "finance/ap/payment_detail.html", context
             )
 
-        return RedirectResponse(url="/finance/ap/payments", status_code=303)
+        return RedirectResponse(
+            url="/finance/ap/payments?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     def payment_edit_form_response(
         self,
@@ -2937,7 +2949,10 @@ class APWebService:
 
         payment = db.get(SupplierPayment, pay_id)
         if not payment or payment.organization_id != org_id:
-            return RedirectResponse(url="/finance/ap/payments", status_code=303)
+            return RedirectResponse(
+                url="/finance/ap/payments?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         if payment.status != APPaymentStatus.DRAFT:
             return RedirectResponse(
@@ -3236,7 +3251,10 @@ class APWebService:
             self.purchase_order_form_context(db, str(auth.organization_id), po_id)
         )
         if not context.get("order"):
-            return RedirectResponse(url="/finance/ap/purchase-orders", status_code=303)
+            return RedirectResponse(
+                url="/finance/ap/purchase-orders?success=Record+updated+successfully",
+                status_code=303,
+            )
         return templates.TemplateResponse(
             request, "finance/ap/purchase_order_form.html", context
         )
@@ -3273,7 +3291,7 @@ class APWebService:
                 return {"success": True, "po_id": str(po.po_id)}
 
             return RedirectResponse(
-                url=f"/ap/purchase-orders/{po.po_id}",
+                url=f"/ap/purchase-orders/{po.po_id}?saved=1",
                 status_code=303,
             )
 
@@ -3482,7 +3500,7 @@ class APWebService:
                 return {"success": True, "receipt_id": str(receipt.receipt_id)}
 
             return RedirectResponse(
-                url=f"/ap/goods-receipts/{receipt.receipt_id}",
+                url=f"/ap/goods-receipts/{receipt.receipt_id}?saved=1",
                 status_code=303,
             )
 

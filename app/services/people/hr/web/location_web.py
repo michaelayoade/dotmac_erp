@@ -81,7 +81,9 @@ class LocationWebService:
             "search": search or "",
             "page": page,
             "total_pages": total_pages,
+            "total_count": result.total,
             "total": result.total,
+            "limit": limit,
             "has_prev": page > 1,
             "has_next": page < total_pages,
         }
@@ -235,7 +237,10 @@ class LocationWebService:
         )
         db.commit()
 
-        return RedirectResponse(url="/people/hr/locations", status_code=303)
+        return RedirectResponse(
+            url="/people/hr/locations?success=Record+saved+successfully",
+            status_code=303,
+        )
 
     @staticmethod
     async def update_location_response(
@@ -352,7 +357,10 @@ class LocationWebService:
         )
         db.commit()
 
-        return RedirectResponse(url="/people/hr/locations", status_code=303)
+        return RedirectResponse(
+            url="/people/hr/locations?success=Record+saved+successfully",
+            status_code=303,
+        )
 
     @staticmethod
     def geofence_editor_response(

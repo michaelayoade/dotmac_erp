@@ -13,38 +13,77 @@
 {% endblock %}
 
 {% block content %}
-<div class="max-w-2xl stagger-in">
-    <div class="card p-6">
-        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Create Purchase Requisition</h2>
-        <form method="post" class="space-y-4">
-            {{ request.state.csrf_form | safe }}
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Requisition Number <span class="text-rose-500">*</span></label>
-                    <input type="text" name="requisition_number" required class="input-field" placeholder="PR-2025-001">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Date <span class="text-rose-500">*</span></label>
-                    <input type="date" name="requisition_date" required class="input-field">
-                </div>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Urgency <span class="text-rose-500">*</span></label>
-                <select name="urgency" required class="input-field">
-                    {% for u in urgency_levels %}
-                    <option value="{{ u.value }}">{{ u.value }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Justification</label>
-                <textarea name="justification" rows="3" class="input-field" placeholder="Describe the business need for this requisition..."></textarea>
-            </div>
-            <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
-                <a href="/procurement/requisitions" class="btn btn-secondary">Cancel</a>
-                <button type="submit" class="btn btn-primary">Create Requisition</button>
-            </div>
-        </form>
+<div class="max-w-3xl">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
     </div>
+    {% endif %}
+
+    <form method="post" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Requisition Details</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="requisition_number" class="form-label required">Requisition Number</label>
+                        <input
+                            type="text"
+                            id="requisition_number"
+                            name="requisition_number"
+                            required
+                            class="form-input w-full"
+                            placeholder="PR-2025-001"
+                        >
+                    </div>
+                    <div>
+                        <label for="requisition_date" class="form-label required">Requisition Date</label>
+                        <input
+                            type="date"
+                            id="requisition_date"
+                            name="requisition_date"
+                            required
+                            class="form-input w-full"
+                        >
+                    </div>
+                </div>
+
+                <div>
+                    <label for="urgency" class="form-label required">Urgency</label>
+                    <select id="urgency" name="urgency" required class="form-select w-full md:max-w-sm">
+                        {% for u in urgency_levels %}
+                        <option value="{{ u.value }}">{{ u.value | replace('_', ' ') | title }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div>
+                    <label for="justification" class="form-label">Justification</label>
+                    <textarea
+                        id="justification"
+                        name="justification"
+                        rows="4"
+                        class="form-input w-full"
+                        placeholder="Describe the business need for this requisition..."
+                    ></textarea>
+                    <p class="text-xs text-slate-500 mt-1">Include key context such as timeline, impact, and expected outcome.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
+            <a href="/procurement/requisitions" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Create Requisition</button>
+        </div>
+    </form>
 </div>
 {% endblock %}

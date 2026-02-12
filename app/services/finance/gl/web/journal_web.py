@@ -510,7 +510,8 @@ class JournalWebService:
             )
 
         return RedirectResponse(
-            url=f"/finance/gl/journals/{entry.journal_entry_id}", status_code=303
+            url=f"/finance/gl/journals/{entry.journal_entry_id}?saved=1",
+            status_code=303,
         )
 
     def update_journal_response(
@@ -568,7 +569,9 @@ class JournalWebService:
                 request, "finance/gl/journal_form.html", context
             )
 
-        return RedirectResponse(url=f"/finance/gl/journals/{entry_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/finance/gl/journals/{entry_id}?saved=1", status_code=303
+        )
 
     def delete_journal_response(
         self,
@@ -594,7 +597,10 @@ class JournalWebService:
                 request, "finance/gl/journal_detail.html", context
             )
 
-        return RedirectResponse(url="/finance/gl/journals", status_code=303)
+        return RedirectResponse(
+            url="/finance/gl/journals?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     def post_journal_response(
         self,

@@ -495,7 +495,9 @@ class QuoteWebService:
                 request, "finance/ar/quote_form.html", context
             )
 
-        return RedirectResponse(url=f"/quotes/{quote.quote_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/quotes/{quote.quote_id}?saved=1", status_code=303
+        )
 
     def detail_response(
         self,
@@ -535,7 +537,7 @@ class QuoteWebService:
             )
         except Exception:
             logger.exception("send_response: failed")
-        return RedirectResponse(url=f"/quotes/{quote_id}", status_code=303)
+        return RedirectResponse(url=f"/quotes/{quote_id}?saved=1", status_code=303)
 
     def accept_response(
         self,
@@ -549,7 +551,7 @@ class QuoteWebService:
             quote_service.accept(db, str(auth.organization_id), quote_id)
         except Exception:
             logger.exception("accept_response: failed")
-        return RedirectResponse(url=f"/quotes/{quote_id}", status_code=303)
+        return RedirectResponse(url=f"/quotes/{quote_id}?saved=1", status_code=303)
 
     def reject_response(
         self,
@@ -564,7 +566,7 @@ class QuoteWebService:
             quote_service.reject(db, str(auth.organization_id), quote_id, reason)
         except Exception:
             logger.exception("reject_response: failed")
-        return RedirectResponse(url=f"/quotes/{quote_id}", status_code=303)
+        return RedirectResponse(url=f"/quotes/{quote_id}?saved=1", status_code=303)
 
     def convert_to_invoice_response(
         self,
@@ -579,7 +581,7 @@ class QuoteWebService:
                 db, str(auth.organization_id), quote_id, str(auth.user_id)
             )
             return RedirectResponse(
-                url=f"/ar/invoices/{invoice.invoice_id}", status_code=303
+                url=f"/ar/invoices/{invoice.invoice_id}?saved=1", status_code=303
             )
         except Exception:
             logger.exception("convert_to_invoice_response: failed")
@@ -602,7 +604,9 @@ class QuoteWebService:
                 str(auth.user_id),
                 customer_po_number=customer_po_number,
             )
-            return RedirectResponse(url=f"/sales-orders/{so.so_id}", status_code=303)
+            return RedirectResponse(
+                url=f"/sales-orders/{so.so_id}?saved=1", status_code=303
+            )
         except Exception:
             logger.exception("convert_to_sales_order_response: failed")
             return RedirectResponse(url=f"/quotes/{quote_id}", status_code=303)
@@ -621,7 +625,7 @@ class QuoteWebService:
             )
         except Exception:
             logger.exception("void_response: failed")
-        return RedirectResponse(url=f"/quotes/{quote_id}", status_code=303)
+        return RedirectResponse(url=f"/quotes/{quote_id}?saved=1", status_code=303)
 
 
 # Module-level singleton

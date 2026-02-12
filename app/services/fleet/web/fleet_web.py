@@ -8,9 +8,12 @@ import logging
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import inspect
+from sqlalchemy import inspect, or_
+from sqlalchemy import select as sa_select
 from sqlalchemy.orm import Session
 
+from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
+from app.models.finance.core_org.location import Location
 from app.models.fleet.enums import (
     AssignmentType,
     DocumentType,
@@ -25,6 +28,7 @@ from app.models.fleet.enums import (
     VehicleStatus,
     VehicleType,
 )
+from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.services.common import NotFoundError, PaginationParams, coerce_uuid
 from app.services.fleet.assignment_service import AssignmentService
 from app.services.fleet.document_service import DocumentService
@@ -52,6 +56,31 @@ class FleetWebService:
             logger.exception("Failed to inspect fleet schema tables")
             return False
 
+    def _get_locations(self, organization_id: UUID) -> list[Location]:
+        """Get active locations (branches) for dropdowns."""
+        stmt = (
+            self.db.query(Location)
+            .filter(
+                Location.organization_id == organization_id,
+                Location.is_active == True,  # noqa: E712
+            )
+            .order_by(Location.location_name.asc())
+        )
+        return list(stmt.all())
+
+    def _get_employees(self, organization_id: UUID) -> list[Employee]:
+        """Get active employees for dropdowns."""
+        stmt = (
+            self.db.query(Employee)
+            .filter(
+                Employee.organization_id == organization_id,
+                Employee.status == EmployeeStatus.ACTIVE,
+                Employee.is_deleted == False,  # noqa: E712
+            )
+            .order_by(Employee.employee_code.asc())
+        )
+        return list(stmt.all())
+
     def _empty_list_context(self) -> dict[str, Any]:
         return {
             "total": 0,
@@ -60,6 +89,55 @@ class FleetWebService:
             "has_next": False,
             "has_prev": False,
         }
+
+    @staticmethod
+    def expense_claim_typeahead(
+        db: Session,
+        organization_id: str,
+        query: str,
+        limit: int = 8,
+    ) -> dict[str, list[dict[str, str]]]:
+        """Search expense claims for fleet linkage fields."""
+        org_id = coerce_uuid(organization_id)
+        search_term = f"%{query.strip()}%"
+        stmt = (
+            sa_select(ExpenseClaim)
+            .where(
+                ExpenseClaim.organization_id == org_id,
+                ExpenseClaim.status != ExpenseClaimStatus.CANCELLED,
+            )
+            .where(
+                or_(
+                    ExpenseClaim.claim_number.ilike(search_term),
+                    ExpenseClaim.purpose.ilike(search_term),
+                )
+            )
+            .order_by(ExpenseClaim.claim_date.desc(), ExpenseClaim.claim_number.desc())
+            .limit(limit)
+        )
+        claims = list(db.scalars(stmt).all())
+
+        items: list[dict[str, str]] = []
+        for claim in claims:
+            purpose = (claim.purpose or "").strip()
+            status = claim.status.value if claim.status else ""
+            label = claim.claim_number
+            if purpose:
+                short_purpose = purpose if len(purpose) <= 60 else f"{purpose[:57]}..."
+                label = f"{claim.claim_number} - {short_purpose}"
+            if status:
+                label = f"{label} ({status})"
+
+            items.append(
+                {
+                    "ref": str(claim.claim_id),
+                    "label": label,
+                    "name": claim.claim_number,
+                    "claim_number": claim.claim_number,
+                }
+            )
+
+        return {"items": items}
 
     # ─────────────────────────────────────────────────────────────
     # Dashboard
@@ -136,9 +214,9 @@ class FleetWebService:
                 {
                     "vehicles": [],
                     "status_counts": {},
-                    "statuses": [s.value for s in VehicleStatus],
-                    "vehicle_types": [t.value for t in VehicleType],
-                    "assignment_types": [a.value for a in AssignmentType],
+                    "statuses": list(VehicleStatus),
+                    "vehicle_types": list(VehicleType),
+                    "assignment_types": list(AssignmentType),
                     "current_status": status,
                     "current_type": vehicle_type,
                     "current_department_id": department_id,
@@ -171,9 +249,9 @@ class FleetWebService:
             "has_next": result.has_next,
             "has_prev": result.has_prev,
             "status_counts": status_counts,
-            "statuses": [s.value for s in VehicleStatus],
-            "vehicle_types": [t.value for t in VehicleType],
-            "assignment_types": [a.value for a in AssignmentType],
+            "statuses": list(VehicleStatus),
+            "vehicle_types": list(VehicleType),
+            "assignment_types": list(AssignmentType),
             "current_status": status,
             "current_type": vehicle_type,
             "current_department_id": department_id,
@@ -187,18 +265,22 @@ class FleetWebService:
         """Build context for vehicle create/edit form."""
         if not self._fleet_tables_ready():
             return {
-                "vehicle_types": [t.value for t in VehicleType],
-                "fuel_types": [f.value for f in FuelType],
-                "ownership_types": [o.value for o in OwnershipType],
-                "assignment_types": [a.value for a in AssignmentType],
+                "vehicle_types": list(VehicleType),
+                "fuel_types": list(FuelType),
+                "ownership_types": list(OwnershipType),
+                "assignment_types": list(AssignmentType),
+                "locations": [],
+                "employees": [],
                 "vehicle": None,
             }
         org_id = coerce_uuid(organization_id)
         context: dict[str, Any] = {
-            "vehicle_types": [t.value for t in VehicleType],
-            "fuel_types": [f.value for f in FuelType],
-            "ownership_types": [o.value for o in OwnershipType],
-            "assignment_types": [a.value for a in AssignmentType],
+            "vehicle_types": list(VehicleType),
+            "fuel_types": list(FuelType),
+            "ownership_types": list(OwnershipType),
+            "assignment_types": list(AssignmentType),
+            "locations": self._get_locations(org_id),
+            "employees": self._get_employees(org_id),
             "vehicle": None,
         }
 

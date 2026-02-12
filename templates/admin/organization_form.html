@@ -98,6 +98,30 @@
                     />
                 </div>
 
+                <!-- Public Slug -->
+                <div>
+                    <label for="slug" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        Public Slug
+                    </label>
+                    <input
+                        type="text"
+                        id="slug"
+                        name="slug"
+                        value="{{ organization_data.slug if organization_data else '' }}"
+                        maxlength="50"
+                        pattern="[a-z0-9]+(-[a-z0-9]+)*"
+                        class="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                        placeholder="e.g., dotmac-group"
+                    />
+                    <p class="mt-1.5 text-xs text-slate-500 dark:text-slate-400">
+                        Used for public links like careers. Lowercase letters, numbers, hyphens only.
+                    </p>
+                    <p class="mt-1 text-xs font-mono text-slate-500 dark:text-slate-400">
+                        Public URL:
+                        <span id="slug-url-preview">{{ public_url_base }}/c/{% if organization_data and (organization_data.slug or organization_data.id) %}{{ organization_data.slug if organization_data.slug else organization_data.id }}{% else %}&lt;slug&gt;{% endif %}</span>
+                    </p>
+                </div>
+
                 <!-- Jurisdiction Country -->
                 <div>
                     <label for="jurisdiction_country_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
@@ -476,4 +500,67 @@
         {{ request.state.csrf_form | safe }}</form>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+(function initOrganizationSlugHelpers() {
+    const legalName = document.getElementById('legal_name');
+    const tradingName = document.getElementById('trading_name');
+    const slugInput = document.getElementById('slug');
+    const preview = document.getElementById('slug-url-preview');
+    if (!slugInput || !preview) {
+        return;
+    }
+
+    const baseUrl = '{{ public_url_base }}/c/';
+    const fallbackId = '{{ organization_data.id if organization_data else "" }}';
+    let manualSlug = (slugInput.value || '').trim().length > 0;
+
+    function slugify(value) {
+        return String(value || '')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .replace(/-{2,}/g, '-')
+            .slice(0, 50);
+    }
+
+    function updatePreview() {
+        const current = slugify(slugInput.value);
+        if (slugInput.value !== current) {
+            slugInput.value = current;
+        }
+        const tail = current || fallbackId || '<slug>';
+        preview.textContent = baseUrl + tail;
+    }
+
+    function maybeSuggestSlug() {
+        if (manualSlug) {
+            return;
+        }
+        const candidateSource = (tradingName && tradingName.value.trim())
+            || (legalName && legalName.value.trim())
+            || '';
+        slugInput.value = slugify(candidateSource);
+        updatePreview();
+    }
+
+    slugInput.addEventListener('input', () => {
+        manualSlug = (slugInput.value || '').trim().length > 0;
+        updatePreview();
+    });
+
+    if (legalName) {
+        legalName.addEventListener('input', maybeSuggestSlug);
+    }
+    if (tradingName) {
+        tradingName.addEventListener('input', maybeSuggestSlug);
+    }
+
+    updatePreview();
+    maybeSuggestSlug();
+})();
+</script>
 {% endblock %}

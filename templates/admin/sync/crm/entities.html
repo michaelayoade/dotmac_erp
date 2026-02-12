@@ -1,5 +1,5 @@
 {% extends "admin/base_admin.html" %}
-{% from "components/macros.html" import live_search %}
+{% from "components/macros.html" import live_search, pagination as render_pagination %}
 
 {% block page_title %}Synced CRM Entities{% endblock %}
 {% block page_subtitle %}Browse projects, tickets, and work orders synced from DotMac CRM{% endblock %}
@@ -110,36 +110,14 @@
             </table>
         </div>
 
-        <!-- Pagination -->
-        {% if total_pages > 1 %}
-        <div class="flex items-center justify-between border-t border-slate-200 dark:border-slate-700 px-4 py-3">
-            <div class="text-sm text-slate-500 dark:text-slate-400">
-                Showing {{ (page - 1) * per_page + 1 }} - {{ min(page * per_page, total_count) }} of {{ total_count }}
-            </div>
-            <div class="flex items-center gap-2">
-                {% if page > 1 %}
-                <a href="?page={{ page - 1 }}{% if filter_entity_type %}&entity_type={{ filter_entity_type }}{% endif %}{% if filter_status %}&status={{ filter_status }}{% endif %}{% if filter_search %}&search={{ filter_search }}{% endif %}"
-                   class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
-                    Previous
-                </a>
-                {% endif %}
-
-                {% for p in range(max(1, page - 2), min(total_pages + 1, page + 3)) %}
-                <a href="?page={{ p }}{% if filter_entity_type %}&entity_type={{ filter_entity_type }}{% endif %}{% if filter_status %}&status={{ filter_status }}{% endif %}{% if filter_search %}&search={{ filter_search }}{% endif %}"
-                   class="px-3 py-1.5 rounded-lg text-sm {% if p == page %}bg-primary-600 text-white{% else %}border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800{% endif %} transition">
-                    {{ p }}
-                </a>
-                {% endfor %}
-
-                {% if page < total_pages %}
-                <a href="?page={{ page + 1 }}{% if filter_entity_type %}&entity_type={{ filter_entity_type }}{% endif %}{% if filter_status %}&status={{ filter_status }}{% endif %}{% if filter_search %}&search={{ filter_search }}{% endif %}"
-                   class="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition">
-                    Next
-                </a>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
+        {# Pagination #}
+        {{ render_pagination(
+            page=page,
+            total_pages=total_pages,
+            total_count=total_count,
+            limit=limit,
+            search=search
+        ) }}
 
         {% else %}
         <div class="text-center py-16">

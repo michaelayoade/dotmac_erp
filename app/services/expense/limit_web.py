@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.expense import LimitActionType, LimitPeriodType, LimitScopeType
+from app.models.expense.limit_rule import ExpenseApproverLimit
 from app.services.common import PaginationParams, coerce_uuid
 from app.services.expense import ExpenseLimitService
 from app.templates import templates
@@ -244,7 +247,10 @@ class ExpenseLimitWebService:
                 is_active=is_active,
             )
             db.commit()
-            return RedirectResponse(url="/expense/limits/rules", status_code=303)
+            return RedirectResponse(
+                url="/expense/limits/rules?success=Record+saved+successfully",
+                status_code=303,
+            )
         except Exception as e:
             db.rollback()
             errors["_form"] = str(e)
@@ -386,7 +392,10 @@ class ExpenseLimitWebService:
         try:
             service.update_rule(org_id, rule_id, **update_data)
             db.commit()
-            return RedirectResponse(url="/expense/limits/rules", status_code=303)
+            return RedirectResponse(
+                url="/expense/limits/rules?success=Record+saved+successfully",
+                status_code=303,
+            )
         except Exception as e:
             db.rollback()
             rule = service.get_rule(org_id, rule_id)
@@ -424,7 +433,10 @@ class ExpenseLimitWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url="/expense/limits/rules", status_code=303)
+        return RedirectResponse(
+            url="/expense/limits/rules?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     def approver_limits_list_response(
         self,
@@ -460,9 +472,11 @@ class ExpenseLimitWebService:
         total_pages = (result.total + per_page - 1) // per_page
 
         context = base_context(request, auth, "Approver Limits", "limits")
+        scope_labels = self._build_approver_scope_labels(db, org_id, result.items)
         context.update(
             {
                 "approver_limits": result.items,
+                "approver_scope_labels": scope_labels,
                 "total": result.total,
                 "page": page,
                 "total_pages": total_pages,
@@ -641,7 +655,10 @@ class ExpenseLimitWebService:
                 is_active=is_active,
             )
             db.commit()
-            return RedirectResponse(url="/expense/limits/approvers", status_code=303)
+            return RedirectResponse(
+                url="/expense/limits/approvers?success=Record+saved+successfully",
+                status_code=303,
+            )
         except Exception as e:
             db.rollback()
             errors["_form"] = str(e)
@@ -750,7 +767,10 @@ class ExpenseLimitWebService:
                 is_active=is_active,
             )
             db.commit()
-            return RedirectResponse(url="/expense/limits/approvers", status_code=303)
+            return RedirectResponse(
+                url="/expense/limits/approvers?success=Record+saved+successfully",
+                status_code=303,
+            )
         except Exception as e:
             db.rollback()
             errors["_form"] = str(e)
@@ -784,7 +804,10 @@ class ExpenseLimitWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url="/expense/limits/approvers", status_code=303)
+        return RedirectResponse(
+            url="/expense/limits/approvers?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     def usage_dashboard_response(
         self,
@@ -901,6 +924,117 @@ class ExpenseLimitWebService:
         return templates.TemplateResponse(
             request, "expense/limits/evaluations.html", context
         )
+
+    @staticmethod
+    def _build_approver_scope_labels(
+        db: Session, org_id: UUID, limits: Sequence[ExpenseApproverLimit]
+    ) -> dict[str, str]:
+        """Resolve human-readable labels for approver limit scope targets."""
+        from app.models.people.hr.designation import Designation
+        from app.models.people.hr.employee import Employee
+        from app.models.people.hr.employee_grade import EmployeeGrade
+        from app.models.person import Person
+        from app.models.rbac import Role
+
+        labels: dict[str, str] = {}
+        employee_ids: set[UUID] = set()
+        grade_ids: set[UUID] = set()
+        designation_ids: set[UUID] = set()
+        role_ids: set[UUID] = set()
+
+        for limit in limits:
+            scope_id = getattr(limit, "scope_id", None)
+            if not scope_id:
+                continue
+
+            scope_type = getattr(limit, "scope_type", "")
+            if scope_type == "EMPLOYEE":
+                employee_ids.add(scope_id)
+            elif scope_type == "GRADE":
+                grade_ids.add(scope_id)
+            elif scope_type == "DESIGNATION":
+                designation_ids.add(scope_id)
+            elif scope_type == "ROLE":
+                role_ids.add(scope_id)
+
+        employee_map: dict[UUID, str] = {}
+        if employee_ids:
+            employees = list(
+                db.scalars(
+                    select(Employee)
+                    .join(Person, Person.id == Employee.person_id)
+                    .where(
+                        Employee.organization_id == org_id,
+                        Employee.employee_id.in_(employee_ids),
+                    )
+                ).all()
+            )
+            for employee in employees:
+                name = employee.person.name if employee.person else ""
+                employee_label = name
+                if employee.employee_code:
+                    employee_label = (
+                        f"{name} ({employee.employee_code})"
+                        if name
+                        else employee.employee_code
+                    )
+                employee_map[employee.employee_id] = employee_label or str(
+                    employee.employee_id
+                )
+
+        grade_map: dict[UUID, str] = {}
+        if grade_ids:
+            grades = list(
+                db.scalars(
+                    select(EmployeeGrade).where(
+                        EmployeeGrade.organization_id == org_id,
+                        EmployeeGrade.grade_id.in_(grade_ids),
+                    )
+                ).all()
+            )
+            for grade in grades:
+                grade_map[grade.grade_id] = grade.grade_name
+
+        designation_map: dict[UUID, str] = {}
+        if designation_ids:
+            designations = list(
+                db.scalars(
+                    select(Designation).where(
+                        Designation.organization_id == org_id,
+                        Designation.designation_id.in_(designation_ids),
+                    )
+                ).all()
+            )
+            for designation in designations:
+                designation_map[designation.designation_id] = (
+                    designation.designation_name
+                )
+
+        role_map: dict[UUID, str] = {}
+        if role_ids:
+            roles = list(db.scalars(select(Role).where(Role.id.in_(role_ids))).all())
+            for role in roles:
+                role_map[role.id] = role.name
+
+        for limit in limits:
+            scope_id = limit.scope_id
+            if not scope_id:
+                continue
+
+            scope_type = limit.scope_type
+            label: str | None = None
+            if scope_type == "EMPLOYEE":
+                label = employee_map.get(scope_id)
+            elif scope_type == "GRADE":
+                label = grade_map.get(scope_id)
+            elif scope_type == "DESIGNATION":
+                label = designation_map.get(scope_id)
+            elif scope_type == "ROLE":
+                label = role_map.get(scope_id)
+
+            labels[str(limit.approver_limit_id)] = label or str(scope_id)
+
+        return labels
 
     @staticmethod
     def _get_scope_options(db: Session, org_id: UUID) -> dict:

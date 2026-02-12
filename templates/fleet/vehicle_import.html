@@ -1,0 +1,109 @@
+{% extends "modules/base_modules.html" %}
+
+{% block page_title %}Import Vehicles{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
+    <a href="/fleet" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Fleet</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/fleet/vehicles" class="hover:text-amber-600 dark:hover:text-amber-400 transition-colors">Vehicles</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Import</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl space-y-6">
+    <div class="card p-6">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div>
+                <h1 class="text-xl font-semibold text-slate-900 dark:text-white">Import Vehicles</h1>
+                <p class="text-sm text-slate-500 dark:text-slate-400">Upload a CSV file to add or update fleet vehicles.</p>
+            </div>
+            <a href="/fleet/vehicles/template-csv" class="btn btn-secondary">
+                <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0l-4 4m4-4v12"/>
+                </svg>
+                Download CSV Template
+            </a>
+        </div>
+    </div>
+
+    {% if error %}
+    <div class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-800/60 dark:bg-rose-900/30 dark:text-rose-200">
+        <p class="font-semibold">Import failed</p>
+        <p class="mt-1">{{ error }}</p>
+    </div>
+    {% endif %}
+
+    {% if result %}
+    <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-900/30 dark:text-emerald-200">
+        <p class="font-semibold">Import completed</p>
+        <div class="mt-2 grid gap-2 text-xs text-emerald-700 dark:text-emerald-200 sm:grid-cols-2">
+            <div>Total Rows: <span class="font-medium">{{ result.total_rows }}</span></div>
+            <div>Imported: <span class="font-medium">{{ result.imported_count }}</span></div>
+            <div>Skipped: <span class="font-medium">{{ result.skipped_count }}</span></div>
+            <div>Duplicates: <span class="font-medium">{{ result.duplicate_count }}</span></div>
+            <div>Errors: <span class="font-medium">{{ result.error_count }}</span></div>
+            <div>Success Rate: <span class="font-medium">{{ result.success_rate }}</span></div>
+        </div>
+        {% if result.errors %}
+        <div class="mt-3">
+            <p class="font-semibold text-rose-700 dark:text-rose-200">Errors</p>
+            <ul class="mt-1 list-disc pl-5 text-rose-700 dark:text-rose-200">
+                {% for err in result.errors %}
+                <li>{{ err }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        {% if result.warnings %}
+        <div class="mt-3">
+            <p class="font-semibold text-amber-700 dark:text-amber-200">Warnings</p>
+            <ul class="mt-1 list-disc pl-5 text-amber-700 dark:text-amber-200">
+                {% for warn in result.warnings %}
+                <li>{{ warn }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <form method="post" action="/fleet/vehicles/import" enctype="multipart/form-data" class="card p-6 space-y-6">
+        {{ request.state.csrf_form | safe }}
+        <div>
+            <label for="import_file" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">CSV File</label>
+            <input id="import_file" name="import_file" type="file" accept=".csv"
+                   class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+            <p class="mt-2 text-xs text-slate-500">CSV only. Max {{ max_file_mb }}MB.</p>
+        </div>
+
+        <div class="grid gap-4 sm:grid-cols-2">
+            <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                <input type="checkbox" name="skip_duplicates" value="true" class="form-checkbox" checked>
+                Skip duplicates
+            </label>
+            <label class="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
+                <input type="checkbox" name="dry_run" value="true" class="form-checkbox">
+                Dry run (no changes)
+            </label>
+        </div>
+
+        <div class="max-w-xs">
+            <label for="batch_size" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Batch Size</label>
+            <input id="batch_size" name="batch_size" type="number" min="1" max="1000" value="100"
+                   class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button type="submit" class="btn btn-primary">Run Import</button>
+            <a href="/fleet/vehicles" class="btn btn-secondary">Back to Vehicles</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

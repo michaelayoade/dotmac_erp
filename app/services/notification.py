@@ -401,7 +401,7 @@ class NotificationService:
             notification_type=NotificationType.SUBMITTED,
             title=f"Response Received - {case_number}",
             message=f"{employee_name} has submitted a response to disciplinary case {case_number}.",
-            channel=NotificationChannel.IN_APP,
+            channel=NotificationChannel.BOTH,
             action_url=f"/people/hr/discipline/{case_id}",
             actor_id=actor_id,
         )

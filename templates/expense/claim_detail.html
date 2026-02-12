@@ -21,7 +21,7 @@
 <div class="space-y-6">
     {% if error %}
     <div class="card p-4 border border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-900/20 dark:text-rose-400">
-        Action failed. Please try again or contact support. ({{ error }})
+        {{ error }}
     </div>
     {% elif action == "approved" %}
     <div class="card p-4 border border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-400">
@@ -58,6 +58,12 @@
                 <form method="post" action="/expense/claims/{{ claim.claim_id }}/submit">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button type="submit" class="btn btn-primary">Submit for Approval</button>
+                </form>
+                {% endif %}
+                {% if can_delete %}
+                <form method="post" action="/expense/claims/{{ claim.claim_id }}/delete" onsubmit="return confirm('Delete this draft claim permanently? This cannot be undone.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-secondary">Delete Draft</button>
                 </form>
                 {% endif %}
                 {% if can_approve and can_act %}
@@ -111,8 +117,24 @@
                         <td class="text-slate-900 dark:text-white">{{ item.description }}</td>
                         <td class="text-right font-mono tabular-nums text-slate-900 dark:text-white">{{ item.claimed_amount | format_currency }}</td>
                         <td class="text-slate-500">
-                            {% if item.receipt_url %}
-                            <span class="font-mono text-xs">{{ item.receipt_url }}</span>
+                            {% if item.receipt_urls %}
+                            <div class="space-y-1">
+                                {% for receipt_url in item.receipt_urls %}
+                                <a href="/expense/claims/{{ claim.claim_id }}/items/{{ item.item_id }}/receipt?index={{ loop.index0 }}"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300">
+                                    View receipt {{ loop.index }}
+                                    <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                        <path d="M12.293 3.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-8.5 8.5a1 1 0 01-.39.243l-4 1.5a1 1 0 01-1.285-1.285l1.5-4a1 1 0 01.243-.39l8.5-8.5z"/>
+                                    </svg>
+                                </a>
+                                <p class="font-mono text-[11px] text-slate-400 dark:text-slate-500 break-all">{{ receipt_url }}</p>
+                                {% endfor %}
+                                {% if item.receipt_number %}
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Receipt #: {{ item.receipt_number }}</p>
+                                {% endif %}
+                            </div>
                             {% else %}
                             -
                             {% endif %}

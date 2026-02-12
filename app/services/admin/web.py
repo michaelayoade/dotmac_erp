@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import UTC, datetime, timedelta
 from typing import TypedDict
 from urllib.parse import urlencode
@@ -39,6 +40,7 @@ from app.web.deps import WebAuthContext, brand_context
 logger = logging.getLogger(__name__)
 
 DEFAULT_PAGE_SIZE = 20
+_ORG_SLUG_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
 class Pagination(TypedDict):
@@ -1608,6 +1610,7 @@ class AdminWebService:
                     "id": str(org.organization_id),
                     "organization_code": org.organization_code,
                     "legal_name": org.legal_name,
+                    "slug": org.slug or "",
                     "trading_name": org.trading_name or "",
                     "registration_number": org.registration_number or "",
                     "tax_identification_number": org.tax_identification_number or "",
@@ -1725,7 +1728,25 @@ class AdminWebService:
             "default_presentation_currency_code": default_presentation_currency_code,
             "expense_accounts": expense_accounts,
             "liability_accounts": liability_accounts,
+            "public_url_base": settings.app_url.rstrip("/"),
         }
+
+    @staticmethod
+    def _normalize_org_slug(slug: str) -> str | None:
+        value = (slug or "").strip().lower()
+        return value or None
+
+    @staticmethod
+    def _validate_org_slug(slug: str | None) -> str | None:
+        if not slug:
+            return None
+        if len(slug) > 50:
+            return "Slug must be 50 characters or fewer"
+        if not _ORG_SLUG_PATTERN.fullmatch(slug):
+            return (
+                "Slug must contain only lowercase letters, numbers, and single hyphens"
+            )
+        return None
 
     @staticmethod
     def create_organization(
@@ -1745,6 +1766,7 @@ class AdminWebService:
         consolidation_method: str = "",
         ownership_percentage: str = "",
         is_active: bool = True,
+        slug: str = "",
     ) -> tuple[Organization | None, str | None]:
         """Create a new organization. Returns (organization, error)."""
         from datetime import date as date_type
@@ -1759,6 +1781,19 @@ class AdminWebService:
         )
         if existing:
             return None, "An organization with this code already exists"
+
+        normalized_slug = AdminWebService._normalize_org_slug(slug)
+        slug_error = AdminWebService._validate_org_slug(normalized_slug)
+        if slug_error:
+            return None, slug_error
+        if normalized_slug:
+            slug_exists = (
+                db.query(Organization)
+                .filter(Organization.slug == normalized_slug)
+                .first()
+            )
+            if slug_exists:
+                return None, "An organization with this slug already exists"
 
         try:
             # Parse incorporation date
@@ -1786,6 +1821,7 @@ class AdminWebService:
             org = Organization(
                 organization_code=organization_code,
                 legal_name=legal_name,
+                slug=normalized_slug,
                 trading_name=trading_name if trading_name else None,
                 registration_number=registration_number
                 if registration_number
@@ -1841,6 +1877,7 @@ class AdminWebService:
         is_active: bool = True,
         salaries_expense_account_id: str = "",
         salary_payable_account_id: str = "",
+        slug: str = "",
     ) -> tuple[Organization | None, str | None]:
         """Update an existing organization. Returns (organization, error)."""
         from datetime import date as date_type
@@ -1867,6 +1904,20 @@ class AdminWebService:
             and coerce_uuid(parent_organization_id) == org.organization_id
         ):
             return None, "An organization cannot be its own parent"
+
+        normalized_slug = AdminWebService._normalize_org_slug(slug)
+        slug_error = AdminWebService._validate_org_slug(normalized_slug)
+        if slug_error:
+            return None, slug_error
+        if normalized_slug:
+            slug_exists = (
+                db.query(Organization)
+                .filter(Organization.slug == normalized_slug)
+                .filter(Organization.organization_id != org.organization_id)
+                .first()
+            )
+            if slug_exists:
+                return None, "An organization with this slug already exists"
 
         try:
             # Parse incorporation date
@@ -1902,6 +1953,7 @@ class AdminWebService:
 
             org.organization_code = organization_code
             org.legal_name = legal_name
+            org.slug = normalized_slug
             org.trading_name = trading_name if trading_name else None
             org.registration_number = (
                 registration_number if registration_number else None
@@ -2635,13 +2687,21 @@ class AdminWebService:
     ) -> HTMLResponse:
         if status_code is None:
             status_code = 200
+        csrf_token = getattr(request.state, "csrf_token", "")
+        csrf_form_val = getattr(request.state, "csrf_form", None)
+        if not isinstance(csrf_form_val, str):
+            request.state.csrf_form = (
+                f'<input type="hidden" name="csrf_token" value="{csrf_token}">'
+                if csrf_token
+                else ""
+            )
         payload = {
             "title": title,
             "page_title": page_title,
             "brand": brand_context(),
             "user": auth.user,
             "active_page": active_page,
-            "csrf_token": getattr(request.state, "csrf_token", ""),
+            "csrf_token": csrf_token,
             **(context or {}),
         }
         return templates.TemplateResponse(
@@ -3388,6 +3448,7 @@ class AdminWebService:
         auth: WebAuthContext,
         organization_code: str,
         legal_name: str,
+        slug: str,
         functional_currency_code: str,
         presentation_currency_code: str,
         fiscal_year_end_month: int,
@@ -3409,6 +3470,7 @@ class AdminWebService:
             db=db,
             organization_code=organization_code,
             legal_name=legal_name,
+            slug=slug,
             functional_currency_code=functional_currency_code,
             presentation_currency_code=presentation_currency_code,
             fiscal_year_end_month=fiscal_year_end_month,
@@ -3487,6 +3549,7 @@ class AdminWebService:
         org_id: str,
         organization_code: str,
         legal_name: str,
+        slug: str,
         functional_currency_code: str,
         presentation_currency_code: str,
         fiscal_year_end_month: int,
@@ -3511,6 +3574,7 @@ class AdminWebService:
             organization_id=org_id,
             organization_code=organization_code,
             legal_name=legal_name,
+            slug=slug,
             functional_currency_code=functional_currency_code,
             presentation_currency_code=presentation_currency_code,
             fiscal_year_end_month=fiscal_year_end_month,

@@ -53,6 +53,8 @@ class VehicleBase(BaseModel):
     lease_end_date: date | None = None
     lease_monthly_cost: Decimal | None = Field(default=None, ge=0)
     vendor_id: UUID | None = None
+    license_expiry_date: date | None = None
+    location_id: UUID | None = None
 
     # Assignment
     assignment_type: AssignmentType = AssignmentType.POOL
@@ -95,6 +97,8 @@ class VehicleUpdate(BaseModel):
     lease_end_date: date | None = None
     lease_monthly_cost: Decimal | None = Field(default=None, ge=0)
     vendor_id: UUID | None = None
+    license_expiry_date: date | None = None
+    location_id: UUID | None = None
     assignment_type: AssignmentType | None = None
     assigned_employee_id: UUID | None = None
     assigned_department_id: UUID | None = None

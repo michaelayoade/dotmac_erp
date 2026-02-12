@@ -624,7 +624,10 @@ class SupplierWebService:
                 request, "finance/ap/supplier_detail.html", context
             )
 
-        return RedirectResponse(url="/finance/ap/suppliers", status_code=303)
+        return RedirectResponse(
+            url="/finance/ap/suppliers?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     async def upload_supplier_attachment_response(
         self,

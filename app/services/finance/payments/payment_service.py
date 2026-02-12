@@ -244,7 +244,6 @@ class PaymentService:
         )
 
         self._commit_and_refresh(intent)
-        self._commit_and_refresh(intent)
         return intent
 
     def verify_payment_by_reference(
@@ -995,6 +994,13 @@ class PaymentService:
                 },
             )
 
+        # CRITICAL: Commit after Paystack transfer is initiated.  The money
+        # has already left (or is in-flight), so DB must reflect transfer_code
+        # and updated status.  Without this commit the session closes without
+        # persisting, leaving the intent PENDING with no transfer_code — which
+        # causes webhooks to be rejected and the polling task to miss it.
+        self._commit_and_refresh(intent)
+
         return intent
 
     def process_successful_transfer(
@@ -1039,8 +1045,13 @@ class PaymentService:
             logger.info(f"Transfer intent {locked_intent.intent_id} already completed")
             return
 
-        # Only process PROCESSING intents
-        if locked_intent.status != PaymentIntentStatus.PROCESSING:
+        # Accept PROCESSING (normal) and PENDING (defensive: webhook arrived
+        # before the initiate route committed, or commit was lost).  Once
+        # Paystack confirms success we must honour it regardless.
+        if locked_intent.status not in (
+            PaymentIntentStatus.PROCESSING,
+            PaymentIntentStatus.PENDING,
+        ):
             raise HTTPException(
                 status_code=400,
                 detail=f"Cannot complete transfer with status '{locked_intent.status.value}'",

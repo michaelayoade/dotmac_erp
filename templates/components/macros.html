@@ -774,15 +774,21 @@ if (typeof window.searchAutosuggest === 'undefined') {
    Usage: {{ pagination(page=1, total_pages=10, total_count=250, limit=50, search=search, filters=filters) }}
    ============================================ #}
 {% macro pagination(page, total_pages, total_count, limit=50, search="", filters={}, show_size_selector=true) %}
-{% if total_count > 0 %}
+{% set current_page = page | default(1) | int %}
+{% set page_count = total_pages | default(1) | int %}
+{% set result_count = total_count | default(0) | int %}
+{% set page_limit = limit | default(50) | int %}
+{% set search_term = search | default("") %}
+{% set active_filters = filters | default({}) %}
+{% if result_count > 0 %}
 <div class="border-t border-slate-200 dark:border-slate-700 px-6 py-4">
   <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
     {# Results Info #}
     <div class="flex items-center gap-4">
       <p class="text-sm text-slate-600 dark:text-slate-400">
-        Showing <span class="font-medium text-slate-900 dark:text-white">{{ ((page - 1) * limit + 1) }}</span>
-        to <span class="font-medium text-slate-900 dark:text-white">{{ [page * limit, total_count]|min }}</span>
-        of <span class="font-medium text-slate-900 dark:text-white">{{ total_count }}</span> results
+        Showing <span class="font-medium text-slate-900 dark:text-white">{{ ((current_page - 1) * page_limit + 1) }}</span>
+        to <span class="font-medium text-slate-900 dark:text-white">{{ [current_page * page_limit, result_count]|min }}</span>
+        of <span class="font-medium text-slate-900 dark:text-white">{{ result_count }}</span> results
       </p>
 
       {# Page Size Selector #}
@@ -791,11 +797,11 @@ if (typeof window.searchAutosuggest === 'undefined') {
         <label class="text-sm text-slate-500 dark:text-slate-400">Show:</label>
         <select onchange="window.location.href=this.value" class="form-select py-1 text-sm">
           {% for size in [25, 50, 100, 200] %}
-          {% set params = "page=1" ~ ("&search=" ~ search if search else "") %}
-          {% for key, val in filters.items() if val %}
+          {% set params = "page=1" ~ ("&search=" ~ search_term if search_term else "") %}
+          {% for key, val in active_filters.items() if val %}
           {% set params = params ~ "&" ~ key ~ "=" ~ val %}
           {% endfor %}
-          <option value="?{{ params }}&limit={{ size }}" {{ 'selected' if limit == size else '' }}>{{ size }}</option>
+          <option value="?{{ params }}&limit={{ size }}" {{ 'selected' if page_limit == size else '' }}>{{ size }}</option>
           {% endfor %}
         </select>
       </div>
@@ -803,12 +809,12 @@ if (typeof window.searchAutosuggest === 'undefined') {
     </div>
 
     {# Page Navigation #}
-    {% if total_pages > 1 %}
+    {% if page_count > 1 %}
     <nav class="flex items-center gap-1">
       {# Previous Button #}
-      {% if page > 1 %}
-      {% set prev_params = "page=" ~ (page - 1) ~ ("&search=" ~ search if search else "") ~ ("&limit=" ~ limit if limit != 50 else "") %}
-      {% for key, val in filters.items() if val %}{% set prev_params = prev_params ~ "&" ~ key ~ "=" ~ val %}{% endfor %}
+      {% if current_page > 1 %}
+      {% set prev_params = "page=" ~ (current_page - 1) ~ ("&search=" ~ search_term if search_term else "") ~ ("&limit=" ~ page_limit if page_limit != 50 else "") %}
+      {% for key, val in active_filters.items() if val %}{% set prev_params = prev_params ~ "&" ~ key ~ "=" ~ val %}{% endfor %}
       <a href="?{{ prev_params }}"
          class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors">
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -818,23 +824,23 @@ if (typeof window.searchAutosuggest === 'undefined') {
       {% endif %}
 
       {# Page Numbers #}
-      {% for p in range(1, total_pages + 1) %}
-        {% if p == page %}
+      {% for p in range(1, page_count + 1) %}
+        {% if p == current_page %}
         <span class="rounded-lg bg-teal-50 px-3 py-1.5 text-sm font-medium text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">{{ p }}</span>
-        {% elif p == 1 or p == total_pages or (p >= page - 1 and p <= page + 1) %}
-        {% set page_params = "page=" ~ p ~ ("&search=" ~ search if search else "") ~ ("&limit=" ~ limit if limit != 50 else "") %}
-        {% for key, val in filters.items() if val %}{% set page_params = page_params ~ "&" ~ key ~ "=" ~ val %}{% endfor %}
+        {% elif p == 1 or p == page_count or (p >= current_page - 1 and p <= current_page + 1) %}
+        {% set page_params = "page=" ~ p ~ ("&search=" ~ search_term if search_term else "") ~ ("&limit=" ~ page_limit if page_limit != 50 else "") %}
+        {% for key, val in active_filters.items() if val %}{% set page_params = page_params ~ "&" ~ key ~ "=" ~ val %}{% endfor %}
         <a href="?{{ page_params }}"
            class="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors">{{ p }}</a>
-        {% elif p == page - 2 or p == page + 2 %}
+        {% elif p == current_page - 2 or p == current_page + 2 %}
         <span class="px-1 text-slate-400">...</span>
         {% endif %}
       {% endfor %}
 
       {# Next Button #}
-      {% if page < total_pages %}
-      {% set next_params = "page=" ~ (page + 1) ~ ("&search=" ~ search if search else "") ~ ("&limit=" ~ limit if limit != 50 else "") %}
-      {% for key, val in filters.items() if val %}{% set next_params = next_params ~ "&" ~ key ~ "=" ~ val %}{% endfor %}
+      {% if current_page < page_count %}
+      {% set next_params = "page=" ~ (current_page + 1) ~ ("&search=" ~ search_term if search_term else "") ~ ("&limit=" ~ page_limit if page_limit != 50 else "") %}
+      {% for key, val in active_filters.items() if val %}{% set next_params = next_params ~ "&" ~ key ~ "=" ~ val %}{% endfor %}
       <a href="?{{ next_params }}"
          class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors">
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1162,4 +1168,58 @@ if (typeof window.searchAutosuggest === 'undefined') {
     </div>
   </div>
 </header>
+{% endmacro %}
+
+
+{# ============================================
+   SUCCESS BANNER
+   Usage: {% if saved %}{{ success_banner("Record saved successfully.") }}{% endif %}
+   Auto-dismisses after 5 seconds. Includes close button.
+   ============================================ #}
+{% macro success_banner(message="Record saved successfully.") %}
+<div class="p-4 rounded-lg bg-emerald-50 border border-emerald-200 dark:bg-emerald-900/20 dark:border-emerald-800"
+     x-data="{ show: true }" x-show="show" x-cloak
+     x-init="setTimeout(() => show = false, 5000)"
+     x-transition:leave="transition ease-in duration-200"
+     x-transition:leave-start="opacity-100"
+     x-transition:leave-end="opacity-0">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span class="text-sm font-medium">{{ message }}</span>
+        </div>
+        <button @click="show = false" class="text-emerald-500 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300" aria-label="Dismiss">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    </div>
+</div>
+{% endmacro %}
+
+
+{# ============================================
+   ERROR BANNER
+   Usage: {% if error %}{{ error_banner(error) }}{% endif %}
+   Persistent — no auto-dismiss. Includes close button.
+   ============================================ #}
+{% macro error_banner(message) %}
+<div class="p-4 rounded-lg bg-rose-50 border border-rose-200 dark:bg-rose-900/20 dark:border-rose-800"
+     x-data="{ show: true }" x-show="show" x-cloak>
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2 text-rose-700 dark:text-rose-400">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span class="text-sm font-medium">{{ message }}</span>
+        </div>
+        <button @click="show = false" class="text-rose-500 hover:text-rose-700 dark:text-rose-400 dark:hover:text-rose-300" aria-label="Dismiss">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+    </div>
+</div>
 {% endmacro %}

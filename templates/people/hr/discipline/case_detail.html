@@ -553,6 +553,15 @@
                             Withdraw Case
                         </button>
                     </form>
+
+                    {% if case.status.value == 'DRAFT' %}
+                    <form method="post" action="/people/hr/discipline/{{ case.case_id }}/delete" onsubmit="return confirm('Delete this draft case? This action cannot be undone.')">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}" />
+                        <button type="submit" class="btn btn-ghost text-red-600 dark:text-red-400 w-full">
+                            Delete Draft Case
+                        </button>
+                    </form>
+                    {% endif %}
                 </div>
             </div>
             {% endif %}

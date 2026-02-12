@@ -177,7 +177,10 @@ class LoanWebService:
 
         db.commit()
 
-        return RedirectResponse(url="/people/payroll/loans/types", status_code=303)
+        return RedirectResponse(
+            url="/people/payroll/loans/types?success=Record+saved+successfully",
+            status_code=303,
+        )
 
     # =========================================================================
     # Loans
@@ -244,7 +247,9 @@ class LoanWebService:
                 ],
                 "page": page,
                 "total_pages": total_pages,
+                "total_count": total,
                 "total": total,
+                "limit": per_page,
                 "has_prev": page > 1,
                 "has_next": page < total_pages,
             }
@@ -395,7 +400,7 @@ class LoanWebService:
         db.commit()
 
         return RedirectResponse(
-            url=f"/people/payroll/loans/{loan.loan_id}", status_code=303
+            url=f"/people/payroll/loans/{loan.loan_id}?saved=1", status_code=303
         )
 
     def approve_loan_response(
@@ -413,7 +418,9 @@ class LoanWebService:
         loan_service.approve_loan(org_id, l_id, person_id)
         db.commit()
 
-        return RedirectResponse(url=f"/people/payroll/loans/{loan_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/payroll/loans/{loan_id}?saved=1", status_code=303
+        )
 
     async def reject_loan_response(
         self,
@@ -434,7 +441,9 @@ class LoanWebService:
         loan_service.reject_loan(org_id, l_id, person_id, reason)
         db.commit()
 
-        return RedirectResponse(url=f"/people/payroll/loans/{loan_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/payroll/loans/{loan_id}?saved=1", status_code=303
+        )
 
     async def disburse_loan_response(
         self,
@@ -455,7 +464,9 @@ class LoanWebService:
         loan_service.disburse_loan(org_id, l_id, person_id, reference)
         db.commit()
 
-        return RedirectResponse(url=f"/people/payroll/loans/{loan_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/payroll/loans/{loan_id}?saved=1", status_code=303
+        )
 
 
 loan_web_service = LoanWebService()

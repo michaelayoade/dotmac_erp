@@ -579,6 +579,38 @@ class DisciplineWebService:
             status_code=303,
         )
 
+    def delete_case_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        case_id: UUID,
+    ) -> RedirectResponse:
+        """Delete a draft case."""
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = auth.person_id
+
+        service = DisciplineService(db)
+        case = service.get_case_or_404(case_id)
+
+        if case.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Case not found")
+
+        try:
+            service.delete_case(case_id, deleted_by_id=person_id)
+            db.commit()
+        except ValidationError as exc:
+            db.rollback()
+            message = quote(exc.message or "Unable to delete case.")
+            return RedirectResponse(
+                url=f"/people/hr/discipline/{case_id}?error={message}",
+                status_code=303,
+            )
+
+        return RedirectResponse(
+            url="/people/hr/discipline?success=deleted",
+            status_code=303,
+        )
+
     # ─────────────────────────────────────────────────────────────────────────
     # Witness Management
     # ─────────────────────────────────────────────────────────────────────────

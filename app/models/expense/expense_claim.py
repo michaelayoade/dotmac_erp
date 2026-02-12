@@ -5,6 +5,7 @@ Employee expense claims with AP integration.
 """
 
 import enum
+import json
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
@@ -517,6 +518,22 @@ class ExpenseClaimItem(Base):
         back_populates="items",
     )
     category: Mapped["ExpenseCategory"] = relationship("ExpenseCategory")
+
+    @property
+    def receipt_urls(self) -> list[str]:
+        if not self.receipt_url:
+            return []
+        raw = self.receipt_url.strip()
+        if not raw:
+            return []
+        if raw.startswith("["):
+            try:
+                decoded = json.loads(raw)
+            except Exception:
+                return [raw]
+            if isinstance(decoded, list):
+                return [str(entry).strip() for entry in decoded if str(entry).strip()]
+        return [raw]
 
     def __repr__(self) -> str:
         return f"<ExpenseClaimItem {self.description[:30]}>"

@@ -350,7 +350,7 @@ class RunWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/payroll/runs/{entry.entry_id}", status_code=303
+                url=f"/people/payroll/runs/{entry.entry_id}?saved=1", status_code=303
             )
 
         except Exception as e:
@@ -392,11 +392,17 @@ class RunWebService:
         e_id = parse_uuid(entry_id)
 
         if not e_id:
-            return RedirectResponse(url="/people/payroll/runs", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/runs?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         entry = db.get(PayrollEntry, e_id)
         if not entry or entry.organization_id != org_id:
-            return RedirectResponse(url="/people/payroll/runs", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/runs?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         # Get associated slips
         search = self._form_text(request.query_params.get("search"))
@@ -453,6 +459,11 @@ class RunWebService:
                 "slip_status_counts": slip_status_counts,
                 "filtered_slip_count": len(slips),
                 "total_slip_count": total_slips,
+                "search": search,
+                "page": 1,
+                "total_pages": 1,
+                "total_count": len(slips),
+                "limit": max(1, len(slips)),
             }
         )
         return templates.TemplateResponse(
@@ -482,7 +493,9 @@ class RunWebService:
             except Exception:
                 db.rollback()
 
-        return RedirectResponse(url=f"/people/payroll/runs/{entry_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/payroll/runs/{entry_id}?saved=1", status_code=303
+        )
 
     def regenerate_run_response(
         self,
@@ -507,7 +520,9 @@ class RunWebService:
             except Exception:
                 db.rollback()
 
-        return RedirectResponse(url=f"/people/payroll/runs/{entry_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/payroll/runs/{entry_id}?saved=1", status_code=303
+        )
 
     def submit_run_response(
         self,
@@ -536,7 +551,9 @@ class RunWebService:
                     status_code=303,
                 )
 
-        return RedirectResponse(url=f"/people/payroll/runs/{entry_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/payroll/runs/{entry_id}?saved=1", status_code=303
+        )
 
     def approve_run_response(
         self,
@@ -565,7 +582,9 @@ class RunWebService:
                     status_code=303,
                 )
 
-        return RedirectResponse(url=f"/people/payroll/runs/{entry_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/payroll/runs/{entry_id}?saved=1", status_code=303
+        )
 
     def post_run_response(
         self,
@@ -596,7 +615,9 @@ class RunWebService:
                     status_code=303,
                 )
 
-        return RedirectResponse(url=f"/people/payroll/runs/{entry_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/payroll/runs/{entry_id}?saved=1", status_code=303
+        )
 
     def delete_run_response(
         self,
@@ -621,9 +642,14 @@ class RunWebService:
                 ).delete()
                 db.delete(entry)
                 db.commit()
-                return RedirectResponse(url="/people/payroll/runs", status_code=303)
+                return RedirectResponse(
+                    url="/people/payroll/runs?success=Record+deleted+successfully",
+                    status_code=303,
+                )
 
-        return RedirectResponse(url=f"/people/payroll/runs/{entry_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/payroll/runs/{entry_id}?saved=1", status_code=303
+        )
 
     def _render_run_form_with_error(
         self,
@@ -750,11 +776,17 @@ class RunWebService:
         e_id = parse_uuid(entry_id)
 
         if not e_id:
-            return RedirectResponse(url="/people/payroll/runs", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/runs?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         entry = db.get(PayrollEntry, e_id)
         if not entry or entry.organization_id != org_id:
-            return RedirectResponse(url="/people/payroll/runs", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/runs?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         # Resolve source bank account (prefer run selection, fallback to query param)
         resolved_source_id = source_account_id or (

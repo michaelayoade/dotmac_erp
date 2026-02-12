@@ -93,11 +93,13 @@ class ComponentWebService:
         context.update(
             {
                 "components": components,
-                "search": search,
+                "search": search or "",
                 "component_type": component_type,
                 "page": page,
                 "total_pages": total_pages,
+                "total_count": total,
                 "total": total,
+                "limit": per_page,
                 "has_prev": page > 1,
                 "has_next": page < total_pages,
             }
@@ -171,11 +173,17 @@ class ComponentWebService:
         c_id = parse_uuid(component_id)
 
         if not c_id:
-            return RedirectResponse(url="/people/payroll/components", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/components?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         component = db.get(SalaryComponent, c_id)
         if not component or component.organization_id != org_id:
-            return RedirectResponse(url="/people/payroll/components", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/components?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         expense_accounts = (
             db.query(Account)
@@ -265,7 +273,10 @@ class ComponentWebService:
 
             db.add(component)
             db.commit()
-            return RedirectResponse(url="/people/payroll/components", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/components?success=Record+created+successfully",
+                status_code=303,
+            )
 
         except Exception as e:
             db.rollback()
@@ -340,11 +351,17 @@ class ComponentWebService:
         c_id = parse_uuid(component_id)
 
         if not c_id:
-            return RedirectResponse(url="/people/payroll/components", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/components?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         component = db.get(SalaryComponent, c_id)
         if not component or component.organization_id != org_id:
-            return RedirectResponse(url="/people/payroll/components", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/components?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         form = getattr(request.state, "csrf_form", None)
         if form is None:
@@ -378,7 +395,10 @@ class ComponentWebService:
             component.depends_on_payment_days = depends_on_payment_days
 
             db.commit()
-            return RedirectResponse(url="/people/payroll/components", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/components?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         except Exception as e:
             db.rollback()
@@ -452,11 +472,17 @@ class ComponentWebService:
         c_id = parse_uuid(component_id)
 
         if not c_id:
-            return RedirectResponse(url="/people/payroll/components", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/components?success=Record+deleted+successfully",
+                status_code=303,
+            )
 
         component = db.get(SalaryComponent, c_id)
         if not component or component.organization_id != org_id:
-            return RedirectResponse(url="/people/payroll/components", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/components?success=Record+deleted+successfully",
+                status_code=303,
+            )
 
         in_structure = (
             db.query(SalaryStructureEarning)
@@ -490,4 +516,7 @@ class ComponentWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url="/people/payroll/components", status_code=303)
+        return RedirectResponse(
+            url="/people/payroll/components?success=Record+deleted+successfully",
+            status_code=303,
+        )

@@ -104,11 +104,13 @@ class SlipWebService:
         context.update(
             {
                 "slips": slips,
-                "search": search,
-                "status": status,
+                "search": search or "",
+                "status": status or "",
                 "page": page,
                 "total_pages": total_pages,
+                "total_count": total,
                 "total": total,
+                "limit": per_page,
                 "has_prev": page > 1,
                 "has_next": page < total_pages,
                 "status_counts": status_counts,
@@ -228,15 +230,21 @@ class SlipWebService:
         s_id = parse_uuid(slip_id)
 
         if not s_id:
-            return RedirectResponse(url="/people/payroll/slips", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/slips?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         slip = db.get(SalarySlip, s_id)
         if not slip or slip.organization_id != org_id:
-            return RedirectResponse(url="/people/payroll/slips", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/slips?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         if slip.status != SalarySlipStatus.DRAFT:
             return RedirectResponse(
-                url=f"/people/payroll/slips/{slip_id}", status_code=303
+                url=f"/people/payroll/slips/{slip_id}?saved=1", status_code=303
             )
 
         employees = (
@@ -351,7 +359,7 @@ class SlipWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/payroll/slips/{slip.slip_id}", status_code=303
+                url=f"/people/payroll/slips/{slip.slip_id}?saved=1", status_code=303
             )
 
         except Exception as e:
@@ -477,7 +485,7 @@ class SlipWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/payroll/slips/{slip.slip_id}", status_code=303
+                url=f"/people/payroll/slips/{slip.slip_id}?saved=1", status_code=303
             )
 
         except Exception as e:
@@ -531,11 +539,17 @@ class SlipWebService:
         s_id = parse_uuid(slip_id)
 
         if not s_id:
-            return RedirectResponse(url="/people/payroll/slips", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/slips?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         slip = db.get(SalarySlip, s_id)
         if not slip or slip.organization_id != org_id:
-            return RedirectResponse(url="/people/payroll/slips", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/slips?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         # Calculate PAYE breakdown for display
         paye_breakdown = None
@@ -643,7 +657,9 @@ class SlipWebService:
                 status_code=303,
             )
 
-        return RedirectResponse(url=f"/people/payroll/slips/{slip_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/payroll/slips/{slip_id}?saved=1", status_code=303
+        )
 
     def approve_slip_response(
         self,
@@ -671,7 +687,9 @@ class SlipWebService:
                 status_code=303,
             )
 
-        return RedirectResponse(url=f"/people/payroll/slips/{slip_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/payroll/slips/{slip_id}?saved=1", status_code=303
+        )
 
     def post_slip_response(
         self,
@@ -703,7 +721,9 @@ class SlipWebService:
                 status_code=303,
             )
 
-        return RedirectResponse(url=f"/people/payroll/slips/{slip_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/people/payroll/slips/{slip_id}?saved=1", status_code=303
+        )
 
     def delete_slip_response(
         self,
@@ -716,15 +736,21 @@ class SlipWebService:
         s_id = parse_uuid(slip_id)
 
         if not s_id:
-            return RedirectResponse(url="/people/payroll/slips", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/slips?success=Record+deleted+successfully",
+                status_code=303,
+            )
 
         slip = db.get(SalarySlip, s_id)
         if not slip or slip.organization_id != org_id:
-            return RedirectResponse(url="/people/payroll/slips", status_code=303)
+            return RedirectResponse(
+                url="/people/payroll/slips?success=Record+deleted+successfully",
+                status_code=303,
+            )
 
         if slip.status != SalarySlipStatus.DRAFT:
             return RedirectResponse(
-                url=f"/people/payroll/slips/{slip_id}", status_code=303
+                url=f"/people/payroll/slips/{slip_id}?saved=1", status_code=303
             )
 
         try:
@@ -733,4 +759,7 @@ class SlipWebService:
         except Exception:
             db.rollback()
 
-        return RedirectResponse(url="/people/payroll/slips", status_code=303)
+        return RedirectResponse(
+            url="/people/payroll/slips?success=Record+deleted+successfully",
+            status_code=303,
+        )

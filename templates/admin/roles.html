@@ -1,5 +1,5 @@
 {% extends "admin/base_admin.html" %}
-{% from "components/macros.html" import live_search %}
+{% from "components/macros.html" import live_search, pagination as render_pagination %}
 
 {% block page_title %}Roles & Permissions{% endblock %}
 {% block page_subtitle %}Define access across the platform{% endblock %}
@@ -124,6 +124,15 @@
                 </tbody>
             </table>
         </div>
+
+            {# Pagination #}
+            {{ render_pagination(
+                page=page,
+                total_pages=total_pages,
+                total_count=total_count,
+                limit=limit,
+                search=search
+            ) }}
 
         {% if pagination.total_pages > 1 %}
         <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">

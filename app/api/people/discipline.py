@@ -179,6 +179,25 @@ def update_case(
     return DisciplinaryCaseRead.model_validate(case)
 
 
+@router.delete("/cases/{case_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_case(
+    case_id: UUID,
+    org_id: UUID = Depends(require_organization_id),
+    auth: dict = Depends(require_tenant_auth),
+    db: Session = Depends(get_db),
+):
+    """Delete a disciplinary case (only in DRAFT status)."""
+    service = DisciplineService(db)
+    case = service.get_case_or_404(case_id)
+
+    if case.organization_id != org_id:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    person_id = UUID(auth["person_id"])
+    service.delete_case(case_id, deleted_by_id=person_id)
+    db.commit()
+
+
 # =============================================================================
 # Workflow Operations
 # =============================================================================

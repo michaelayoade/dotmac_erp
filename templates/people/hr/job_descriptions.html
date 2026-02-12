@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import live_search %}
+{% from "components/macros.html" import live_search, pagination %}
 
 {% block page_title %}Job Descriptions{% endblock %}
 
@@ -130,6 +130,15 @@
             </tbody>
         </table>
     </div>
+
+            {# Pagination #}
+            {{ pagination(
+                page=page,
+                total_pages=total_pages,
+                total_count=total_count,
+                limit=limit,
+                search=search
+            ) }}
 
     {% if pagination.total_pages > 1 %}
     <div class="flex justify-center">

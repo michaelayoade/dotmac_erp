@@ -573,7 +573,10 @@ class PaymentWebService:
                 request, "finance/ap/payment_detail.html", context
             )
 
-        return RedirectResponse(url="/finance/ap/payments", status_code=303)
+        return RedirectResponse(
+            url="/finance/ap/payments?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     def aging_report_response(
         self,

@@ -134,7 +134,7 @@ def _builtin_beat_schedule() -> dict[str, dict]:
         },
         "expense-stuck-transfers": {
             "task": "app.tasks.expense.poll_stuck_expense_transfers",
-            "schedule": crontab(minute="*/30"),  # Every 30 minutes
+            "schedule": crontab(minute="*/2"),  # Every 2 minutes
         },
         "daily-exchange-rate-fetch": {
             "task": "app.tasks.exchange_rates.fetch_daily_exchange_rates",

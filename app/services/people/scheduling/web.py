@@ -32,6 +32,7 @@ from app.services.people.scheduling import (
     SchedulingService,
     SwapService,
 )
+from app.services.people.scheduling.scheduling_service import SchedulingServiceError
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -111,6 +112,8 @@ class SchedulingWebService:
         db: Session,
         search: str | None,
         is_active: str | None,
+        success: str | None,
+        error: str | None,
         page: int,
     ) -> HTMLResponse:
         """Shift patterns list page."""
@@ -163,6 +166,8 @@ class SchedulingWebService:
                 "patterns": patterns,
                 "search": search or "",
                 "is_active": is_active or "",
+                "success": success,
+                "error": error,
                 "page": page,
                 "total_pages": total_pages,
                 "has_prev": page > 1,
@@ -419,6 +424,41 @@ class SchedulingWebService:
                 request, auth, db, pattern_id
             )
 
+    @staticmethod
+    async def delete_pattern_response(
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        pattern_id: str,
+    ) -> RedirectResponse:
+        """Deactivate a shift pattern."""
+        from urllib.parse import quote
+
+        org_id = coerce_uuid(auth.organization_id)
+        svc = SchedulingService(db)
+        try:
+            svc.delete_pattern(org_id, coerce_uuid(pattern_id))
+            db.commit()
+            success_msg = quote("Pattern deactivated")
+            return RedirectResponse(
+                url=f"/people/scheduling/patterns?success={success_msg}",
+                status_code=303,
+            )
+        except SchedulingServiceError as exc:
+            db.rollback()
+            error_msg = quote(str(exc))
+            return RedirectResponse(
+                url=f"/people/scheduling/patterns?error={error_msg}",
+                status_code=303,
+            )
+        except Exception as exc:
+            db.rollback()
+            error_msg = quote(str(exc))
+            return RedirectResponse(
+                url=f"/people/scheduling/patterns?error={error_msg}",
+                status_code=303,
+            )
+
     # =========================================================================
     # Pattern Assignments
     # =========================================================================
@@ -429,6 +469,8 @@ class SchedulingWebService:
         auth: WebAuthContext,
         db: Session,
         department_id: str | None,
+        success: str | None,
+        error: str | None,
         page: int,
     ) -> HTMLResponse:
         """Pattern assignments list page."""
@@ -485,6 +527,8 @@ class SchedulingWebService:
                 "assignments": assignments,
                 "departments": departments,
                 "department_id": department_id or "",
+                "success": success,
+                "error": error,
                 "page": page,
                 "total_pages": total_pages,
                 "has_prev": page > 1,
@@ -609,6 +653,36 @@ class SchedulingWebService:
             )
             return templates.TemplateResponse(
                 "people/scheduling/assignment_form.html", ctx
+            )
+
+    @staticmethod
+    async def delete_assignment_response(
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        assignment_id: str,
+    ) -> RedirectResponse:
+        """Delete (end) a pattern assignment."""
+        org_id = coerce_uuid(auth.organization_id)
+        svc = SchedulingService(db)
+        try:
+            svc.delete_assignment(org_id, coerce_uuid(assignment_id))
+            db.commit()
+            return RedirectResponse(
+                "/people/scheduling/assignments?success=deleted",
+                status_code=303,
+            )
+        except SchedulingServiceError as exc:
+            db.rollback()
+            return RedirectResponse(
+                f"/people/scheduling/assignments?error={quote(str(exc))}",
+                status_code=303,
+            )
+        except Exception as exc:
+            db.rollback()
+            return RedirectResponse(
+                f"/people/scheduling/assignments?error={quote(str(exc))}",
+                status_code=303,
             )
 
     # =========================================================================
@@ -822,6 +896,44 @@ class SchedulingWebService:
                 f"/people/scheduling/schedules?department_id={department_id}&year_month={year_month}&error={quote(str(e))}",
                 status_code=303,
             )
+
+    @staticmethod
+    async def delete_schedule_response(
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        schedule_id: str,
+    ) -> RedirectResponse:
+        """Delete a draft schedule entry."""
+        org_id = coerce_uuid(auth.organization_id)
+        form_data = getattr(request.state, "csrf_form", None)
+        if form_data is None:
+            form_data = await request.form()
+
+        department_id = SchedulingWebService._parse_uuid(
+            SchedulingWebService._get_form_str(form_data, "department_id")
+        )
+        year_month = SchedulingWebService._get_form_str(form_data, "year_month")
+
+        base_url = "/people/scheduling/schedules"
+        query = []
+        if department_id:
+            query.append(f"department_id={department_id}")
+        if year_month:
+            query.append(f"year_month={year_month}")
+
+        try:
+            svc = SchedulingService(db)
+            svc.delete_schedule(org_id, coerce_uuid(schedule_id))
+            db.commit()
+            query.append("success=deleted")
+            url = base_url + (f"?{'&'.join(query)}" if query else "")
+            return RedirectResponse(url, status_code=303)
+        except Exception as e:
+            db.rollback()
+            query.append(f"error={quote(str(e))}")
+            url = base_url + (f"?{'&'.join(query)}" if query else "")
+            return RedirectResponse(url, status_code=303)
 
     # =========================================================================
     # Swap Requests

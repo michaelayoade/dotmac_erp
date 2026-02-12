@@ -21,6 +21,7 @@ from fastapi import APIRouter
 from app.web.people.attendance import router as attendance_router
 from app.web.people.dashboard import router as dashboard_router
 from app.web.people.hr import router as hr_router
+from app.web.people.import_export import router as import_router
 from app.web.people.leave import router as leave_router
 from app.web.people.payroll import router as payroll_router
 from app.web.people.perf import router as perf_router
@@ -38,6 +39,9 @@ router.include_router(dashboard_router)
 
 # HR Core routes
 router.include_router(hr_router)
+
+# Import routes
+router.include_router(import_router)
 
 # Payroll routes
 router.include_router(payroll_router)

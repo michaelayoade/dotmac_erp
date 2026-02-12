@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/macros.html" import success_banner %}
 
 {% block title %}{{ page_title | default("Admin") }} - {{ brand.name }}{% endblock %}
 
@@ -344,6 +345,7 @@
 
     <!-- Page Content -->
     <div class="app-page">
+        {% if saved %}{{ success_banner("Record saved successfully.") }}{% endif %}
         {% block content %}{% endblock %}
     </div>
 </main>

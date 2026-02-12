@@ -650,6 +650,9 @@ def base_context(
             else ""
         )
 
+    # Extract feedback param from query string for success banner
+    _saved = bool(request.query_params.get("saved"))
+
     context = {
         "request": request,
         "title": page_title,
@@ -666,6 +669,7 @@ def base_context(
         "can_team_expenses": can_team_expenses,
         "csrf_token": csrf_token,
         "notifications": notifications or [],
+        "saved": _saved,
         # Org formatting settings for JS / template use
         "org_date_format": getattr(organization, "date_format", None)
         if organization

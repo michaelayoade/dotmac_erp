@@ -42,7 +42,7 @@
     </div>
     {% endif %}
 
-    {% from "components/macros.html" import live_search %}
+    {% from "components/macros.html" import live_search, pagination %}
     {% call(search_attrs) live_search(search=search, base_url="/procurement/rfqs", placeholder="Search RFQs...") %}
         <select name="status" class="form-select" {{ search_attrs }}>
             <option value="">All Status</option>
@@ -118,6 +118,15 @@
                 </tbody>
             </table>
         </div>
+
+            {# Pagination #}
+            {{ pagination(
+                page=page,
+                total_pages=total_pages,
+                total_count=total_count,
+                limit=limit,
+                search=search
+            ) }}
         {% if total > limit %}
         <div class="p-4 border-t border-slate-200 dark:border-slate-700 flex justify-between items-center text-sm text-slate-600 dark:text-slate-400">
             <span>Showing {{ offset + 1 }}-{{ [offset + limit, total] | min }} of {{ total }}</span>

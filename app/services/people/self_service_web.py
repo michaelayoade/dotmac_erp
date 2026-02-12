@@ -4,6 +4,7 @@ Self-service web view service for employees and managers.
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
@@ -1013,6 +1014,8 @@ class SelfServiceWebService:
         # Get projects for dropdown
         projects = self._get_projects_for_dropdown(db, org_id)
 
+        allowed_banks = OrgBankDirectoryService(db).list_active_banks(org_id)
+
         selected_ticket_id = request.query_params.get("ticket_id")
         selected_project_id = request.query_params.get("project_id")
         selected_task_id = request.query_params.get("task_id")
@@ -1037,6 +1040,7 @@ class SelfServiceWebService:
                 or "",
                 "employee_recipient_name": (employee.full_name if employee else "")
                 or "",
+                "allowed_banks": allowed_banks,
                 "expense_approver_options": self._get_expense_approver_options(
                     db, org_id
                 ),
@@ -1069,6 +1073,7 @@ class SelfServiceWebService:
         requested_approver_id: str | None = None,
         receipt_url: str | None = None,
         receipt_number: str | None = None,
+        receipt_files: list[UploadFile] | None = None,
         receipt_file: UploadFile | None = None,
         submit_now: str | None = None,
         project_id: str | None = None,
@@ -1086,9 +1091,35 @@ class SelfServiceWebService:
                 status_code=400, detail="Invalid claimed amount"
             ) from exc
 
-        resolved_receipt_url = receipt_url.strip() if receipt_url else None
-        if receipt_file:
-            resolved_receipt_url = self._save_receipt_file(org_id, receipt_file)
+        resolved_receipt_urls: list[str] = []
+        if receipt_url and receipt_url.strip():
+            resolved_receipt_urls.append(receipt_url.strip())
+
+        upload_files: list[UploadFile] = []
+        if receipt_files:
+            upload_files.extend(
+                f
+                for f in receipt_files
+                if isinstance(f, UploadFile) and getattr(f, "filename", None)
+            )
+        if (
+            receipt_file
+            and isinstance(receipt_file, UploadFile)
+            and getattr(receipt_file, "filename", None)
+            and receipt_file not in upload_files
+        ):
+            upload_files.append(receipt_file)
+
+        for upload in upload_files:
+            resolved_receipt_urls.append(self._save_receipt_file(org_id, upload))
+
+        resolved_receipt_url: str | None
+        if not resolved_receipt_urls:
+            resolved_receipt_url = None
+        elif len(resolved_receipt_urls) == 1:
+            resolved_receipt_url = resolved_receipt_urls[0]
+        else:
+            resolved_receipt_url = json.dumps(resolved_receipt_urls)
 
         svc = ExpenseService(db, auth)
         claim = svc.create_claim(
@@ -1204,6 +1235,30 @@ class SelfServiceWebService:
             )
 
         svc.submit_claim(org_id, claim_id)
+        db.commit()
+        return RedirectResponse(url="/people/self/expenses", status_code=302)
+
+    def expense_claim_delete_response(
+        self,
+        auth: WebAuthContext,
+        db: Session,
+        *,
+        claim_id: UUID,
+    ) -> RedirectResponse:
+        org_id = coerce_uuid(auth.organization_id)
+        person_id = coerce_uuid(auth.person_id)
+        employee_id = self._get_employee_id(db, org_id, person_id)
+
+        svc = ExpenseService(db, auth)
+        claim = svc.get_claim(org_id, claim_id)
+        if claim.employee_id != employee_id:
+            raise HTTPException(status_code=403, detail="Forbidden")
+        if claim.status != ExpenseClaimStatus.DRAFT:
+            raise HTTPException(
+                status_code=400, detail="Only draft claims can be deleted"
+            )
+
+        svc.delete_claim(org_id, claim_id)
         db.commit()
         return RedirectResponse(url="/people/self/expenses", status_code=302)
 
@@ -1548,7 +1603,7 @@ class SelfServiceWebService:
         ExpenseService(db, auth).approve_claim(
             org_id=org_id,
             claim_id=claim_id,
-            approver_id=person_id,
+            approver_id=manager_employee_id,
         )
         db.commit()
         return RedirectResponse(url="/people/self/team/expenses", status_code=302)
@@ -1578,7 +1633,7 @@ class SelfServiceWebService:
         ExpenseService(db, auth).reject_claim(
             org_id=org_id,
             claim_id=claim_id,
-            approver_id=person_id,
+            approver_id=manager_employee_id,
             reason=reason or "Rejected",
         )
         db.commit()

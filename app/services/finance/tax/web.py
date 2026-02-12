@@ -828,7 +828,7 @@ class TaxWebService:
             )
 
             return RedirectResponse(
-                url=f"/finance/tax/returns/{tax_return.return_id}",
+                url=f"/finance/tax/returns/{tax_return.return_id}?saved=1",
                 status_code=303,
             )
 
@@ -878,11 +878,15 @@ class TaxWebService:
 
         tax_return = tax_return_service.get(db, return_id, org_id)
         if not tax_return or tax_return.organization_id != org_id:
-            return RedirectResponse(url="/finance/tax/returns", status_code=303)
+            return RedirectResponse(
+                url="/finance/tax/returns?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         if tax_return.status not in {TaxReturnStatus.DRAFT, TaxReturnStatus.PREPARED}:
             return RedirectResponse(
-                url=f"/finance/tax/returns/{tax_return.return_id}", status_code=303
+                url=f"/finance/tax/returns/{tax_return.return_id}?saved=1",
+                status_code=303,
             )
 
         period = (
@@ -951,7 +955,7 @@ class TaxWebService:
             )
 
             return RedirectResponse(
-                url=f"/finance/tax/returns/{tax_return.return_id}",
+                url=f"/finance/tax/returns/{tax_return.return_id}?saved=1",
                 status_code=303,
             )
 
@@ -1128,7 +1132,7 @@ class TaxWebService:
             logger.exception("Ignored exception")
 
         return RedirectResponse(
-            url=f"/finance/tax/returns/{return_id}",
+            url=f"/finance/tax/returns/{return_id}?saved=1",
             status_code=303,
         )
 
@@ -1141,7 +1145,7 @@ class TaxWebService:
         try:
             if not auth.person_id:
                 return RedirectResponse(
-                    url=f"/finance/tax/returns/{return_id}",
+                    url=f"/finance/tax/returns/{return_id}?saved=1",
                     status_code=303,
                 )
             org_id = coerce_uuid(auth.organization_id)
@@ -1155,7 +1159,7 @@ class TaxWebService:
             logger.exception("Ignored exception")
 
         return RedirectResponse(
-            url=f"/finance/tax/returns/{return_id}",
+            url=f"/finance/tax/returns/{return_id}?saved=1",
             status_code=303,
         )
 
@@ -1168,7 +1172,7 @@ class TaxWebService:
         try:
             if not auth.person_id:
                 return RedirectResponse(
-                    url=f"/finance/tax/returns/{return_id}",
+                    url=f"/finance/tax/returns/{return_id}?saved=1",
                     status_code=303,
                 )
             org_id = coerce_uuid(auth.organization_id)
@@ -1182,7 +1186,7 @@ class TaxWebService:
             logger.exception("Ignored exception")
 
         return RedirectResponse(
-            url=f"/finance/tax/returns/{return_id}",
+            url=f"/finance/tax/returns/{return_id}?saved=1",
             status_code=303,
         )
 
@@ -1363,7 +1367,10 @@ class TaxWebService:
             # Create tax code
             tax_code_service.create_tax_code(db, org_id, tax_input)
 
-            return RedirectResponse(url="/finance/tax/codes", status_code=303)
+            return RedirectResponse(
+                url="/finance/tax/codes?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         except ValueError as e:
             return self.new_tax_code_form_response(request, auth, db, error=str(e))
@@ -1384,7 +1391,10 @@ class TaxWebService:
 
         tax_code = tax_code_service.get(db, tax_code_id, org_id)
         if not tax_code or tax_code.organization_id != org_id:
-            return RedirectResponse(url="/finance/tax/codes", status_code=303)
+            return RedirectResponse(
+                url="/finance/tax/codes?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         context = base_context(request, auth, "Edit Tax Code", "tax")
         context.update(self._get_tax_code_form_context(db, auth, tax_code, error))
@@ -1407,7 +1417,10 @@ class TaxWebService:
         try:
             tax_code = tax_code_service.get(db, tax_code_id, org_id)
             if not tax_code or tax_code.organization_id != org_id:
-                return RedirectResponse(url="/finance/tax/codes", status_code=303)
+                return RedirectResponse(
+                    url="/finance/tax/codes?success=Record+updated+successfully",
+                    status_code=303,
+                )
 
             # Parse form data
             tax_code_str = _safe_form_text(form.get("tax_code")).strip()
@@ -1521,7 +1534,10 @@ class TaxWebService:
 
             db.commit()
 
-            return RedirectResponse(url="/finance/tax/codes", status_code=303)
+            return RedirectResponse(
+                url="/finance/tax/codes?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         except ValueError as e:
             return self.edit_tax_code_form_response(
@@ -1547,7 +1563,9 @@ class TaxWebService:
             tax_code.is_active = not tax_code.is_active
             db.commit()
 
-        return RedirectResponse(url="/finance/tax/codes", status_code=303)
+        return RedirectResponse(
+            url="/finance/tax/codes?success=Record+saved+successfully", status_code=303
+        )
 
     # ============================================================
     # Tax Reports

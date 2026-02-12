@@ -182,7 +182,9 @@ class HRWebService:
             "date_of_leaving_to": date_of_leaving_to or "",
             "page": page,
             "total_pages": result.total_pages,
+            "total_count": result.total,
             "total": result.total,
+            "limit": pagination.limit,
             "has_prev": result.has_prev,
             "has_next": result.has_next,
             "success": success,
@@ -495,7 +497,7 @@ class HRWebService:
         db.commit()
 
         return RedirectResponse(
-            url=f"/people/hr/employees/{employee.employee_id}",
+            url=f"/people/hr/employees/{employee.employee_id}?saved=1",
             status_code=303,
         )
 
@@ -631,7 +633,7 @@ class HRWebService:
         db.commit()
 
         return RedirectResponse(
-            url=f"/people/hr/employees/{employee_id}",
+            url=f"/people/hr/employees/{employee_id}?saved=1",
             status_code=303,
         )
 
@@ -647,7 +649,7 @@ class HRWebService:
         svc.activate_employee(employee_id)
         db.commit()
         return RedirectResponse(
-            url=f"/people/hr/employees/{employee_id}", status_code=303
+            url=f"/people/hr/employees/{employee_id}?saved=1", status_code=303
         )
 
     async def suspend_employee_response(
@@ -668,7 +670,7 @@ class HRWebService:
         svc.suspend_employee(employee_id, reason=reason or None)
         db.commit()
         return RedirectResponse(
-            url=f"/people/hr/employees/{employee_id}", status_code=303
+            url=f"/people/hr/employees/{employee_id}?saved=1", status_code=303
         )
 
     def set_employee_on_leave_response(
@@ -683,7 +685,7 @@ class HRWebService:
         svc.set_on_leave(employee_id)
         db.commit()
         return RedirectResponse(
-            url=f"/people/hr/employees/{employee_id}", status_code=303
+            url=f"/people/hr/employees/{employee_id}?saved=1", status_code=303
         )
 
     async def resign_employee_response(
@@ -708,7 +710,7 @@ class HRWebService:
             svc.resign_employee(employee_id, leaving_date)
             db.commit()
             return RedirectResponse(
-                url=f"/people/hr/employees/{employee_id}", status_code=303
+                url=f"/people/hr/employees/{employee_id}?saved=1", status_code=303
             )
 
         employee = svc.get_employee(employee_id)
@@ -752,7 +754,7 @@ class HRWebService:
             )
             db.commit()
             return RedirectResponse(
-                url=f"/people/hr/employees/{employee_id}", status_code=303
+                url=f"/people/hr/employees/{employee_id}?saved=1", status_code=303
             )
 
         employee = svc.get_employee(employee_id)
@@ -1326,7 +1328,9 @@ class HRWebService:
             else "",
             "page": page,
             "total_pages": result.total_pages,
+            "total_count": result.total,
             "total": result.total,
+            "limit": pagination.limit,
             "has_prev": result.has_prev,
             "has_next": result.has_next,
         }
@@ -1449,7 +1453,9 @@ class HRWebService:
             "search": search or "",
             "page": page,
             "total_pages": result.total_pages,
+            "total_count": result.total,
             "total": result.total,
+            "limit": pagination.limit,
             "has_prev": result.has_prev,
             "has_next": result.has_next,
         }
@@ -1514,7 +1520,9 @@ class HRWebService:
             "search": search or "",
             "page": page,
             "total_pages": result.total_pages,
+            "total_count": result.total,
             "total": result.total,
+            "limit": pagination.limit,
             "has_prev": result.has_prev,
             "has_next": result.has_next,
         }
@@ -1579,7 +1587,9 @@ class HRWebService:
             "search": search or "",
             "page": page,
             "total_pages": result.total_pages,
+            "total_count": result.total,
             "total": result.total,
+            "limit": pagination.limit,
             "has_prev": result.has_prev,
             "has_next": result.has_next,
         }

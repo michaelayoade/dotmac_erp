@@ -1,5 +1,5 @@
 {% extends "admin/base_admin.html" %}
-{% from "components/macros.html" import live_search %}
+{% from "components/macros.html" import live_search, pagination as render_pagination %}
 
 {% block page_title %}Permissions{% endblock %}
 {% block page_subtitle %}Manage system permissions{% endblock %}
@@ -191,41 +191,14 @@
             </table>
         </div>
 
-        <!-- Pagination -->
-        {% if pagination.total_pages > 1 %}
-        <div class="flex items-center justify-between border-t border-slate-200 dark:border-slate-700 px-6 py-4">
-            <p class="text-sm text-slate-500 dark:text-slate-400">
-                Showing {{ pagination.start }} to {{ pagination.end }} of {{ pagination.total }} permissions
-            </p>
-            <nav class="flex items-center gap-1">
-                {% if pagination.has_prev %}
-                <a href="/admin/permissions?page={{ pagination.page - 1 }}&search={{ search }}&status={{ status_filter }}" class="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition-colors">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                    </svg>
-                </a>
-                {% endif %}
-
-                {% for p in pagination.pages %}
-                {% if p == "..." %}
-                <span class="px-3 py-1 text-slate-400">...</span>
-                {% else %}
-                <a href="/admin/permissions?page={{ p }}&search={{ search }}&status={{ status_filter }}" class="px-3 py-1 rounded-lg text-sm font-medium {{ 'bg-primary-500 text-white' if p == pagination.page else 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800' }} transition-colors">
-                    {{ p }}
-                </a>
-                {% endif %}
-                {% endfor %}
-
-                {% if pagination.has_next %}
-                <a href="/admin/permissions?page={{ pagination.page + 1 }}&search={{ search }}&status={{ status_filter }}" class="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:text-slate-300 dark:hover:bg-slate-800 transition-colors">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                    </svg>
-                </a>
-                {% endif %}
-            </nav>
-        </div>
-        {% endif %}
+        {# Pagination #}
+        {{ render_pagination(
+            page=page,
+            total_pages=total_pages,
+            total_count=total_count,
+            limit=limit,
+            search=search
+        ) }}
     </div>
     </div>
 </div>

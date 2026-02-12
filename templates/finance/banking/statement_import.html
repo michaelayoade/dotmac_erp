@@ -5,19 +5,17 @@
 {% block breadcrumbs %}
 <nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
     <a href="/finance/banking/statements" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Statements</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
     <span class="font-medium text-slate-900 dark:text-white" aria-current="page">Import</span>
 </nav>
 {% endblock %}
 
 {% block content %}
-<div class="mx-auto max-w-3xl">
+<div class="mx-auto max-w-4xl"
+     x-data='importWizard({{ accounts | tojson }}, {{ form_data | tojson }})'>
+
     {% if form_errors %}
     <div class="mb-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-800/60 dark:bg-rose-900/30 dark:text-rose-200">
         <p class="font-semibold">Please fix the following issues:</p>
@@ -28,347 +26,756 @@
         </ul>
     </div>
     {% endif %}
+
+    <!-- Step Indicator -->
+    <div class="mb-6 flex items-center justify-center gap-2 text-sm" aria-label="Import progress">
+        <template x-for="(label, i) in stepLabels" :key="i">
+            <div class="flex items-center gap-2">
+                <div class="flex items-center gap-1.5"
+                     :class="step > i + 1 ? 'text-teal-600 dark:text-teal-400' : step === i + 1 ? 'text-slate-900 dark:text-white font-semibold' : 'text-slate-400 dark:text-slate-500'">
+                    <span class="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold"
+                          :class="step > i + 1 ? 'bg-teal-100 dark:bg-teal-900/40 text-teal-700 dark:text-teal-300' : step === i + 1 ? 'bg-teal-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'">
+                        <template x-if="step > i + 1">
+                            <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                        </template>
+                        <template x-if="step <= i + 1">
+                            <span x-text="i + 1"></span>
+                        </template>
+                    </span>
+                    <span x-text="label"></span>
+                </div>
+                <svg x-show="i < stepLabels.length - 1" class="h-4 w-4 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </div>
+        </template>
+    </div>
+
     <form method="post"
           action="/finance/banking/statements/import"
           enctype="multipart/form-data"
-          class="space-y-6">
+          @submit="onSubmit($event)"
+          x-ref="importForm">
         {{ request.state.csrf_form | safe }}
-        <!-- Bank Account -->
-        <div class="card p-6">
-            <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Bank Account</h3>
 
-            <div>
-                <label for="bank_account_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Select Account <span class="text-rose-500">*</span></label>
-                <select id="bank_account_id" name="bank_account_id" required
-                        class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                    <option value="">Choose a bank account</option>
-                    {% for acc in accounts %}
-                    <option value="{{ acc.bank_account_id }}" {{ 'selected' if form_data.bank_account_id and form_data.bank_account_id == acc.bank_account_id|string else '' }}>{{ acc.bank_name }} - {{ acc.account_number }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-        </div>
+        <!-- ============================================================ -->
+        <!-- STEP 1: Statement Details + File Selection                    -->
+        <!-- ============================================================ -->
+        <div x-show="step === 1" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0">
 
-        <!-- Statement Details -->
-        <div class="card p-6">
-            <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Statement Details</h3>
-
-            <div class="grid gap-4 sm:grid-cols-2">
+            <!-- Bank Account -->
+            <div class="card p-6 mb-6">
+                <h3 class="mb-4 text-lg font-semibold text-slate-900 dark:text-white">Bank Account</h3>
                 <div>
-                    <label for="statement_number" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Statement Number <span class="text-rose-500">*</span></label>
-                    <input type="text" id="statement_number" name="statement_number" required
-                           value="{{ form_data.statement_number or '' }}"
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                </div>
-                <div>
-                    <label for="statement_date" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Statement Date <span class="text-rose-500">*</span></label>
-                    <input type="date" id="statement_date" name="statement_date" required
-                           value="{{ form_data.statement_date or '' }}"
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                </div>
-                <div>
-                    <label for="period_start" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Period Start <span class="text-rose-500">*</span></label>
-                    <input type="date" id="period_start" name="period_start" required
-                           value="{{ form_data.period_start or '' }}"
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                </div>
-                <div>
-                    <label for="period_end" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Period End <span class="text-rose-500">*</span></label>
-                    <input type="date" id="period_end" name="period_end" required
-                           value="{{ form_data.period_end or '' }}"
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                </div>
-            </div>
-        </div>
-
-        <!-- Balances -->
-        <div class="card p-6">
-            <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Balances</h3>
-
-            <div class="grid gap-4 sm:grid-cols-2">
-                <div>
-                    <label for="opening_balance" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Opening Balance <span class="text-rose-500">*</span></label>
-                    <input type="number" id="opening_balance" name="opening_balance" step="0.01" required
-                           value="{{ form_data.opening_balance or '' }}"
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                </div>
-                <div>
-                    <label for="closing_balance" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Closing Balance <span class="text-rose-500">*</span></label>
-                    <input type="number" id="closing_balance" name="closing_balance" step="0.01" required
-                           value="{{ form_data.closing_balance or '' }}"
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                </div>
-            </div>
-        </div>
-
-        <!-- File Upload -->
-        <div class="card p-6">
-            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-                <h3 class="text-lg font-medium text-slate-900 dark:text-white">Statement File</h3>
-                <div class="flex flex-wrap items-center gap-3">
-                    <label class="text-xs font-medium text-slate-500 dark:text-slate-400" for="csv-format">CSV Format</label>
-                    <select id="csv-format" name="csv_format"
-                            class="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
-                        <option value="type" {{ 'selected' if form_data.csv_format in (None, '', 'type') else '' }}>Type + Amount</option>
-                        <option value="debit_credit" {{ 'selected' if form_data.csv_format == 'debit_credit' else '' }}>Debit / Credit</option>
+                    <label for="bank_account_id" class="form-label">Select Account <span class="text-rose-500">*</span></label>
+                    <select id="bank_account_id" name="bank_account_id" required x-model="formData.bank_account_id" class="form-select">
+                        <option value="">Choose a bank account</option>
+                        <template x-for="acc in accounts" :key="acc.bank_account_id">
+                            <option :value="acc.bank_account_id" x-text="`${acc.bank_name} - ${acc.account_number}`" :selected="formData.bank_account_id == acc.bank_account_id"></option>
+                        </template>
                     </select>
-                    <a id="sample-csv-link"
-                       href="/finance/banking/statements/sample-csv?format=type"
+                </div>
+            </div>
+
+            <!-- Statement Details -->
+            <div class="card p-6 mb-6">
+                <h3 class="mb-4 text-lg font-semibold text-slate-900 dark:text-white">Statement Details</h3>
+                <div class="grid gap-4 grid-cols-1 sm:grid-cols-2">
+                    <div>
+                        <label for="statement_number" class="form-label">Statement Number</label>
+                        <input type="text" id="statement_number" name="statement_number"
+                               x-model="formData.statement_number" class="form-input"
+                               placeholder="Auto-generated if blank">
+                    </div>
+                    <div>
+                        <label for="statement_date" class="form-label">Statement Date</label>
+                        <input type="date" id="statement_date" name="statement_date"
+                               x-model="formData.statement_date" class="form-input">
+                    </div>
+                    <div>
+                        <label for="period_start" class="form-label">Period Start <span class="text-rose-500">*</span></label>
+                        <input type="date" id="period_start" name="period_start" required
+                               x-model="formData.period_start" class="form-input">
+                    </div>
+                    <div>
+                        <label for="period_end" class="form-label">Period End <span class="text-rose-500">*</span></label>
+                        <input type="date" id="period_end" name="period_end" required
+                               x-model="formData.period_end" class="form-input">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Balances -->
+            <div class="card p-6 mb-6">
+                <h3 class="mb-4 text-lg font-semibold text-slate-900 dark:text-white">Balances <span class="text-xs font-normal text-slate-400 ml-1">(optional)</span></h3>
+                <p class="mb-3 text-xs text-slate-500 dark:text-slate-400">If your statement includes opening and closing balances, enter them here for validation. Leave blank if unavailable.</p>
+                <div class="grid gap-4 grid-cols-1 sm:grid-cols-2">
+                    <div>
+                        <label for="opening_balance" class="form-label">Opening Balance</label>
+                        <input type="number" id="opening_balance" name="opening_balance" step="0.01"
+                               x-model="formData.opening_balance" class="form-input form-input-currency" placeholder="0.00">
+                    </div>
+                    <div>
+                        <label for="closing_balance" class="form-label">Closing Balance</label>
+                        <input type="number" id="closing_balance" name="closing_balance" step="0.01"
+                               x-model="formData.closing_balance" class="form-input form-input-currency" placeholder="0.00">
+                    </div>
+                </div>
+            </div>
+
+            <!-- File Upload -->
+            <div class="card p-6 mb-6">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Statement File</h3>
+                    <a href="/finance/banking/statements/sample-csv?format=debit_credit"
                        class="inline-flex items-center gap-1.5 text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-                        </svg>
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
                         Download Sample CSV
                     </a>
                 </div>
-            </div>
 
-            <div>
-                <label for="statement_file" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Upload statement file
-                </label>
-                <input id="statement_file" name="statement_file" type="file"
-                       accept=".csv,.xlsx,.xlsm"
-                       class="block w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200">
-                <p class="mt-2 text-xs text-slate-500">CSV, XLSX, XLSM (max 10MB).</p>
-            </div>
+                <!-- Drag & drop zone -->
+                <div class="relative"
+                     @dragover.prevent="dragOver = true"
+                     @dragleave.prevent="dragOver = false"
+                     @drop.prevent="handleFileDrop($event)">
+                    <div class="flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-10 transition-colors"
+                         :class="dragOver ? 'border-teal-400 bg-teal-50/50 dark:bg-teal-900/10' : 'border-slate-300 dark:border-slate-600 hover:border-slate-400 dark:hover:border-slate-500'">
 
-            <!-- CSV Format Guide -->
-            <details class="mt-4">
-                <summary class="cursor-pointer text-sm font-medium text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors">
-                    CSV Column Format Guide
-                </summary>
-                <div class="mt-3 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden">
-                    <div class="table-container">
-                        <table class="table text-xs" data-csv-format="type">
-                            <thead>
-                                <tr>
-                                    <th scope="col">Column</th>
-                                    <th scope="col">Required</th>
-                                    <th scope="col">Format</th>
-                                    <th scope="col">Example</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td class="font-mono font-medium">transaction_date</td>
-                                    <td><span class="text-rose-600 dark:text-rose-400 font-medium">Yes</span></td>
-                                    <td>YYYY-MM-DD</td>
-                                    <td class="font-mono">2026-01-15</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-mono font-medium">transaction_type</td>
-                                    <td><span class="text-rose-600 dark:text-rose-400 font-medium">Yes</span></td>
-                                    <td>credit or debit</td>
-                                    <td class="font-mono">credit</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-mono font-medium">amount</td>
-                                    <td><span class="text-rose-600 dark:text-rose-400 font-medium">Yes</span></td>
-                                    <td>Decimal (positive)</td>
-                                    <td class="font-mono">50000.00</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-mono font-medium">description</td>
-                                    <td><span class="text-slate-400">No</span></td>
-                                    <td>Text</td>
-                                    <td>Salary deposit</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-mono font-medium">reference</td>
-                                    <td><span class="text-slate-400">No</span></td>
-                                    <td>Text</td>
-                                    <td class="font-mono">TRF-001</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-mono font-medium">payee_payer</td>
-                                    <td><span class="text-slate-400">No</span></td>
-                                    <td>Text</td>
-                                    <td>ABC Corp Ltd</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-mono font-medium">check_number</td>
-                                    <td><span class="text-slate-400">No</span></td>
-                                    <td>Text</td>
-                                    <td class="font-mono">4521</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-mono font-medium">value_date</td>
-                                    <td><span class="text-slate-400">No</span></td>
-                                    <td>YYYY-MM-DD</td>
-                                    <td class="font-mono">2026-01-15</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-mono font-medium">running_balance</td>
-                                    <td><span class="text-slate-400">No</span></td>
-                                    <td>Decimal</td>
-                                    <td class="font-mono">50000.00</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <table class="table text-xs hidden" data-csv-format="debit_credit">
-                            <thead>
-                                <tr>
-                                    <th scope="col">Column</th>
-                                    <th scope="col">Required</th>
-                                    <th scope="col">Format</th>
-                                    <th scope="col">Example</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td class="font-mono font-medium">transaction_date</td>
-                                    <td><span class="text-rose-600 dark:text-rose-400 font-medium">Yes</span></td>
-                                    <td>YYYY-MM-DD</td>
-                                    <td class="font-mono">2026-01-15</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-mono font-medium">debit</td>
-                                    <td><span class="text-rose-600 dark:text-rose-400 font-medium">Yes*</span></td>
-                                    <td>Decimal (positive)</td>
-                                    <td class="font-mono">2500.00</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-mono font-medium">credit</td>
-                                    <td><span class="text-rose-600 dark:text-rose-400 font-medium">Yes*</span></td>
-                                    <td>Decimal (positive)</td>
-                                    <td class="font-mono">50000.00</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-mono font-medium">description</td>
-                                    <td><span class="text-slate-400">No</span></td>
-                                    <td>Text</td>
-                                    <td>Salary deposit</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-mono font-medium">reference</td>
-                                    <td><span class="text-slate-400">No</span></td>
-                                    <td>Text</td>
-                                    <td class="font-mono">TRF-001</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-mono font-medium">payee_payer</td>
-                                    <td><span class="text-slate-400">No</span></td>
-                                    <td>Text</td>
-                                    <td>ABC Corp Ltd</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-mono font-medium">check_number</td>
-                                    <td><span class="text-slate-400">No</span></td>
-                                    <td>Text</td>
-                                    <td class="font-mono">4521</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-mono font-medium">value_date</td>
-                                    <td><span class="text-slate-400">No</span></td>
-                                    <td>YYYY-MM-DD</td>
-                                    <td class="font-mono">2026-01-15</td>
-                                </tr>
-                                <tr>
-                                    <td class="font-mono font-medium">running_balance</td>
-                                    <td><span class="text-slate-400">No</span></td>
-                                    <td>Decimal</td>
-                                    <td class="font-mono">50000.00</td>
-                                </tr>
-                            </tbody>
-                        </table>
+                        <!-- Loading spinner -->
+                        <div x-show="parsing" class="flex flex-col items-center gap-3">
+                            <svg class="h-8 w-8 animate-spin text-teal-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                            <p class="text-sm font-medium text-teal-700 dark:text-teal-300">Parsing file...</p>
+                        </div>
+
+                        <!-- File selected state -->
+                        <div x-show="!parsing && fileName" class="flex flex-col items-center gap-2">
+                            <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-50 dark:bg-teal-900/30">
+                                <svg class="h-6 w-6 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            </div>
+                            <p class="text-sm font-medium text-slate-900 dark:text-white" x-text="fileName"></p>
+                            <p class="text-xs text-slate-500" x-text="`${csvRows.length} rows detected`" x-show="csvRows.length > 0"></p>
+                            <p class="text-xs text-amber-600 dark:text-amber-400" x-show="isXlsx">XLSX files are auto-detected on the server</p>
+                            <button type="button" @click="clearFile()" class="text-xs font-medium text-rose-500 hover:text-rose-600 mt-1">Remove file</button>
+                        </div>
+
+                        <!-- Empty state -->
+                        <div x-show="!parsing && !fileName" class="flex flex-col items-center gap-3">
+                            <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800">
+                                <svg class="h-6 w-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                            </div>
+                            <div class="text-center">
+                                <label for="statement_file" class="cursor-pointer text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">
+                                    Choose a file
+                                </label>
+                                <span class="text-sm text-slate-500"> or drag and drop</span>
+                            </div>
+                            <p class="text-xs text-slate-400">CSV, XLSX, XLSM (max 10 MB)</p>
+                        </div>
                     </div>
-                    <div class="px-4 py-2.5 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700">
-                        <p class="text-xs text-slate-500 dark:text-slate-400">
-                            For CSV/XLSX files, use the column headers shown above.
-                            <span class="block">* Provide a value in either debit or credit (not both) for each row.</span>
-                        </p>
-                    </div>
+                    <input id="statement_file" name="statement_file" type="file"
+                           accept=".csv,.xlsx,.xlsm"
+                           @change="handleFileSelect($event)"
+                           class="sr-only">
                 </div>
-            </details>
-        </div>
 
-        <!-- Manual Entry Option -->
-        <div class="card p-6">
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-medium text-slate-900 dark:text-white">Or Enter Manually</h3>
-                <button type="button" onclick="addTransactionRow()"
-                        class="text-sm font-medium text-primary-600 hover:text-primary-700">
-                    + Add Transaction
+                <div x-show="parseError" class="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-800/60 dark:bg-rose-900/30 dark:text-rose-200" x-text="parseError"></div>
+            </div>
+
+            <!-- Manual Entry Option -->
+            <div class="card p-6 mb-6" x-show="!fileName">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-slate-900 dark:text-white">Or Enter Manually</h3>
+                    <button type="button" @click="addManualRow()"
+                            class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">
+                        + Add Transaction
+                    </button>
+                </div>
+                <div id="transactions-container" class="space-y-4">
+                    <template x-for="(row, idx) in manualRows" :key="row._key">
+                        <div class="grid gap-2 grid-cols-1 sm:grid-cols-5 items-end">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400">Date <span class="text-rose-500">*</span></label>
+                                <input type="date" :name="`lines[${idx}][transaction_date]`" x-model="row.transaction_date" required
+                                       class="mt-1 w-full form-input text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400">Type <span class="text-rose-500">*</span></label>
+                                <select :name="`lines[${idx}][transaction_type]`" x-model="row.transaction_type" required
+                                        class="mt-1 w-full form-select text-sm">
+                                    <option value="debit">Debit</option>
+                                    <option value="credit">Credit</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400">Amount <span class="text-rose-500">*</span></label>
+                                <input type="number" step="0.01" :name="`lines[${idx}][amount]`" x-model="row.amount" required
+                                       class="mt-1 w-full form-input text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-500 dark:text-slate-400">Description</label>
+                                <input type="text" :name="`lines[${idx}][description]`" x-model="row.description"
+                                       class="mt-1 w-full form-input text-sm">
+                            </div>
+                            <div>
+                                <button type="button" @click="manualRows.splice(idx, 1)"
+                                        class="rounded p-1.5 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20" aria-label="Remove row">
+                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                </button>
+                                <input type="hidden" :name="`lines[${idx}][line_number]`" :value="idx + 1">
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Step 1 Actions -->
+            <div class="flex items-center justify-end gap-3 pt-2">
+                <a href="/finance/banking/statements" class="btn btn-secondary">Cancel</a>
+                <!-- CSV file → go to mapping step; XLSX or manual → direct submit -->
+                <button type="button" @click="goToStep2()" x-show="csvRows.length > 0"
+                        class="btn btn-primary">
+                    Continue to Column Mapping
+                </button>
+                <button type="submit" x-show="csvRows.length === 0"
+                        :disabled="submitting"
+                        class="btn btn-primary">
+                    <span x-show="!submitting">Import Statement</span>
+                    <span x-show="submitting" class="flex items-center gap-2">
+                        <svg class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                        Importing...
+                    </span>
                 </button>
             </div>
+        </div>
 
-            <div id="transactions-container" class="space-y-4">
-                <!-- Transaction rows will be added here -->
+        <!-- ============================================================ -->
+        <!-- STEP 2: Column Mapping                                        -->
+        <!-- ============================================================ -->
+        <div x-show="step === 2" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0">
+
+            <!-- Info banner -->
+            <div class="card p-4 mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/30">
+                        <svg class="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-slate-900 dark:text-white" x-text="`${fileName} \u2014 ${csvRows.length} rows detected`"></p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Map your CSV columns to the fields below. We've auto-matched what we could.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preview table -->
+            <div class="card mb-6">
+                <div class="card-header">
+                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white">CSV Preview (first 3 rows)</h3>
+                </div>
+                <div class="table-container">
+                    <table class="table text-xs">
+                        <thead>
+                            <tr>
+                                <template x-for="h in csvHeaders" :key="h">
+                                    <th scope="col" class="font-mono" x-text="h"></th>
+                                </template>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="(row, ri) in previewRows" :key="ri">
+                                <tr>
+                                    <template x-for="h in csvHeaders" :key="h">
+                                        <td class="truncate max-w-[150px]" x-text="row[h] || ''"></td>
+                                    </template>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Column Mapping Grid -->
+            <div class="card p-6 mb-6">
+                <h3 class="mb-4 text-sm font-semibold text-slate-900 dark:text-white">Column Mapping</h3>
+                <div class="space-y-3">
+                    <template x-for="h in csvHeaders" :key="h">
+                        <div class="flex items-center gap-3">
+                            <span class="w-40 shrink-0 truncate rounded-md bg-slate-100 dark:bg-slate-800 px-3 py-2 text-xs font-mono text-slate-700 dark:text-slate-300" x-text="h"></span>
+                            <svg class="h-4 w-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+                            <select class="form-select text-sm flex-1"
+                                    :class="mapping[h] ? 'border-teal-300 dark:border-teal-700' : 'border-slate-300 dark:border-slate-600'"
+                                    x-model="mapping[h]">
+                                <option value="">-- Skip this column --</option>
+                                <option value="transaction_date" :disabled="isMappedElsewhere('transaction_date', h)">Transaction Date *</option>
+                                <option value="debit" :disabled="isMappedElsewhere('debit', h)">Debit Amount</option>
+                                <option value="credit" :disabled="isMappedElsewhere('credit', h)">Credit Amount</option>
+                                <option value="transaction_type" :disabled="isMappedElsewhere('transaction_type', h)">Transaction Type (debit/credit)</option>
+                                <option value="amount" :disabled="isMappedElsewhere('amount', h)">Amount</option>
+                                <option value="description" :disabled="isMappedElsewhere('description', h)">Description</option>
+                                <option value="reference" :disabled="isMappedElsewhere('reference', h)">Reference</option>
+                                <option value="payee_payer" :disabled="isMappedElsewhere('payee_payer', h)">Payee / Payer</option>
+                                <option value="check_number" :disabled="isMappedElsewhere('check_number', h)">Check / Cheque Number</option>
+                                <option value="value_date" :disabled="isMappedElsewhere('value_date', h)">Value Date</option>
+                                <option value="running_balance" :disabled="isMappedElsewhere('running_balance', h)">Running Balance</option>
+                                <option value="transaction_id" :disabled="isMappedElsewhere('transaction_id', h)">Transaction ID</option>
+                                <option value="bank_reference" :disabled="isMappedElsewhere('bank_reference', h)">Bank Reference</option>
+                                <option value="bank_category" :disabled="isMappedElsewhere('bank_category', h)">Bank Category</option>
+                                <option value="bank_code" :disabled="isMappedElsewhere('bank_code', h)">Bank Code</option>
+                            </select>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Validation messages -->
+                <div x-show="mappingErrors.length > 0" class="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-800/60 dark:bg-rose-900/30 dark:text-rose-200">
+                    <ul class="space-y-1">
+                        <template x-for="err in mappingErrors" :key="err">
+                            <li x-text="err"></li>
+                        </template>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Step 2 Actions -->
+            <div class="flex items-center justify-between gap-3 pt-2">
+                <button type="button" @click="step = 1" class="btn btn-secondary">Back</button>
+                <button type="button" @click="goToStep3()" class="btn btn-primary">Continue to Preview</button>
             </div>
         </div>
 
-        <!-- Actions -->
-        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
-            <a href="/finance/banking/statements"
-               class="btn btn-secondary">
-                Cancel
-            </a>
-            <button type="submit"
-                    class="btn btn-primary">
-                Import Statement
-            </button>
+        <!-- ============================================================ -->
+        <!-- STEP 3: Mapped Preview & Submit                               -->
+        <!-- ============================================================ -->
+        <div x-show="step === 3" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 translate-y-2" x-transition:enter-end="opacity-100 translate-y-0">
+
+            <!-- Summary banner -->
+            <div class="card p-4 mb-6">
+                <div class="flex items-center gap-3">
+                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-900/30">
+                        <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-slate-900 dark:text-white" x-text="`${mappedRows.length} transactions ready to import`"></p>
+                        <p class="text-xs text-slate-500 dark:text-slate-400" x-show="mappingWarnings.length > 0" x-text="`${mappingWarnings.length} warning(s)`"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Warnings -->
+            <div x-show="mappingWarnings.length > 0" class="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-800/60 dark:bg-amber-900/30 dark:text-amber-200">
+                <p class="font-semibold mb-1">Warnings:</p>
+                <ul class="space-y-1">
+                    <template x-for="w in mappingWarnings" :key="w">
+                        <li x-text="w"></li>
+                    </template>
+                </ul>
+            </div>
+
+            <!-- Mapped preview table -->
+            <div class="card mb-6">
+                <div class="card-header">
+                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Transformed Preview (first 5 rows)</h3>
+                </div>
+                <div class="table-container">
+                    <table class="table text-xs">
+                        <thead>
+                            <tr>
+                                <template x-for="col in mappedPreviewCols" :key="col">
+                                    <th scope="col" x-text="col"></th>
+                                </template>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="(row, ri) in mappedPreviewRows" :key="ri">
+                                <tr>
+                                    <template x-for="col in mappedPreviewCols" :key="col">
+                                        <td class="truncate max-w-[150px]"
+                                            :class="(col === 'debit' || col === 'credit' || col === 'amount') ? 'text-right font-mono tabular-nums' : ''"
+                                            x-text="row[col] || ''"></td>
+                                    </template>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Hidden inputs for mapped lines (injected on submit) -->
+            <div x-ref="hiddenLines"></div>
+
+            <!-- Step 3 Actions -->
+            <div class="flex items-center justify-between gap-3 pt-2">
+                <button type="button" @click="step = 2" class="btn btn-secondary">Back</button>
+                <button type="submit"
+                        :disabled="submitting"
+                        class="btn btn-primary">
+                    <span x-show="!submitting">Import Statement</span>
+                    <span x-show="submitting" class="flex items-center gap-2">
+                        <svg class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>
+                        Importing...
+                    </span>
+                </button>
+            </div>
         </div>
     </form>
 </div>
 
 <script>
-let rowCount = 0;
+/* ================================================================
+   CSV Parser — handles quoted fields, auto-detects delimiters.
+   ================================================================ */
+function parseCSVText(text) {
+    // Detect delimiter from first line
+    const firstLine = text.split('\n').find(l => l.trim()) || '';
+    const delimiters = [',', '\t', ';', '|'];
+    let delim = ',';
+    let maxCount = 0;
+    for (const d of delimiters) {
+        const c = (firstLine.match(new RegExp(d === '|' ? '\\|' : (d === '\t' ? '\t' : d), 'g')) || []).length;
+        if (c > maxCount) { maxCount = c; delim = d; }
+    }
 
-function updateCsvFormat() {
-    const select = document.getElementById('csv-format');
-    const link = document.getElementById('sample-csv-link');
-    if (!select || !link) return;
-    const format = select.value;
-    link.href = `/finance/banking/statements/sample-csv?format=${format}`;
-    document.querySelectorAll('[data-csv-format]').forEach((table) => {
-        table.classList.toggle('hidden', table.dataset.csvFormat !== format);
-    });
+    const rows = [];
+    let headers = null;
+    let i = 0;
+    const len = text.length;
+
+    while (i < len) {
+        const row = [];
+        // Parse one row
+        while (i < len) {
+            let value = '';
+            if (text[i] === '"') {
+                // Quoted field
+                i++;
+                while (i < len) {
+                    if (text[i] === '"') {
+                        if (i + 1 < len && text[i + 1] === '"') {
+                            value += '"';
+                            i += 2;
+                        } else {
+                            i++; // closing quote
+                            break;
+                        }
+                    } else {
+                        value += text[i];
+                        i++;
+                    }
+                }
+                // Skip to delimiter or newline
+                while (i < len && text[i] !== delim && text[i] !== '\n' && text[i] !== '\r') i++;
+            } else {
+                // Unquoted field
+                while (i < len && text[i] !== delim && text[i] !== '\n' && text[i] !== '\r') {
+                    value += text[i];
+                    i++;
+                }
+            }
+            row.push(value.trim());
+            if (i < len && text[i] === delim) {
+                i++; // skip delimiter
+                continue;
+            }
+            break;
+        }
+        // Skip line endings
+        if (i < len && text[i] === '\r') i++;
+        if (i < len && text[i] === '\n') i++;
+
+        // Skip empty rows
+        if (row.length === 1 && row[0] === '') continue;
+
+        if (!headers) {
+            headers = row;
+        } else {
+            const obj = {};
+            for (let c = 0; c < headers.length; c++) {
+                obj[headers[c]] = row[c] || '';
+            }
+            rows.push(obj);
+        }
+    }
+    return { headers: headers || [], rows };
 }
 
-function addTransactionRow() {
-    rowCount++;
-    const container = document.getElementById('transactions-container');
-    const row = document.createElement('div');
-    row.className = 'grid gap-2 sm:grid-cols-5 items-end';
-    row.innerHTML = `
-        <div>
-            <label class="block text-xs font-medium text-slate-500">Date <span class="text-rose-500">*</span></label>
-            <input type="date" name="lines[${rowCount}][transaction_date]" required
-                   class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-        </div>
-        <div>
-            <label class="block text-xs font-medium text-slate-500">Type <span class="text-rose-500">*</span></label>
-            <select name="lines[${rowCount}][transaction_type]" required
-                    class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-                <option value="debit">Debit</option>
-                <option value="credit">Credit</option>
-            </select>
-        </div>
-        <div>
-            <label class="block text-xs font-medium text-slate-500">Amount <span class="text-rose-500">*</span></label>
-            <input type="number" step="0.01" name="lines[${rowCount}][amount]" required
-                   class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-        </div>
-        <div>
-            <label class="block text-xs font-medium text-slate-500">Description</label>
-            <input type="text" name="lines[${rowCount}][description]"
-                   class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-        </div>
-        <div>
-            <button type="button" onclick="this.parentElement.parentElement.remove()"
-                    class="rounded p-1.5 text-red-500 hover:bg-red-50" aria-label="Delete">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                </svg>
-            </button>
-        </div>
-        <input type="hidden" name="lines[${rowCount}][line_number]" value="${rowCount}">
-    `;
-    container.appendChild(row);
+/* ================================================================
+   Auto-match aliases
+   ================================================================ */
+const ALIAS_MAP = {
+    'date': 'transaction_date', 'txn_date': 'transaction_date', 'posting_date': 'transaction_date',
+    'trans_date': 'transaction_date', 'tran_date': 'transaction_date', 'book_date': 'transaction_date',
+    'transaction_date': 'transaction_date',
+    'debit': 'debit', 'dr': 'debit', 'withdrawal': 'debit', 'withdrawals': 'debit', 'debit_amount': 'debit',
+    'credit': 'credit', 'cr': 'credit', 'deposit': 'credit', 'deposits': 'credit', 'credit_amount': 'credit',
+    'transaction_type': 'transaction_type', 'txn_type': 'transaction_type', 'type': 'transaction_type',
+    'trans_type': 'transaction_type', 'tran_type': 'transaction_type',
+    'amount': 'amount', 'value': 'amount', 'amt': 'amount', 'transaction_amount': 'amount', 'txn_amount': 'amount',
+    'description': 'description', 'narration': 'description', 'narrative': 'description',
+    'particulars': 'description', 'details': 'description', 'memo': 'description',
+    'remark': 'description', 'remarks': 'description',
+    'reference': 'reference', 'ref': 'reference', 'ref_no': 'reference', 'reference_number': 'reference',
+    'payee_payer': 'payee_payer', 'payee': 'payee_payer', 'payer': 'payee_payer',
+    'beneficiary': 'payee_payer', 'party': 'payee_payer', 'counterparty': 'payee_payer',
+    'check_number': 'check_number', 'cheque': 'check_number', 'check': 'check_number',
+    'chq_no': 'check_number', 'cheque_number': 'check_number', 'cheque_no': 'check_number',
+    'running_balance': 'running_balance', 'balance': 'running_balance', 'closing_balance': 'running_balance',
+    'value_date': 'value_date', 'val_date': 'value_date',
+    'transaction_id': 'transaction_id', 'txn_id': 'transaction_id', 'trans_id': 'transaction_id',
+    'bank_reference': 'bank_reference', 'bank_ref': 'bank_reference',
+    'bank_category': 'bank_category', 'category': 'bank_category',
+    'bank_code': 'bank_code',
+};
+
+function autoMatchHeaders(headers) {
+    const mapping = {};
+    const used = new Set();
+    for (const h of headers) {
+        const normalized = h.trim().toLowerCase().replace(/\s+/g, '_');
+        const target = ALIAS_MAP[normalized];
+        if (target && !used.has(target)) {
+            mapping[h] = target;
+            used.add(target);
+        } else {
+            mapping[h] = '';
+        }
+    }
+    return mapping;
 }
 
-document.addEventListener('DOMContentLoaded', updateCsvFormat);
-document.getElementById('csv-format')?.addEventListener('change', updateCsvFormat);
+/* ================================================================
+   Alpine.js Component
+   ================================================================ */
+function importWizard(accounts, serverFormData) {
+    return {
+        step: 1,
+        stepLabels: ['Details & File', 'Column Mapping', 'Preview & Import'],
+        accounts: accounts || [],
+        formData: {
+            bank_account_id: serverFormData.bank_account_id || '',
+            statement_number: serverFormData.statement_number || '',
+            statement_date: serverFormData.statement_date || '',
+            period_start: serverFormData.period_start || '',
+            period_end: serverFormData.period_end || '',
+            opening_balance: serverFormData.opening_balance || '',
+            closing_balance: serverFormData.closing_balance || '',
+        },
+
+        // File state
+        fileName: '',
+        isXlsx: false,
+        parsing: false,
+        parseError: '',
+        dragOver: false,
+
+        // CSV parsed data
+        csvHeaders: [],
+        csvRows: [],
+
+        // Column mapping
+        mapping: {},
+        mappingErrors: [],
+        mappingWarnings: [],
+
+        // Mapped output
+        mappedRows: [],
+        mappedPreviewCols: [],
+        mappedPreviewRows: [],
+
+        // Manual entry
+        manualRows: [],
+        _manualKey: 0,
+
+        // Submit state
+        submitting: false,
+
+        get previewRows() {
+            return this.csvRows.slice(0, 3);
+        },
+
+        isMappedElsewhere(targetValue, currentHeader) {
+            for (const [h, v] of Object.entries(this.mapping)) {
+                if (h !== currentHeader && v === targetValue) return true;
+            }
+            return false;
+        },
+
+        handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) this.processFile(file);
+        },
+
+        handleFileDrop(event) {
+            this.dragOver = false;
+            const file = event.dataTransfer.files[0];
+            if (file) {
+                // Update the real file input
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                this.$refs.importForm.querySelector('#statement_file').files = dt.files;
+                this.processFile(file);
+            }
+        },
+
+        processFile(file) {
+            this.parseError = '';
+            this.fileName = file.name;
+            const lower = file.name.toLowerCase();
+            this.isXlsx = lower.endsWith('.xlsx') || lower.endsWith('.xlsm');
+
+            if (!(lower.endsWith('.csv') || lower.endsWith('.xlsx') || lower.endsWith('.xlsm'))) {
+                this.parseError = 'Supported formats: CSV, XLSX, XLSM';
+                this.fileName = '';
+                return;
+            }
+
+            if (this.isXlsx) {
+                // XLSX can't be parsed client-side — will be auto-detected server-side
+                this.csvHeaders = [];
+                this.csvRows = [];
+                return;
+            }
+
+            // Parse CSV client-side
+            this.parsing = true;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const text = e.target.result;
+                    const { headers, rows } = parseCSVText(text);
+                    if (headers.length === 0) {
+                        this.parseError = 'Could not detect any column headers in the file.';
+                        this.csvHeaders = [];
+                        this.csvRows = [];
+                    } else if (rows.length === 0) {
+                        this.parseError = 'File contains headers but no data rows.';
+                        this.csvHeaders = headers;
+                        this.csvRows = [];
+                    } else {
+                        this.csvHeaders = headers;
+                        this.csvRows = rows;
+                        this.mapping = autoMatchHeaders(headers);
+                    }
+                } catch (err) {
+                    this.parseError = 'Failed to parse CSV: ' + err.message;
+                    this.csvHeaders = [];
+                    this.csvRows = [];
+                }
+                this.parsing = false;
+            };
+            reader.onerror = () => {
+                this.parseError = 'Failed to read file.';
+                this.parsing = false;
+            };
+            reader.readAsText(file);
+        },
+
+        clearFile() {
+            this.fileName = '';
+            this.isXlsx = false;
+            this.csvHeaders = [];
+            this.csvRows = [];
+            this.mapping = {};
+            this.parseError = '';
+            const fileInput = this.$refs.importForm.querySelector('#statement_file');
+            if (fileInput) fileInput.value = '';
+        },
+
+        addManualRow() {
+            this.manualRows.push({
+                _key: ++this._manualKey,
+                transaction_date: '',
+                transaction_type: 'debit',
+                amount: '',
+                description: '',
+            });
+        },
+
+        goToStep2() {
+            if (this.csvRows.length === 0) return;
+            this.step = 2;
+        },
+
+        goToStep3() {
+            // Validate mapping
+            this.mappingErrors = [];
+            this.mappingWarnings = [];
+
+            const mapped = Object.values(this.mapping).filter(v => v);
+            const hasDate = mapped.includes('transaction_date');
+            const hasDebit = mapped.includes('debit');
+            const hasCredit = mapped.includes('credit');
+            const hasType = mapped.includes('transaction_type');
+            const hasAmount = mapped.includes('amount');
+
+            if (!hasDate) {
+                this.mappingErrors.push('Transaction Date is required. Please map a column to it.');
+            }
+            if (!(hasDebit || hasCredit) && !(hasType && hasAmount)) {
+                this.mappingErrors.push('Map either Debit+Credit columns OR Transaction Type+Amount columns.');
+            }
+            if (this.mappingErrors.length > 0) return;
+
+            if ((hasDebit || hasCredit) && !(hasDebit && hasCredit)) {
+                this.mappingWarnings.push('Only one of Debit/Credit is mapped. Rows without a value will be skipped.');
+            }
+
+            // Build mapped rows
+            this.mappedRows = [];
+            const reverseMap = {};
+            for (const [csvCol, target] of Object.entries(this.mapping)) {
+                if (target) reverseMap[target] = csvCol;
+            }
+
+            for (let i = 0; i < this.csvRows.length; i++) {
+                const src = this.csvRows[i];
+                const row = { line_number: String(i + 1) };
+                for (const [target, csvCol] of Object.entries(reverseMap)) {
+                    row[target] = src[csvCol] || '';
+                }
+                this.mappedRows.push(row);
+            }
+
+            // Build preview columns in logical display order
+            const cols = ['line_number'];
+            const fieldOrder = [
+                'transaction_date', 'debit', 'credit', 'transaction_type', 'amount',
+                'description', 'reference', 'payee_payer', 'check_number', 'value_date',
+                'running_balance', 'transaction_id', 'bank_reference', 'bank_category', 'bank_code',
+            ];
+            for (const f of fieldOrder) {
+                if (mapped.includes(f)) cols.push(f);
+            }
+            this.mappedPreviewCols = cols;
+            this.mappedPreviewRows = this.mappedRows.slice(0, 5);
+
+            this.step = 3;
+        },
+
+        onSubmit(event) {
+            if (this.submitting) {
+                event.preventDefault();
+                return;
+            }
+            this.submitting = true;
+
+            // If we're on step 3 with CSV data, inject hidden line inputs
+            if (this.step === 3 && this.mappedRows.length > 0) {
+                const container = this.$refs.hiddenLines;
+                container.innerHTML = '';
+                for (let i = 0; i < this.mappedRows.length; i++) {
+                    const row = this.mappedRows[i];
+                    for (const [field, value] of Object.entries(row)) {
+                        if (!value && field !== 'line_number') continue;
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = `lines[${i}][${field}]`;
+                        input.value = value;
+                        container.appendChild(input);
+                    }
+                }
+            }
+
+            // Allow form to submit normally
+        },
+    };
+}
 </script>
 {% endblock %}

@@ -72,7 +72,7 @@ class AttachmentWebService:
             )
 
         return RedirectResponse(
-            url=f"/support/tickets/{ticket_id}#attachments",
+            url=f"/support/tickets/{ticket_id}#attachments?saved=1",
             status_code=303,
         )
 
@@ -128,7 +128,7 @@ class AttachmentWebService:
             logger.exception("Failed to delete attachment")
 
         return RedirectResponse(
-            url=f"/support/tickets/{ticket_id}#attachments",
+            url=f"/support/tickets/{ticket_id}#attachments?saved=1",
             status_code=303,
         )
 

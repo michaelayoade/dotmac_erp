@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import status_badge, live_search, empty_state %}
+{% from "components/macros.html" import status_badge, live_search, empty_state, pagination %}
 
 {% block page_title %}Payroll Run {{ entry.entry_number }}{% endblock %}
 
@@ -324,6 +324,15 @@
                 </tfoot>
             </table>
         </div>
+
+            {# Pagination #}
+            {{ pagination(
+                page=page,
+                total_pages=total_pages,
+                total_count=total_count,
+                limit=limit,
+                search=search
+            ) }}
         {% else %}
         <div class="p-8 text-center">
             <div class="mx-auto w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">

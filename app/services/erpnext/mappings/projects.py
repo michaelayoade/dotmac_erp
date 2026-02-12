@@ -28,12 +28,53 @@ PROJECT_STATUS_MAP = {
     "Overdue": "ACTIVE",  # Still active, just past deadline
 }
 
+# ERPNext priority → DotMac ProjectPriority enum value
+PROJECT_PRIORITY_MAP = {
+    "Low": "LOW",
+    "Medium": "MEDIUM",
+    "High": "HIGH",
+    "Urgent": "CRITICAL",  # ERPNext doesn't have Critical, map Urgent
+}
+
+# ERPNext project_type → DotMac ProjectType enum value
+PROJECT_TYPE_MAP: dict[str, str] = {
+    # Direct matches to DotMac enum values
+    "Fiber Optics Installation": "FIBER_OPTICS_INSTALLATION",
+    "Radio Installation": "AIR_FIBER_INSTALLATION",
+    "Cable Rerun": "CABLE_RERUN",
+    "Radio Fiber Relocation": "AIR_FIBER_RELOCATION",
+    "Fiber Optics Relocation": "FIBER_OPTICS_RELOCATION",
+    # Client/contract work
+    "GOV ITT": "CLIENT",
+    "GOV EOI": "CLIENT",
+    "GOV FIN": "CLIENT",
+    "NGO Temp": "CLIENT",
+    "Contract Project": "CLIENT",
+    # Default/internal
+    "cabinet migration": "INTERNAL",
+    "EQUIPMENT REPAIR": "INTERNAL",
+}
+
 
 def map_project_status(value: Any) -> str:
     """Map ERPNext project status."""
     if not value:
         return "ACTIVE"
     return PROJECT_STATUS_MAP.get(str(value), "ACTIVE")
+
+
+def map_project_priority(value: Any) -> str:
+    """Map ERPNext project priority to DotMac ProjectPriority."""
+    if not value:
+        return "MEDIUM"
+    return PROJECT_PRIORITY_MAP.get(str(value), "MEDIUM")
+
+
+def map_project_type(value: Any) -> str:
+    """Map ERPNext project_type to DotMac ProjectType."""
+    if not value:
+        return "INTERNAL"
+    return PROJECT_TYPE_MAP.get(str(value), "INTERNAL")
 
 
 class ProjectMapping(DocTypeMapping):
@@ -75,6 +116,39 @@ class ProjectMapping(DocTypeMapping):
                     target="end_date",
                     required=False,
                     transformer=parse_date,
+                ),
+                # Priority and type
+                FieldMapping(
+                    source="priority",
+                    target="project_priority",
+                    required=False,
+                    default="MEDIUM",
+                    transformer=map_project_priority,
+                ),
+                FieldMapping(
+                    source="project_type",
+                    target="project_type",
+                    required=False,
+                    default="INTERNAL",
+                    transformer=map_project_type,
+                ),
+                # Progress and cost
+                FieldMapping(
+                    source="percent_complete",
+                    target="percent_complete",
+                    required=False,
+                    transformer=parse_decimal,
+                ),
+                FieldMapping(
+                    source="total_costing_amount",
+                    target="actual_cost",
+                    required=False,
+                    transformer=parse_decimal,
+                ),
+                FieldMapping(
+                    source="description",
+                    target="description",
+                    required=False,
                 ),
                 # Budget
                 FieldMapping(

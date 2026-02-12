@@ -296,7 +296,7 @@ class OnboardingAdminWebService:
 
         db.commit()
         return RedirectResponse(
-            url=f"/people/onboarding/templates/{template.template_id}",
+            url=f"/people/onboarding/templates/{template.template_id}?saved=1",
             status_code=303,
         )
 
@@ -404,7 +404,7 @@ class OnboardingAdminWebService:
         logger.info("Added item to template %s: %s", template_id, item_name)
 
         return RedirectResponse(
-            url=f"/people/onboarding/templates/{template_id}",
+            url=f"/people/onboarding/templates/{template_id}?saved=1",
             status_code=303,
         )
 
@@ -433,7 +433,7 @@ class OnboardingAdminWebService:
         logger.info("Deleted item %s from template %s", item_id, template_id)
 
         return RedirectResponse(
-            url=f"/people/onboarding/templates/{template_id}",
+            url=f"/people/onboarding/templates/{template_id}?saved=1",
             status_code=303,
         )
 
@@ -610,7 +610,7 @@ class OnboardingAdminWebService:
         db.commit()
 
         return RedirectResponse(
-            url=f"/people/onboarding/employees/{onboarding_id}",
+            url=f"/people/onboarding/employees/{onboarding_id}?saved=1",
             status_code=303,
         )
 

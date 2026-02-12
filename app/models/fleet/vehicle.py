@@ -26,6 +26,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
+from app.models.finance.core_org.location import Location
 from app.models.fleet.base import FleetBaseMixin
 from app.models.fleet.enums import (
     AssignmentType,
@@ -200,6 +201,17 @@ class Vehicle(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
         nullable=True,
         comment="Dealer or leasing company",
     )
+    license_expiry_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+        comment="Vehicle license expiry date",
+    )
+    location_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("core_org.location.location_id"),
+        nullable=True,
+        comment="Branch/location where the vehicle is based",
+    )
 
     # ─────────────────────────────────────────────────────────────
     # Assignment
@@ -295,6 +307,11 @@ class Vehicle(Base, FleetBaseMixin, AuditMixin, SoftDeleteMixin):
     assigned_employee: Mapped[Optional["Employee"]] = relationship(
         "Employee",
         foreign_keys=[assigned_employee_id],
+        lazy="joined",
+    )
+    location: Mapped[Optional["Location"]] = relationship(
+        "Location",
+        foreign_keys=[location_id],
         lazy="joined",
     )
 

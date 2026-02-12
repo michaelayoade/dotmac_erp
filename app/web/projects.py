@@ -19,7 +19,7 @@ from fastapi import (
     Request,
     UploadFile,
 )
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
 
@@ -29,6 +29,7 @@ from app.services.common import (
     ValidationError,
     coerce_uuid,
 )
+from app.services.pm.web.import_web import project_import_web_service
 from app.templates import templates
 from app.web.deps import (
     WebAuthContext,
@@ -775,7 +776,7 @@ async def create_project_template(
 
     db.commit()
     return RedirectResponse(
-        url=f"/projects/templates/{template.template_id}", status_code=303
+        url=f"/projects/templates/{template.template_id}?saved=1", status_code=303
     )
 
 
@@ -985,7 +986,7 @@ async def update_project_template(
 
     db.commit()
     return RedirectResponse(
-        url=f"/projects/templates/{template.template_id}", status_code=303
+        url=f"/projects/templates/{template.template_id}?saved=1", status_code=303
     )
 
 
@@ -1133,7 +1134,7 @@ def create_global_task(
 
     db.commit()
     return RedirectResponse(
-        url=f"/projects/tasks?project_id={task.project_id}",
+        url=f"/projects/tasks?project_id={task.project_id}&saved=1",
         status_code=303,
     )
 
@@ -1238,7 +1239,9 @@ async def add_project_comment(
     user_id = coerce_uuid(auth.user_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+saved+successfully", status_code=303
+        )
 
     upload_files = _normalize_uploads(files)
     attachment_errors = []
@@ -1302,7 +1305,9 @@ def delete_project_comment(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+deleted+successfully", status_code=303
+        )
 
     try:
         comment_service.delete_comment(db, org_id, coerce_uuid(comment_id))
@@ -1310,7 +1315,9 @@ def delete_project_comment(
     except Exception:
         db.rollback()
 
-    return RedirectResponse(url=_project_url(project) + "#comments", status_code=303)
+    return RedirectResponse(
+        url=_project_url(project) + "?saved=1" + "#comments", status_code=303
+    )
 
 
 @router.post("", response_class=RedirectResponse)
@@ -1574,7 +1581,7 @@ async def create_project(
 
         db.commit()
 
-        return RedirectResponse(url=_project_url(project), status_code=303)
+        return RedirectResponse(url=_project_url(project) + "?saved=1", status_code=303)
     except Exception as exc:
         db.rollback()
         customers = db.scalars(
@@ -1670,7 +1677,9 @@ async def update_project(
     project = _resolve_project_ref(db, org_id, project_id)
 
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+updated+successfully", status_code=303
+        )
 
     project.project_name = project_name.strip()
     project.description = description.strip() if description else None
@@ -1708,7 +1717,7 @@ async def update_project(
     db.commit()
 
     return RedirectResponse(
-        url=_project_url(project),
+        url=_project_url(project) + "?saved=1",
         status_code=303,
     )
 
@@ -1730,7 +1739,9 @@ def delete_project(
         project.status = ProjectStatus.CANCELLED
         db.commit()
 
-    return RedirectResponse(url="/projects", status_code=303)
+    return RedirectResponse(
+        url="/projects?success=Record+deleted+successfully", status_code=303
+    )
 
 
 # ============================================================================
@@ -1936,11 +1947,13 @@ async def add_task_comment(
     user_id = coerce_uuid(auth.user_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+saved+successfully", status_code=303
+        )
     task = _resolve_task_ref(db, org_id, project.project_id, task_id)
     if not task:
         return RedirectResponse(
-            url=f"/projects/{project.project_code}/tasks", status_code=303
+            url=f"/projects/{project.project_code}/tasks?saved=1", status_code=303
         )
 
     upload_files = _normalize_uploads(files)
@@ -2009,11 +2022,13 @@ def delete_task_comment(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+deleted+successfully", status_code=303
+        )
     task = _resolve_task_ref(db, org_id, project.project_id, task_id)
     if not task:
         return RedirectResponse(
-            url=f"/projects/{project.project_code}/tasks", status_code=303
+            url=f"/projects/{project.project_code}/tasks?saved=1", status_code=303
         )
 
     try:
@@ -2089,11 +2104,13 @@ async def upload_task_attachment(
     user_id = coerce_uuid(auth.user_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+saved+successfully", status_code=303
+        )
     task = _resolve_task_ref(db, org_id, project.project_id, task_id)
     if not task:
         return RedirectResponse(
-            url=f"/projects/{project.project_code}/tasks", status_code=303
+            url=f"/projects/{project.project_code}/tasks?saved=1", status_code=303
         )
 
     upload_files = _normalize_uploads(files)
@@ -2134,11 +2151,13 @@ def delete_task_attachment(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+deleted+successfully", status_code=303
+        )
     task = _resolve_task_ref(db, org_id, project.project_id, task_id)
     if not task:
         return RedirectResponse(
-            url=f"/projects/{project.project_code}/tasks", status_code=303
+            url=f"/projects/{project.project_code}/tasks?saved=1", status_code=303
         )
 
     project_attachment_service.delete_attachment(db, org_id, coerce_uuid(attachment_id))
@@ -2227,7 +2246,9 @@ def create_task(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+created+successfully", status_code=303
+        )
     services = _get_services(db, org_id)
 
     # Generate task code if not provided
@@ -2275,7 +2296,7 @@ def create_task(
     db.commit()
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/tasks/{task.task_code}",
+        url=f"/projects/{project.project_code}/tasks/{task.task_code}?saved=1",
         status_code=303,
     )
 
@@ -2380,12 +2401,14 @@ def update_task(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+updated+successfully", status_code=303
+        )
     services = _get_services(db, org_id)
     task = _resolve_task_ref(db, org_id, project.project_id, task_id)
     if not task:
         return RedirectResponse(
-            url=f"/projects/{project.project_code}/tasks", status_code=303
+            url=f"/projects/{project.project_code}/tasks?saved=1", status_code=303
         )
     task_uuid = task.task_id
     _ensure_task_code(db, org_id, task)
@@ -2452,7 +2475,7 @@ def update_task(
         pass
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/tasks/{task.task_code or task.task_id}",
+        url=f"/projects/{project.project_code}/tasks/{task.task_code or task.task_id}?saved=1",
         status_code=303,
     )
 
@@ -2469,11 +2492,15 @@ def delete_task(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+deleted+successfully", status_code=303
+        )
     services = _get_services(db, org_id)
     task = _resolve_task_ref(db, org_id, project.project_id, task_id)
     if not task:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+deleted+successfully", status_code=303
+        )
     task_uuid = task.task_id
     _ensure_task_code(db, org_id, task)
 
@@ -2484,7 +2511,7 @@ def delete_task(
         pass
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/tasks",
+        url=f"/projects/{project.project_code}/tasks?saved=1",
         status_code=303,
     )
 
@@ -2503,12 +2530,14 @@ def start_task(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+saved+successfully", status_code=303
+        )
     services = _get_services(db, org_id)
     task = _resolve_task_ref(db, org_id, project.project_id, task_id)
     if not task:
         return RedirectResponse(
-            url=f"/projects/{project.project_code}/tasks", status_code=303
+            url=f"/projects/{project.project_code}/tasks?saved=1", status_code=303
         )
 
     try:
@@ -2518,7 +2547,7 @@ def start_task(
         pass
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/tasks/{task.task_code}",
+        url=f"/projects/{project.project_code}/tasks/{task.task_code}?saved=1",
         status_code=303,
     )
 
@@ -2537,12 +2566,14 @@ def complete_task(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+saved+successfully", status_code=303
+        )
     services = _get_services(db, org_id)
     task = _resolve_task_ref(db, org_id, project.project_id, task_id)
     if not task:
         return RedirectResponse(
-            url=f"/projects/{project.project_code}/tasks", status_code=303
+            url=f"/projects/{project.project_code}/tasks?saved=1", status_code=303
         )
 
     try:
@@ -2558,7 +2589,7 @@ def complete_task(
         pass
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/tasks/{task.task_code}",
+        url=f"/projects/{project.project_code}/tasks/{task.task_code}?saved=1",
         status_code=303,
     )
 
@@ -2587,11 +2618,15 @@ def add_task_dependency(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+saved+successfully", status_code=303
+        )
 
     task = _resolve_task_ref(db, org_id, project.project_id, task_id)
     if not task:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+saved+successfully", status_code=303
+        )
     task_uuid = task.task_id
     depends_on_uuid = coerce_uuid(depends_on_id)
     services = _get_services(db, org_id)
@@ -2610,7 +2645,7 @@ def add_task_dependency(
         pass
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/tasks/{task.task_code}/edit",
+        url=f"/projects/{project.project_code}/tasks/{task.task_code}/edit?saved=1",
         status_code=303,
     )
 
@@ -2631,11 +2666,15 @@ def remove_task_dependency(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+saved+successfully", status_code=303
+        )
 
     task = _resolve_task_ref(db, org_id, project.project_id, task_id)
     if not task:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+saved+successfully", status_code=303
+        )
     task_uuid = task.task_id
     depends_on_uuid = coerce_uuid(depends_on_id)
     services = _get_services(db, org_id)
@@ -2647,7 +2686,7 @@ def remove_task_dependency(
         pass
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/tasks/{task.task_code}/edit",
+        url=f"/projects/{project.project_code}/tasks/{task.task_code}/edit?saved=1",
         status_code=303,
     )
 
@@ -2672,11 +2711,13 @@ def bulk_update_task_status(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+updated+successfully", status_code=303
+        )
 
     if not status:
         return RedirectResponse(
-            url=f"/projects/{project.project_code}/tasks",
+            url=f"/projects/{project.project_code}/tasks?saved=1",
             status_code=303,
         )
 
@@ -2704,7 +2745,7 @@ def bulk_update_task_status(
     db.commit()
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/tasks",
+        url=f"/projects/{project.project_code}/tasks?saved=1",
         status_code=303,
     )
 
@@ -2721,7 +2762,9 @@ def bulk_delete_tasks(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+deleted+successfully", status_code=303
+        )
 
     services = _get_services(db, org_id)
 
@@ -2739,7 +2782,7 @@ def bulk_delete_tasks(
     db.commit()
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/tasks",
+        url=f"/projects/{project.project_code}/tasks?saved=1",
         status_code=303,
     )
 
@@ -2843,13 +2886,15 @@ def create_resource_allocation(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+created+successfully", status_code=303
+        )
     services = _get_services(db, org_id)
 
     parsed_start = _safe_date(start_date)
     if not parsed_start:
         return RedirectResponse(
-            url=f"/projects/{project.project_code}/team",
+            url=f"/projects/{project.project_code}/team?saved=1",
             status_code=303,
         )
 
@@ -2869,7 +2914,7 @@ def create_resource_allocation(
     db.commit()
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/team",
+        url=f"/projects/{project.project_code}/team?saved=1",
         status_code=303,
     )
 
@@ -2893,7 +2938,9 @@ def update_resource_allocation(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+updated+successfully", status_code=303
+        )
     allocation_uuid = coerce_uuid(allocation_id)
     services = _get_services(db, org_id)
 
@@ -2914,7 +2961,7 @@ def update_resource_allocation(
         pass
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/team",
+        url=f"/projects/{project.project_code}/team?saved=1",
         status_code=303,
     )
 
@@ -2932,7 +2979,9 @@ def end_resource_allocation(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+saved+successfully", status_code=303
+        )
     allocation_uuid = coerce_uuid(allocation_id)
     services = _get_services(db, org_id)
 
@@ -2944,7 +2993,7 @@ def end_resource_allocation(
         pass
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/team",
+        url=f"/projects/{project.project_code}/team?saved=1",
         status_code=303,
     )
 
@@ -2963,7 +3012,9 @@ def delete_resource_allocation(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+deleted+successfully", status_code=303
+        )
     allocation_uuid = coerce_uuid(allocation_id)
     services = _get_services(db, org_id)
 
@@ -2974,7 +3025,7 @@ def delete_resource_allocation(
         pass
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/team",
+        url=f"/projects/{project.project_code}/team?saved=1",
         status_code=303,
     )
 
@@ -3161,7 +3212,9 @@ def create_milestone(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+created+successfully", status_code=303
+        )
     services = _get_services(db, org_id)
 
     # Generate milestone code
@@ -3181,7 +3234,7 @@ def create_milestone(
     db.commit()
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/milestones",
+        url=f"/projects/{project.project_code}/milestones?saved=1",
         status_code=303,
     )
 
@@ -3204,7 +3257,9 @@ def update_milestone(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+updated+successfully", status_code=303
+        )
     milestone_uuid = coerce_uuid(milestone_id)
     services = _get_services(db, org_id)
 
@@ -3224,7 +3279,7 @@ def update_milestone(
         pass
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/milestones",
+        url=f"/projects/{project.project_code}/milestones?saved=1",
         status_code=303,
     )
 
@@ -3243,7 +3298,9 @@ def achieve_milestone(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+saved+successfully", status_code=303
+        )
     milestone_uuid = coerce_uuid(milestone_id)
     services = _get_services(db, org_id)
 
@@ -3254,7 +3311,7 @@ def achieve_milestone(
         pass
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/milestones",
+        url=f"/projects/{project.project_code}/milestones?saved=1",
         status_code=303,
     )
 
@@ -3273,7 +3330,9 @@ def delete_milestone(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+deleted+successfully", status_code=303
+        )
     milestone_uuid = coerce_uuid(milestone_id)
     services = _get_services(db, org_id)
 
@@ -3284,7 +3343,7 @@ def delete_milestone(
         pass
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/milestones",
+        url=f"/projects/{project.project_code}/milestones?saved=1",
         status_code=303,
     )
 
@@ -3460,14 +3519,16 @@ def create_time_entry(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+created+successfully", status_code=303
+        )
     services = _get_services(db, org_id)
 
     parsed_date = _safe_date(entry_date)
     parsed_hours = _safe_decimal(hours)
     if not parsed_date or not parsed_hours:
         return RedirectResponse(
-            url=f"/projects/{project.project_code}/time",
+            url=f"/projects/{project.project_code}/time?saved=1",
             status_code=303,
         )
 
@@ -3486,7 +3547,7 @@ def create_time_entry(
     db.commit()
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/time",
+        url=f"/projects/{project.project_code}/time?saved=1",
         status_code=303,
     )
 
@@ -3532,7 +3593,7 @@ def edit_time_entry_form(
     # Don't allow editing billed entries
     if entry.billing_status == BillingStatus.BILLED:
         return RedirectResponse(
-            url=f"/projects/{project.project_code}/time",
+            url=f"/projects/{project.project_code}/time?saved=1",
             status_code=303,
         )
 
@@ -3579,7 +3640,9 @@ def update_time_entry(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+updated+successfully", status_code=303
+        )
     entry_uuid = coerce_uuid(entry_id)
     services = _get_services(db, org_id)
 
@@ -3587,7 +3650,7 @@ def update_time_entry(
     parsed_hours = _safe_decimal(hours)
     if not parsed_date or not parsed_hours:
         return RedirectResponse(
-            url=f"/projects/{project.project_code}/time",
+            url=f"/projects/{project.project_code}/time?saved=1",
             status_code=303,
         )
 
@@ -3607,7 +3670,7 @@ def update_time_entry(
         pass
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/time",
+        url=f"/projects/{project.project_code}/time?saved=1",
         status_code=303,
     )
 
@@ -3624,7 +3687,9 @@ def delete_time_entry(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+deleted+successfully", status_code=303
+        )
     entry_uuid = coerce_uuid(entry_id)
     services = _get_services(db, org_id)
 
@@ -3635,7 +3700,7 @@ def delete_time_entry(
         pass
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/time",
+        url=f"/projects/{project.project_code}/time?saved=1",
         status_code=303,
     )
 
@@ -3652,7 +3717,9 @@ def bill_time_entry(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+saved+successfully", status_code=303
+        )
 
     entry_uuid = coerce_uuid(entry_id)
     services = _get_services(db, org_id)
@@ -3664,7 +3731,7 @@ def bill_time_entry(
         pass
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/time",
+        url=f"/projects/{project.project_code}/time?saved=1",
         status_code=303,
     )
 
@@ -3681,7 +3748,9 @@ def bulk_bill_time_entries(
     org_id = coerce_uuid(auth.organization_id)
     project = _resolve_project_ref(db, org_id, project_id)
     if not project:
-        return RedirectResponse(url="/projects", status_code=303)
+        return RedirectResponse(
+            url="/projects?success=Record+saved+successfully", status_code=303
+        )
 
     services = _get_services(db, org_id)
 
@@ -3703,7 +3772,7 @@ def bulk_bill_time_entries(
         db.commit()
 
     return RedirectResponse(
-        url=f"/projects/{project.project_code}/time",
+        url=f"/projects/{project.project_code}/time?saved=1",
         status_code=303,
     )
 
@@ -3795,13 +3864,17 @@ def log_timesheet_entry(
     org_id = coerce_uuid(auth.organization_id)
     employee_id = coerce_uuid(auth.employee_id) if auth.employee_id else None
     if not org_id or not employee_id:
-        return RedirectResponse(url="/projects/timesheet", status_code=303)
+        return RedirectResponse(
+            url="/projects/timesheet?success=Record+saved+successfully", status_code=303
+        )
 
     services = _get_services(db, org_id)
     parsed_date = _safe_date(entry_date)
     parsed_hours = _safe_decimal(hours)
     if not parsed_date or not parsed_hours:
-        return RedirectResponse(url="/projects/timesheet", status_code=303)
+        return RedirectResponse(
+            url="/projects/timesheet?success=Record+saved+successfully", status_code=303
+        )
 
     services["time"].log_time(
         {
@@ -3816,7 +3889,9 @@ def log_timesheet_entry(
     )
     db.commit()
 
-    return RedirectResponse(url="/projects/timesheet", status_code=303)
+    return RedirectResponse(
+        url="/projects/timesheet?success=Record+saved+successfully", status_code=303
+    )
 
 
 # ============================================================================
@@ -4042,3 +4117,110 @@ def delete_project_attachment(
         url=f"/projects/{project.project_code}/attachments?success=Attachment+deleted",
         status_code=303,
     )
+
+
+# =============================================================================
+# Import/Export
+# =============================================================================
+
+
+@router.get("/import", response_class=HTMLResponse)
+def project_import_dashboard(
+    request: Request,
+    auth: WebAuthContext = Depends(require_projects_access),
+    db: Session = Depends(get_db),
+):
+    """Project import dashboard page."""
+    context = base_context(request, auth, "Project Import", "projects", db=db)
+    context["entity_types"] = project_import_web_service.get_dashboard_entities()
+    return templates.TemplateResponse(
+        request, "projects/import_export/dashboard.html", context
+    )
+
+
+@router.get("/import/{entity_type}", response_class=HTMLResponse)
+def project_import_form(
+    request: Request,
+    entity_type: str,
+    auth: WebAuthContext = Depends(require_projects_access),
+    db: Session = Depends(get_db),
+):
+    """Project import form for a specific entity type."""
+    entity_names = project_import_web_service.ENTITY_TYPES
+    context = base_context(
+        request,
+        auth,
+        f"Import {entity_names.get(entity_type, entity_type)}",
+        "projects",
+        db=db,
+    )
+    context["entity_type"] = entity_type
+    context["entity_name"] = entity_names.get(entity_type, entity_type)
+    context["columns"] = project_import_web_service.get_entity_columns(entity_type)
+    return templates.TemplateResponse(
+        request, "projects/import_export/import_form.html", context
+    )
+
+
+@router.post("/import/{entity_type}/preview", response_class=JSONResponse)
+async def project_import_preview(
+    request: Request,
+    entity_type: str,
+    file: UploadFile = File(...),
+    auth: WebAuthContext = Depends(require_projects_access),
+    db: Session = Depends(get_db),
+):
+    """Preview project import with validation and column mapping."""
+    try:
+        result = await project_import_web_service.preview_import(
+            db=db,
+            organization_id=auth.organization_id,
+            user_id=auth.person_id,
+            entity_type=entity_type,
+            file=file,
+        )
+        return JSONResponse(content=result)
+    except ValueError as exc:
+        return JSONResponse(content={"detail": str(exc)}, status_code=400)
+    except Exception as exc:
+        return JSONResponse(
+            content={"detail": f"Preview failed: {str(exc)}"}, status_code=500
+        )
+
+
+@router.post("/import/{entity_type}", response_class=JSONResponse)
+async def project_execute_import(
+    request: Request,
+    entity_type: str,
+    file: UploadFile = File(...),
+    skip_duplicates: str | None = Form(default=None),
+    dry_run: str | None = Form(default=None),
+    auth: WebAuthContext = Depends(require_projects_access),
+    db: Session = Depends(get_db),
+):
+    """Execute project import operation (web route)."""
+    try:
+        skip_dups = skip_duplicates is not None and skip_duplicates.lower() in (
+            "true",
+            "1",
+            "on",
+            "",
+        )
+        is_dry_run = dry_run is not None and dry_run.lower() in ("true", "1", "on", "")
+
+        result = await project_import_web_service.execute_import(
+            db=db,
+            organization_id=auth.organization_id,
+            user_id=auth.person_id,
+            entity_type=entity_type,
+            file=file,
+            skip_duplicates=skip_dups,
+            dry_run=is_dry_run,
+        )
+        return JSONResponse(content=result)
+    except ValueError as exc:
+        return JSONResponse(content={"detail": str(exc)}, status_code=400)
+    except Exception as exc:
+        return JSONResponse(
+            content={"detail": f"Import failed: {str(exc)}"}, status_code=500
+        )

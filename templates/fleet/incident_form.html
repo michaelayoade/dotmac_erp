@@ -123,6 +123,31 @@
                                class="form-input">
                     </div>
                 </div>
+
+                <div>
+                    <label for="expense_claim_name" class="form-label">Expense Claim</label>
+                    <div class="relative" data-typeahead-url="/fleet/expense-claims/search" data-typeahead-min="2" data-typeahead-limit="8">
+                        <input
+                            type="text"
+                            id="expense_claim_name"
+                            name="expense_claim_name"
+                            placeholder="Search claim number or purpose..."
+                            autocomplete="off"
+                            class="form-input"
+                            data-typeahead-input
+                        >
+                        <input
+                            type="hidden"
+                            id="expense_claim_id"
+                            name="expense_claim_id"
+                            data-typeahead-hidden
+                        >
+                        <div data-typeahead-results></div>
+                    </div>
+                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                        Optional. Select an existing expense claim to link this incident.
+                    </p>
+                </div>
             </div>
         </div>
 

@@ -13,89 +13,180 @@
 {% endblock %}
 
 {% block content %}
-<div class="max-w-3xl stagger-in">
-    <div class="card p-6">
-        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Create Procurement Contract</h2>
-        <form method="post" class="space-y-4">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Contract Number <span class="text-rose-500">*</span></label>
-                    <input type="text" name="contract_number" required class="input-field" placeholder="CTR-2026-001">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Supplier ID <span class="text-rose-500">*</span></label>
-                    <input type="text" name="supplier_id" required class="input-field" placeholder="Supplier UUID">
-                </div>
+<div class="max-w-3xl">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
+    </div>
+    {% endif %}
+
+    <form method="post" class="space-y-6">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">Contract Details</h3>
             </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Title <span class="text-rose-500">*</span></label>
-                <input type="text" name="title" required class="input-field" placeholder="Supply of Office Equipment">
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Contract Date <span class="text-rose-500">*</span></label>
-                    <input type="date" name="contract_date" required class="input-field">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Start Date <span class="text-rose-500">*</span></label>
-                    <input type="date" name="start_date" required class="input-field">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">End Date <span class="text-rose-500">*</span></label>
-                    <input type="date" name="end_date" required class="input-field">
-                </div>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Contract Value <span class="text-rose-500">*</span></label>
-                    <input type="number" step="0.01" name="contract_value" required class="input-field" placeholder="0.00">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Currency</label>
-                    <input type="text" name="currency_code" class="input-field" placeholder="{{ default_currency_code }}">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Retention %</label>
-                    <input type="number" step="0.01" name="retention_percentage" class="input-field" placeholder="0.00">
-                </div>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">BPP Clearance Number</label>
-                    <input type="text" name="bpp_clearance_number" class="input-field" placeholder="BPP-0001">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">BPP Clearance Date</label>
-                    <input type="date" name="bpp_clearance_date" class="input-field">
-                </div>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Performance Bond</label>
-                    <div class="flex items-center gap-2">
-                        <input type="checkbox" name="performance_bond_required" class="h-4 w-4 text-amber-600">
-                        <span class="text-sm text-slate-600 dark:text-slate-400">Required</span>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="contract_number" class="form-label required">Contract Number</label>
+                        <input
+                            type="text"
+                            id="contract_number"
+                            name="contract_number"
+                            required
+                            class="form-input w-full"
+                            placeholder="CTR-2026-001"
+                        >
+                    </div>
+                    <div>
+                        <label for="supplier_id" class="form-label required">Supplier ID</label>
+                        <input
+                            type="text"
+                            id="supplier_id"
+                            name="supplier_id"
+                            required
+                            class="form-input w-full"
+                            placeholder="Supplier UUID"
+                        >
                     </div>
                 </div>
+
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Bond Amount</label>
-                    <input type="number" step="0.01" name="performance_bond_amount" class="input-field" placeholder="0.00">
+                    <label for="title" class="form-label required">Title</label>
+                    <input
+                        type="text"
+                        id="title"
+                        name="title"
+                        required
+                        class="form-input w-full"
+                        placeholder="Supply of Office Equipment"
+                    >
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label for="contract_date" class="form-label required">Contract Date</label>
+                        <input type="date" id="contract_date" name="contract_date" required class="form-input w-full">
+                    </div>
+                    <div>
+                        <label for="start_date" class="form-label required">Start Date</label>
+                        <input type="date" id="start_date" name="start_date" required class="form-input w-full">
+                    </div>
+                    <div>
+                        <label for="end_date" class="form-label required">End Date</label>
+                        <input type="date" id="end_date" name="end_date" required class="form-input w-full">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label for="contract_value" class="form-label required">Contract Value</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            id="contract_value"
+                            name="contract_value"
+                            required
+                            class="form-input w-full"
+                            placeholder="0.00"
+                        >
+                    </div>
+                    <div>
+                        <label for="currency_code" class="form-label">Currency</label>
+                        <input
+                            type="text"
+                            id="currency_code"
+                            name="currency_code"
+                            class="form-input w-full"
+                            placeholder="{{ default_currency_code }}"
+                        >
+                    </div>
+                    <div>
+                        <label for="retention_percentage" class="form-label">Retention %</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            id="retention_percentage"
+                            name="retention_percentage"
+                            class="form-input w-full"
+                            placeholder="0.00"
+                        >
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="bpp_clearance_number" class="form-label">BPP Clearance Number</label>
+                        <input
+                            type="text"
+                            id="bpp_clearance_number"
+                            name="bpp_clearance_number"
+                            class="form-input w-full"
+                            placeholder="BPP-0001"
+                        >
+                    </div>
+                    <div>
+                        <label for="bpp_clearance_date" class="form-label">BPP Clearance Date</label>
+                        <input type="date" id="bpp_clearance_date" name="bpp_clearance_date" class="form-input w-full">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="form-label">Performance Bond</label>
+                        <label class="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                            <input type="checkbox" name="performance_bond_required" class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500">
+                            Required
+                        </label>
+                    </div>
+                    <div>
+                        <label for="performance_bond_amount" class="form-label">Bond Amount</label>
+                        <input
+                            type="number"
+                            step="0.01"
+                            id="performance_bond_amount"
+                            name="performance_bond_amount"
+                            class="form-input w-full"
+                            placeholder="0.00"
+                        >
+                    </div>
+                </div>
+
+                <div>
+                    <label for="payment_terms" class="form-label">Payment Terms</label>
+                    <textarea
+                        id="payment_terms"
+                        name="payment_terms"
+                        rows="3"
+                        class="form-input w-full"
+                        placeholder="Specify payment schedule or terms..."
+                    ></textarea>
+                </div>
+
+                <div>
+                    <label for="terms_and_conditions" class="form-label">Terms and Conditions</label>
+                    <textarea
+                        id="terms_and_conditions"
+                        name="terms_and_conditions"
+                        rows="4"
+                        class="form-input w-full"
+                        placeholder="Add contract terms and conditions..."
+                    ></textarea>
                 </div>
             </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Payment Terms</label>
-                <textarea name="payment_terms" rows="3" class="input-field" placeholder="Specify payment schedule or terms..."></textarea>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Terms and Conditions</label>
-                <textarea name="terms_and_conditions" rows="4" class="input-field" placeholder="Add contract terms and conditions..."></textarea>
-            </div>
-            <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
-                <a href="/procurement/contracts" class="btn btn-secondary">Cancel</a>
-                <button type="submit" class="btn btn-primary">Create Contract</button>
-            </div>
-        </form>
-    </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
+            <a href="/procurement/contracts" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Create Contract</button>
+        </div>
+    </form>
 </div>
 {% endblock %}

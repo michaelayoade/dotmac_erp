@@ -394,13 +394,11 @@
             let refreshTimeoutId = null;
             let lastRefreshTime = 0;
             let refreshDisabled = false;
+            let refreshInProgress = false; // Mutex: prevent concurrent refresh requests
 
             // Refresh the access token
             async function refreshToken() {
-                if (!window.__authEnabled) {
-                    return;
-                }
-                if (refreshDisabled) {
+                if (!window.__authEnabled || refreshDisabled || refreshInProgress) {
                     return;
                 }
                 const currentPath = window.location.pathname;
@@ -413,6 +411,7 @@
                     return;
                 }
 
+                refreshInProgress = true;
                 try {
                     const response = await fetch('/auth/refresh', {
                         method: 'POST',
@@ -425,20 +424,22 @@
 
                     if (response.ok) {
                         await response.json();
-                        lastRefreshTime = now;
+                        lastRefreshTime = Date.now();
                         console.debug('[Auth] Token refreshed successfully');
                     } else if (response.status === 401) {
                         // Session expired - redirect to login
                         console.debug('[Auth] Session expired, redirecting to login');
-                        const path = window.location.pathname;
+                        refreshDisabled = true;
                         const redirectTarget = window.location.pathname + window.location.search;
-                        if (path !== '/login' && path !== '/') {
+                        if (currentPath !== '/login' && currentPath !== '/') {
                             window.location.href = '/login?next=' + encodeURIComponent(redirectTarget);
                         }
                         return; // Don't schedule another refresh
                     }
                 } catch (e) {
                     console.debug('[Auth] Token refresh failed:', e.message);
+                } finally {
+                    refreshInProgress = false;
                 }
 
                 scheduleNextRefresh();
@@ -446,34 +447,24 @@
 
             // Calculate when to refresh and schedule it
             function scheduleNextRefresh() {
-                if (!window.__authEnabled) {
-                    return;
-                }
-                if (refreshDisabled) {
+                if (!window.__authEnabled || refreshDisabled) {
                     return;
                 }
                 if (refreshTimeoutId) {
                     clearTimeout(refreshTimeoutId);
                 }
-
-                console.debug('[Auth] Next token refresh in', Math.round(REFRESH_INTERVAL_MS / 1000), 'seconds');
                 refreshTimeoutId = setTimeout(refreshToken, REFRESH_INTERVAL_MS);
             }
 
-            // Also refresh on user activity (extends session feel)
-            let activityRefreshScheduled = false;
+            // On user activity, just reset the timer (don't call refreshToken directly)
             function onUserActivity() {
-                if (activityRefreshScheduled) return;
-                activityRefreshScheduled = true;
-                setTimeout(() => {
-                    activityRefreshScheduled = false;
-                    if (window.__authEnabled) {
-                        refreshToken();
-                    }
-                }, 1000);
+                if (!window.__authEnabled || refreshDisabled) return;
+                // If last refresh was recent, no need to reschedule
+                if (Date.now() - lastRefreshTime < MIN_REFRESH_INTERVAL_MS) return;
+                scheduleNextRefresh();
             }
 
-            // Listen for user activity
+            // Listen for user activity (passive, debounced by scheduleNextRefresh's clearTimeout)
             ['click', 'keydown', 'scroll', 'touchstart'].forEach(function(event) {
                 document.addEventListener(event, onUserActivity, { passive: true });
             });
@@ -483,10 +474,16 @@
                 scheduleNextRefresh();
             }
 
-            // Handle visibility changes (refresh when tab becomes visible)
+            // Handle visibility changes (refresh when tab becomes visible after being hidden)
             document.addEventListener('visibilitychange', function() {
-                if (document.visibilityState === 'visible' && window.__authEnabled) {
-                    scheduleNextRefresh();
+                if (document.visibilityState === 'visible' && window.__authEnabled && !refreshDisabled) {
+                    // If tab was hidden for a while, refresh immediately
+                    var elapsed = Date.now() - lastRefreshTime;
+                    if (elapsed >= REFRESH_INTERVAL_MS) {
+                        refreshToken();
+                    } else {
+                        scheduleNextRefresh();
+                    }
                 }
             });
         })();

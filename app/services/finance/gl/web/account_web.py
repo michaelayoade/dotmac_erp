@@ -582,7 +582,7 @@ class AccountWebService:
             )
 
         return RedirectResponse(
-            url=f"/finance/gl/accounts/{account.account_id}", status_code=303
+            url=f"/finance/gl/accounts/{account.account_id}?saved=1", status_code=303
         )
 
     def update_account_response(
@@ -657,7 +657,7 @@ class AccountWebService:
             )
 
         return RedirectResponse(
-            url=f"/finance/gl/accounts/{account_id}", status_code=303
+            url=f"/finance/gl/accounts/{account_id}?saved=1", status_code=303
         )
 
     def delete_account_response(
@@ -684,4 +684,7 @@ class AccountWebService:
                 request, "finance/gl/account_detail.html", context
             )
 
-        return RedirectResponse(url="/finance/gl/accounts", status_code=303)
+        return RedirectResponse(
+            url="/finance/gl/accounts?success=Record+deleted+successfully",
+            status_code=303,
+        )

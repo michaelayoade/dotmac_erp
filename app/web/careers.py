@@ -25,6 +25,7 @@ from app.templates import templates
 from app.web.csrf import CSRF_COOKIE_NAME, _is_secure_request
 
 router = APIRouter(prefix="/careers", tags=["careers-web"])
+short_router = APIRouter(prefix="/c", tags=["careers-web"])
 logger = logging.getLogger(__name__)
 
 
@@ -120,6 +121,15 @@ def _parse_department_ids(request: Request) -> list[uuid.UUID]:
 # ═══════════════════════════════════════════════════════════════════════════
 # Job Listings
 # ═══════════════════════════════════════════════════════════════════════════
+
+
+@short_router.get("/{org_slug}", include_in_schema=False)
+def careers_short_link_redirect(request: Request, org_slug: str) -> RedirectResponse:
+    """Short link redirect to public careers portal."""
+    url = f"/careers/{org_slug}"
+    if request.url.query:
+        url = f"{url}?{request.url.query}"
+    return RedirectResponse(url=url, status_code=302)
 
 
 @router.get("/{org_slug}", response_class=HTMLResponse)
@@ -306,7 +316,7 @@ async def submit_application(
 
         if result.success:
             return RedirectResponse(
-                url=f"/careers/{org_slug}/confirm/{result.application_number}",
+                url=f"/careers/{org_slug}/confirm/{result.application_number}?saved=1",
                 status_code=303,
             )
         error = result.error

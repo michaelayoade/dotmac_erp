@@ -498,7 +498,16 @@ class BankingWebService:
             .order_by(BankAccount.bank_name, BankAccount.account_number)
             .all()
         )
-        return {"accounts": [_account_view(account) for account in accounts]}
+        # Build JSON-safe account list for Alpine.js tojson serialization.
+        accounts_json = [
+            {
+                "bank_account_id": str(a.bank_account_id),
+                "bank_name": a.bank_name or "",
+                "account_number": a.account_number or "",
+            }
+            for a in accounts
+        ]
+        return {"accounts": accounts_json}
 
     @staticmethod
     def statement_detail_context(
@@ -1537,7 +1546,7 @@ class BankingWebService:
         if form is None:
             form = await request.form()
         form_data = dict(form)
-        csv_format = str(form_data.get("csv_format") or "type")
+        csv_format = form_data.get("csv_format") or None
         errors: list[str] = []
 
         # Parse lines from file or manual entry.
@@ -1635,12 +1644,12 @@ class BankingWebService:
 
         payload_data = {
             "bank_account_id": form_data.get("bank_account_id"),
-            "statement_number": form_data.get("statement_number"),
-            "statement_date": form_data.get("statement_date"),
+            "statement_number": form_data.get("statement_number") or None,
+            "statement_date": form_data.get("statement_date") or None,
             "period_start": form_data.get("period_start"),
             "period_end": form_data.get("period_end"),
-            "opening_balance": form_data.get("opening_balance"),
-            "closing_balance": form_data.get("closing_balance"),
+            "opening_balance": form_data.get("opening_balance") or None,
+            "closing_balance": form_data.get("closing_balance") or None,
             "import_source": "csv"
             if upload_file and upload_file.filename
             else "manual",
@@ -1709,7 +1718,7 @@ class BankingWebService:
         )
         db.commit()
         return RedirectResponse(
-            url=f"/finance/banking/statements/{result.statement.statement_id}",
+            url=f"/finance/banking/statements/{result.statement.statement_id}?saved=1",
             status_code=303,
         )
 
@@ -1743,12 +1752,18 @@ class BankingWebService:
                 "transaction_date": data.get("transaction_date"),
                 "transaction_type": data.get("transaction_type"),
                 "amount": data.get("amount"),
+                "debit": data.get("debit"),
+                "credit": data.get("credit"),
                 "description": data.get("description"),
                 "reference": data.get("reference"),
                 "payee_payer": data.get("payee_payer"),
+                "bank_reference": data.get("bank_reference"),
                 "check_number": data.get("check_number"),
+                "bank_category": data.get("bank_category"),
+                "bank_code": data.get("bank_code"),
                 "value_date": data.get("value_date"),
                 "running_balance": data.get("running_balance"),
+                "transaction_id": data.get("transaction_id"),
             }
             results.append(result)
 
@@ -2116,7 +2131,7 @@ class BankingWebService:
 
         # Fallback: full redirect
         return RedirectResponse(
-            url="/finance/banking/rules",
+            url="/finance/banking/rules?success=Record+saved+successfully",
             status_code=303,
         )
 

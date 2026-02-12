@@ -552,6 +552,7 @@ class LeaveService:
         org_id: UUID,
         *,
         employee_id: UUID | None = None,
+        employee_ids: Sequence[UUID] | None = None,
         leave_type_id: UUID | None = None,
         year: int | None = None,
         is_active: bool | None = None,
@@ -562,6 +563,15 @@ class LeaveService:
 
         if employee_id:
             query = query.where(LeaveAllocation.employee_id == employee_id)
+        elif employee_ids is not None:
+            if len(employee_ids) == 0:
+                return PaginatedResult(
+                    items=[],
+                    total=0,
+                    offset=pagination.offset if pagination else 0,
+                    limit=pagination.limit if pagination else 0,
+                )
+            query = query.where(LeaveAllocation.employee_id.in_(employee_ids))
 
         if leave_type_id:
             query = query.where(LeaveAllocation.leave_type_id == leave_type_id)

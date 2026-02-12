@@ -65,11 +65,16 @@ def list_job_descriptions(
         {
             "job_descriptions": result.items,
             "pagination": result,
+            "page": page,
+            "total_pages": result.total_pages,
+            "total_count": result.total,
+            "total": result.total,
+            "limit": pagination.limit,
             "statuses": list(JobDescriptionStatus),
             "departments": departments,
             "selected_status": status,
             "selected_department_id": department_id,
-            "search": search,
+            "search": search or "",
             "success": success,
             "error": error,
         }

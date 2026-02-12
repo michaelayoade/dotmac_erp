@@ -641,7 +641,10 @@ class ReceiptWebService:
                 request, "finance/ar/receipt_detail.html", context
             )
 
-        return RedirectResponse(url="/finance/ar/receipts", status_code=303)
+        return RedirectResponse(
+            url="/finance/ar/receipts?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     def receipt_edit_form_response(
         self,

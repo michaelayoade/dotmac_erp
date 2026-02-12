@@ -321,7 +321,8 @@ class PaystackSyncService:
 
         # Update statement totals
         statement.total_credits += total
-        statement.closing_balance += total
+        if statement.closing_balance is not None:
+            statement.closing_balance += total
         statement.total_lines += count
         statement.unmatched_lines += count
 
@@ -419,7 +420,8 @@ class PaystackSyncService:
 
         # Update statement totals
         statement.total_debits += total
-        statement.closing_balance -= total
+        if statement.closing_balance is not None:
+            statement.closing_balance -= total
         statement.total_lines += count
         statement.unmatched_lines += count
 
@@ -519,7 +521,8 @@ class PaystackSyncService:
 
         # Update statement totals (settlements + fees are debits)
         statement.total_debits += total
-        statement.closing_balance -= total
+        if statement.closing_balance is not None:
+            statement.closing_balance -= total
         statement.total_lines += count
         statement.unmatched_lines += count
 
@@ -608,13 +611,14 @@ class PaystackSyncService:
             .order_by(BankStatement.statement_date.desc())
         )
 
-        if latest_statement:
+        if latest_statement and latest_statement.closing_balance is not None:
             account.last_statement_balance = latest_statement.closing_balance
-            account.last_statement_date = datetime.combine(
-                latest_statement.statement_date,
-                datetime.min.time(),
-                tzinfo=UTC,
-            )
+            if latest_statement.statement_date is not None:
+                account.last_statement_date = datetime.combine(
+                    latest_statement.statement_date,
+                    datetime.min.time(),
+                    tzinfo=UTC,
+                )
             account.updated_at = datetime.now(UTC)
 
     def _update_collections_balance_from_api(

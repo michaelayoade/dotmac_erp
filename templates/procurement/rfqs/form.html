@@ -13,48 +13,88 @@
 {% endblock %}
 
 {% block content %}
-<div class="max-w-2xl stagger-in">
-    <div class="card p-6">
-        <h2 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">Create Request for Quotation</h2>
-        <form method="post" class="space-y-4">
-            {{ request.state.csrf_form | safe }}
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">RFQ Number <span class="text-rose-500">*</span></label>
-                    <input type="text" name="rfq_number" required class="input-field" placeholder="RFQ-2025-001">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Procurement Method <span class="text-rose-500">*</span></label>
-                    <select name="procurement_method" required class="input-field">
-                        {% for m in procurement_methods %}
-                        <option value="{{ m.value }}">{{ m.value }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Title <span class="text-rose-500">*</span></label>
-                <input type="text" name="title" required class="input-field" placeholder="Supply of Office Equipment">
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Published Date</label>
-                    <input type="date" name="published_date" class="input-field">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Closing Date <span class="text-rose-500">*</span></label>
-                    <input type="date" name="closing_date" required class="input-field">
-                </div>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Description</label>
-                <textarea name="description" rows="3" class="input-field" placeholder="Detailed description of the procurement requirement..."></textarea>
-            </div>
-            <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
-                <a href="/procurement/rfqs" class="btn btn-secondary">Cancel</a>
-                <button type="submit" class="btn btn-primary">Create RFQ</button>
-            </div>
-        </form>
+<div class="max-w-3xl">
+    {% if error %}
+    <div class="mb-6 p-4 rounded-lg bg-red-50 border border-red-200 dark:bg-red-900/20 dark:border-red-800">
+        <div class="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span>{{ error }}</span>
+        </div>
     </div>
+    {% endif %}
+
+    <form method="post" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="font-medium text-slate-900 dark:text-white">RFQ Details</h3>
+            </div>
+            <div class="card-body space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="rfq_number" class="form-label required">RFQ Number</label>
+                        <input
+                            type="text"
+                            id="rfq_number"
+                            name="rfq_number"
+                            required
+                            class="form-input w-full"
+                            placeholder="RFQ-2025-001"
+                        >
+                    </div>
+                    <div>
+                        <label for="procurement_method" class="form-label required">Procurement Method</label>
+                        <select id="procurement_method" name="procurement_method" required class="form-select w-full">
+                            {% for m in procurement_methods %}
+                            <option value="{{ m.value }}">{{ m.value | replace('_', ' ') | title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="title" class="form-label required">Title</label>
+                    <input
+                        type="text"
+                        id="title"
+                        name="title"
+                        required
+                        class="form-input w-full"
+                        placeholder="Supply of Office Equipment"
+                    >
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="published_date" class="form-label">Published Date</label>
+                        <input type="date" id="published_date" name="published_date" class="form-input w-full">
+                    </div>
+                    <div>
+                        <label for="closing_date" class="form-label required">Closing Date</label>
+                        <input type="date" id="closing_date" name="closing_date" required class="form-input w-full">
+                    </div>
+                </div>
+
+                <div>
+                    <label for="description" class="form-label">Description</label>
+                    <textarea
+                        id="description"
+                        name="description"
+                        rows="4"
+                        class="form-input w-full"
+                        placeholder="Detailed description of the procurement requirement..."
+                    ></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-6 border-t border-slate-200 dark:border-slate-700">
+            <a href="/procurement/rfqs" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">Create RFQ</button>
+        </div>
+    </form>
 </div>
 {% endblock %}

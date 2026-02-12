@@ -88,6 +88,9 @@ class TaskMapping(DocTypeMapping):
             ),
             FieldMapping("description", "description"),
             FieldMapping("completed_on", "actual_end_date", transformer=parse_date),
+            # Pass-through fields for sync service resolution
+            FieldMapping("_assign", "_assign_raw"),
+            FieldMapping("_depends_on", "_depends_on"),
         ]
     )
 

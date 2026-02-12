@@ -641,7 +641,9 @@ class SalesOrderWebService:
                 request, "finance/ar/sales_order_form.html", context
             )
 
-        return RedirectResponse(url=f"/sales-orders/{so.so_id}", status_code=303)
+        return RedirectResponse(
+            url=f"/sales-orders/{so.so_id}?saved=1", status_code=303
+        )
 
     def detail_response(
         self,
@@ -677,7 +679,7 @@ class SalesOrderWebService:
             sales_order_service.submit(db, so_id, str(auth.user_id))
         except Exception:
             logger.exception("submit_response: failed")
-        return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
+        return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
 
     def approve_response(
         self, request: Request, auth: WebAuthContext, db: Session, so_id: str
@@ -687,7 +689,7 @@ class SalesOrderWebService:
             sales_order_service.approve(db, so_id, str(auth.user_id))
         except Exception:
             logger.exception("approve_response: failed")
-        return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
+        return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
 
     def confirm_response(
         self, request: Request, auth: WebAuthContext, db: Session, so_id: str
@@ -697,7 +699,7 @@ class SalesOrderWebService:
             sales_order_service.confirm(db, so_id)
         except Exception:
             logger.exception("confirm_response: failed")
-        return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
+        return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
 
     def cancel_response(
         self,
@@ -712,7 +714,7 @@ class SalesOrderWebService:
             sales_order_service.cancel(db, so_id, str(auth.user_id), reason)
         except Exception:
             logger.exception("cancel_response: failed")
-        return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
+        return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
 
     def hold_response(
         self, request: Request, auth: WebAuthContext, db: Session, so_id: str
@@ -722,7 +724,7 @@ class SalesOrderWebService:
             sales_order_service.hold(db, so_id, str(auth.user_id))
         except Exception:
             logger.exception("hold_response: failed")
-        return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
+        return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
 
     def release_response(
         self, request: Request, auth: WebAuthContext, db: Session, so_id: str
@@ -732,7 +734,7 @@ class SalesOrderWebService:
             sales_order_service.release_hold(db, so_id, str(auth.user_id))
         except Exception:
             logger.exception("release_response: failed")
-        return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
+        return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
 
     def create_invoice_response(
         self, request: Request, auth: WebAuthContext, db: Session, so_id: str
@@ -743,7 +745,7 @@ class SalesOrderWebService:
                 db, so_id, str(auth.user_id)
             )
             return RedirectResponse(
-                url=f"/ar/invoices/{invoice.invoice_id}", status_code=303
+                url=f"/ar/invoices/{invoice.invoice_id}?saved=1", status_code=303
             )
         except Exception:
             logger.exception("create_invoice_response: failed")
@@ -756,7 +758,9 @@ class SalesOrderWebService:
         shipment_ctx = self.shipment_form_context(db, str(auth.organization_id), so_id)
 
         if shipment_ctx["order"] is None:
-            return RedirectResponse(url="/sales-orders", status_code=303)
+            return RedirectResponse(
+                url="/sales-orders?success=Record+saved+successfully", status_code=303
+            )
 
         so_number = shipment_ctx["order"]["so_number"]
         context = base_context(request, auth, f"Ship SO {so_number}", "sales-orders")
@@ -797,7 +801,7 @@ class SalesOrderWebService:
                 url=f"/sales-orders/{so_id}/ship?error={error}", status_code=303
             )
 
-        return RedirectResponse(url=f"/sales-orders/{so_id}", status_code=303)
+        return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
 
     def mark_delivered_response(
         self, request: Request, auth: WebAuthContext, db: Session, shipment_id: str
@@ -806,7 +810,7 @@ class SalesOrderWebService:
         try:
             shipment = sales_order_service.mark_delivered(db, shipment_id)
             return RedirectResponse(
-                url=f"/sales-orders/{shipment.so_id}", status_code=303
+                url=f"/sales-orders/{shipment.so_id}?saved=1", status_code=303
             )
         except Exception:
             logger.exception("mark_delivered_response: failed")

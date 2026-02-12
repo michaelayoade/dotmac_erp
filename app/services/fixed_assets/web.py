@@ -285,7 +285,10 @@ class FixedAssetWebService:
                 input_data,
                 created_by_user_id=user_id,
             )
-            return RedirectResponse(url="/fixed-assets/assets", status_code=303)
+            return RedirectResponse(
+                url="/fixed-assets/assets?success=Record+created+successfully",
+                status_code=303,
+            )
 
         except Exception as e:
             context = base_context(request, auth, "New Asset", "fa")
@@ -476,7 +479,10 @@ class FixedAssetWebService:
             )
 
             asset_category_service.create_category(db, org_id, category_input)
-            return RedirectResponse(url="/fixed-assets/categories", status_code=303)
+            return RedirectResponse(
+                url="/fixed-assets/categories?success=Record+saved+successfully",
+                status_code=303,
+            )
         except Exception as e:
             return self.new_category_form_response(request, auth, db, error=str(e))
 
@@ -569,7 +575,10 @@ class FixedAssetWebService:
             asset_category_service.update_category(
                 db, org_id, category_id, category_input, is_active=is_active
             )
-            return RedirectResponse(url="/fixed-assets/categories", status_code=303)
+            return RedirectResponse(
+                url="/fixed-assets/categories?success=Record+saved+successfully",
+                status_code=303,
+            )
         except Exception as e:
             return self.edit_category_form_response(
                 request, auth, category_id, db, error=str(e)
@@ -589,7 +598,10 @@ class FixedAssetWebService:
         except Exception:
             logger.exception("Ignored exception")
 
-        return RedirectResponse(url="/fixed-assets/categories", status_code=303)
+        return RedirectResponse(
+            url="/fixed-assets/categories?success=Record+saved+successfully",
+            status_code=303,
+        )
 
     @staticmethod
     def depreciation_context(
@@ -672,7 +684,10 @@ class FixedAssetWebService:
 
         asset = db.get(Asset, a_id)
         if not asset or asset.organization_id != org_id:
-            return RedirectResponse(url="/fixed-assets/assets", status_code=303)
+            return RedirectResponse(
+                url="/fixed-assets/assets?success=Record+saved+successfully",
+                status_code=303,
+            )
 
         # Get category info
         category = (
@@ -726,7 +741,10 @@ class FixedAssetWebService:
 
         asset = db.get(Asset, a_id)
         if not asset or asset.organization_id != org_id:
-            return RedirectResponse(url="/fixed-assets/assets", status_code=303)
+            return RedirectResponse(
+                url="/fixed-assets/assets?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         if asset.status not in [AssetStatus.DRAFT, AssetStatus.ACTIVE]:
             return RedirectResponse(

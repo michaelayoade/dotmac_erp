@@ -2233,7 +2233,10 @@ class ARWebService:
                 request, "finance/ar/customer_detail.html", context
             )
 
-        return RedirectResponse(url="/finance/ar/customers", status_code=303)
+        return RedirectResponse(
+            url="/finance/ar/customers?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     def list_invoices_response(
         self,
@@ -2363,7 +2366,10 @@ class ARWebService:
                 request, "finance/ar/invoice_detail.html", context
             )
 
-        return RedirectResponse(url="/finance/ar/invoices", status_code=303)
+        return RedirectResponse(
+            url="/finance/ar/invoices?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     def invoice_edit_form_response(
         self,
@@ -2378,7 +2384,10 @@ class ARWebService:
 
         invoice = db.get(Invoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            return RedirectResponse(url="/finance/ar/invoices", status_code=303)
+            return RedirectResponse(
+                url="/finance/ar/invoices?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         if invoice.status != InvoiceStatus.DRAFT:
             # Can't edit non-draft invoices, redirect to detail page
@@ -2751,7 +2760,10 @@ class ARWebService:
                 request, "finance/ar/receipt_detail.html", context
             )
 
-        return RedirectResponse(url="/finance/ar/receipts", status_code=303)
+        return RedirectResponse(
+            url="/finance/ar/receipts?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     def receipt_edit_form_response(
         self,
@@ -2966,7 +2978,10 @@ class ARWebService:
                 request, "finance/ar/credit_note_detail.html", context
             )
 
-        return RedirectResponse(url="/finance/ar/credit-notes", status_code=303)
+        return RedirectResponse(
+            url="/finance/ar/credit-notes?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     def credit_note_edit_form_response(
         self,
@@ -2981,7 +2996,10 @@ class ARWebService:
 
         credit_note = db.get(Invoice, cn_id)
         if not credit_note or credit_note.organization_id != org_id:
-            return RedirectResponse(url="/finance/ar/credit-notes", status_code=303)
+            return RedirectResponse(
+                url="/finance/ar/credit-notes?success=Record+updated+successfully",
+                status_code=303,
+            )
 
         if credit_note.status != InvoiceStatus.DRAFT:
             return RedirectResponse(

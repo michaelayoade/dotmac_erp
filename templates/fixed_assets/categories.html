@@ -1,5 +1,5 @@
 {% extends "inventory/base_inventory.html" %}
-{% from "components/macros.html" import status_badge, empty_state, live_search %}
+{% from "components/macros.html" import status_badge, empty_state, live_search, pagination %}
 
 {% block page_title %}Asset Categories{% endblock %}
 
@@ -105,6 +105,15 @@
                     </tbody>
                 </table>
             </div>
+
+            {# Pagination #}
+            {{ pagination(
+                page=page,
+                total_pages=total_pages,
+                total_count=total_count,
+                limit=limit,
+                search=search
+            ) }}
         </div>
     </div>
 </div>

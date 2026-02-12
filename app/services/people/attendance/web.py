@@ -227,7 +227,10 @@ class AttendanceWebService:
         svc = AttendanceService(db)
         svc.delete_attendance(org_id, coerce_uuid(attendance_id))
         db.commit()
-        return RedirectResponse(url="/people/attendance", status_code=303)
+        return RedirectResponse(
+            url="/people/attendance?success=Record+deleted+successfully",
+            status_code=303,
+        )
 
     @staticmethod
     async def bulk_mark_attendance_response(
@@ -461,7 +464,10 @@ class AttendanceWebService:
                 remarks=remarks or None,
             )
             db.commit()
-            return RedirectResponse(url="/people/attendance", status_code=303)
+            return RedirectResponse(
+                url="/people/attendance?success=Record+saved+successfully",
+                status_code=303,
+            )
         except Exception as exc:
             db.rollback()
             org_id = coerce_uuid(auth.organization_id)
@@ -608,7 +614,10 @@ class AttendanceWebService:
                 is_active=AttendanceWebService._parse_bool(is_active, False),
             )
             db.commit()
-            return RedirectResponse(url="/people/attendance/shifts", status_code=303)
+            return RedirectResponse(
+                url="/people/attendance/shifts?success=Record+saved+successfully",
+                status_code=303,
+            )
         except Exception as exc:
             db.rollback()
             context = base_context(request, auth, "New Shift Type", "attendance", db=db)
@@ -762,7 +771,10 @@ class AttendanceWebService:
                 is_active=AttendanceWebService._parse_bool(is_active, False),
             )
             db.commit()
-            return RedirectResponse(url="/people/attendance/shifts", status_code=303)
+            return RedirectResponse(
+                url="/people/attendance/shifts?success=Record+saved+successfully",
+                status_code=303,
+            )
         except Exception as exc:
             db.rollback()
             context = base_context(

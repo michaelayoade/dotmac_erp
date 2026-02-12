@@ -72,6 +72,22 @@ class TestCaseCRUD:
 
         assert result is None
 
+    def test_get_case_returns_none_when_soft_deleted(
+        self, organization_id: uuid.UUID, case_id: uuid.UUID
+    ):
+        """Soft-deleted cases should be treated as missing."""
+        mock_case = MockDisciplinaryCase(
+            case_id=case_id,
+            organization_id=organization_id,
+            is_deleted=True,
+        )
+        db = create_mock_db_session(get_returns={case_id: mock_case})
+
+        service = DisciplineService(db)
+        result = service.get_case(case_id)
+
+        assert result is None
+
     def test_get_case_or_404_raises_when_not_exists(self, case_id: uuid.UUID):
         """Test get_case_or_404 raises NotFoundError when case doesn't exist."""
         db = create_mock_db_session(get_returns={})
@@ -196,6 +212,41 @@ class TestCaseCRUD:
 
         with pytest.raises(ValidationError, match="only update case details in DRAFT"):
             service.update_case(case_id, data)
+
+    def test_delete_case_in_draft_status_succeeds(
+        self, organization_id: uuid.UUID, case_id: uuid.UUID, user_id: uuid.UUID
+    ):
+        """Test deleting a case in DRAFT status."""
+        mock_case = MockDisciplinaryCase(
+            case_id=case_id,
+            organization_id=organization_id,
+            status=CaseStatus.DRAFT,
+            is_deleted=False,
+        )
+        db = create_mock_db_session(get_returns={case_id: mock_case})
+
+        service = DisciplineService(db)
+        result = service.delete_case(case_id, deleted_by_id=user_id)
+
+        assert result.is_deleted is True
+        assert result.deleted_by_id == user_id
+        assert result.deleted_at is not None
+        db.flush.assert_called_once()
+
+    def test_delete_case_not_in_draft_raises_error(
+        self, organization_id: uuid.UUID, case_id: uuid.UUID
+    ):
+        """Test deleting a case not in DRAFT status fails."""
+        mock_case = MockDisciplinaryCase(
+            case_id=case_id,
+            organization_id=organization_id,
+            status=CaseStatus.QUERY_ISSUED,
+        )
+        db = create_mock_db_session(get_returns={case_id: mock_case})
+
+        service = DisciplineService(db)
+        with pytest.raises(ValidationError, match="only delete case in DRAFT"):
+            service.delete_case(case_id)
 
 
 # =============================================================================
