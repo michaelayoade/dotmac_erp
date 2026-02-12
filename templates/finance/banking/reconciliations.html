@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card %}
+{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card, compact_filters %}
 
 {% block page_title %}Bank Reconciliations{% endblock %}
 
@@ -33,51 +33,37 @@
     </div>
 
     {# Filters #}
-    <div class="card p-4">
-        <form method="get" action="/finance/banking/reconciliations" class="flex flex-wrap items-center gap-4">
-            {# Account Filter #}
-            <select name="account_id" data-testid="bank-reconciliations-account" class="form-select">
-                <option value="">All Accounts</option>
-                {% for acc in accounts %}
-                <option value="{{ acc.bank_account_id }}" {{ 'selected' if account_id == acc.bank_account_id|string else '' }}>
-                    {{ acc.bank_name }} - {{ acc.account_number }}
-                </option>
-                {% endfor %}
-            </select>
-
-            {# Status Filter #}
-            <select name="status" data-testid="bank-reconciliations-status" class="form-select">
-                <option value="">All Status</option>
-                {% for s in statuses | default(['draft', 'in_progress', 'pending_review', 'approved', 'rejected']) %}
-                <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
-                {% endfor %}
-            </select>
-
-            {# Date Range #}
-            <input type="date" name="start_date" value="{{ start_date | default('', true) }}"
-                   data-testid="bank-reconciliations-start-date"
-                   class="form-input" placeholder="Start Date">
-            <input type="date" name="end_date" value="{{ end_date | default('', true) }}"
-                   data-testid="bank-reconciliations-end-date"
-                   class="form-input" placeholder="End Date">
-
-            {# Actions #}
-            <button type="submit" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                </svg>
-                Filter
-            </button>
-
-            {% if account_id or status or start_date or end_date %}
-            <a href="/finance/banking/reconciliations" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
-                Clear
-            </a>
-            {% endif %}
-        </form>
+    {% call(filter_attrs) compact_filters(
+        base_url="/finance/banking/reconciliations",
+        active_filters=active_filters | default([]),
+        date_range=true,
+        start_date=start_date | default('', true),
+        end_date=end_date | default('', true)
+    ) %}
+    <div>
+        <label class="form-label text-xs">Account</label>
+        <select name="account_id" data-testid="bank-reconciliations-account" class="form-select w-full" {{ filter_attrs }}>
+            <option value="">All Accounts</option>
+            {% for acc in accounts %}
+            <option value="{{ acc.bank_account_id }}" {{ 'selected' if account_id == acc.bank_account_id|string else '' }}>
+                {{ acc.bank_name }} - {{ acc.account_number }}
+            </option>
+            {% endfor %}
+        </select>
     </div>
+    <div>
+        <label class="form-label text-xs">Status</label>
+        <select name="status" data-testid="bank-reconciliations-status" class="form-select w-full" {{ filter_attrs }}>
+            <option value="">All Status</option>
+            {% for s in statuses | default(['draft', 'in_progress', 'pending_review', 'approved', 'rejected']) %}
+            <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endcall %}
 
-    {# Reconciliations Table #}
+    {# Results Container (HTMX target) #}
+    <div id="results-container">
     <div class="card">
         <div class="table-container">
             <table class="table" data-testid="bank-reconciliations-table">
@@ -140,10 +126,10 @@
                         <td colspan="7" class="py-12">
                             {{ empty_state(
                                 'No reconciliations found',
-                                'Start your first bank reconciliation' if not (account_id or status or start_date or end_date) else 'Try adjusting your filter criteria',
+                                'Start your first bank reconciliation' if not (active_filters | default([])) else 'Try adjusting your filter criteria',
                                 'check-circle',
-                                'New Reconciliation' if not (account_id or status or start_date or end_date) else none,
-                                '/finance/banking/reconciliations/new' if not (account_id or status or start_date or end_date) else none
+                                'New Reconciliation' if not (active_filters | default([])) else none,
+                                '/finance/banking/reconciliations/new' if not (active_filters | default([])) else none
                             ) }}
                         </td>
                     </tr>
@@ -160,6 +146,7 @@
             limit=limit | default(50),
             filters={"account_id": account_id, "status": status, "start_date": start_date, "end_date": end_date}
         ) }}
+    </div>
     </div>
 </div>
 {% endblock %}

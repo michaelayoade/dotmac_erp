@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card %}
+{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card, compact_filters, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_export, bulk_icon_delete %}
 
 {% block page_title %}Bank Statements{% endblock %}
 
@@ -33,56 +33,43 @@
     </div>
 
     {# Filters #}
-    <div class="card p-4">
-        <form method="get" action="/finance/banking/statements" class="flex flex-wrap items-center gap-4">
-            {# Account Filter #}
-            <select name="account_id" data-testid="bank-statements-account" class="form-select">
-                <option value="">All Accounts</option>
-                {% for acc in accounts %}
-                <option value="{{ acc.bank_account_id }}" {{ 'selected' if account_id == acc.bank_account_id|string else '' }}>
-                    {{ acc.bank_name }} - {{ acc.account_number }}
-                </option>
-                {% endfor %}
-            </select>
-
-            {# Status Filter #}
-            <select name="status" data-testid="bank-statements-status" class="form-select">
-                <option value="">All Status</option>
-                <option value="imported" {{ 'selected' if status == 'imported' else '' }}>Imported</option>
-                <option value="in_progress" {{ 'selected' if status == 'in_progress' else '' }}>In Progress</option>
-                <option value="reconciled" {{ 'selected' if status == 'reconciled' else '' }}>Reconciled</option>
-            </select>
-
-            {# Date Range #}
-            <input type="date" name="start_date" value="{{ start_date | default('', true) }}"
-                   data-testid="bank-statements-start-date"
-                   class="form-input" placeholder="Start Date">
-            <input type="date" name="end_date" value="{{ end_date | default('', true) }}"
-                   data-testid="bank-statements-end-date"
-                   class="form-input" placeholder="End Date">
-
-            {# Actions #}
-            <button type="submit" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                </svg>
-                Filter
-            </button>
-
-            {% if account_id or status or start_date or end_date %}
-            <a href="/finance/banking/statements" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
-                Clear
-            </a>
-            {% endif %}
-        </form>
+    {% call(filter_attrs) compact_filters(
+        base_url="/finance/banking/statements",
+        active_filters=active_filters | default([]),
+        date_range=true,
+        start_date=start_date | default('', true),
+        end_date=end_date | default('', true)
+    ) %}
+    <div>
+        <label class="form-label text-xs">Account</label>
+        <select name="account_id" data-testid="bank-statements-account" class="form-select w-full" {{ filter_attrs }}>
+            <option value="">All Accounts</option>
+            {% for acc in accounts %}
+            <option value="{{ acc.bank_account_id }}" {{ 'selected' if account_id == acc.bank_account_id|string else '' }}>
+                {{ acc.bank_name }} - {{ acc.account_number }}
+            </option>
+            {% endfor %}
+        </select>
     </div>
+    <div>
+        <label class="form-label text-xs">Status</label>
+        <select name="status" data-testid="bank-statements-status" class="form-select w-full" {{ filter_attrs }}>
+            <option value="">All Status</option>
+            <option value="imported" {{ 'selected' if status == 'imported' else '' }}>Imported</option>
+            <option value="in_progress" {{ 'selected' if status == 'in_progress' else '' }}>In Progress</option>
+            <option value="reconciled" {{ 'selected' if status == 'reconciled' else '' }}>Reconciled</option>
+        </select>
+    </div>
+    {% endcall %}
 
-    {# Statements Table #}
+    {# Results Container (HTMX target) #}
+    <div id="results-container" x-data="bulkActions({ entityName: 'statements' })">
     <div class="card">
         <div class="table-container">
             <table class="table" data-testid="bank-statements-table">
                 <thead>
                     <tr>
+                        {{ bulk_select_header() }}
                         <th scope="col">Statement #</th>
                         <th scope="col">Bank Account</th>
                         <th scope="col">Period</th>
@@ -96,6 +83,7 @@
                 <tbody>
                     {% for stmt in statements %}
                     <tr class="group">
+                        {{ bulk_select_cell(stmt.statement_id) }}
                         <td>
                             <a href="/finance/banking/statements/{{ stmt.statement_id }}" class="font-mono text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
                                 {{ stmt.statement_number }}
@@ -109,10 +97,10 @@
                         <td class="text-slate-600 dark:text-slate-400">
                             {{ stmt.period_start }} - {{ stmt.period_end }}
                         </td>
-                        <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ stmt.opening_balance }}</td>
-                        <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ stmt.closing_balance }}</td>
+                        <td class="text-right font-mono tabular-nums font-medium text-slate-900 dark:text-white">{{ stmt.opening_balance }}</td>
+                        <td class="text-right font-mono tabular-nums font-medium text-slate-900 dark:text-white">{{ stmt.closing_balance }}</td>
                         <td class="text-center">
-                            <span class="text-sm text-slate-600 dark:text-slate-400">{{ stmt.matched_lines }}/{{ stmt.total_lines }}</span>
+                            <span class="text-sm text-slate-600 dark:text-slate-400 tabular-nums">{{ stmt.matched_lines }}/{{ stmt.total_lines }}</span>
                             <div class="mt-1 h-1.5 w-16 mx-auto rounded-full bg-slate-200 dark:bg-slate-700">
                                 <div class="h-1.5 rounded-full bg-emerald-500" style="width: {{ (stmt.matched_lines / stmt.total_lines * 100) if stmt.total_lines else 0 }}%"></div>
                             </div>
@@ -135,13 +123,13 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="8" class="py-12">
+                        <td colspan="9" class="py-12">
                             {{ empty_state(
                                 'No bank statements found',
-                                'Import your first bank statement to get started' if not (account_id or status or start_date or end_date) else 'Try adjusting your filter criteria',
+                                'Import your first bank statement to get started' if not (active_filters | default([])) else 'Try adjusting your filter criteria',
                                 'document',
-                                'Import Statement' if not (account_id or status or start_date or end_date) else none,
-                                '/finance/banking/statements/import' if not (account_id or status or start_date or end_date) else none
+                                'Import Statement' if not (active_filters | default([])) else none,
+                                '/finance/banking/statements/import' if not (active_filters | default([])) else none
                             ) }}
                         </td>
                     </tr>
@@ -158,6 +146,29 @@
             limit=limit | default(50),
             filters={"account_id": account_id, "status": status, "start_date": start_date, "end_date": end_date}
         ) }}
+    </div>
+
+    {# Bulk Action Bar #}
+    {{ bulk_action_bar(
+        actions=[
+            {
+                "name": "export",
+                "label": "Export",
+                "endpoint": "/finance/banking/statements/bulk-export",
+                "icon": bulk_icon_export(),
+                "class": "btn-secondary"
+            },
+            {
+                "name": "delete",
+                "label": "Delete",
+                "endpoint": "/finance/banking/statements/bulk-delete",
+                "icon": bulk_icon_delete(),
+                "class": "btn-bulk-danger",
+                "confirm": "Delete selected statements? Only imported/processing statements can be deleted."
+            }
+        ],
+        entity_name="statements"
+    ) }}
     </div>
 </div>
 {% endblock %}

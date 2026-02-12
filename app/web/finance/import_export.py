@@ -4,6 +4,8 @@ Import/Export Web Routes.
 HTML template routes for data import functionality.
 """
 
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
@@ -11,6 +13,19 @@ from sqlalchemy.orm import Session
 from app.services.finance.import_export.web import import_web_service
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context, get_db, require_finance_access
+
+
+def _build_target_fields(
+    columns: dict[str, list[str]],
+) -> list[dict[str, str | bool]]:
+    """Build target_fields list from column requirements for the wizard."""
+    fields: list[dict[str, str | bool]] = []
+    for col in columns.get("required", []):
+        fields.append({"source_field": col, "target_field": col, "required": True})
+    for col in columns.get("optional", []):
+        fields.append({"source_field": col, "target_field": col, "required": False})
+    return fields
+
 
 router = APIRouter(prefix="/import", tags=["import-web"])
 
@@ -223,14 +238,22 @@ def import_form(
         },
     }
 
+    from app.services.finance.import_export.base import build_alias_map
+
+    columns = entity_columns.get(entity_type, {"required": [], "optional": []})
     context = base_context(
         request, auth, f"Import {entity_names.get(entity_type, entity_type)}", "import"
     )
     context["entity_type"] = entity_type
     context["entity_name"] = entity_names.get(entity_type, entity_type)
-    context["columns"] = entity_columns.get(
-        entity_type, {"required": [], "optional": []}
-    )
+    context["columns"] = columns
+    # Wizard context
+    context["preview_url"] = f"/import/{entity_type}/preview"
+    context["import_url"] = f"/import/{entity_type}"
+    context["cancel_url"] = "/import"
+    context["alias_map"] = build_alias_map()
+    context["target_fields"] = _build_target_fields(columns)
+    context["accent_color"] = "teal"
 
     return templates.TemplateResponse(
         request, "finance/import_export/import_form.html", context
@@ -270,12 +293,14 @@ async def execute_import(
     file: UploadFile = File(...),
     skip_duplicates: str | None = Form(default=None),
     dry_run: str | None = Form(default=None),
+    column_mapping: str | None = Form(default=None),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
     """Execute import operation (web route)."""
+    import json
+
     try:
-        # Handle both checkbox (sends nothing when unchecked) and explicit "true"/"false" strings
         skip_dups = skip_duplicates is not None and skip_duplicates.lower() in (
             "true",
             "1",
@@ -283,6 +308,7 @@ async def execute_import(
             "",
         )
         is_dry_run = dry_run is not None and dry_run.lower() in ("true", "1", "on", "")
+        mapping = json.loads(column_mapping) if column_mapping else None
 
         result = await import_web_service.execute_import(
             db=db,
@@ -292,6 +318,7 @@ async def execute_import(
             file=file,
             skip_duplicates=skip_dups,
             dry_run=is_dry_run,
+            column_mapping=mapping,
         )
         return JSONResponse(content=result)
     except ValueError as e:

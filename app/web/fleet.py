@@ -665,7 +665,10 @@ def fleet_import_form(
     db: Session = Depends(get_db),
 ):
     """Fleet import form for a specific entity type."""
+    from app.services.finance.import_export.base import build_alias_map
+
     entity_names = fleet_import_web_service.ENTITY_TYPES
+    columns = fleet_import_web_service.get_entity_columns(entity_type)
     context = base_context(
         request,
         auth,
@@ -675,7 +678,23 @@ def fleet_import_form(
     )
     context["entity_type"] = entity_type
     context["entity_name"] = entity_names.get(entity_type, entity_type)
-    context["columns"] = fleet_import_web_service.get_entity_columns(entity_type)
+    context["columns"] = columns
+    # Wizard context
+    target_fields: list[dict[str, str | bool]] = []
+    for col in columns.get("required", []):
+        target_fields.append(
+            {"source_field": col, "target_field": col, "required": True}
+        )
+    for col in columns.get("optional", []):
+        target_fields.append(
+            {"source_field": col, "target_field": col, "required": False}
+        )
+    context["preview_url"] = f"/fleet/import/{entity_type}/preview"
+    context["import_url"] = f"/fleet/import/{entity_type}"
+    context["cancel_url"] = "/fleet/import"
+    context["alias_map"] = build_alias_map()
+    context["target_fields"] = target_fields
+    context["accent_color"] = "amber"
     return templates.TemplateResponse(
         request, "fleet/import_export/import_form.html", context
     )
@@ -714,10 +733,13 @@ async def fleet_execute_import(
     file: UploadFile = File(...),
     skip_duplicates: str | None = Form(default=None),
     dry_run: str | None = Form(default=None),
+    column_mapping: str | None = Form(default=None),
     auth: WebAuthContext = Depends(require_fleet_access),
     db: Session = Depends(get_db),
 ):
     """Execute fleet import operation (web route)."""
+    import json
+
     try:
         skip_dups = skip_duplicates is not None and skip_duplicates.lower() in (
             "true",
@@ -726,6 +748,7 @@ async def fleet_execute_import(
             "",
         )
         is_dry_run = dry_run is not None and dry_run.lower() in ("true", "1", "on", "")
+        mapping = json.loads(column_mapping) if column_mapping else None
 
         result = await fleet_import_web_service.execute_import(
             db=db,
@@ -735,6 +758,7 @@ async def fleet_execute_import(
             file=file,
             skip_duplicates=skip_dups,
             dry_run=is_dry_run,
+            column_mapping=mapping,
         )
         return JSONResponse(content=result)
     except ValueError as exc:

@@ -284,6 +284,55 @@ def _line_amount(line: BankReconciliationLine) -> Decimal:
     return Decimal(str(amount))
 
 
+def _build_active_filters(
+    *,
+    account_id: str | None,
+    accounts: list[dict],
+    status: str | None,
+    start_date: str | None,
+    end_date: str | None,
+    status_labels: dict[str, str] | None = None,
+) -> list[dict[str, str]]:
+    """Build a list of active filter dicts for the compact_filters macro.
+
+    Each dict has ``name``, ``value``, and ``display_value`` keys.
+    """
+    filters: list[dict[str, str]] = []
+    if account_id:
+        # Resolve account display name from the accounts list
+        display = account_id
+        for acc in accounts:
+            acc_id = str(acc.get("bank_account_id", ""))
+            if acc_id == account_id:
+                display = (
+                    f"{acc.get('bank_name', '')} - {acc.get('account_number', '')}"
+                )
+                break
+        filters.append(
+            {"name": "account_id", "value": account_id, "display_value": display}
+        )
+    if status:
+        label = status
+        if status_labels and status in status_labels:
+            label = status_labels[status]
+        else:
+            label = status.replace("_", " ").title()
+        filters.append({"name": "status", "value": status, "display_value": label})
+    if start_date:
+        filters.append(
+            {
+                "name": "start_date",
+                "value": start_date,
+                "display_value": f"From {start_date}",
+            }
+        )
+    if end_date:
+        filters.append(
+            {"name": "end_date", "value": end_date, "display_value": f"To {end_date}"}
+        )
+    return filters
+
+
 class BankingWebService:
     """View service for banking web routes."""
 
@@ -492,9 +541,18 @@ class BankingWebService:
 
         total_pages = max(1, (total_count + limit - 1) // limit)
 
+        account_views = [_account_view(account) for account in accounts]
+        active_filters = _build_active_filters(
+            account_id=account_id,
+            accounts=account_views,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
         return {
             "statements": [_statement_view(statement) for statement in statements],
-            "accounts": [_account_view(account) for account in accounts],
+            "accounts": account_views,
             "account_id": account_id,
             "status": status,
             "start_date": start_date,
@@ -507,6 +565,7 @@ class BankingWebService:
             "total_lines": total_lines,
             "matched_lines": matched_lines,
             "unmatched_lines": unmatched_lines,
+            "active_filters": active_filters,
         }
 
     @staticmethod
@@ -667,11 +726,20 @@ class BankingWebService:
 
         total_pages = max(1, (total_count + limit - 1) // limit)
 
+        account_views = [_account_view(account) for account in accounts]
+        active_filters = _build_active_filters(
+            account_id=account_id,
+            accounts=account_views,
+            status=status,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
         return {
             "reconciliations": [
                 _reconciliation_view(recon) for recon in reconciliations
             ],
-            "accounts": [_account_view(account) for account in accounts],
+            "accounts": account_views,
             "account_id": account_id,
             "status": status,
             "start_date": start_date,
@@ -685,6 +753,7 @@ class BankingWebService:
             "pending_review_count": pending_review_count,
             "approved_count": approved_count,
             "statuses": [s.value for s in ReconciliationStatus],
+            "active_filters": active_filters,
         }
 
     @staticmethod
@@ -2001,6 +2070,44 @@ class BankingWebService:
             url="/finance/banking/statements?success=Statement+deleted",
             status_code=303,
         )
+
+    async def bulk_delete_statements_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ):
+        """Handle bulk delete statements request."""
+        from app.schemas.bulk_actions import BulkActionRequest
+        from app.services.finance.banking.bulk import get_statement_bulk_service
+
+        body = await request.json()
+        req = BulkActionRequest(**body)
+        service = get_statement_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
+        return await service.bulk_delete(req.ids)
+
+    async def bulk_export_statements_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ):
+        """Handle bulk export statements request."""
+        from app.schemas.bulk_actions import BulkExportRequest
+        from app.services.finance.banking.bulk import get_statement_bulk_service
+
+        body = await request.json()
+        req = BulkExportRequest(**body)
+        service = get_statement_bulk_service(
+            db,
+            coerce_uuid(auth.organization_id),
+            coerce_uuid(auth.user_id),
+        )
+        return await service.bulk_export(req.ids, req.format)
 
     def list_reconciliations_response(
         self,

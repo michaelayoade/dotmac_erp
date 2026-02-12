@@ -127,6 +127,26 @@ def download_sample_csv(
     )
 
 
+@router.post("/statements/bulk-delete")
+async def bulk_delete_statements(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Bulk delete statement batches."""
+    return await banking_web_service.bulk_delete_statements_response(request, auth, db)
+
+
+@router.post("/statements/bulk-export")
+async def bulk_export_statements(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Export selected statements to CSV."""
+    return await banking_web_service.bulk_export_statements_response(request, auth, db)
+
+
 @router.get("/statements/{statement_id}", response_class=HTMLResponse)
 def view_statement(
     request: Request,
