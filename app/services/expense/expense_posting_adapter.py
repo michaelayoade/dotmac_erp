@@ -204,10 +204,16 @@ class ExpensePostingAdapter:
                 success=False, message="Expense claim not found"
             )
 
-        if claim.status != ExpenseClaimStatus.APPROVED:
+        # Allow posting for APPROVED (normal workflow) and for claims that are
+        # already in a posted state but missing GL entries (sync/import backfill).
+        postable_statuses = {
+            ExpenseClaimStatus.APPROVED,
+            ExpenseClaimStatus.PAID,
+        }
+        if claim.status not in postable_statuses:
             return ExpensePostingResult(
                 success=False,
-                message=f"Expense claim must be APPROVED to post (current: {claim.status.value})",
+                message=f"Expense claim must be APPROVED or PAID to post (current: {claim.status.value})",
             )
 
         # Check if already posted

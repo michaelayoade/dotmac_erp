@@ -1225,6 +1225,78 @@ class ExpenseService:
             )
             raise
 
+    @staticmethod
+    def ensure_gl_posted(
+        db: Session,
+        claim: ExpenseClaim,
+        posted_by_user_id: UUID | None = None,
+    ) -> bool:
+        """
+        Ensure an expense claim in APPROVED/PAID status has its GL entries.
+
+        For claims created via sync/import that already have an approved/paid
+        status but were never posted through the GL pipeline, this idempotently
+        creates the missing journal entries.
+
+        Does NOT change the claim status — only fills in missing GL entries.
+
+        Args:
+            db: Database session
+            claim: Expense claim to check and post if needed
+            posted_by_user_id: User to attribute posting to (defaults to creator)
+
+        Returns:
+            True if GL entries were created, False if already posted or N/A
+        """
+        postable_statuses = {
+            ExpenseClaimStatus.APPROVED,
+            ExpenseClaimStatus.PAID,
+        }
+        if claim.status not in postable_statuses:
+            return False
+        if claim.journal_entry_id is not None:
+            return False  # Already has GL entries
+
+        try:
+            from app.services.expense.expense_posting_adapter import (
+                ExpensePostingAdapter,
+            )
+
+            user_id = (
+                posted_by_user_id
+                or claim.created_by_id
+                or UUID("00000000-0000-0000-0000-000000000000")
+            )
+            result = ExpensePostingAdapter.post_expense_claim(
+                db=db,
+                organization_id=claim.organization_id,
+                claim_id=claim.claim_id,
+                posting_date=claim.claim_date,
+                posted_by_user_id=user_id,
+                auto_post=True,
+                idempotency_key=f"ensure-gl-exp-{claim.claim_id}",
+            )
+            if result.success:
+                claim.journal_entry_id = result.journal_entry_id
+                logger.info(
+                    "Auto-posted expense claim %s (journal %s)",
+                    claim.claim_id,
+                    result.journal_entry_id,
+                )
+                return True
+            else:
+                logger.warning(
+                    "Auto-post failed for expense claim %s: %s",
+                    claim.claim_id,
+                    result.message,
+                )
+                return False
+        except Exception as e:
+            logger.exception(
+                "Error auto-posting expense claim %s: %s", claim.claim_id, e
+            )
+            return False
+
     def _validate_approver_authority(
         self,
         org_id: UUID,

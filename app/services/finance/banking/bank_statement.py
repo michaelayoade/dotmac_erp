@@ -993,9 +993,9 @@ class BankStatementService:
         db.flush()
         return statement
 
-    def delete(self, db: Session, statement_id: UUID) -> bool:
-        """Delete a statement and its lines (CASCADE)."""
-        statement = db.get(BankStatement, statement_id)
+    def delete(self, db: Session, organization_id: UUID, statement_id: UUID) -> bool:
+        """Delete a statement and its lines (CASCADE) within an organization."""
+        statement = self.get(db, organization_id, statement_id)
         if not statement:
             return False
 

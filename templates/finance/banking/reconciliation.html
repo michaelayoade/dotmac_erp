@@ -71,6 +71,11 @@
 
 {% block content %}
 {% if reconciliation %}
+{# Hidden CSRF token for Alpine.js fetch() calls (cookie is HttpOnly). #}
+<div class="hidden">
+    {{ request.state.csrf_form | safe }}
+</div>
+
 <div x-data='{
     selectedStatement: null,
     selectedGL: null,
@@ -78,6 +83,7 @@
     selectedStatements: [],
     selectedGLs: [],
     suggestions: {{ match_suggestions | tojson }},
+    csrfToken() { return document.querySelector("[name=csrf_token]")?.value || ""; },
     toggleStatement(id) {
         if (this.multiMode) {
             let idx = this.selectedStatements.indexOf(id);
@@ -108,7 +114,7 @@
     matchSingle() {
         fetch("/finance/banking/reconciliations/{{ reconciliation.reconciliation_id }}/matches", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "X-CSRF-Token": this.csrfToken() },
             body: JSON.stringify({
                 statement_line_id: this.selectedStatement,
                 journal_line_id: this.selectedGL,
@@ -121,7 +127,7 @@
         if (!sug) return;
         fetch("/finance/banking/reconciliations/{{ reconciliation.reconciliation_id }}/matches", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "X-CSRF-Token": this.csrfToken() },
             body: JSON.stringify({
                 statement_line_id: this.selectedStatement,
                 journal_line_id: sug.journal_line_id,
@@ -132,7 +138,7 @@
     matchMultiple() {
         fetch("/finance/banking/reconciliations/{{ reconciliation.reconciliation_id }}/multi-match", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { "Content-Type": "application/json", "X-CSRF-Token": this.csrfToken() },
             body: JSON.stringify({
                 statement_line_ids: this.selectedStatements,
                 journal_line_ids: this.selectedGLs

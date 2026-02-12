@@ -63,10 +63,19 @@ def post_invoice(
     if not invoice or invoice.organization_id != org_id:
         return ARPostingResult(success=False, message="Invoice not found")
 
-    if invoice.status != InvoiceStatus.APPROVED:
+    # Allow posting for APPROVED (normal workflow) and for invoices that are
+    # already in a posted state but missing GL entries (sync/import backfill).
+    postable_statuses = {
+        InvoiceStatus.APPROVED,
+        InvoiceStatus.POSTED,
+        InvoiceStatus.PAID,
+        InvoiceStatus.PARTIALLY_PAID,
+        InvoiceStatus.OVERDUE,
+    }
+    if invoice.status not in postable_statuses:
         return ARPostingResult(
             success=False,
-            message=f"Invoice must be APPROVED to post (current: {invoice.status.value})",
+            message=f"Invoice must be APPROVED or already posted to create GL entries (current: {invoice.status.value})",
         )
 
     # Load customer

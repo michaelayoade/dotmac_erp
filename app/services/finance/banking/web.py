@@ -1745,29 +1745,34 @@ class BankingWebService:
             ):
                 errors.append("Supported statement files: CSV, XLSX, XLSM.")
             else:
-                content = await upload_file.read()
+                # Limit upload size to avoid memory blowups.
+                max_bytes = 10 * 1024 * 1024  # 10 MiB
+                content = await upload_file.read(max_bytes + 1)
+                if len(content) > max_bytes:
+                    errors.append(
+                        "Uploaded file is too large (max 10 MB). Please upload a smaller file."
+                    )
+                    content = b""
                 if not content:
                     # Some middleware (e.g., CSRF) may have consumed the file stream.
                     # Fall back to reading from the underlying file handle.
                     try:
                         upload_file.file.seek(0)
-                        content = upload_file.file.read()
+                        content = upload_file.file.read(max_bytes + 1)
+                        if len(content) > max_bytes:
+                            errors.append(
+                                "Uploaded file is too large (max 10 MB). Please upload a smaller file."
+                            )
+                            content = b""
                     except Exception:
                         content = content or b""
                 if content:
-                    try:
-                        header_preview = content.decode("utf-8-sig", errors="replace")
-                    except Exception:
-                        header_preview = ""
-                    header_line = next(
-                        (line for line in header_preview.splitlines() if line.strip()),
-                        "",
-                    )
+                    # Avoid logging file contents (may contain PII).
                     logger.info(
-                        "Statement import file read: filename=%s bytes=%s header=%s",
+                        "Statement import file read: filename=%s bytes=%s content_type=%s",
                         upload_file.filename,
                         len(content),
-                        header_line,
+                        upload_file.content_type,
                     )
                 if not content:
                     logger.warning(
@@ -2083,7 +2088,11 @@ class BankingWebService:
     ) -> RedirectResponse:
         """Handle POST to delete a bank statement batch."""
         try:
-            deleted = bank_statement_service.delete(db, coerce_uuid(statement_id))
+            deleted = bank_statement_service.delete(
+                db,
+                coerce_uuid(auth.organization_id),
+                coerce_uuid(statement_id),
+            )
             if not deleted:
                 return RedirectResponse(
                     url=f"/finance/banking/statements/{statement_id}?error=Statement+not+found",

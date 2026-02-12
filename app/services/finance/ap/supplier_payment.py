@@ -505,6 +505,72 @@ class SupplierPaymentService(ListResponseMixin):
         return payment
 
     @staticmethod
+    def ensure_gl_posted(
+        db: Session,
+        payment: SupplierPayment,
+        posted_by_user_id: UUID | None = None,
+    ) -> bool:
+        """
+        Ensure an AP payment in a sent/posted state has its GL journal entries.
+
+        For supplier payments created via sync/import that are already SENT
+        but were never posted through the GL pipeline, this idempotently
+        creates the missing journal entries.
+
+        Does NOT change the payment status — only fills in missing GL entries.
+
+        Args:
+            db: Database session
+            payment: Supplier payment to check and post if needed
+            posted_by_user_id: User to attribute posting to (defaults to creator)
+
+        Returns:
+            True if GL entries were created, False if already posted or N/A
+        """
+        if payment.status != APPaymentStatus.SENT:
+            return False
+        if payment.journal_entry_id is not None:
+            return False  # Already has GL entries
+
+        try:
+            from app.services.finance.ap.ap_posting_adapter import APPostingAdapter
+
+            user_id = (
+                posted_by_user_id
+                or payment.created_by_user_id
+                or UUID("00000000-0000-0000-0000-000000000000")
+            )
+            result = APPostingAdapter.post_payment(
+                db=db,
+                organization_id=payment.organization_id,
+                payment_id=payment.payment_id,
+                posting_date=payment.payment_date,
+                posted_by_user_id=user_id,
+                idempotency_key=f"ensure-gl-ap-pmt-{payment.payment_id}",
+            )
+            if result.success:
+                payment.journal_entry_id = result.journal_entry_id
+                payment.posting_batch_id = result.posting_batch_id
+                logger.info(
+                    "Auto-posted AP payment %s (journal %s)",
+                    payment.payment_id,
+                    result.journal_entry_id,
+                )
+                return True
+            else:
+                logger.warning(
+                    "Auto-post failed for AP payment %s: %s",
+                    payment.payment_id,
+                    result.message,
+                )
+                return False
+        except Exception as e:
+            logger.exception(
+                "Error auto-posting AP payment %s: %s", payment.payment_id, e
+            )
+            return False
+
+    @staticmethod
     def void_payment(
         db: Session,
         organization_id: UUID,

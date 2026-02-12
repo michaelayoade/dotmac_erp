@@ -953,6 +953,79 @@ class SupplierInvoiceService(ListResponseMixin):
         return invoice
 
     @staticmethod
+    def ensure_gl_posted(
+        db: Session,
+        invoice: SupplierInvoice,
+        posted_by_user_id: UUID | None = None,
+    ) -> bool:
+        """
+        Ensure an AP invoice in a posted state has its GL journal entries.
+
+        For supplier invoices created via sync/import that already have a
+        posted status (POSTED, PAID, PARTIALLY_PAID) but were never run
+        through the GL posting pipeline, this idempotently creates the
+        missing journal entries.
+
+        Does NOT change the invoice status — only fills in missing GL entries.
+
+        Args:
+            db: Database session
+            invoice: Supplier invoice to check and post if needed
+            posted_by_user_id: User to attribute posting to (defaults to creator)
+
+        Returns:
+            True if GL entries were created, False if already posted or N/A
+        """
+        postable_statuses = {
+            SupplierInvoiceStatus.POSTED,
+            SupplierInvoiceStatus.PAID,
+            SupplierInvoiceStatus.PARTIALLY_PAID,
+        }
+        if invoice.status not in postable_statuses:
+            return False
+        if invoice.journal_entry_id is not None:
+            return False  # Already has GL entries
+
+        try:
+            from app.services.finance.ap.ap_posting_adapter import APPostingAdapter
+
+            user_id = (
+                posted_by_user_id
+                or invoice.created_by_user_id
+                or UUID("00000000-0000-0000-0000-000000000000")
+            )
+            result = APPostingAdapter.post_invoice(
+                db=db,
+                organization_id=invoice.organization_id,
+                invoice_id=invoice.invoice_id,
+                posting_date=invoice.invoice_date,
+                posted_by_user_id=user_id,
+                idempotency_key=f"ensure-gl-ap-inv-{invoice.invoice_id}",
+            )
+            if result.success:
+                invoice.journal_entry_id = result.journal_entry_id
+                invoice.posting_batch_id = result.posting_batch_id
+                invoice.posting_status = "POSTED"
+                logger.info(
+                    "Auto-posted AP invoice %s (journal %s)",
+                    invoice.invoice_id,
+                    result.journal_entry_id,
+                )
+                return True
+            else:
+                logger.warning(
+                    "Auto-post failed for AP invoice %s: %s",
+                    invoice.invoice_id,
+                    result.message,
+                )
+                return False
+        except Exception as e:
+            logger.exception(
+                "Error auto-posting AP invoice %s: %s", invoice.invoice_id, e
+            )
+            return False
+
+    @staticmethod
     def void_invoice(
         db: Session,
         organization_id: UUID,

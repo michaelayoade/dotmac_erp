@@ -65,10 +65,16 @@ def post_payment(
     if not payment or payment.organization_id != org_id:
         return APPostingResult(success=False, message="Payment not found")
 
-    if payment.status != APPaymentStatus.APPROVED:
+    # Allow posting for APPROVED (normal workflow) and for payments that are
+    # already in a posted state but missing GL entries (sync/import backfill).
+    postable_statuses = {
+        APPaymentStatus.APPROVED,
+        APPaymentStatus.SENT,
+    }
+    if payment.status not in postable_statuses:
         return APPostingResult(
             success=False,
-            message=f"Payment must be APPROVED to post (current: {payment.status.value})",
+            message=f"Payment must be APPROVED or SENT to post (current: {payment.status.value})",
         )
 
     # Load supplier

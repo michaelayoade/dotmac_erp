@@ -479,7 +479,7 @@ def delete_bank_statement(
     if not statement:
         raise HTTPException(status_code=404, detail="Statement not found")
 
-    if not bank_statement_service.delete(db, statement_id):
+    if not bank_statement_service.delete(db, organization_id, statement_id):
         raise HTTPException(status_code=404, detail="Statement not found")
 
 

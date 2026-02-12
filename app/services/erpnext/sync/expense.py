@@ -285,6 +285,12 @@ class ExpenseClaimSyncService(BaseSyncService[ExpenseClaim]):
     def get_entity_id(self, entity: ExpenseClaim) -> uuid.UUID:
         return entity.claim_id
 
+    def post_sync_hook(self, entity: ExpenseClaim) -> None:
+        """Ensure GL entries exist for synced expense claims."""
+        from app.services.expense.expense_service import ExpenseService
+
+        ExpenseService.ensure_gl_posted(self.db, entity)
+
     def find_existing_entity(self, source_name: str) -> ExpenseClaim | None:
         if source_name in self._claim_cache:
             return self._claim_cache[source_name]

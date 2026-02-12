@@ -130,6 +130,14 @@ class BaseSyncService(ABC, Generic[T]):
         """Get the primary key ID from an entity."""
         pass
 
+    def post_sync_hook(self, entity: T) -> None:
+        """
+        Hook called after an entity is synced (created or updated).
+
+        Override in subclasses to perform post-sync actions like GL posting.
+        Default implementation does nothing.
+        """
+
     def get_unique_key(self, record: dict[str, Any]) -> str:
         """
         Get unique identifier from ERPNext record.
@@ -374,6 +382,9 @@ class BaseSyncService(ABC, Generic[T]):
         sync_entity.target_id = self.get_entity_id(entity)
         sync_entity.source_modified = source_modified
         sync_entity.mark_synced(sync_entity.target_id)
+
+        # Allow subclasses to run post-sync logic (e.g. GL posting)
+        self.post_sync_hook(entity)
 
         result.synced_count += 1
         return entity

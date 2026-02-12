@@ -918,6 +918,8 @@ class SplynxSyncService:
             self._record_sync(
                 EntityType.INVOICE, external_id, existing.invoice_id, data_hash
             )
+            # Ensure GL entries exist for posted invoices
+            self._ensure_invoice_gl_posted(existing, created_by_user_id)
         else:
             # Create new invoice
             invoice = Invoice(
@@ -965,6 +967,20 @@ class SplynxSyncService:
             self._record_sync(
                 EntityType.INVOICE, external_id, invoice.invoice_id, data_hash
             )
+            # Ensure GL entries exist for posted invoices
+            self._ensure_invoice_gl_posted(invoice, created_by_user_id)
+
+    def _ensure_invoice_gl_posted(
+        self,
+        invoice: Invoice,
+        created_by_user_id: UUID | None = None,
+    ) -> None:
+        """Post invoice to GL if it has a postable status but no journal entry."""
+        from app.services.finance.ar.invoice import ARInvoiceService
+
+        ARInvoiceService.ensure_gl_posted(
+            self.db, invoice, posted_by_user_id=created_by_user_id
+        )
 
     def _map_invoice_status(
         self, splynx_status: str, total_due: Decimal
@@ -1219,6 +1235,8 @@ class SplynxSyncService:
                 self._record_sync(
                     EntityType.PAYMENT, external_id, payment.payment_id, data_hash
                 )
+                # Ensure GL entries exist for cleared payments
+                self._ensure_payment_gl_posted(payment, created_by_user_id)
                 result.updated += 1
                 return
 
@@ -1270,6 +1288,20 @@ class SplynxSyncService:
         )
 
         result.created += 1
+        # Ensure GL entries exist for cleared payments
+        self._ensure_payment_gl_posted(payment, created_by_user_id)
+
+    def _ensure_payment_gl_posted(
+        self,
+        payment: CustomerPayment,
+        created_by_user_id: UUID | None = None,
+    ) -> None:
+        """Post payment to GL if it has CLEARED status but no journal entry."""
+        from app.services.finance.ar.customer_payment import CustomerPaymentService
+
+        CustomerPaymentService.ensure_gl_posted(
+            self.db, payment, posted_by_user_id=created_by_user_id
+        )
 
     # =========================================================================
     # Credit Note Sync

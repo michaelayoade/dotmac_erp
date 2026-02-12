@@ -150,7 +150,12 @@ class FakeInvoice:
         self.currency_code = currency_code
         self.correlation_id = correlation_id
         self.due_date = date(2024, 7, 1)
+        self.invoice_date = date(2024, 6, 1)
         self.notes = None
+        self.journal_entry_id = None
+        self.posting_batch_id = None
+        self.posting_status = None
+        self.created_by_user_id = None
         for k, v in kwargs.items():
             setattr(self, k, v)
 

@@ -950,11 +950,6 @@ class AuthFlow(ListResponseMixin):
             db, result, TokenResponse, status.HTTP_200_OK
         )
 
-    # Grace period for concurrent refresh requests using a recently-rotated token.
-    # If previous_token_hash matches AND the rotation happened within this window,
-    # treat it as a harmless race condition instead of a stolen-token replay.
-    ROTATION_GRACE_SECONDS = 30
-
     @staticmethod
     def refresh(db: Session, refresh_token: str, request: Request) -> dict[str, str]:
         token_hash = _hash_token(refresh_token)
@@ -975,52 +970,8 @@ class AuthFlow(ListResponseMixin):
                 .first()
             )
             if reused:
-                # Check if this is a harmless race condition (concurrent request
-                # from same browser) vs. a genuine stolen-token replay attack.
-                # If the token was rotated very recently, it's almost certainly
-                # a race condition — return current tokens without re-rotating.
-                rotated_at = _as_utc(reused.token_rotated_at)
-                now = _now()
-                if (
-                    rotated_at
-                    and (now - rotated_at).total_seconds()
-                    < AuthFlow.ROTATION_GRACE_SECONDS
-                ):
-                    logger.info(
-                        "Refresh token race condition (grace period): session=%s, "
-                        "rotated %.1fs ago",
-                        reused.id,
-                        (now - rotated_at).total_seconds(),
-                    )
-                    # Don't rotate again — return fresh access token with the
-                    # current refresh token (already set by the winning request)
-                    reused.last_seen_at = now
-                    if request.client:
-                        reused.ip_address = request.client.host
-                    reused.user_agent = _truncate_user_agent(
-                        request.headers.get("user-agent")
-                    )
-                    db.commit()
-                    roles, permissions = _load_rbac_claims(db, str(reused.person_id))
-                    access_token = _issue_access_token(
-                        db,
-                        str(reused.person_id),
-                        str(reused.id),
-                        roles,
-                        permissions,
-                    )
-                    # Issue a new refresh token so the cookie gets updated
-                    new_refresh = secrets.token_urlsafe(48)
-                    reused.previous_token_hash = reused.token_hash
-                    reused.token_hash = _hash_token(new_refresh)
-                    reused.token_rotated_at = now
-                    db.commit()
-                    return {
-                        "access_token": access_token,
-                        "refresh_token": new_refresh,
-                    }
-
-                # Rotation was too long ago — genuine reuse, revoke session
+                # Any reuse of a rotated refresh token is treated as theft/replay:
+                # revoke the session immediately.
                 logger.warning("Refresh token reuse detected: session=%s", reused.id)
                 reused.status = SessionStatus.revoked
                 reused.revoked_at = _now()

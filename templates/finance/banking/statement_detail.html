@@ -101,7 +101,7 @@
             this.matchLoading[this.matchLineId] = true;
             fetch("/finance/banking/statements/{{ statement.statement_id }}/lines/" + this.matchLineId + "/match", {
                 method: "POST",
-                headers: {"Content-Type": "application/json", "X-CSRFToken": document.querySelector("[name=csrf_token]")?.value || ""},
+                headers: {"Content-Type": "application/json", "X-CSRF-Token": document.querySelector("[name=csrf_token]")?.value || ""},
                 body: JSON.stringify({journal_line_id: journalLineId})
             }).then(r => r.json()).then(d => {
                 if (d.status === "ok") location.reload();
@@ -355,7 +355,7 @@
                                             matchLoading['{{ line.line_id }}'] = true;
                                             fetch('/finance/banking/statements/{{ statement.statement_id }}/lines/{{ line.line_id }}/unmatch', {
                                                 method: 'POST',
-                                                headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''},
+                                                headers: {'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('[name=csrf_token]')?.value || ''},
                                                 body: '{}'
                                             }).then(r => r.json()).then(d => {
                                                 if (d.status === 'ok') location.reload();
@@ -407,7 +407,7 @@
                                                     matchLoading['{{ line_id_str }}'] = true;
                                                     fetch('/finance/banking/statements/{{ statement.statement_id }}/lines/{{ line_id_str }}/match', {
                                                         method: 'POST',
-                                                        headers: {'Content-Type': 'application/json', 'X-CSRFToken': document.querySelector('[name=csrf_token]')?.value || ''},
+                                                        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('[name=csrf_token]')?.value || ''},
                                                         body: JSON.stringify({journal_line_id: suggestions['{{ line_id_str }}'].journal_line_id})
                                                     }).then(r => r.json()).then(d => {
                                                         if (d.status === 'ok') location.reload();
