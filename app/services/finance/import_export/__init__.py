@@ -44,6 +44,7 @@ from .base import (
     # New preview and validation classes
     PreviewResult,
     ValidationRule,
+    build_alias_map,
     detect_csv_format,
     find_account_by_name_pattern,
     # Account lookup utilities
@@ -85,6 +86,7 @@ __all__ = [
     "COLUMN_ALIASES",
     "VALID_CURRENCY_CODES",
     "VALID_ACCOUNT_TYPES",
+    "build_alias_map",
     "detect_csv_format",
     "resolve_column_alias",
     # Account lookup utilities

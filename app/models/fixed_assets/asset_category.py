@@ -24,6 +24,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
+from app.models.mixins import ERPNextSyncMixin
 
 
 class DepreciationMethod(str, enum.Enum):
@@ -34,7 +35,7 @@ class DepreciationMethod(str, enum.Enum):
     UNITS_OF_PRODUCTION = "UNITS_OF_PRODUCTION"
 
 
-class AssetCategory(Base):
+class AssetCategory(Base, ERPNextSyncMixin):
     """
     Asset category/class for fixed assets.
     """

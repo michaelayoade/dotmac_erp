@@ -89,6 +89,12 @@ class CustomerMapping(DocTypeMapping):
                     required=False,
                     transformer=parse_datetime,
                 ),
+                FieldMapping(
+                    source="custom_splynx_id",
+                    target="splynx_id",
+                    required=False,
+                    transformer=lambda v: clean_string(v, 100),
+                ),
             ],
             unique_key="name",
         )

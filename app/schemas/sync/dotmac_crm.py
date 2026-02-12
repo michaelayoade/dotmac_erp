@@ -268,6 +268,8 @@ class DepartmentMemberRead(BaseModel):
     employee_id: UUID
     email: str | None = None
     full_name: str
+    designation_name: str | None = None
+    designation_id: UUID | None = None
     role: str | None = None
     is_active: bool = True
 

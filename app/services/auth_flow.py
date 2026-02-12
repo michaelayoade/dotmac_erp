@@ -501,7 +501,7 @@ def _decrypt_secret(db: Session | None, secret: str) -> str:
 
 
 # Password policy configuration
-MIN_PASSWORD_LENGTH = 12
+MIN_PASSWORD_LENGTH = 8
 MAX_PASSWORD_LENGTH = 128
 REQUIRE_UPPERCASE = True
 REQUIRE_LOWERCASE = True
@@ -530,7 +530,7 @@ def validate_password_strength(password: str) -> tuple[bool, str | None]:
     """Validate password meets security requirements.
 
     Requirements:
-    - Minimum 12 characters
+    - Minimum 8 characters
     - Maximum 128 characters
     - At least one uppercase letter
     - At least one lowercase letter

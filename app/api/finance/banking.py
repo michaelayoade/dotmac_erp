@@ -36,6 +36,7 @@ from app.schemas.finance.banking import (
     ReconciliationCreate,
     ReconciliationLineRead,
     ReconciliationMatchCreate,
+    ReconciliationMultiMatchCreate,
     ReconciliationOutstandingCreate,
     ReconciliationRejection,
     ReconciliationReport,
@@ -635,6 +636,35 @@ def add_reconciliation_match(
         created_by=user_id,
     )
     return result
+
+
+@router.post(
+    "/reconciliations/{reconciliation_id}/multi-match",
+    response_model=list[ReconciliationLineRead],
+    status_code=status.HTTP_201_CREATED,
+)
+def add_reconciliation_multi_match(
+    reconciliation_id: UUID,
+    payload: ReconciliationMultiMatchCreate,
+    auth: dict = Depends(require_tenant_permission("banking:reconciliation:update")),
+    db: Session = Depends(get_db),
+):
+    """Match multiple statement lines to multiple GL entries."""
+    organization_id = _get_org_id(auth)
+    user_id = _get_user_id(auth)
+
+    lines = bank_reconciliation_service.add_multi_match(
+        db=db,
+        organization_id=organization_id,
+        reconciliation_id=reconciliation_id,
+        statement_line_ids=payload.statement_line_ids,
+        journal_line_ids=payload.journal_line_ids,
+        tolerance=payload.tolerance,
+        notes=payload.notes,
+        created_by=user_id,
+    )
+    db.commit()
+    return lines
 
 
 @router.post(

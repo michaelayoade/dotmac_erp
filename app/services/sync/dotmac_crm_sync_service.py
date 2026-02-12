@@ -868,7 +868,9 @@ class DotMacCRMSyncService:
         stmt = (
             stmt.options(
                 selectinload(Department.head).joinedload(Employee.person),
+                selectinload(Department.head).joinedload(Employee.designation),
                 selectinload(Department.employees).joinedload(Employee.person),
+                selectinload(Department.employees).joinedload(Employee.designation),
             )
             .order_by(Department.department_name)
             .offset(offset)
@@ -882,10 +884,17 @@ class DotMacCRMSyncService:
             manager = None
             if dept.head and dept.head.person:
                 p = dept.head.person
+                head_designation = dept.head.designation
                 manager = DepartmentMemberRead(
                     employee_id=dept.head.employee_id,
                     email=p.email,
                     full_name=f"{p.first_name} {p.last_name}".strip(),
+                    designation_name=head_designation.designation_name
+                    if head_designation
+                    else None,
+                    designation_id=head_designation.designation_id
+                    if head_designation
+                    else None,
                     role="manager",
                     is_active=dept.head.status == EmployeeStatus.ACTIVE,
                 )
@@ -897,11 +906,18 @@ class DotMacCRMSyncService:
                     continue
                 if emp.person:
                     ep = emp.person
+                    emp_designation = emp.designation
                     members.append(
                         DepartmentMemberRead(
                             employee_id=emp.employee_id,
                             email=ep.email,
                             full_name=f"{ep.first_name} {ep.last_name}".strip(),
+                            designation_name=emp_designation.designation_name
+                            if emp_designation
+                            else None,
+                            designation_id=emp_designation.designation_id
+                            if emp_designation
+                            else None,
                             role=None,
                             is_active=emp.status == EmployeeStatus.ACTIVE,
                         )

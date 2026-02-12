@@ -904,16 +904,26 @@ class TestListDepartments:
         mock_member_person.last_name = "Smith"
         mock_member_person.email = "jane@company.com"
 
+        mock_head_designation = MagicMock()
+        mock_head_designation.designation_id = uuid.uuid4()
+        mock_head_designation.designation_name = "Lead Engineer"
+
+        mock_member_designation = MagicMock()
+        mock_member_designation.designation_id = uuid.uuid4()
+        mock_member_designation.designation_name = "Field Technician"
+
         # Create mock head employee
         mock_head = MagicMock()
         mock_head.employee_id = uuid.uuid4()
         mock_head.person = mock_person
+        mock_head.designation = mock_head_designation
         mock_head.status = EmployeeStatus.ACTIVE
 
         # Create mock member employee
         mock_member = MagicMock()
         mock_member.employee_id = uuid.uuid4()
         mock_member.person = mock_member_person
+        mock_member.designation = mock_member_designation
         mock_member.status = EmployeeStatus.ACTIVE
 
         # Create mock department
@@ -936,6 +946,8 @@ class TestListDepartments:
         assert dept.manager is not None
         assert dept.manager.full_name == "John Doe"
         assert dept.manager.email == "john@company.com"
+        assert dept.manager.designation_name == "Lead Engineer"
+        assert dept.manager.designation_id == mock_head_designation.designation_id
         assert dept.manager.role == "manager"
         assert len(dept.members) == 2
 

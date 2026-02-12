@@ -129,13 +129,15 @@ class HrImportWebService:
     ) -> dict[str, Any]:
         if entity_type not in self.ENTITY_TYPES:
             raise ValueError(f"Unsupported entity type: {entity_type}")
-        if not file.filename or not file.filename.endswith(".csv"):
-            raise ValueError("Only CSV files are supported")
+        _ALLOWED_EXTENSIONS = (".csv", ".xlsx", ".xlsm")
+        if not file.filename or not file.filename.lower().endswith(_ALLOWED_EXTENSIONS):
+            raise ValueError("Only CSV, XLSX, or XLSM files are supported")
 
+        ext = Path(file.filename).suffix.lower()
         max_bytes = get_env_max_bytes("MAX_IMPORT_FILE_SIZE", 50 * 1024 * 1024)
         tmp_path = await write_upload_to_temp(
             file,
-            suffix=".csv",
+            suffix=ext,
             max_bytes=max_bytes,
             error_detail=f"File too large. Maximum size: {max_bytes // 1024 // 1024}MB",
         )
@@ -148,7 +150,7 @@ class HrImportWebService:
                 dry_run=True,
             )
             importer = self._get_importer(entity_type, db, config)
-            preview_result = importer.preview_file(tmp_path, max_rows=10)
+            preview_result = importer.preview_any_file(tmp_path, max_rows=10)
             return cast(dict[str, Any], preview_result.to_dict())
         finally:
             Path(tmp_path).unlink(missing_ok=True)
@@ -163,16 +165,19 @@ class HrImportWebService:
         file: UploadFile,
         skip_duplicates: bool = True,
         dry_run: bool = False,
+        column_mapping: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         if entity_type not in self.ENTITY_TYPES:
             raise ValueError(f"Unsupported entity type: {entity_type}")
-        if not file.filename or not file.filename.endswith(".csv"):
-            raise ValueError("Only CSV files are supported")
+        _ALLOWED_EXTENSIONS = (".csv", ".xlsx", ".xlsm")
+        if not file.filename or not file.filename.lower().endswith(_ALLOWED_EXTENSIONS):
+            raise ValueError("Only CSV, XLSX, or XLSM files are supported")
 
+        ext = Path(file.filename).suffix.lower()
         max_bytes = get_env_max_bytes("MAX_IMPORT_FILE_SIZE", 50 * 1024 * 1024)
         tmp_path = await write_upload_to_temp(
             file,
-            suffix=".csv",
+            suffix=ext,
             max_bytes=max_bytes,
             error_detail=f"File too large. Maximum size: {max_bytes // 1024 // 1024}MB",
         )
@@ -183,6 +188,7 @@ class HrImportWebService:
                 user_id=user_id,
                 skip_duplicates=skip_duplicates,
                 dry_run=dry_run,
+                column_mapping=column_mapping,
             )
             importer = self._get_importer(entity_type, db, config)
             result = ImportService.run_import(importer, tmp_path)

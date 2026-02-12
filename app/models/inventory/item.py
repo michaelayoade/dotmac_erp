@@ -24,6 +24,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
+from app.models.mixins import ERPNextSyncMixin
 
 
 class ItemType(str, enum.Enum):
@@ -40,7 +41,7 @@ class CostingMethod(str, enum.Enum):
     STANDARD_COST = "STANDARD_COST"
 
 
-class Item(Base):
+class Item(Base, ERPNextSyncMixin):
     """
     Inventory item master.
     """

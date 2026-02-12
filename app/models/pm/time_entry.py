@@ -26,7 +26,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
-from app.models.people.base import AuditMixin
+from app.models.people.base import AuditMixin, ERPNextSyncMixin
 
 if TYPE_CHECKING:
     from app.models.finance.core_org.project import Project
@@ -42,7 +42,7 @@ class BillingStatus(str, enum.Enum):
     NON_BILLABLE = "NON_BILLABLE"
 
 
-class TimeEntry(Base, AuditMixin):
+class TimeEntry(Base, AuditMixin, ERPNextSyncMixin):
     """
     Time entry for project time tracking.
 

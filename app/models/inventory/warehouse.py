@@ -19,9 +19,10 @@ from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
+from app.models.mixins import ERPNextSyncMixin
 
 
-class Warehouse(Base):
+class Warehouse(Base, ERPNextSyncMixin):
     """
     Warehouse/storage facility.
     """

@@ -25,7 +25,7 @@ class ImportService:
         file_path: Union[str, Path],
     ) -> ImportResult:
         try:
-            result = importer.import_file(file_path)
+            result = importer.import_any_file(file_path)
 
             if not importer.config.dry_run and result.status in (
                 ImportStatus.COMPLETED,

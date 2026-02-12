@@ -25,6 +25,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.config import settings
 from app.db import Base
+from app.models.mixins import ERPNextSyncMixin
 
 
 class SupplierType(str, enum.Enum):
@@ -36,7 +37,7 @@ class SupplierType(str, enum.Enum):
     RELATED_PARTY = "RELATED_PARTY"
 
 
-class Supplier(Base):
+class Supplier(Base, ERPNextSyncMixin):
     """
     Supplier master data.
     """

@@ -364,6 +364,12 @@ class BaseSyncService(ABC, Generic[T]):
             self.db.add(entity)
             self.db.flush()  # Get ID
 
+        # Persist ERPNext doc name on entity when supported.
+        if hasattr(entity, "erpnext_id"):
+            erpnext_id_value = str(source_name)[:255] if source_name else None
+            if erpnext_id_value and not entity.erpnext_id:
+                entity.erpnext_id = erpnext_id_value
+
         # Update sync entity
         sync_entity.target_id = self.get_entity_id(entity)
         sync_entity.source_modified = source_modified

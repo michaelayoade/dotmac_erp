@@ -182,6 +182,20 @@ async def reject_suggestion(
     )
 
 
+@router.post("/statements/{statement_id}/delete")
+async def delete_statement(
+    request: Request,
+    statement_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Delete a bank statement batch and its lines."""
+    await request.form()  # consume form body for CSRF validation
+    return banking_web_service.delete_statement_response(
+        request, auth, db, statement_id
+    )
+
+
 @router.get("/reconciliations", response_class=HTMLResponse)
 def list_reconciliations(
     request: Request,

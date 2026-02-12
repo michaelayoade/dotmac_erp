@@ -24,6 +24,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
+from app.models.mixins import ERPNextSyncMixin
 
 
 class IFRSCategory(str, enum.Enum):
@@ -35,7 +36,7 @@ class IFRSCategory(str, enum.Enum):
     OTHER_COMPREHENSIVE_INCOME = "OTHER_COMPREHENSIVE_INCOME"
 
 
-class AccountCategory(Base):
+class AccountCategory(Base, ERPNextSyncMixin):
     """
     Account category for chart of accounts hierarchy.
     """

@@ -344,7 +344,8 @@ def test_calculate_match_score():
         journal_entry=SimpleNamespace(entry_date=date(2024, 1, 5)),
     )
 
-    assert svc._calculate_match_score(stmt, gl) >= 90
+    # Base score without payee: amount(35) + date(25) + reference(25) = 85
+    assert svc._calculate_match_score(stmt, gl) >= 80
 
 
 def test_get_gl_balance_and_prior_reconciliation():
@@ -437,3 +438,678 @@ def test_get_reconciliation_report():
     assert report["adjustments"]["count"] == 1
     assert report["outstanding_deposits"]["count"] == 1
     assert report["outstanding_payments"]["count"] == 1
+
+
+# =============================================================================
+# Payee name scoring
+# =============================================================================
+
+
+class TestPayeeNameScore:
+    """Tests for _calculate_payee_name_score static method."""
+
+    svc = BankReconciliationService()
+
+    def test_exact_match(self) -> None:
+        assert self.svc._calculate_payee_name_score("Acme Corp", "Acme Corp") == 15.0
+
+    def test_case_insensitive(self) -> None:
+        assert self.svc._calculate_payee_name_score("ACME CORP", "acme corp") == 15.0
+
+    def test_substring_match(self) -> None:
+        assert self.svc._calculate_payee_name_score("Acme", "Acme Corp Ltd") == 15.0
+        assert self.svc._calculate_payee_name_score("Acme Corp Ltd", "Acme") == 15.0
+
+    def test_word_overlap_high(self) -> None:
+        # "omega services" vs "omega services international" → substring match = 15
+        # Use non-substring case: "omega engineering" vs "omega consulting engineering"
+        # sp_significant = {"omega", "engineering"}, cn_significant = {"omega", "consulting", "engineering"}
+        # overlap = 2/3 ≈ 0.67 ≥ 0.5 → 12.0
+        score = self.svc._calculate_payee_name_score(
+            "Omega Engineering", "Omega Consulting Engineering"
+        )
+        assert score == 12.0
+
+    def test_word_overlap_low(self) -> None:
+        # Only 1 significant word in common out of 3 → <50%
+        score = self.svc._calculate_payee_name_score(
+            "Global Logistics Inc", "Global Warehouse Corp"
+        )
+        assert score == 8.0
+
+    def test_no_match(self) -> None:
+        assert self.svc._calculate_payee_name_score("Alpha", "Beta") == 0.0
+
+    def test_none_inputs(self) -> None:
+        assert self.svc._calculate_payee_name_score(None, "Test") == 0.0
+        assert self.svc._calculate_payee_name_score("Test", None) == 0.0
+        assert self.svc._calculate_payee_name_score(None, None) == 0.0
+
+    def test_empty_strings(self) -> None:
+        assert self.svc._calculate_payee_name_score("", "Test") == 0.0
+        assert self.svc._calculate_payee_name_score("  ", "Test") == 0.0
+
+    def test_filler_words_ignored(self) -> None:
+        # "The" and "Ltd" are filler — significant words are "acme" vs "acme"
+        score = self.svc._calculate_payee_name_score("The Acme Ltd", "Acme Co")
+        # "acme" is the only significant overlap, "co" is not in filler list
+        # sp_significant = {"acme"}, cn_significant = {"acme", "co"}
+        # overlap = 1/2 = 0.5 → 12.0
+        assert score == 12.0
+
+
+# =============================================================================
+# Categorization bonus scoring
+# =============================================================================
+
+
+class TestCategorizationBonus:
+    """Tests for _calculate_categorization_bonus static method."""
+
+    svc = BankReconciliationService()
+
+    def test_account_match_bonus(self) -> None:
+        """Suggested account matching GL line account gives +5."""
+        account_id = uuid4()
+        stmt_line = SimpleNamespace(
+            suggested_account_id=account_id, suggested_rule_id=None
+        )
+        gl_line = SimpleNamespace(
+            account_id=account_id,
+            journal_entry=SimpleNamespace(source_module=None),
+        )
+        bonus = self.svc._calculate_categorization_bonus(stmt_line, gl_line, None)
+        assert bonus == 5.0
+
+    def test_module_match_ar(self) -> None:
+        """AR module + customer counterparty gives +3."""
+        from app.services.finance.banking.payment_metadata import PaymentMetadata
+
+        meta = PaymentMetadata(
+            source_type="customer_payment",
+            payment_id=uuid4(),
+            payment_number=None,
+            counterparty_name="Test",
+            counterparty_id=uuid4(),
+            counterparty_type="customer",
+            invoice_numbers=[],
+        )
+        stmt_line = SimpleNamespace(suggested_account_id=None, suggested_rule_id=None)
+        gl_line = SimpleNamespace(
+            account_id=uuid4(),
+            journal_entry=SimpleNamespace(source_module="AR"),
+        )
+        bonus = self.svc._calculate_categorization_bonus(stmt_line, gl_line, meta)
+        assert bonus == 3.0
+
+    def test_module_match_ap(self) -> None:
+        """AP module + supplier counterparty gives +3."""
+        from app.services.finance.banking.payment_metadata import PaymentMetadata
+
+        meta = PaymentMetadata(
+            source_type="supplier_payment",
+            payment_id=uuid4(),
+            payment_number=None,
+            counterparty_name="Test",
+            counterparty_id=uuid4(),
+            counterparty_type="supplier",
+            invoice_numbers=[],
+        )
+        stmt_line = SimpleNamespace(suggested_account_id=None, suggested_rule_id=None)
+        gl_line = SimpleNamespace(
+            account_id=uuid4(),
+            journal_entry=SimpleNamespace(source_module="AP"),
+        )
+        bonus = self.svc._calculate_categorization_bonus(stmt_line, gl_line, meta)
+        assert bonus == 3.0
+
+    def test_no_bonus(self) -> None:
+        """No categorization data gives 0 bonus."""
+        stmt_line = SimpleNamespace(suggested_account_id=None, suggested_rule_id=None)
+        gl_line = SimpleNamespace(
+            account_id=uuid4(),
+            journal_entry=SimpleNamespace(source_module=None),
+        )
+        bonus = self.svc._calculate_categorization_bonus(stmt_line, gl_line, None)
+        assert bonus == 0.0
+
+    def test_combined_account_and_module(self) -> None:
+        """Account match (+5) + module match (+3) = +8."""
+        from app.services.finance.banking.payment_metadata import PaymentMetadata
+
+        account_id = uuid4()
+        meta = PaymentMetadata(
+            source_type="customer_payment",
+            payment_id=uuid4(),
+            payment_number=None,
+            counterparty_name="Test",
+            counterparty_id=uuid4(),
+            counterparty_type="customer",
+            invoice_numbers=[],
+        )
+        stmt_line = SimpleNamespace(
+            suggested_account_id=account_id, suggested_rule_id=None
+        )
+        gl_line = SimpleNamespace(
+            account_id=account_id,
+            journal_entry=SimpleNamespace(source_module="AR"),
+        )
+        bonus = self.svc._calculate_categorization_bonus(stmt_line, gl_line, meta)
+        assert bonus == 8.0
+
+
+# =============================================================================
+# Full match scoring with payee factor
+# =============================================================================
+
+
+def test_calculate_match_score_with_payee() -> None:
+    """Score includes payee name factor when metadata is available."""
+    from app.services.finance.banking.payment_metadata import PaymentMetadata
+
+    svc = BankReconciliationService()
+    source_doc_id = uuid4()
+    meta = PaymentMetadata(
+        source_type="customer_payment",
+        payment_id=uuid4(),
+        payment_number="PAY-001",
+        counterparty_name="Acme Corp",
+        counterparty_id=uuid4(),
+        counterparty_type="customer",
+        invoice_numbers=[],
+    )
+    gl_metadata = {source_doc_id: meta}
+
+    stmt = SimpleNamespace(
+        signed_amount=Decimal("100.00"),
+        transaction_date=date(2024, 1, 5),
+        reference="ABC",
+        description="ABC Payment",
+        payee_payer="Acme Corp",
+        suggested_account_id=None,
+        suggested_rule_id=None,
+    )
+    gl = SimpleNamespace(
+        debit_amount=Decimal("100.00"),
+        credit_amount=Decimal("0"),
+        description="ABC Payment",
+        account_id=uuid4(),
+        journal_entry=SimpleNamespace(
+            entry_date=date(2024, 1, 5),
+            source_document_type="customer_payment",
+            source_document_id=source_doc_id,
+            source_module=None,
+        ),
+    )
+
+    # Without payee metadata
+    score_no_payee = svc._calculate_match_score(stmt, gl)
+
+    # With payee metadata
+    score_with_payee = svc._calculate_match_score(
+        stmt, gl, db=MagicMock(), gl_metadata=gl_metadata
+    )
+
+    # Payee adds 15 points for exact match
+    assert score_with_payee > score_no_payee
+    assert score_with_payee >= 90  # 35 (amount) + 25 (date) + 25 (ref) + 15 (payee)
+
+
+def test_calculate_match_score_no_payee_match() -> None:
+    """Score excludes payee points when payee names don't match."""
+    from app.services.finance.banking.payment_metadata import PaymentMetadata
+
+    svc = BankReconciliationService()
+    source_doc_id = uuid4()
+    meta = PaymentMetadata(
+        source_type="customer_payment",
+        payment_id=uuid4(),
+        payment_number=None,
+        counterparty_name="Totally Different Name",
+        counterparty_id=uuid4(),
+        counterparty_type="customer",
+        invoice_numbers=[],
+    )
+    gl_metadata = {source_doc_id: meta}
+
+    stmt = SimpleNamespace(
+        signed_amount=Decimal("100.00"),
+        transaction_date=date(2024, 1, 5),
+        reference="ABC",
+        description="ABC Payment",
+        payee_payer="Acme Corp",
+        suggested_account_id=None,
+        suggested_rule_id=None,
+    )
+    gl = SimpleNamespace(
+        debit_amount=Decimal("100.00"),
+        credit_amount=Decimal("0"),
+        description="ABC Payment",
+        account_id=uuid4(),
+        journal_entry=SimpleNamespace(
+            entry_date=date(2024, 1, 5),
+            source_document_type="customer_payment",
+            source_document_id=source_doc_id,
+            source_module=None,
+        ),
+    )
+
+    score = svc._calculate_match_score(
+        stmt, gl, db=MagicMock(), gl_metadata=gl_metadata
+    )
+
+    # Amount 35 + date 25 + reference 25 + payee 0 = 85
+    assert score == 85.0
+
+
+# =============================================================================
+# Match suggestions
+# =============================================================================
+
+
+def test_get_match_suggestions_empty_when_no_lines() -> None:
+    """Returns empty dict when no unmatched lines exist."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+    recon = _make_reconciliation()
+    recon.period_start = date(2024, 1, 1)
+    recon.period_end = date(2024, 1, 31)
+    recon.bank_account_id = uuid4()
+    recon.bank_account = SimpleNamespace(gl_account_id=uuid4())
+    db.get.return_value = recon
+
+    # Both queries return empty
+    db.execute.return_value.scalars.return_value.all.return_value = []
+
+    result = svc.get_match_suggestions(
+        db, recon.organization_id, recon.reconciliation_id
+    )
+    assert result == {}
+
+
+def test_get_match_suggestions_finds_best() -> None:
+    """Returns the best match per statement line above min_confidence."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+
+    recon = _make_reconciliation()
+    recon.period_start = date(2024, 1, 1)
+    recon.period_end = date(2024, 1, 31)
+    recon.bank_account = SimpleNamespace(gl_account_id=uuid4())
+
+    stmt = SimpleNamespace(
+        line_id=uuid4(),
+        signed_amount=Decimal("100.00"),
+        transaction_date=date(2024, 1, 10),
+        description="Payment ABC",
+        reference="ABC",
+        payee_payer=None,
+        is_matched=False,
+        suggested_account_id=None,
+        suggested_rule_id=None,
+    )
+    gl = SimpleNamespace(
+        line_id=uuid4(),
+        debit_amount=Decimal("100.00"),
+        credit_amount=Decimal("0"),
+        description="Payment ABC",
+        account_id=uuid4(),
+        journal_entry=SimpleNamespace(
+            entry_date=date(2024, 1, 10),
+            source_document_type=None,
+            source_document_id=None,
+            source_module=None,
+        ),
+    )
+
+    db.get.return_value = recon
+
+    call_count = 0
+
+    def _execute_side(*args, **kwargs):
+        nonlocal call_count
+        result = MagicMock()
+        if call_count == 0:
+            result.scalars.return_value.all.return_value = [stmt]
+        else:
+            result.scalars.return_value.all.return_value = [gl]
+        call_count += 1
+        return result
+
+    db.execute.side_effect = _execute_side
+
+    suggestions = svc.get_match_suggestions(
+        db, recon.organization_id, recon.reconciliation_id, min_confidence=30.0
+    )
+
+    assert stmt.line_id in suggestions
+    suggestion = suggestions[stmt.line_id]
+    assert suggestion.journal_line_id == gl.line_id
+    assert suggestion.confidence >= 80  # exact amount + date + ref match
+
+
+def test_get_match_suggestions_below_threshold() -> None:
+    """Lines with scores below min_confidence are excluded."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+
+    recon = _make_reconciliation()
+    recon.period_start = date(2024, 1, 1)
+    recon.period_end = date(2024, 1, 31)
+    recon.bank_account = SimpleNamespace(gl_account_id=uuid4())
+
+    # Statement line with amount that doesn't match any GL line
+    stmt = SimpleNamespace(
+        line_id=uuid4(),
+        signed_amount=Decimal("999.99"),
+        transaction_date=date(2024, 1, 10),
+        description="Unique Payment",
+        reference=None,
+        payee_payer=None,
+        is_matched=False,
+        suggested_account_id=None,
+        suggested_rule_id=None,
+    )
+    gl = SimpleNamespace(
+        line_id=uuid4(),
+        debit_amount=Decimal("100.00"),
+        credit_amount=Decimal("0"),
+        description="Completely Different",
+        account_id=uuid4(),
+        journal_entry=SimpleNamespace(
+            entry_date=date(2024, 1, 20),
+            source_document_type=None,
+            source_document_id=None,
+            source_module=None,
+        ),
+    )
+
+    db.get.return_value = recon
+
+    call_count = 0
+
+    def _execute_side(*args, **kwargs):
+        nonlocal call_count
+        result = MagicMock()
+        if call_count == 0:
+            result.scalars.return_value.all.return_value = [stmt]
+        else:
+            result.scalars.return_value.all.return_value = [gl]
+        call_count += 1
+        return result
+
+    db.execute.side_effect = _execute_side
+
+    # High threshold — amounts don't match so score will be low
+    suggestions = svc.get_match_suggestions(
+        db, recon.organization_id, recon.reconciliation_id, min_confidence=80.0
+    )
+    assert suggestions == {}
+
+
+# =============================================================================
+# Multi-match
+# =============================================================================
+
+
+def test_add_multi_match_happy_path() -> None:
+    """Multi-match creates lines for each stmt×GL pair."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+
+    recon = _make_reconciliation()
+    stmt1 = SimpleNamespace(
+        line_id=uuid4(),
+        signed_amount=Decimal("60.00"),
+        transaction_date=date(2024, 1, 10),
+        description="Part 1",
+        reference="REF-1",
+        is_matched=False,
+        matched_at=None,
+        matched_by=None,
+    )
+    stmt2 = SimpleNamespace(
+        line_id=uuid4(),
+        signed_amount=Decimal("40.00"),
+        transaction_date=date(2024, 1, 11),
+        description="Part 2",
+        reference="REF-2",
+        is_matched=False,
+        matched_at=None,
+        matched_by=None,
+    )
+    gl = SimpleNamespace(
+        line_id=uuid4(),
+        debit_amount=Decimal("100.00"),
+        credit_amount=Decimal("0"),
+        description="Full Payment",
+    )
+
+    lookup = {
+        recon.reconciliation_id: recon,
+        stmt1.line_id: stmt1,
+        stmt2.line_id: stmt2,
+        gl.line_id: gl,
+    }
+    db.get.side_effect = lambda _model, key: lookup.get(key)
+
+    lines = svc.add_multi_match(
+        db,
+        recon.organization_id,
+        recon.reconciliation_id,
+        statement_line_ids=[stmt1.line_id, stmt2.line_id],
+        journal_line_ids=[gl.line_id],
+        tolerance=Decimal("0.01"),
+    )
+
+    # 2 statement lines × 1 GL line = 2 recon lines
+    assert len(lines) == 2
+    assert all(isinstance(l, BankReconciliationLine) for l in lines)
+
+    # Statement lines marked as matched
+    assert stmt1.is_matched is True
+    assert stmt2.is_matched is True
+
+    # Reconciliation total updated
+    assert recon.total_matched == Decimal("100.00")
+
+
+def test_add_multi_match_amount_mismatch() -> None:
+    """Raises 400 when statement total doesn't match GL total."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+
+    recon = _make_reconciliation()
+    stmt = SimpleNamespace(
+        line_id=uuid4(),
+        signed_amount=Decimal("100.00"),
+    )
+    gl = SimpleNamespace(
+        line_id=uuid4(),
+        debit_amount=Decimal("80.00"),
+        credit_amount=Decimal("0"),
+    )
+
+    lookup = {
+        recon.reconciliation_id: recon,
+        stmt.line_id: stmt,
+        gl.line_id: gl,
+    }
+    db.get.side_effect = lambda _model, key: lookup.get(key)
+
+    with pytest.raises(HTTPException) as excinfo:
+        svc.add_multi_match(
+            db,
+            recon.organization_id,
+            recon.reconciliation_id,
+            statement_line_ids=[stmt.line_id],
+            journal_line_ids=[gl.line_id],
+            tolerance=Decimal("0.01"),
+        )
+
+    assert excinfo.value.status_code == 400
+    assert "Amount mismatch" in excinfo.value.detail
+
+
+def test_add_multi_match_invalid_status() -> None:
+    """Cannot multi-match on an approved reconciliation."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+
+    recon = _make_reconciliation(status=ReconciliationStatus.approved)
+    db.get.return_value = recon
+
+    with pytest.raises(HTTPException) as excinfo:
+        svc.add_multi_match(
+            db,
+            recon.organization_id,
+            recon.reconciliation_id,
+            statement_line_ids=[uuid4()],
+            journal_line_ids=[uuid4()],
+        )
+
+    assert excinfo.value.status_code == 400
+
+
+def test_add_multi_match_within_tolerance() -> None:
+    """Multi-match succeeds when difference is within tolerance."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+
+    recon = _make_reconciliation()
+    stmt = SimpleNamespace(
+        line_id=uuid4(),
+        signed_amount=Decimal("100.00"),
+        transaction_date=date(2024, 1, 10),
+        description="Payment",
+        reference="REF",
+        is_matched=False,
+        matched_at=None,
+        matched_by=None,
+    )
+    gl = SimpleNamespace(
+        line_id=uuid4(),
+        debit_amount=Decimal("100.005"),
+        credit_amount=Decimal("0"),
+    )
+
+    lookup = {
+        recon.reconciliation_id: recon,
+        stmt.line_id: stmt,
+        gl.line_id: gl,
+    }
+    db.get.side_effect = lambda _model, key: lookup.get(key)
+
+    lines = svc.add_multi_match(
+        db,
+        recon.organization_id,
+        recon.reconciliation_id,
+        statement_line_ids=[stmt.line_id],
+        journal_line_ids=[gl.line_id],
+        tolerance=Decimal("0.01"),
+    )
+
+    assert len(lines) == 1
+
+
+def test_add_multi_match_statement_not_found() -> None:
+    """Raises 404 when a statement line doesn't exist."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+
+    recon = _make_reconciliation()
+    missing_id = uuid4()
+
+    def _get(_model, key):
+        if key == recon.reconciliation_id:
+            return recon
+        return None  # Statement line not found
+
+    db.get.side_effect = _get
+
+    with pytest.raises(HTTPException) as excinfo:
+        svc.add_multi_match(
+            db,
+            recon.organization_id,
+            recon.reconciliation_id,
+            statement_line_ids=[missing_id],
+            journal_line_ids=[uuid4()],
+        )
+
+    assert excinfo.value.status_code == 404
+
+
+# =============================================================================
+# _check_rule_payee_link helper
+# =============================================================================
+
+
+def test_check_rule_payee_link_matching_customer() -> None:
+    """Returns 10.0 when rule's payee has matching customer_id."""
+    from app.services.finance.banking.bank_reconciliation import _check_rule_payee_link
+
+    db = MagicMock()
+    rule_id = uuid4()
+    payee_id = uuid4()
+    customer_id = uuid4()
+
+    rule = SimpleNamespace(payee_id=payee_id)
+    payee = SimpleNamespace(customer_id=customer_id, supplier_id=None)
+
+    db.get.side_effect = [rule, payee]
+
+    assert _check_rule_payee_link(db, rule_id, customer_id) == 10.0
+
+
+def test_check_rule_payee_link_matching_supplier() -> None:
+    """Returns 10.0 when rule's payee has matching supplier_id."""
+    from app.services.finance.banking.bank_reconciliation import _check_rule_payee_link
+
+    db = MagicMock()
+    rule_id = uuid4()
+    payee_id = uuid4()
+    supplier_id = uuid4()
+
+    rule = SimpleNamespace(payee_id=payee_id)
+    payee = SimpleNamespace(customer_id=None, supplier_id=supplier_id)
+
+    db.get.side_effect = [rule, payee]
+
+    assert _check_rule_payee_link(db, rule_id, supplier_id) == 10.0
+
+
+def test_check_rule_payee_link_no_match() -> None:
+    """Returns 0.0 when payee's customer/supplier doesn't match counterparty."""
+    from app.services.finance.banking.bank_reconciliation import _check_rule_payee_link
+
+    db = MagicMock()
+    rule_id = uuid4()
+    payee_id = uuid4()
+
+    rule = SimpleNamespace(payee_id=payee_id)
+    payee = SimpleNamespace(customer_id=uuid4(), supplier_id=uuid4())
+
+    db.get.side_effect = [rule, payee]
+
+    assert _check_rule_payee_link(db, rule_id, uuid4()) == 0.0
+
+
+def test_check_rule_payee_link_no_rule() -> None:
+    """Returns 0.0 when rule doesn't exist."""
+    from app.services.finance.banking.bank_reconciliation import _check_rule_payee_link
+
+    db = MagicMock()
+    db.get.return_value = None
+
+    assert _check_rule_payee_link(db, uuid4(), uuid4()) == 0.0
+
+
+def test_check_rule_payee_link_no_payee_id() -> None:
+    """Returns 0.0 when rule has no payee_id."""
+    from app.services.finance.banking.bank_reconciliation import _check_rule_payee_link
+
+    db = MagicMock()
+    rule = SimpleNamespace(payee_id=None)
+    db.get.return_value = rule
+
+    assert _check_rule_payee_link(db, uuid4(), uuid4()) == 0.0

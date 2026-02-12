@@ -161,7 +161,7 @@ class TestAutoMatchScoring:
     """Test the reconciliation auto-match scoring algorithm."""
 
     def test_exact_amount_same_date_full_score(self) -> None:
-        """Exact amount + same date + reference match = 100 points."""
+        """Exact amount + same date + reference match = 85 points (base, no payee)."""
         service = BankReconciliationService()
 
         stmt_line = SimpleNamespace(
@@ -180,10 +180,10 @@ class TestAutoMatchScoring:
         )
 
         score = service._calculate_match_score(stmt_line, gl_line)
-        assert score == 100.0  # 40 (amount) + 30 (date) + 30 (reference)
+        assert score == 85.0  # 35 (amount) + 25 (date) + 25 (reference)
 
     def test_exact_amount_different_date_partial_score(self) -> None:
-        """Exact amount + 2-day offset = 60 points."""
+        """Exact amount + 2-day offset = 50 points."""
         service = BankReconciliationService()
 
         stmt_line = SimpleNamespace(
@@ -202,8 +202,8 @@ class TestAutoMatchScoring:
         )
 
         score = service._calculate_match_score(stmt_line, gl_line)
-        # 40 (exact amount) + 20 (3-day proximity) + 0 (no ref match) = 60
-        assert score == 60.0
+        # 35 (exact amount) + 15 (2-day proximity) + 0 (no ref match) = 50
+        assert score == 50.0
 
     def test_zero_score_for_mismatched_amount(self) -> None:
         """Different amounts with no other matches = 0."""
@@ -228,7 +228,7 @@ class TestAutoMatchScoring:
         assert score == 0.0
 
     def test_near_match_amount_with_tolerance(self) -> None:
-        """Amount within 0.01 tolerance gets 35 points."""
+        """Amount within 0.01 tolerance gets 30 points."""
         service = BankReconciliationService()
 
         stmt_line = SimpleNamespace(
@@ -247,8 +247,8 @@ class TestAutoMatchScoring:
         )
 
         score = service._calculate_match_score(stmt_line, gl_line)
-        # 35 (near amount) + 30 (same date) + 0 = 65
-        assert score == 65.0
+        # 30 (near amount) + 25 (same date) + 0 = 55
+        assert score == 55.0
 
     def test_word_overlap_scoring(self) -> None:
         """Common words in description contribute to score."""
@@ -270,11 +270,11 @@ class TestAutoMatchScoring:
         )
 
         score = service._calculate_match_score(stmt_line, gl_line)
-        # 40 (amount) + 30 (date) + 30 (reference "SALARY" in desc) = 100
-        assert score == 100.0
+        # 35 (amount) + 25 (date) + 25 (reference "SALARY" in desc) = 85
+        assert score == 85.0
 
     def test_one_day_date_proximity(self) -> None:
-        """1-day date offset gets 25 points for date."""
+        """1-day date offset gets 20 points for date."""
         service = BankReconciliationService()
 
         stmt_line = SimpleNamespace(
@@ -293,11 +293,11 @@ class TestAutoMatchScoring:
         )
 
         score = service._calculate_match_score(stmt_line, gl_line)
-        # 40 (amount) + 25 (1-day) + 0 = 65
-        assert score == 65.0
+        # 35 (amount) + 20 (1-day) + 0 = 55
+        assert score == 55.0
 
     def test_seven_day_date_proximity(self) -> None:
-        """7-day date offset gets 10 points for date."""
+        """7-day date offset gets 8 points for date."""
         service = BankReconciliationService()
 
         stmt_line = SimpleNamespace(
@@ -316,8 +316,8 @@ class TestAutoMatchScoring:
         )
 
         score = service._calculate_match_score(stmt_line, gl_line)
-        # 40 (amount) + 10 (7-day) + 0 = 50
-        assert score == 50.0
+        # 35 (amount) + 8 (7-day) + 0 = 43
+        assert score == 43.0
 
 
 # ============ Categorization Duplicate Isolation ============

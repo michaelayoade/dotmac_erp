@@ -35,7 +35,12 @@ from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
 from app.schemas.finance.banking import BankStatementImport
 from app.services.common import coerce_uuid
-from app.services.finance.banking import bank_statement_service
+from app.services.finance.banking import (
+    bank_statement_service,
+)
+from app.services.finance.banking.payment_metadata import (
+    PaymentMetadata,
+)
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.formatters import format_currency as _base_format_currency
 from app.services.formatters import format_date as _format_date
@@ -241,15 +246,33 @@ def _reconciliation_line_view(line: BankReconciliationLine) -> dict:
     }
 
 
-def _gl_line_view(line: JournalEntryLine, entry: JournalEntry) -> dict:
-    return {
+def _gl_line_view(
+    line: JournalEntryLine,
+    entry: JournalEntry,
+    metadata: PaymentMetadata | None = None,
+) -> dict:
+    view: dict = {
         "line_id": line.line_id,
         "entry_date": _format_date(entry.entry_date),
         "description": line.description or entry.description,
         "reference": entry.reference,
         "debit_amount": line.debit_amount,
         "credit_amount": line.credit_amount,
+        # Payment metadata (None if not from a payment)
+        "source_type": None,
+        "source_module": getattr(entry, "source_module", None),
+        "payment_number": None,
+        "counterparty_name": None,
+        "counterparty_type": None,
+        "invoice_numbers": [],
     }
+    if metadata:
+        view["source_type"] = metadata.source_type
+        view["payment_number"] = metadata.payment_number
+        view["counterparty_name"] = metadata.counterparty_name
+        view["counterparty_type"] = metadata.counterparty_type
+        view["invoice_numbers"] = metadata.invoice_numbers
+    return view
 
 
 def _line_amount(line: BankReconciliationLine) -> Decimal:
@@ -507,7 +530,14 @@ class BankingWebService:
             }
             for a in accounts
         ]
-        return {"accounts": accounts_json}
+        # Build alias map from unified registry for client-side header matching
+        from app.services.finance.banking.bank_statement import (
+            BankStatementService,
+        )
+        from app.services.finance.import_export.base import build_alias_map
+
+        alias_map = build_alias_map(BankStatementService._BANK_FIELD_TYPES)
+        return {"accounts": accounts_json, "alias_map": alias_map}
 
     @staticmethod
     def statement_detail_context(
@@ -685,6 +715,13 @@ class BankingWebService:
         organization_id: str,
         reconciliation_id: str,
     ) -> dict:
+        from app.services.finance.banking.bank_reconciliation import (
+            bank_reconciliation_service as recon_svc,
+        )
+        from app.services.finance.banking.payment_metadata import (
+            resolve_payment_metadata_batch,
+        )
+
         org_id = coerce_uuid(organization_id)
         reconciliation = db.get(BankReconciliation, coerce_uuid(reconciliation_id))
         if not reconciliation or reconciliation.organization_id != org_id:
@@ -693,6 +730,7 @@ class BankingWebService:
                 "lines": [],
                 "unmatched_statement_lines": [],
                 "unmatched_gl_lines": [],
+                "match_suggestions": {},
             }
 
         bank_account = reconciliation.bank_account
@@ -713,7 +751,7 @@ class BankingWebService:
             .all()
         )
 
-        gl_lines = []
+        gl_lines: list[tuple[JournalEntryLine, JournalEntry]] = []
         if bank_account:
             gl_lines = (
                 db.query(JournalEntryLine, JournalEntry)
@@ -731,16 +769,52 @@ class BankingWebService:
                 .all()
             )
 
+        # Batch-resolve payment metadata for GL lines
+        metadata_pairs: list[tuple[str | None, UUID | None]] = [
+            (
+                getattr(entry, "source_document_type", None),
+                getattr(entry, "source_document_id", None),
+            )
+            for _line, entry in gl_lines
+        ]
+        metadata_map = resolve_payment_metadata_batch(db, metadata_pairs)
+
+        # Build GL line views with metadata
         unmatched_statement_lines = [
             _statement_line_view(line) for line in statement_lines
         ]
-        unmatched_gl_lines = [_gl_line_view(line, entry) for line, entry in gl_lines]
+        unmatched_gl_lines = []
+        for line, entry in gl_lines:
+            doc_id = getattr(entry, "source_document_id", None)
+            meta = metadata_map.get(doc_id) if doc_id else None
+            unmatched_gl_lines.append(_gl_line_view(line, entry, metadata=meta))
+
+        # Generate match suggestions for draft/pending reconciliations
+        match_suggestions: dict[str, dict] = {}
+        if reconciliation.status in (
+            ReconciliationStatus.draft,
+            ReconciliationStatus.pending_review,
+        ):
+            try:
+                raw_suggestions = recon_svc.get_match_suggestions(
+                    db, org_id, reconciliation.reconciliation_id
+                )
+                for stmt_id, sug in raw_suggestions.items():
+                    match_suggestions[str(stmt_id)] = {
+                        "journal_line_id": str(sug.journal_line_id),
+                        "confidence": round(sug.confidence, 1),
+                        "counterparty_name": sug.counterparty_name or "",
+                        "payment_number": sug.payment_number or "",
+                    }
+            except Exception:
+                logger.exception("Failed to generate match suggestions")
 
         return {
             "reconciliation": _reconciliation_view(reconciliation),
             "lines": [_reconciliation_line_view(line) for line in reconciliation.lines],
             "unmatched_statement_lines": unmatched_statement_lines,
             "unmatched_gl_lines": unmatched_gl_lines,
+            "match_suggestions": match_suggestions,
         }
 
     @staticmethod
@@ -1897,6 +1971,34 @@ class BankingWebService:
 
         return RedirectResponse(
             url=f"/finance/banking/statements/{statement_id}?success=Suggestion+rejected",
+            status_code=303,
+        )
+
+    def delete_statement_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        statement_id: str,
+    ) -> RedirectResponse:
+        """Handle POST to delete a bank statement batch."""
+        try:
+            deleted = bank_statement_service.delete(db, coerce_uuid(statement_id))
+            if not deleted:
+                return RedirectResponse(
+                    url=f"/finance/banking/statements/{statement_id}?error=Statement+not+found",
+                    status_code=303,
+                )
+            db.commit()
+        except ValueError as exc:
+            logger.warning("Delete statement failed: %s", exc)
+            return RedirectResponse(
+                url=f"/finance/banking/statements/{statement_id}?error={exc}",
+                status_code=303,
+            )
+
+        return RedirectResponse(
+            url="/finance/banking/statements?success=Statement+deleted",
             status_code=303,
         )
 

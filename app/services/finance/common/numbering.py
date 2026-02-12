@@ -150,6 +150,15 @@ DEFAULT_SEQUENCE_CONFIGS = {
         "year_format": 4,
         "reset_frequency": ResetFrequency.YEARLY,
     },
+    SequenceType.BANK_STATEMENT: {
+        "prefix": "STMT",
+        "separator": "-",
+        "min_digits": 5,
+        "include_year": True,
+        "include_month": False,
+        "year_format": 4,
+        "reset_frequency": ResetFrequency.YEARLY,
+    },
 }
 
 

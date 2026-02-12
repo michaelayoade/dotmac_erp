@@ -12,6 +12,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
+from app.models.mixins import ERPNextSyncMixin
 
 
 class TransactionType(str, enum.Enum):
@@ -27,7 +28,7 @@ class TransactionType(str, enum.Enum):
     COUNT_ADJUSTMENT = "COUNT_ADJUSTMENT"
 
 
-class InventoryTransaction(Base):
+class InventoryTransaction(Base, ERPNextSyncMixin):
     """
     Inventory movement transaction.
     """

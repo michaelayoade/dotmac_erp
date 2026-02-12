@@ -133,6 +133,7 @@ class CustomerSyncService(BaseSyncService[Customer]):
             is_active=data.get("is_active", True),
             created_by_user_id=self.user_id,
             erpnext_id=erpnext_id,
+            splynx_id=(data.get("splynx_id") or None),
         )
         return customer
 
@@ -150,6 +151,8 @@ class CustomerSyncService(BaseSyncService[Customer]):
         entity.currency_code = (data.get("currency_code") or "NGN")[:3]
         entity.tax_identification_number = str(data.get("tax_id") or "")[:50] or None
         entity.is_active = data.get("is_active", True)
+        if data.get("splynx_id") is not None:
+            entity.splynx_id = data.get("splynx_id")
 
         # Backfill erpnext_id if not yet set
         if not entity.erpnext_id and source_name:

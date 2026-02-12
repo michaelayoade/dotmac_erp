@@ -597,16 +597,12 @@ class TestUpdateStatus:
 
     def test_update_status_nonexistent_fails(self, service, mock_db):
         """Test updating status of non-existent statement fails."""
-        from fastapi import HTTPException
-
         from app.models.finance.banking.bank_statement import BankStatementStatus
 
         mock_db.get.return_value = None
 
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(ValueError, match="not found"):
             service.update_status(mock_db, uuid4(), BankStatementStatus.closed)
-
-        assert exc.value.status_code == 404
 
 
 class TestDeleteStatement:
@@ -632,17 +628,13 @@ class TestDeleteStatement:
 
     def test_delete_reconciled_statement_fails(self, service, mock_db):
         """Test deleting reconciled statement fails."""
-        from fastapi import HTTPException
-
         from app.models.finance.banking.bank_statement import BankStatementStatus
 
         statement = MockBankStatement(status=BankStatementStatus.reconciled)
         mock_db.get.return_value = statement
 
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(ValueError, match="Cannot delete"):
             service.delete(mock_db, statement.statement_id)
-
-        assert exc.value.status_code == 400
 
 
 class TestGetStatementSummary:

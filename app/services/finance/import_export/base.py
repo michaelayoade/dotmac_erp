@@ -643,7 +643,124 @@ COLUMN_ALIASES: dict[str, list[str]] = {
         "Employee Status",
         "Status",
     ],
+    # ── Bank statement fields ───────────────────────────────────────────────
+    "transaction_date": [
+        "Transaction Date",
+        "Date",
+        "Txn Date",
+        "Posting Date",
+        "Trans Date",
+        "Tran Date",
+        "Book Date",
+    ],
+    "debit": [
+        "Debit",
+        "Dr",
+        "Withdrawal",
+        "Withdrawals",
+        "Debit Amount",
+    ],
+    "credit": [
+        "Credit",
+        "Cr",
+        "Deposit",
+        "Deposits",
+        "Credit Amount",
+    ],
+    "transaction_type": [
+        "Transaction Type",
+        "Txn Type",
+        "Trans Type",
+        "Tran Type",
+        "Type",
+    ],
+    "description": [
+        "Description",
+        "Narration",
+        "Narrative",
+        "Particulars",
+        "Details",
+        "Memo",
+        "Remark",
+        "Remarks",
+    ],
+    "reference": [
+        "Reference",
+        "Ref",
+        "Ref No",
+        "Reference Number",
+    ],
+    "payee_payer": [
+        "Payee Payer",
+        "Payee",
+        "Payer",
+        "Beneficiary",
+        "Party",
+        "Counterparty",
+    ],
+    "check_number": [
+        "Check Number",
+        "Cheque",
+        "Check",
+        "Chq No",
+        "Cheque Number",
+        "Cheque No",
+    ],
+    "running_balance": [
+        "Running Balance",
+        "Balance",
+        "Closing Balance",
+    ],
+    "value_date": [
+        "Value Date",
+        "Val Date",
+    ],
+    "transaction_id": [
+        "Transaction ID",
+        "Txn ID",
+        "Trans ID",
+    ],
+    "bank_reference": [
+        "Bank Reference",
+        "Bank Ref",
+    ],
+    "bank_category": [
+        "Bank Category",
+        "Category",
+    ],
+    "bank_code": [
+        "Bank Code",
+    ],
 }
+
+
+def build_alias_map(
+    field_types: list[str] | None = None,
+) -> dict[str, str]:
+    """Flatten ``COLUMN_ALIASES`` into ``{normalized_alias: canonical_field}``.
+
+    If *field_types* is provided, only aliases for those field types are
+    included.  Otherwise **all** aliases are included.
+
+    The alias keys are lower-cased with spaces replaced by underscores to
+    match the normalisation used by the bank-statement importer.
+    """
+    result: dict[str, str] = {}
+    entries = (
+        COLUMN_ALIASES
+        if field_types is None
+        else {k: v for k, v in COLUMN_ALIASES.items() if k in field_types}
+    )
+    for canonical, aliases in entries.items():
+        # Also add the canonical name itself as an identity mapping
+        norm_canonical = canonical.strip().lower().replace(" ", "_")
+        if norm_canonical not in result:
+            result[norm_canonical] = canonical
+        for alias in aliases:
+            norm = alias.strip().lower().replace(" ", "_")
+            if norm not in result:
+                result[norm] = canonical
+    return result
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1411,6 +1528,175 @@ class BaseImporter(ABC, Generic[T]):
 
         return self.result
 
+    # ── XLSX support ────────────────────────────────────────────────────
+
+    @staticmethod
+    def parse_xlsx_file(file_path: Union[str, Path]) -> list[dict[str, str]]:
+        """Parse an XLSX/XLSM file into a list of dicts (all values as strings).
+
+        Uses openpyxl in read-only/data-only mode for performance.  Dates
+        are converted via ``.isoformat()``, numbers via ``str()``, and
+        everything else via ``str()``.
+        """
+        from openpyxl import load_workbook
+
+        wb = load_workbook(filename=str(file_path), read_only=True, data_only=True)
+        try:
+            sheet = wb.active
+            rows_iter = sheet.iter_rows(values_only=True)
+            try:
+                raw_headers = next(rows_iter)
+            except StopIteration:
+                return []
+
+            headers = [
+                str(h).strip() if h is not None else f"Column_{i}"
+                for i, h in enumerate(raw_headers)
+            ]
+
+            result: list[dict[str, str]] = []
+            for values in rows_iter:
+                if not values or not any(v is not None for v in values):
+                    continue
+                row: dict[str, str] = {}
+                for i, h in enumerate(headers):
+                    v = values[i] if i < len(values) else None
+                    if v is None:
+                        row[h] = ""
+                    elif isinstance(v, datetime):
+                        row[h] = v.date().isoformat()
+                    elif isinstance(v, date):
+                        row[h] = v.isoformat()
+                    else:
+                        row[h] = str(v)
+                result.append(row)
+            return result
+        finally:
+            wb.close()
+
+    def import_xlsx_file(self, file_path: Union[str, Path]) -> ImportResult:
+        """Import data from an XLSX/XLSM file."""
+        import time
+
+        start_time = time.time()
+        file_path = Path(file_path)
+
+        if not file_path.exists():
+            self.result.status = ImportStatus.FAILED
+            self.result.add_error(0, f"File not found: {file_path}", None)
+            return self.result
+
+        self.result.status = ImportStatus.IN_PROGRESS
+
+        try:
+            rows = self.parse_xlsx_file(file_path)
+            self.result.total_rows = len(rows)
+            self._import_rows(rows)
+        except Exception as e:
+            self.result.status = ImportStatus.FAILED
+            self.result.add_error(0, f"XLSX parsing error: {str(e)}", None)
+
+        self.result.duration_seconds = time.time() - start_time
+
+        if self.result.status == ImportStatus.IN_PROGRESS:
+            if self.result.error_count > 0:
+                self.result.status = ImportStatus.COMPLETED_WITH_ERRORS
+            else:
+                self.result.status = ImportStatus.COMPLETED
+
+        return self.result
+
+    def preview_xlsx_file(
+        self, file_path: Union[str, Path], max_rows: int = 10
+    ) -> PreviewResult:
+        """Preview an XLSX/XLSM file — same output as ``preview_file``."""
+        file_path = Path(file_path)
+
+        if not file_path.exists():
+            return PreviewResult(
+                entity_type=self.entity_name,
+                total_rows=0,
+                detected_columns=[],
+                required_columns=self.get_required_fields(),
+                optional_columns=self.get_optional_fields(),
+                missing_required=self.get_required_fields(),
+                column_mappings=[],
+                sample_data=[],
+                validation_errors=[f"File not found: {file_path}"],
+                detected_format="unknown",
+                is_valid=False,
+            )
+
+        try:
+            rows = self.parse_xlsx_file(file_path)
+        except Exception as e:
+            return PreviewResult(
+                entity_type=self.entity_name,
+                total_rows=0,
+                detected_columns=[],
+                required_columns=self.get_required_fields(),
+                optional_columns=self.get_optional_fields(),
+                missing_required=self.get_required_fields(),
+                column_mappings=[],
+                sample_data=[],
+                validation_errors=[f"Failed to read XLSX: {str(e)}"],
+                detected_format="unknown",
+                is_valid=False,
+            )
+
+        if not rows:
+            return PreviewResult(
+                entity_type=self.entity_name,
+                total_rows=0,
+                detected_columns=[],
+                required_columns=self.get_required_fields(),
+                optional_columns=self.get_optional_fields(),
+                missing_required=self.get_required_fields(),
+                column_mappings=[],
+                sample_data=[],
+                validation_errors=["File is empty or has no data rows"],
+                detected_format="unknown",
+                is_valid=False,
+            )
+
+        columns = list(rows[0].keys())
+        return self._build_preview_result(columns, rows, max_rows, "xlsx")
+
+    # ── Dispatcher methods ──────────────────────────────────────────────
+
+    def preview_any_file(
+        self, file_path: Union[str, Path], max_rows: int = 10
+    ) -> PreviewResult:
+        """Preview a CSV or XLSX file based on extension."""
+        ext = Path(file_path).suffix.lower()
+        if ext in (".xlsx", ".xlsm"):
+            return self.preview_xlsx_file(file_path, max_rows)
+        return self.preview_file(file_path, max_rows)
+
+    def import_any_file(self, file_path: Union[str, Path]) -> ImportResult:
+        """Import a CSV or XLSX file based on extension."""
+        ext = Path(file_path).suffix.lower()
+        if ext in (".xlsx", ".xlsm"):
+            return self.import_xlsx_file(file_path)
+        return self.import_file(file_path)
+
+    def _remap_row(self, row: dict[str, Any]) -> dict[str, Any]:
+        """Apply user-provided column mapping overrides to a row.
+
+        When ``self.config.column_mapping`` is set, remaps row keys from CSV
+        header names to canonical target field names.  Unmapped columns are
+        passed through unchanged so that subclass validators can still access
+        extra data.
+        """
+        mapping = self.config.column_mapping
+        if not mapping:
+            return row
+        remapped: dict[str, Any] = {}
+        for key, value in row.items():
+            target = mapping.get(key, key)
+            remapped[target] = value
+        return remapped
+
     def _import_rows(self, rows: list[dict[str, Any]]) -> None:
         """Internal method to process rows."""
         batch = []
@@ -1420,6 +1706,9 @@ class BaseImporter(ABC, Generic[T]):
                 break
 
             try:
+                # Apply column mapping overrides
+                row = self._remap_row(row)
+
                 # Validate
                 if not self.validate_with_rules(row, idx):
                     self.result.skipped_count += 1
@@ -1698,18 +1987,8 @@ class BaseImporter(ABC, Generic[T]):
     def preview_file(
         self, file_path: Union[str, Path], max_rows: int = 10
     ) -> PreviewResult:
-        """
-        Preview a CSV file with column mapping suggestions and validation.
-
-        Args:
-            file_path: Path to the CSV file
-            max_rows: Maximum number of sample rows to include
-
-        Returns:
-            PreviewResult with column mappings and sample data
-        """
+        """Preview a CSV file with column mapping suggestions and validation."""
         file_path = Path(file_path)
-        errors = []
 
         if not file_path.exists():
             return PreviewResult(
@@ -1730,7 +2009,7 @@ class BaseImporter(ABC, Generic[T]):
             with open(file_path, encoding=self.config.encoding) as f:
                 reader = csv.DictReader(f)
                 columns = list(reader.fieldnames or [])
-                rows = []
+                rows: list[dict[str, Any]] = []
                 for i, row in enumerate(reader):
                     rows.append(row)
                     if i >= 99:  # Read up to 100 rows for validation
@@ -1751,7 +2030,29 @@ class BaseImporter(ABC, Generic[T]):
                 is_valid=False,
             )
 
-        # Detect CSV format
+        # For CSV we can get an accurate total row count cheaply
+        try:
+            with open(file_path, encoding=self.config.encoding) as f:
+                total_override = sum(1 for _ in f) - 1  # Subtract header
+        except (OSError, UnicodeDecodeError):
+            total_override = None
+
+        return self._build_preview_result(
+            columns, rows, max_rows, "csv", total_override=total_override
+        )
+
+    def _build_preview_result(
+        self,
+        columns: list[str],
+        rows: list[dict[str, Any]],
+        max_rows: int,
+        file_format: str,
+        *,
+        total_override: int | None = None,
+    ) -> PreviewResult:
+        """Shared preview logic used by both CSV and XLSX preview methods."""
+        errors: list[str] = []
+
         detected_format = detect_csv_format(columns)
 
         # Auto-map columns
@@ -1763,36 +2064,30 @@ class BaseImporter(ABC, Generic[T]):
             for row in rows[:5]:
                 val = row.get(mapping.source_column, "")
                 if val and str(val).strip():
-                    samples.append(str(val).strip()[:50])  # Truncate long values
+                    samples.append(str(val).strip()[:50])
             mapping.sample_values = samples
 
         # Find missing required fields
-        {m.source_column for m in column_mappings_dict.values()}
         required_fields = self.get_required_fields()
         missing_required = []
 
         for req_field in required_fields:
-            # Check if mapped directly or via alias
             is_mapped = False
             for mapping in column_mappings_dict.values():
                 if mapping.source_column == req_field:
                     is_mapped = True
                     break
-
             if not is_mapped:
-                # Check if any column matches the required field
                 for column_name in columns:
                     if column_name.lower() == req_field.lower():
                         is_mapped = True
                         break
-
             if not is_mapped:
                 missing_required.append(req_field)
 
         # Validate sample rows
         validation_rules = self.get_validation_rules()
-        for idx, row in enumerate(rows[:20], start=1):  # Validate first 20 rows
-            # Check required fields
+        for idx, row in enumerate(rows[:20], start=1):
             for required_field in required_fields:
                 col: str | None = None
                 for m in column_mappings_dict.values():
@@ -1802,7 +2097,6 @@ class BaseImporter(ABC, Generic[T]):
                     ):
                         col = m.source_column
                         break
-
                 if col:
                     value = str(row.get(col, "") or "").strip()
                     if not value:
@@ -1810,14 +2104,12 @@ class BaseImporter(ABC, Generic[T]):
                             f"Row {idx}: Required field '{required_field}' is empty"
                         )
 
-            # Apply validation rules
             for rule in validation_rules:
                 col = None
                 for m in column_mappings_dict.values():
                     if m.target_field == rule.field_name:
                         col = m.source_column
                         break
-
                 if col:
                     value = row.get(col, "")
                     is_valid, error_msg = rule.validate(value)
@@ -1828,19 +2120,12 @@ class BaseImporter(ABC, Generic[T]):
         sample_data = []
         for row in rows[:max_rows]:
             sample_row = {}
-            for col in columns[:15]:  # Limit to 15 columns for display
+            for col in columns[:15]:
                 val = row.get(col, "")
-                # Truncate long values
                 sample_row[col] = str(val)[:100] if val else ""
             sample_data.append(sample_row)
 
-        # Count total rows (re-read for accurate count)
-        try:
-            with open(file_path, encoding=self.config.encoding) as f:
-                total_rows = sum(1 for _ in f) - 1  # Subtract header
-        except (OSError, UnicodeDecodeError):
-            total_rows = len(rows)
-
+        total_rows = total_override if total_override is not None else len(rows)
         is_valid = len(missing_required) == 0 and len(errors) == 0
 
         return PreviewResult(
@@ -1852,7 +2137,7 @@ class BaseImporter(ABC, Generic[T]):
             missing_required=missing_required,
             column_mappings=list(column_mappings_dict.values()),
             sample_data=sample_data,
-            validation_errors=errors[:50],  # Limit errors shown
+            validation_errors=errors[:50],
             detected_format=detected_format,
             is_valid=is_valid,
         )

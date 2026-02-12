@@ -25,6 +25,7 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
+from app.models.mixins import ERPNextSyncMixin
 
 
 class AssetStatus(str, enum.Enum):
@@ -36,7 +37,7 @@ class AssetStatus(str, enum.Enum):
     UNDER_CONSTRUCTION = "UNDER_CONSTRUCTION"
 
 
-class Asset(Base):
+class Asset(Base, ERPNextSyncMixin):
     """
     Fixed asset master record.
     """

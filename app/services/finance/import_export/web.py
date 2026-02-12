@@ -193,13 +193,15 @@ class ImportWebService:
         if entity_type not in ImportWebService.SUPPORTED_ENTITY_TYPES:
             raise ValueError(f"Unsupported entity type: {entity_type}")
 
-        if not file.filename or not file.filename.endswith(".csv"):
-            raise ValueError("Only CSV files are supported")
+        _ALLOWED_EXTENSIONS = (".csv", ".xlsx", ".xlsm")
+        if not file.filename or not file.filename.lower().endswith(_ALLOWED_EXTENSIONS):
+            raise ValueError("Only CSV, XLSX, or XLSM files are supported")
 
+        ext = Path(file.filename).suffix.lower()
         max_bytes = get_env_max_bytes("MAX_IMPORT_FILE_SIZE", 50 * 1024 * 1024)
         tmp_path = await write_upload_to_temp(
             file,
-            suffix=".csv",
+            suffix=ext,
             max_bytes=max_bytes,
             error_detail=f"File too large. Maximum size: {max_bytes // 1024 // 1024}MB",
         )
@@ -217,13 +219,12 @@ class ImportWebService:
                 importer = ImportWebService._get_importer(entity_type, db, config)
             except ValueError:
                 # If we can't get full importer (missing accounts), use AccountImporter for preview
-                if entity_type == "accounts":
-                    importer = AccountImporter(db, config)
-                else:
-                    importer = AccountImporter(db, config)
+                importer = AccountImporter(db, config)
 
-            # Use the preview method
-            preview_result: PreviewResult = importer.preview_file(tmp_path, max_rows=10)
+            # Use the format-aware preview method
+            preview_result: PreviewResult = importer.preview_any_file(
+                tmp_path, max_rows=10
+            )
 
             # Convert to dict for template
             return {
@@ -261,6 +262,7 @@ class ImportWebService:
         skip_duplicates: bool = True,
         dry_run: bool = False,
         batch_size: int = 100,
+        column_mapping: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """
         Execute the import operation.
@@ -270,13 +272,15 @@ class ImportWebService:
         if entity_type not in ImportWebService.SUPPORTED_ENTITY_TYPES:
             raise ValueError(f"Unsupported entity type: {entity_type}")
 
-        if not file.filename or not file.filename.endswith(".csv"):
-            raise ValueError("Only CSV files are supported")
+        _ALLOWED_EXTENSIONS = (".csv", ".xlsx", ".xlsm")
+        if not file.filename or not file.filename.lower().endswith(_ALLOWED_EXTENSIONS):
+            raise ValueError("Only CSV, XLSX, or XLSM files are supported")
 
+        ext = Path(file.filename).suffix.lower()
         max_bytes = get_env_max_bytes("MAX_IMPORT_FILE_SIZE", 50 * 1024 * 1024)
         tmp_path = await write_upload_to_temp(
             file,
-            suffix=".csv",
+            suffix=ext,
             max_bytes=max_bytes,
             error_detail=f"File too large. Maximum size: {max_bytes // 1024 // 1024}MB",
         )
@@ -288,13 +292,14 @@ class ImportWebService:
                 skip_duplicates=skip_duplicates,
                 dry_run=dry_run,
                 batch_size=batch_size,
+                column_mapping=column_mapping,
             )
 
             # Get the appropriate importer
             importer = ImportWebService._get_importer(entity_type, db, config)
 
-            # Run import
-            result: ImportResult = importer.import_file(tmp_path)
+            # Run import (format-aware: CSV or XLSX)
+            result: ImportResult = importer.import_any_file(tmp_path)
 
             # Commit if not dry run and successful
             if not dry_run and result.status in (

@@ -1,5 +1,4 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import status_badge %}
 {% from "components/macros.html" import empty_state, status_badge %}
 
 {% block page_title %}Bank Reconciliation{% endblock %}
@@ -72,28 +71,99 @@
 
 {% block content %}
 {% if reconciliation %}
-<div x-data="{ selectedStatement: null, selectedGL: null }" class="space-y-6">
+<div x-data='{
+    selectedStatement: null,
+    selectedGL: null,
+    multiMode: false,
+    selectedStatements: [],
+    selectedGLs: [],
+    suggestions: {{ match_suggestions | tojson }},
+    toggleStatement(id) {
+        if (this.multiMode) {
+            let idx = this.selectedStatements.indexOf(id);
+            if (idx > -1) this.selectedStatements.splice(idx, 1);
+            else this.selectedStatements.push(id);
+        } else {
+            this.selectedStatement = this.selectedStatement === id ? null : id;
+            if (this.selectedStatement && this.suggestions[id]) {
+                this.selectedGL = this.suggestions[id].journal_line_id;
+            }
+        }
+    },
+    toggleGL(id) {
+        if (this.multiMode) {
+            let idx = this.selectedGLs.indexOf(id);
+            if (idx > -1) this.selectedGLs.splice(idx, 1);
+            else this.selectedGLs.push(id);
+        } else {
+            this.selectedGL = this.selectedGL === id ? null : id;
+        }
+    },
+    isStmtSelected(id) {
+        return this.multiMode ? this.selectedStatements.includes(id) : this.selectedStatement === id;
+    },
+    isGLSelected(id) {
+        return this.multiMode ? this.selectedGLs.includes(id) : this.selectedGL === id;
+    },
+    matchSingle() {
+        fetch("/api/v1/banking/reconciliations/{{ reconciliation.reconciliation_id }}/matches", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                statement_line_id: this.selectedStatement,
+                journal_line_id: this.selectedGL,
+                match_type: "manual"
+            })
+        }).then(() => location.reload());
+    },
+    acceptSuggestion() {
+        let sug = this.suggestions[this.selectedStatement];
+        if (!sug) return;
+        fetch("/api/v1/banking/reconciliations/{{ reconciliation.reconciliation_id }}/matches", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                statement_line_id: this.selectedStatement,
+                journal_line_id: sug.journal_line_id,
+                match_type: "auto_fuzzy"
+            })
+        }).then(() => location.reload());
+    },
+    matchMultiple() {
+        fetch("/api/v1/banking/reconciliations/{{ reconciliation.reconciliation_id }}/multi-match", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                statement_line_ids: this.selectedStatements,
+                journal_line_ids: this.selectedGLs
+            })
+        }).then(r => {
+            if (!r.ok) return r.json().then(d => { window.showToast(d.detail || "Match failed", "error"); });
+            location.reload();
+        });
+    }
+}' class="space-y-6">
     <!-- Summary Cards -->
     <div class="grid gap-4 sm:grid-cols-5">
         <div class="card p-4">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Statement Balance</p>
-            <p class="mt-1 text-xl font-bold text-slate-900 dark:text-white">{{ reconciliation.statement_closing_balance }}</p>
+            <p class="mt-1 text-xl font-bold text-slate-900 dark:text-white font-mono tabular-nums">{{ reconciliation.statement_closing_balance }}</p>
         </div>
         <div class="card p-4">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">GL Balance</p>
-            <p class="mt-1 text-xl font-bold text-slate-900 dark:text-white">{{ reconciliation.gl_closing_balance }}</p>
+            <p class="mt-1 text-xl font-bold text-slate-900 dark:text-white font-mono tabular-nums">{{ reconciliation.gl_closing_balance }}</p>
         </div>
         <div class="card p-4">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Matched</p>
-            <p class="mt-1 text-xl font-bold text-emerald-600 dark:text-emerald-400">{{ reconciliation.total_matched }}</p>
+            <p class="mt-1 text-xl font-bold text-emerald-600 dark:text-emerald-400 font-mono tabular-nums">{{ reconciliation.total_matched }}</p>
         </div>
         <div class="card p-4">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Adjustments</p>
-            <p class="mt-1 text-xl font-bold text-yellow-600 dark:text-yellow-400">{{ reconciliation.total_adjustments }}</p>
+            <p class="mt-1 text-xl font-bold text-yellow-600 dark:text-yellow-400 font-mono tabular-nums">{{ reconciliation.total_adjustments }}</p>
         </div>
         <div class="card p-4 {{ 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20' if reconciliation.reconciliation_difference == 0 else 'border-rose-500 bg-rose-50 dark:bg-rose-900/20' }}">
             <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Difference</p>
-            <p class="mt-1 text-xl font-bold {{ 'text-emerald-600 dark:text-emerald-400' if reconciliation.reconciliation_difference == 0 else 'text-rose-600 dark:text-rose-400' }}">{{ reconciliation.reconciliation_difference }}</p>
+            <p class="mt-1 text-xl font-bold font-mono tabular-nums {{ 'text-emerald-600 dark:text-emerald-400' if reconciliation.reconciliation_difference == 0 else 'text-rose-600 dark:text-rose-400' }}">{{ reconciliation.reconciliation_difference }}</p>
         </div>
     </div>
 
@@ -103,6 +173,21 @@
         {{ status_badge(reconciliation.status | default('draft'), 'sm') }}
         <span class="text-sm text-slate-500 dark:text-slate-400">Period: {{ reconciliation.period_start }} to {{ reconciliation.period_end }}</span>
     </div>
+
+    <!-- Multi-match toggle -->
+    {% if reconciliation.status in ('draft', 'pending_review') %}
+    <div class="flex items-center gap-3">
+        <label class="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 cursor-pointer">
+            <input type="checkbox" x-model="multiMode"
+                   @change="selectedStatements = []; selectedGLs = []; selectedStatement = null; selectedGL = null;"
+                   class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
+            <span>Multi-match mode</span>
+        </label>
+        <span x-show="multiMode" x-cloak class="text-xs text-slate-500 dark:text-slate-400">
+            Select multiple items on each side, then match them together
+        </span>
+    </div>
+    {% endif %}
 
     <!-- Matching Workspace -->
     <div class="grid gap-6 lg:grid-cols-2">
@@ -125,19 +210,37 @@
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                         {% for line in unmatched_statement_lines %}
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer"
-                            :class="{ 'bg-primary-50 dark:bg-primary-900/30': selectedStatement === '{{ line.line_id }}' }"
-                            @click="selectedStatement = selectedStatement === '{{ line.line_id }}' ? null : '{{ line.line_id }}'">
+                            :class="{ 'bg-teal-50 dark:bg-teal-900/30': isStmtSelected('{{ line.line_id }}') }"
+                            @click="toggleStatement('{{ line.line_id }}')">
                             <td class="text-slate-600 dark:text-slate-400">{{ line.transaction_date }}</td>
                             <td>
                                 <p class="font-medium text-slate-900 dark:text-white truncate max-w-[150px]">{{ line.description | default(line.payee_payer) | default("-") }}</p>
                                 <p class="text-xs text-slate-500 dark:text-slate-400">{{ line.reference | default("") }}</p>
+                                {# Suggestion badge #}
+                                {% if match_suggestions and match_suggestions[line.line_id | string] %}
+                                {% set sug = match_suggestions[line.line_id | string] %}
+                                <span class="inline-flex items-center gap-1 mt-1 text-xs rounded px-1.5 py-0.5
+                                    {% if sug.confidence >= 80 %}bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
+                                    {% elif sug.confidence >= 50 %}bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400
+                                    {% else %}bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400{% endif %}">
+                                    <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                                    {{ sug.confidence }}% match
+                                    {% if sug.counterparty_name %}<span class="font-medium">| {{ sug.counterparty_name }}</span>{% endif %}
+                                </span>
+                                {% endif %}
                             </td>
-                            <td class="text-right font-medium {{ 'text-emerald-600 dark:text-emerald-400' if line.transaction_type == 'credit' else 'text-rose-600 dark:text-rose-400' }}">
+                            <td class="text-right font-medium font-mono tabular-nums {{ 'text-emerald-600 dark:text-emerald-400' if line.transaction_type == 'credit' else 'text-rose-600 dark:text-rose-400' }}">
                                 {{ "+" if line.transaction_type == 'credit' else "-" }}{{ line.amount }}
                             </td>
                             <td>
-                                <input type="radio" name="statement_line" :checked="selectedStatement === '{{ line.line_id }}'"
-                                       class="h-3 w-3 text-primary-600">
+                                <template x-if="multiMode">
+                                    <input type="checkbox" :checked="isStmtSelected('{{ line.line_id }}')"
+                                           class="h-3 w-3 rounded border-slate-300 text-teal-600">
+                                </template>
+                                <template x-if="!multiMode">
+                                    <input type="radio" name="statement_line" :checked="isStmtSelected('{{ line.line_id }}')"
+                                           class="h-3 w-3 text-teal-600">
+                                </template>
                             </td>
                         </tr>
                         {% else %}
@@ -169,19 +272,41 @@
                     <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
                         {% for line in unmatched_gl_lines %}
                         <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer"
-                            :class="{ 'bg-primary-50 dark:bg-primary-900/30': selectedGL === '{{ line.line_id }}' }"
-                            @click="selectedGL = selectedGL === '{{ line.line_id }}' ? null : '{{ line.line_id }}'">
+                            :class="{ 'bg-teal-50 dark:bg-teal-900/30': isGLSelected('{{ line.line_id }}') }"
+                            @click="toggleGL('{{ line.line_id }}')">
                             <td class="text-slate-600 dark:text-slate-400">{{ line.entry_date }}</td>
                             <td>
                                 <p class="font-medium text-slate-900 dark:text-white truncate max-w-[150px]">{{ line.description | default("-") }}</p>
                                 <p class="text-xs text-slate-500 dark:text-slate-400">{{ line.reference | default("") }}</p>
+                                {# Payment metadata #}
+                                {% if line.counterparty_name %}
+                                <div class="flex flex-wrap items-center gap-1 mt-1">
+                                    <span class="inline-flex items-center text-xs rounded px-1.5 py-0.5
+                                        {% if line.counterparty_type == 'customer' %}bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400
+                                        {% else %}bg-rose-50 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400{% endif %}">
+                                        {{ line.counterparty_name }}
+                                    </span>
+                                    {% if line.payment_number %}
+                                    <span class="text-xs font-mono text-slate-500 dark:text-slate-400">{{ line.payment_number }}</span>
+                                    {% endif %}
+                                    {% if line.invoice_numbers %}
+                                    <span class="text-xs text-slate-400 dark:text-slate-500">({{ line.invoice_numbers | join(', ') }})</span>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
                             </td>
-                            <td class="text-right font-medium {{ 'text-emerald-600 dark:text-emerald-400' if line.debit_amount else 'text-rose-600 dark:text-rose-400' }}">
+                            <td class="text-right font-medium font-mono tabular-nums {{ 'text-emerald-600 dark:text-emerald-400' if line.debit_amount else 'text-rose-600 dark:text-rose-400' }}">
                                 {{ "+" if line.debit_amount else "-" }}{{ line.debit_amount or line.credit_amount }}
                             </td>
                             <td>
-                                <input type="radio" name="gl_line" :checked="selectedGL === '{{ line.line_id }}'"
-                                       class="h-3 w-3 text-primary-600">
+                                <template x-if="multiMode">
+                                    <input type="checkbox" :checked="isGLSelected('{{ line.line_id }}')"
+                                           class="h-3 w-3 rounded border-slate-300 text-teal-600">
+                                </template>
+                                <template x-if="!multiMode">
+                                    <input type="radio" name="gl_line" :checked="isGLSelected('{{ line.line_id }}')"
+                                           class="h-3 w-3 text-teal-600">
+                                </template>
                             </td>
                         </tr>
                         {% else %}
@@ -195,27 +320,56 @@
         </div>
     </div>
 
-    <!-- Match Button -->
-    {% if reconciliation.status == 'draft' %}
-    <div class="flex justify-center">
-        <button x-show="selectedStatement && selectedGL"
-                @click="
-                    fetch('/api/v1/banking/reconciliations/{{ reconciliation.reconciliation_id }}/matches', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            statement_line_id: selectedStatement,
-                            journal_line_id: selectedGL,
-                            match_type: 'manual'
-                        })
-                    }).then(() => location.reload())
-                "
-                class="btn btn-primary">
-            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
-            </svg>
-            Match Selected Items
-        </button>
+    <!-- Match Buttons -->
+    {% if reconciliation.status in ('draft', 'pending_review') %}
+    <div class="flex flex-col items-center gap-3">
+        {# Single-match mode buttons #}
+        <template x-if="!multiMode">
+            <div class="flex items-center gap-3">
+                {# Accept suggestion button #}
+                <button x-show="selectedStatement && suggestions[selectedStatement]"
+                        @click="acceptSuggestion()"
+                        x-cloak
+                        class="btn btn-success">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    Accept Suggestion
+                    <span x-show="suggestions[selectedStatement]"
+                          x-text="'(' + (suggestions[selectedStatement]?.confidence || 0) + '%)'"
+                          class="text-xs opacity-80"></span>
+                </button>
+                {# Manual match button #}
+                <button x-show="selectedStatement && selectedGL"
+                        @click="matchSingle()"
+                        x-cloak
+                        class="btn btn-primary">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                    </svg>
+                    Match Selected Items
+                </button>
+            </div>
+        </template>
+
+        {# Multi-match mode button #}
+        <template x-if="multiMode">
+            <div class="flex items-center gap-4">
+                <span class="text-sm text-slate-500 dark:text-slate-400">
+                    <span x-text="selectedStatements.length"></span> statement(s) &amp;
+                    <span x-text="selectedGLs.length"></span> GL line(s) selected
+                </span>
+                <button x-show="selectedStatements.length > 0 && selectedGLs.length > 0"
+                        @click="matchMultiple()"
+                        x-cloak
+                        class="btn btn-primary">
+                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                    </svg>
+                    Match Multiple Items
+                </button>
+            </div>
+        </template>
     </div>
     {% endif %}
 
@@ -243,12 +397,12 @@
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/50">
                         <td class="text-slate-600 dark:text-slate-400">{{ line.transaction_date }}</td>
                         <td class="text-slate-900 dark:text-white">{{ line.description | default("-") }}</td>
-                        <td class="table-cell-amount text-slate-900 dark:text-white">{{ line.statement_amount | default("-") }}</td>
-                        <td class="table-cell-amount text-slate-900 dark:text-white">{{ line.gl_amount | default("-") }}</td>
+                        <td class="table-cell-amount text-slate-900 dark:text-white font-mono tabular-nums">{{ line.statement_amount | default("-") }}</td>
+                        <td class="table-cell-amount text-slate-900 dark:text-white font-mono tabular-nums">{{ line.gl_amount | default("-") }}</td>
                         <td>
                             {{ status_badge(line.match_type, size="sm") }}
                         </td>
-                        <td class="table-cell-amount {{ 'text-emerald-600 dark:text-emerald-400' if line.difference == 0 else 'text-rose-600 dark:text-rose-400' }}">{{ line.difference | default(0) }}</td>
+                        <td class="table-cell-amount font-mono tabular-nums {{ 'text-emerald-600 dark:text-emerald-400' if line.difference == 0 else 'text-rose-600 dark:text-rose-400' }}">{{ line.difference | default(0) }}</td>
                     </tr>
                     {% endif %}
                     {% else %}
@@ -277,7 +431,7 @@
                         <tr>
                             <td class="text-slate-600 dark:text-slate-400">{{ line.transaction_date }}</td>
                             <td class="text-slate-900 dark:text-white">{{ line.description }}</td>
-                            <td class="table-cell-amount text-emerald-600 dark:text-emerald-400">+{{ line.statement_amount or line.gl_amount }}</td>
+                            <td class="table-cell-amount text-emerald-600 dark:text-emerald-400 font-mono tabular-nums">+{{ line.statement_amount or line.gl_amount }}</td>
                         </tr>
                         {% endif %}
                         {% else %}
@@ -304,7 +458,7 @@
                         <tr>
                             <td class="text-slate-600 dark:text-slate-400">{{ line.transaction_date }}</td>
                             <td class="text-slate-900 dark:text-white">{{ line.description }}</td>
-                            <td class="table-cell-amount text-rose-600 dark:text-rose-400">-{{ line.statement_amount or line.gl_amount }}</td>
+                            <td class="table-cell-amount text-rose-600 dark:text-rose-400 font-mono tabular-nums">-{{ line.statement_amount or line.gl_amount }}</td>
                         </tr>
                         {% endif %}
                         {% else %}

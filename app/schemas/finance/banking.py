@@ -276,6 +276,15 @@ class ReconciliationMatchCreate(BaseModel):
     notes: str | None = None
 
 
+class ReconciliationMultiMatchCreate(BaseModel):
+    """Create a many-to-one or one-to-many match."""
+
+    statement_line_ids: list[UUID] = Field(min_length=1)
+    journal_line_ids: list[UUID] = Field(min_length=1)
+    notes: str | None = None
+    tolerance: Decimal = Field(default=Decimal("0.01"), ge=0)
+
+
 class ReconciliationAdjustmentCreate(BaseModel):
     """Create adjustment request."""
 

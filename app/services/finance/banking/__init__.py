@@ -12,6 +12,7 @@ from app.services.finance.banking.bank_account import (
 )
 from app.services.finance.banking.bank_reconciliation import (
     BankReconciliationService,
+    MatchSuggestion,
     ReconciliationInput,
     ReconciliationMatchInput,
     bank_reconciliation_service,
@@ -44,6 +45,7 @@ __all__ = [
     "BankReconciliationService",
     "ReconciliationInput",
     "ReconciliationMatchInput",
+    "MatchSuggestion",
     "bank_reconciliation_service",
     # Categorization
     "TransactionCategorizationService",

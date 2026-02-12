@@ -50,6 +50,7 @@ class SequenceType(str, enum.Enum):
     SALARY_SLIP = "SALARY_SLIP"
     PAYROLL_ENTRY = "PAYROLL_ENTRY"
     EXPENSE_INVOICE = "EXPENSE_INVOICE"
+    BANK_STATEMENT = "BANK_STATEMENT"
 
 
 class ResetFrequency(str, enum.Enum):

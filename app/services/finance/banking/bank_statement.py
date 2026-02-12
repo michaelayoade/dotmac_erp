@@ -174,71 +174,37 @@ class BankStatementService:
         fmt_hint = f" (expected format: {date_format})" if date_format else ""
         raise ValueError(f"Row {row}: invalid {field} '{text}'{fmt_hint}")
 
-    # Map common bank column aliases → canonical internal names.
-    _HEADER_ALIAS_MAP: dict[str, str] = {
-        # Date
-        "date": "transaction_date",
-        "txn_date": "transaction_date",
-        "posting_date": "transaction_date",
-        "trans_date": "transaction_date",
-        "tran_date": "transaction_date",
-        "book_date": "transaction_date",
-        # Debit / Credit
-        "dr": "debit",
-        "withdrawal": "debit",
-        "withdrawals": "debit",
-        "debit_amount": "debit",
-        "cr": "credit",
-        "deposit": "credit",
-        "deposits": "credit",
-        "credit_amount": "credit",
-        # Type + Amount
-        "txn_type": "transaction_type",
-        "trans_type": "transaction_type",
-        "tran_type": "transaction_type",
-        "type": "transaction_type",
-        "amt": "amount",
-        "value": "amount",
-        "transaction_amount": "amount",
-        "txn_amount": "amount",
-        # Description
-        "narration": "description",
-        "narrative": "description",
-        "particulars": "description",
-        "details": "description",
-        "memo": "description",
-        "remark": "description",
-        "remarks": "description",
-        # Reference
-        "ref": "reference",
-        "ref_no": "reference",
-        "reference_number": "reference",
-        # Payee
-        "payee": "payee_payer",
-        "payer": "payee_payer",
-        "beneficiary": "payee_payer",
-        "party": "payee_payer",
-        "counterparty": "payee_payer",
-        # Check
-        "cheque": "check_number",
-        "check": "check_number",
-        "chq_no": "check_number",
-        "cheque_number": "check_number",
-        "cheque_no": "check_number",
-        # Balance
-        "balance": "running_balance",
-        "closing_balance": "running_balance",
-        # Value date
-        "val_date": "value_date",
-        # Transaction ID
-        "txn_id": "transaction_id",
-        "trans_id": "transaction_id",
-    }
+    # Bank-specific field types used to build the alias map from the shared
+    # ``COLUMN_ALIASES`` registry in ``base.py``.
+    _BANK_FIELD_TYPES: list[str] = [
+        "transaction_date",
+        "debit",
+        "credit",
+        "transaction_type",
+        "amount",
+        "description",
+        "reference",
+        "payee_payer",
+        "check_number",
+        "running_balance",
+        "value_date",
+        "transaction_id",
+        "bank_reference",
+        "bank_category",
+        "bank_code",
+    ]
+
+    @classmethod
+    def _get_alias_map(cls) -> dict[str, str]:
+        """Return the flattened alias map for bank statement columns."""
+        from app.services.finance.import_export.base import build_alias_map
+
+        return build_alias_map(cls._BANK_FIELD_TYPES)
 
     @classmethod
     def _remap_header(cls, normalized: str) -> str:
         """Remap a normalized header to its canonical name via alias map."""
-        return cls._HEADER_ALIAS_MAP.get(normalized, normalized)
+        return cls._get_alias_map().get(normalized, normalized)
 
     def parse_csv_rows(
         self,
@@ -731,6 +697,18 @@ class BankStatementService:
             else:
                 total_debits += line_input.amount
 
+        # Auto-generate statement number if not provided
+        if not statement_number:
+            from app.models.finance.core_config.numbering_sequence import SequenceType
+            from app.services.finance.common.numbering import SyncNumberingService
+
+            numbering = SyncNumberingService(db)
+            statement_number = numbering.generate_next_number(
+                organization_id,
+                SequenceType.BANK_STATEMENT,
+                reference_date=statement_date or period_start,
+            )
+
         # Create statement
         statement = BankStatement(
             organization_id=organization_id,
@@ -1009,18 +987,14 @@ class BankStatementService:
         """Update statement status."""
         statement = db.get(BankStatement, statement_id)
         if not statement:
-            raise HTTPException(
-                status_code=404, detail=f"Statement {statement_id} not found"
-            )
+            raise ValueError(f"Statement {statement_id} not found")
 
         statement.status = status
         db.flush()
-        db.commit()
-        db.refresh(statement)
         return statement
 
     def delete(self, db: Session, statement_id: UUID) -> bool:
-        """Delete a statement and its lines."""
+        """Delete a statement and its lines (CASCADE)."""
         statement = db.get(BankStatement, statement_id)
         if not statement:
             return False
@@ -1029,13 +1003,10 @@ class BankStatementService:
             BankStatementStatus.reconciled,
             BankStatementStatus.closed,
         ]:
-            raise HTTPException(
-                status_code=400, detail="Cannot delete a reconciled or closed statement"
-            )
+            raise ValueError("Cannot delete a reconciled or closed statement")
 
         db.delete(statement)
         db.flush()
-        db.commit()
         return True
 
     def get_statement_summary(

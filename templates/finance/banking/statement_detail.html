@@ -13,7 +13,7 @@
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
-    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ statement.statement_number if statement else "Detail" }}</span>
+    <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ statement.statement_number if statement and statement.statement_number else "Detail" }}</span>
 </nav>
 {% endblock %}
 
@@ -352,6 +352,44 @@
                         </svg>
                         All Statements
                     </a>
+
+                    {% if statement.status in ('imported', 'processing') %}
+                    <div x-data="{ showDeleteModal: false }" class="border-t border-slate-200 dark:border-slate-700 pt-2 mt-2">
+                        <button @click="showDeleteModal = true"
+                                class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-900/20 transition-colors">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                            </svg>
+                            Delete Statement
+                        </button>
+
+                        {# Confirmation modal #}
+                        <div x-show="showDeleteModal" x-cloak
+                             role="dialog" aria-modal="true" aria-labelledby="delete-modal-title"
+                             @keydown.escape.window="showDeleteModal = false"
+                             class="fixed inset-0 z-50 flex items-center justify-center">
+                            <div class="fixed inset-0 bg-black/50" @click="showDeleteModal = false"
+                                 x-transition:enter="duration-200 ease-out" x-transition:enter-start="opacity-0"
+                                 x-transition:leave="duration-150 ease-in" x-transition:leave-end="opacity-0"></div>
+                            <div class="relative card max-w-md w-full mx-4 p-6"
+                                 x-transition:enter="duration-200 ease-out" x-transition:enter-start="opacity-0 scale-95"
+                                 x-transition:leave="duration-150 ease-in" x-transition:leave-end="opacity-0 scale-95">
+                                <h3 id="delete-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white">Delete Statement Batch</h3>
+                                <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                                    This will permanently delete <strong>{{ statement.statement_number }}</strong> and all
+                                    <strong class="font-mono tabular-nums">{{ statement.total_lines }}</strong> transaction lines. This cannot be undone.
+                                </p>
+                                <div class="mt-6 flex gap-3 justify-end">
+                                    <button @click="showDeleteModal = false" class="btn btn-secondary">Cancel</button>
+                                    <form method="POST" action="/finance/banking/statements/{{ statement.statement_id }}/delete">
+                                        {{ request.state.csrf_form | safe }}
+                                        <button type="submit" class="btn btn-danger-outline">Delete</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
 
