@@ -1,5 +1,6 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import empty_state %}
+{% from "components/macros.html" import empty_state, compact_filters %}
+
 
 {% block page_title %}Payment Batches{% endblock %}
 
@@ -24,8 +25,12 @@
 
 {% block content %}
 <div class="space-y-6">
-    <div class="card p-4">
-        <form method="get" class="flex flex-wrap items-center gap-4">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/finance/ap/payment-batches",
+        active_filters=active_filters | default([])
+    ) %}
+    <div>
             <select name="status"
                     class="form-select">
                 <option value="">All Status</option>
@@ -35,9 +40,10 @@
                 <option value="COMPLETED" {{ 'selected' if status == 'COMPLETED' else '' }}>Completed</option>
                 <option value="FAILED" {{ 'selected' if status == 'FAILED' else '' }}>Failed</option>
             </select>
-            <button type="submit" class="btn btn-secondary">Filter</button>
-        </form>
     </div>
+    {% endcall %}
+
+    <div id="results-container">
 
     <div class="card">
         <div class="table-container">
@@ -81,5 +87,7 @@
             </table>
         </div>
     </div>
+    </div>
+
 </div>
 {% endblock %}

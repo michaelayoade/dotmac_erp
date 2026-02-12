@@ -1,6 +1,7 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, compact_filters %}
+
 {% block page_title %}Shift Schedules{% endblock %}
 
 {% block breadcrumbs %}
@@ -30,12 +31,15 @@
         </div>
     </div>
 
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap gap-4 items-end">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/scheduling/schedules",
+        active_filters=active_filters | default([])
+    ) %}
+    <div>
                 <div class="w-64">
-                    <label for="department_id" class="form-label">Department</label>
-                    <select name="department_id" id="department_id" class="form-select w-full">
+                    <label class="form-label text-xs">Department</label>
+                    <select name="department_id" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">Select Department...</option>
                         {% for dept in departments %}
                         <option value="{{ dept.department_id }}" {% if department_id == dept.department_id | string %}selected{% endif %}>
@@ -44,15 +48,8 @@
                         {% endfor %}
                     </select>
                 </div>
-                <div class="w-48">
-                    <label for="year_month" class="form-label">Month</label>
-                    <input type="month" name="year_month" id="year_month" value="{{ year_month }}"
-                        class="form-input w-full">
-                </div>
-                <button type="submit" class="btn btn-secondary h-10">View Schedule</button>
-            </div>
-        </form>
     </div>
+    {% endcall %}
 
     {% if department_id and schedule_status %}
     <div class="flex items-center justify-between">

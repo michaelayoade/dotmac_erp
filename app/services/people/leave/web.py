@@ -18,6 +18,7 @@ from app.models.people.hr import Employee, EmployeeStatus
 from app.models.people.leave import LeaveApplicationStatus
 from app.models.person import Person
 from app.services.common import PaginationParams, coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.people.leave import LeaveAllocationExistsError, LeaveService
 from app.services.people.leave.leave_service import (
     HolidayListNotFoundError,
@@ -241,6 +242,16 @@ class LeaveWebService:
             pagination=pagination,
         )
         context = base_context(request, auth, "Leave Applications", "leave", db=db)
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "employee_id": employee_id,
+                "leave_type_id": leave_type_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            labels={"start_date": "From", "end_date": "To"},
+        )
         context.update(
             {
                 "applications": result.items,
@@ -257,6 +268,7 @@ class LeaveWebService:
                 "has_next": result.has_next,
                 "success": success,
                 "error": error,
+                "active_filters": active_filters,
             }
         )
         return templates.TemplateResponse(

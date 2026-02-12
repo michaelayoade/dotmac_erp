@@ -143,6 +143,9 @@ jobs:
       - name: Security lint (bandit via ruff)
         run: poetry run ruff check app/ --select S
 
+      - name: Bandit security scan
+        run: poetry run bandit -r app/ -c pyproject.toml -q
+
   pre-commit:
     name: Pre-commit
     runs-on: ubuntu-latest

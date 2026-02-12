@@ -28,6 +28,7 @@ from app.models.expense.expense_claim import (
 )
 from app.models.people.hr.employee import Employee
 from app.services.common import PaginationParams, coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.expense.expense_service import (
     ApproverAuthorityError,
     ExpenseClaimStatusError,
@@ -170,6 +171,15 @@ class ExpenseClaimsWebService:
             )
 
         context = base_context(request, auth, "Expense Claims", "claims")
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "view": view,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            labels={"start_date": "From", "end_date": "To"},
+        )
         context.update(
             {
                 "claims": claims,
@@ -184,6 +194,7 @@ class ExpenseClaimsWebService:
                 "offset": offset,
                 "limit": limit,
                 "can_delete_claim": can_delete_claim,
+                "active_filters": active_filters,
             }
         )
         return templates.TemplateResponse(request, "expense/claims_list.html", context)
@@ -1180,6 +1191,7 @@ class ExpenseClaimsWebService:
         )
 
         context = base_context(request, auth, "Cash Advances", "advances")
+        active_filters = build_active_filters(params={"status": status})
         context.update(
             {
                 "advances": result.items,
@@ -1190,6 +1202,7 @@ class ExpenseClaimsWebService:
                 "total": result.total,
                 "has_prev": result.has_prev,
                 "has_next": result.has_next,
+                "active_filters": active_filters,
             }
         )
         return templates.TemplateResponse(

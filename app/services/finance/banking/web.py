@@ -9,15 +9,18 @@ from __future__ import annotations
 import json
 import logging
 import re
+from datetime import date
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import ValidationError
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
+from starlette.responses import Response
 
 from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus
 from app.models.finance.banking.bank_reconciliation import (
@@ -650,11 +653,39 @@ class BankingWebService:
             elif line.categorization_status == CategorizationStatus.FLAGGED:
                 cat_summary["flagged"] += 1
 
+        # GL transaction match suggestions for unmatched lines
+        from app.services.finance.banking.bank_reconciliation import (
+            BankReconciliationService,
+        )
+
+        recon_svc = BankReconciliationService()
+        match_suggestions_raw = recon_svc.get_statement_match_suggestions(
+            db, org_id, statement.statement_id
+        )
+
+        # Serialize to JSON-safe dict keyed by string line_id
+        match_suggestions: dict[str, dict] = {}
+        for line_id, suggestion in match_suggestions_raw.items():
+            match_suggestions[str(line_id)] = {
+                "journal_line_id": str(suggestion.journal_line_id),
+                "confidence": suggestion.confidence,
+                "counterparty_name": suggestion.counterparty_name,
+                "payment_number": suggestion.payment_number,
+            }
+
+        # All GL candidates for manual match modal
+        gl_result = recon_svc.get_gl_candidates_for_statement(
+            db, org_id, statement.statement_id
+        )
+
         return {
             "statement": _statement_view(statement),
             "lines": lines,
             "account_map": account_map,
             "categorization_summary": cat_summary,
+            "match_suggestions": match_suggestions,
+            "gl_candidates": gl_result.get("candidates", []),
+            "gl_source_types": gl_result.get("source_types", []),
         }
 
     @staticmethod
@@ -820,7 +851,7 @@ class BankingWebService:
             .all()
         )
 
-        gl_lines: list[tuple[JournalEntryLine, JournalEntry]] = []
+        gl_lines: list[Any] = []
         if bank_account:
             gl_lines = (
                 db.query(JournalEntryLine, JournalEntry)
@@ -2071,6 +2102,84 @@ class BankingWebService:
             status_code=303,
         )
 
+    async def match_statement_line_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        statement_id: str,
+        line_id: str,
+    ) -> Response:
+        """Accept a GL transaction match for a statement line (JSON from Alpine.js)."""
+        from app.services.finance.banking.bank_reconciliation import (
+            BankReconciliationService,
+        )
+
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        body = await request.json()
+        journal_line_id = body.get("journal_line_id")
+        if not journal_line_id:
+            return JSONResponse(
+                content={"detail": "journal_line_id is required"}, status_code=400
+            )
+
+        svc = BankReconciliationService()
+        user_id = getattr(auth, "user_id", None) or getattr(auth, "person_id", None)
+
+        try:
+            svc.match_statement_line(
+                db=db,
+                organization_id=org_id,
+                statement_line_id=UUID(line_id),
+                journal_line_id=UUID(str(journal_line_id)),
+                matched_by=user_id,
+            )
+            db.commit()
+        except HTTPException:
+            raise
+        except (ValueError, RuntimeError) as e:
+            logger.warning("Statement line match failed: %s", e)
+            return JSONResponse(content={"detail": str(e)}, status_code=400)
+
+        return JSONResponse(content={"status": "ok"}, status_code=200)
+
+    async def unmatch_statement_line_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        statement_id: str,
+        line_id: str,
+    ) -> Response:
+        """Remove a direct match from a statement line (JSON from Alpine.js)."""
+        from app.services.finance.banking.bank_reconciliation import (
+            BankReconciliationService,
+        )
+
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        svc = BankReconciliationService()
+
+        try:
+            svc.unmatch_statement_line(
+                db=db,
+                organization_id=org_id,
+                statement_line_id=UUID(line_id),
+            )
+            db.commit()
+        except HTTPException:
+            raise
+        except (ValueError, RuntimeError) as e:
+            logger.warning("Statement line unmatch failed: %s", e)
+            return JSONResponse(content={"detail": str(e)}, status_code=400)
+
+        return JSONResponse(content={"status": "ok"}, status_code=200)
+
     async def bulk_delete_statements_response(
         self,
         request: Request,
@@ -2343,6 +2452,495 @@ class BankingWebService:
             url="/finance/banking/rules?success=Record+saved+successfully",
             status_code=303,
         )
+
+    # ─── Reconciliation POST handlers ───────────────────────────────────
+
+    async def create_reconciliation_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        redirect_cls: type,
+    ) -> Any:
+        """Create a reconciliation from the web form and redirect to detail page."""
+        from decimal import Decimal, InvalidOperation
+        from uuid import UUID as _UUID
+
+        from app.services.finance.banking.bank_reconciliation import (
+            BankReconciliationService,
+            ReconciliationInput,
+        )
+
+        form = await request.form()
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        try:
+            bank_account_id = _UUID(str(form.get("bank_account_id", "")))
+            inp = ReconciliationInput(
+                reconciliation_date=date.fromisoformat(
+                    str(form.get("reconciliation_date", ""))
+                ),
+                period_start=date.fromisoformat(str(form.get("period_start", ""))),
+                period_end=date.fromisoformat(str(form.get("period_end", ""))),
+                statement_opening_balance=Decimal(
+                    str(form.get("statement_opening_balance", "0"))
+                ),
+                statement_closing_balance=Decimal(
+                    str(form.get("statement_closing_balance", "0"))
+                ),
+                notes=str(form.get("notes", "")) or None,
+            )
+        except (ValueError, InvalidOperation) as e:
+            logger.warning("Invalid reconciliation form data: %s", e)
+            # Re-render form with error
+            context = base_context(
+                request, auth, "New Reconciliation", "banking", db=db
+            )
+            context.update(self.reconciliation_form_context(db, str(org_id)))
+            context["error"] = f"Invalid form data: {e}"
+            return templates.TemplateResponse(
+                request,
+                "finance/banking/reconciliation_form.html",
+                context,
+            )
+
+        svc = BankReconciliationService()
+        try:
+            user_id = getattr(auth, "user_id", None) or getattr(auth, "person_id", None)
+            recon = svc.create_reconciliation(
+                db=db,
+                organization_id=org_id,
+                bank_account_id=bank_account_id,
+                input=inp,
+                prepared_by=user_id,
+            )
+            db.commit()
+        except HTTPException:
+            raise
+        except (ValueError, RuntimeError) as e:
+            logger.warning("Reconciliation creation failed: %s", e)
+            context = base_context(
+                request, auth, "New Reconciliation", "banking", db=db
+            )
+            context.update(self.reconciliation_form_context(db, str(org_id)))
+            context["error"] = str(e)
+            return templates.TemplateResponse(
+                request,
+                "finance/banking/reconciliation_form.html",
+                context,
+            )
+
+        return redirect_cls(
+            url=f"/finance/banking/reconciliations/{recon.reconciliation_id}",
+            status_code=303,
+        )
+
+    async def reconciliation_action_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        reconciliation_id: str,
+        action: str,
+    ) -> Response:
+        """Handle reconciliation lifecycle actions (auto-match, submit, approve, reject)."""
+        from app.services.finance.banking.bank_reconciliation import (
+            BankReconciliationService,
+        )
+
+        await request.form()  # consume form body for CSRF validation
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        svc = BankReconciliationService()
+        recon_uuid = UUID(reconciliation_id)
+        user_id = getattr(auth, "user_id", None) or getattr(auth, "person_id", None)
+
+        try:
+            if action == "auto_match":
+                svc.auto_match(
+                    db=db,
+                    organization_id=org_id,
+                    reconciliation_id=recon_uuid,
+                    created_by=user_id,
+                )
+            elif action == "submit":
+                svc.submit_for_review(db, org_id, recon_uuid)
+            elif action == "approve":
+                if not user_id:
+                    raise HTTPException(status_code=401, detail="User ID required")
+                svc.approve(
+                    db=db,
+                    organization_id=org_id,
+                    reconciliation_id=recon_uuid,
+                    approved_by=user_id,
+                )
+            elif action == "reject":
+                if not user_id:
+                    raise HTTPException(status_code=401, detail="User ID required")
+                notes = request.query_params.get("notes", "Rejected via UI")
+                svc.reject(
+                    db=db,
+                    organization_id=org_id,
+                    reconciliation_id=recon_uuid,
+                    rejected_by=user_id,
+                    notes=notes,
+                )
+            db.commit()
+        except HTTPException:
+            raise
+        except (ValueError, RuntimeError) as e:
+            logger.warning("Reconciliation %s failed: %s", action, e)
+            raise HTTPException(status_code=400, detail=str(e))
+
+        # HTMX requests get a 200 + HX-Refresh header
+        if request.headers.get("HX-Request"):
+            return Response(
+                content="",
+                status_code=200,
+                headers={"HX-Refresh": "true"},
+            )
+        return RedirectResponse(
+            url=f"/finance/banking/reconciliations/{reconciliation_id}",
+            status_code=303,
+        )
+
+    async def reconciliation_match_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        reconciliation_id: str,
+    ) -> Response:
+        """Add a single match from Alpine.js fetch (JSON body)."""
+        from app.services.finance.banking.bank_reconciliation import (
+            BankReconciliationService,
+        )
+
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        body = await request.json()
+        svc = BankReconciliationService()
+        user_id = getattr(auth, "user_id", None) or getattr(auth, "person_id", None)
+
+        try:
+            from app.models.finance.banking.bank_reconciliation import (
+                ReconciliationMatchType,
+            )
+            from app.services.finance.banking.bank_reconciliation import (
+                ReconciliationMatchInput,
+            )
+
+            match_type_str = body.get("match_type", "manual")
+            try:
+                match_type = ReconciliationMatchType(match_type_str)
+            except ValueError:
+                match_type = ReconciliationMatchType.manual
+
+            match_input = ReconciliationMatchInput(
+                statement_line_id=UUID(str(body["statement_line_id"])),
+                journal_line_id=UUID(str(body["journal_line_id"])),
+                match_type=match_type,
+            )
+            svc.add_match(
+                db=db,
+                organization_id=org_id,
+                reconciliation_id=UUID(reconciliation_id),
+                input=match_input,
+                created_by=user_id,
+            )
+            db.commit()
+        except HTTPException:
+            raise
+        except (ValueError, RuntimeError, KeyError) as e:
+            logger.warning("Match creation failed: %s", e)
+            return JSONResponse(content={"detail": str(e)}, status_code=400)
+
+        return JSONResponse(content={"status": "ok"}, status_code=200)
+
+    async def reconciliation_multi_match_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        reconciliation_id: str,
+    ) -> Response:
+        """Add a multi-match from Alpine.js fetch (JSON body)."""
+        from app.services.finance.banking.bank_reconciliation import (
+            BankReconciliationService,
+        )
+
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        body = await request.json()
+        svc = BankReconciliationService()
+        user_id = getattr(auth, "user_id", None) or getattr(auth, "person_id", None)
+
+        try:
+            from decimal import Decimal
+
+            svc.add_multi_match(
+                db=db,
+                organization_id=org_id,
+                reconciliation_id=UUID(reconciliation_id),
+                statement_line_ids=[UUID(s) for s in body["statement_line_ids"]],
+                journal_line_ids=[UUID(s) for s in body["journal_line_ids"]],
+                tolerance=Decimal(str(body.get("tolerance", "0.01"))),
+                notes=body.get("notes"),
+                created_by=user_id,
+            )
+            db.commit()
+        except HTTPException:
+            raise
+        except (ValueError, RuntimeError, KeyError) as e:
+            logger.warning("Multi-match creation failed: %s", e)
+            return JSONResponse(content={"detail": str(e)}, status_code=400)
+
+        return JSONResponse(content={"status": "ok"}, status_code=200)
+
+    # ─────────────────────────────────────────────────────────────
+    # Bank Account Create / Update (form POST handlers)
+    # ─────────────────────────────────────────────────────────────
+
+    async def create_account_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> Response:
+        """Handle POST to create a new bank account from form data."""
+        from app.models.finance.banking.bank_account import BankAccountType
+        from app.services.finance.banking.bank_account import (
+            BankAccountInput,
+            bank_account_service,
+        )
+
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        form = await request.form()
+        try:
+            data = BankAccountInput(
+                bank_name=str(form.get("bank_name", "")),
+                account_number=str(form.get("account_number", "")),
+                account_name=str(form.get("account_name", "")),
+                gl_account_id=UUID(str(form["gl_account_id"])),
+                currency_code=str(form.get("currency_code", "NGN")),
+                account_type=BankAccountType(str(form.get("account_type", "checking"))),
+                bank_code=str(form.get("bank_code", "")) or None,
+                branch_code=str(form.get("branch_code", "")) or None,
+                branch_name=str(form.get("branch_name", "")) or None,
+                iban=str(form.get("iban", "")) or None,
+                contact_name=str(form.get("contact_name", "")) or None,
+                contact_phone=str(form.get("contact_phone", "")) or None,
+                contact_email=str(form.get("contact_email", "")) or None,
+                notes=str(form.get("notes", "")) or None,
+                allow_overdraft="allow_overdraft" in form,
+                overdraft_limit=Decimal(str(form["overdraft_limit"]))
+                if form.get("overdraft_limit")
+                else None,
+            )
+            account = bank_account_service.create(
+                db, org_id, data, coerce_uuid(user_id) if user_id else None
+            )
+            db.commit()
+            return RedirectResponse(
+                url=f"/finance/banking/accounts/{account.bank_account_id}",
+                status_code=303,
+            )
+        except (ValueError, RuntimeError) as exc:
+            logger.warning("Bank account creation failed: %s", exc)
+            return RedirectResponse(
+                url=f"/finance/banking/accounts/new?error={exc}",
+                status_code=303,
+            )
+
+    async def update_account_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        account_id: str,
+    ) -> Response:
+        """Handle POST to update an existing bank account from form data."""
+        from app.models.finance.banking.bank_account import BankAccountType
+        from app.services.finance.banking.bank_account import (
+            BankAccountInput,
+            bank_account_service,
+        )
+
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        # Load existing account to preserve account_number (read-only in edit)
+        existing = db.get(BankAccount, coerce_uuid(account_id))
+        if not existing or existing.organization_id != coerce_uuid(org_id):
+            raise HTTPException(status_code=404, detail="Bank account not found")
+
+        form = await request.form()
+        try:
+            data = BankAccountInput(
+                bank_name=str(form.get("bank_name", "")),
+                account_number=existing.account_number,
+                account_name=str(form.get("account_name", "")),
+                gl_account_id=UUID(str(form["gl_account_id"])),
+                currency_code=str(form.get("currency_code", existing.currency_code)),
+                account_type=BankAccountType(str(form.get("account_type", "checking"))),
+                bank_code=str(form.get("bank_code", "")) or None,
+                branch_code=str(form.get("branch_code", "")) or None,
+                branch_name=str(form.get("branch_name", "")) or None,
+                iban=str(form.get("iban", "")) or None,
+                contact_name=str(form.get("contact_name", "")) or None,
+                contact_phone=str(form.get("contact_phone", "")) or None,
+                contact_email=str(form.get("contact_email", "")) or None,
+                notes=str(form.get("notes", "")) or None,
+                allow_overdraft="allow_overdraft" in form,
+                overdraft_limit=Decimal(str(form["overdraft_limit"]))
+                if form.get("overdraft_limit")
+                else None,
+            )
+            bank_account_service.update(
+                db,
+                org_id,
+                coerce_uuid(account_id),
+                data,
+                coerce_uuid(user_id) if user_id else None,
+            )
+            db.commit()
+            return RedirectResponse(
+                url=f"/finance/banking/accounts/{account_id}",
+                status_code=303,
+            )
+        except (ValueError, RuntimeError) as exc:
+            logger.warning("Bank account update failed: %s", exc)
+            return RedirectResponse(
+                url=f"/finance/banking/accounts/{account_id}/edit?error={exc}",
+                status_code=303,
+            )
+
+    # ─────────────────────────────────────────────────────────────
+    # Payee Create / Update (form POST handlers)
+    # ─────────────────────────────────────────────────────────────
+
+    async def create_payee_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> Response:
+        """Handle POST to create a new payee from form data."""
+        from app.models.finance.banking.payee import Payee, PayeeType
+
+        org_id = auth.organization_id
+        user_id = auth.user_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        form = await request.form()
+        try:
+            payee = Payee(
+                organization_id=coerce_uuid(org_id),
+                payee_name=str(form.get("payee_name", "")),
+                payee_type=PayeeType(str(form.get("payee_type", "OTHER"))),
+                is_active="is_active" in form,
+                name_patterns=str(form.get("name_patterns", "")) or None,
+                default_account_id=UUID(str(form["default_account_id"]))
+                if form.get("default_account_id")
+                else None,
+                default_tax_code_id=UUID(str(form["default_tax_code_id"]))
+                if form.get("default_tax_code_id")
+                else None,
+                supplier_id=UUID(str(form["supplier_id"]))
+                if form.get("supplier_id")
+                else None,
+                customer_id=UUID(str(form["customer_id"]))
+                if form.get("customer_id")
+                else None,
+                notes=str(form.get("notes", "")) or None,
+                created_by=coerce_uuid(user_id) if user_id else None,
+            )
+            db.add(payee)
+            db.flush()
+            db.commit()
+            logger.info("Created payee %s: %s", payee.payee_id, payee.payee_name)
+            return RedirectResponse(
+                url="/finance/banking/payees",
+                status_code=303,
+            )
+        except (ValueError, RuntimeError) as exc:
+            logger.warning("Payee creation failed: %s", exc)
+            return RedirectResponse(
+                url=f"/finance/banking/payees/new?error={exc}",
+                status_code=303,
+            )
+
+    async def update_payee_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        payee_id: str,
+    ) -> Response:
+        """Handle POST to update an existing payee from form data."""
+        from app.models.finance.banking.payee import Payee, PayeeType
+
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        form = await request.form()
+        payee = db.get(Payee, coerce_uuid(payee_id))
+        if not payee or payee.organization_id != coerce_uuid(org_id):
+            raise HTTPException(status_code=404, detail="Payee not found")
+
+        try:
+            payee.payee_name = str(form.get("payee_name", payee.payee_name))
+            ptype_raw = str(form.get("payee_type", ""))
+            if ptype_raw:
+                payee.payee_type = PayeeType(ptype_raw)
+            payee.is_active = "is_active" in form
+            payee.name_patterns = str(form.get("name_patterns", "")) or None
+            payee.default_account_id = (
+                UUID(str(form["default_account_id"]))
+                if form.get("default_account_id")
+                else None
+            )
+            payee.default_tax_code_id = (
+                UUID(str(form["default_tax_code_id"]))
+                if form.get("default_tax_code_id")
+                else None
+            )
+            payee.supplier_id = (
+                UUID(str(form["supplier_id"])) if form.get("supplier_id") else None
+            )
+            payee.customer_id = (
+                UUID(str(form["customer_id"])) if form.get("customer_id") else None
+            )
+            payee.notes = str(form.get("notes", "")) or None
+            db.flush()
+            db.commit()
+            logger.info("Updated payee %s: %s", payee.payee_id, payee.payee_name)
+            return RedirectResponse(
+                url="/finance/banking/payees",
+                status_code=303,
+            )
+        except (ValueError, RuntimeError) as exc:
+            logger.warning("Payee update failed: %s", exc)
+            return RedirectResponse(
+                url=f"/finance/banking/payees/{payee_id}?error={exc}",
+                status_code=303,
+            )
 
 
 banking_web_service = BankingWebService()

@@ -27,6 +27,7 @@ from app.models.person import Gender as PersonGender
 from app.models.person import Person
 from app.models.rbac import PersonRole, Role
 from app.services.common import PaginationParams, ValidationError, coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.finance.banking.bank_directory import BankDirectoryService
 from app.services.people.attendance import AttendanceService
 from app.services.people.attendance.attendance_service import AttendanceServiceError
@@ -1708,6 +1709,10 @@ class SelfServiceWebService:
         total_pages = (total + pagination.limit - 1) // pagination.limit if total else 1
 
         context = base_context(request, auth, "My Payslips", "self-payslips", db=db)
+        active_filters = build_active_filters(
+            params={"year": str(year) if year else None},
+            labels={"year": "Year"},
+        )
         context.update(
             {
                 "slips": slips,
@@ -1718,6 +1723,7 @@ class SelfServiceWebService:
                 "total": total,
                 "has_prev": page > 1,
                 "has_next": pagination.offset + pagination.limit < total,
+                "active_filters": active_filters,
             }
         )
         context["has_team_approvals"] = self._has_team_approvals(

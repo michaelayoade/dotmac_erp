@@ -1,6 +1,7 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, compact_filters %}
+
 {% block page_title %}Attendance{% endblock %}
 
 {% block breadcrumbs %}
@@ -159,34 +160,28 @@
             </form>
         </div>
     </div>
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap gap-4 items-end">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/attendance/records",
+        active_filters=active_filters | default([]),
+        date_range=true,
+        start_date=start_date | default('', true),
+        end_date=end_date | default('', true)
+    ) %}
+    <div>
                 <div class="w-44">
-                    <label for="status" class="form-label">Status</label>
-                    <select name="status" id="status" class="form-select w-full">
+                    <label class="form-label text-xs">Status</label>
+                    <select name="status" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All Statuses</option>
                         {% for s in statuses %}
                         <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s | replace("_", " ") | title }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="w-44">
-                    <label for="start_date" class="form-label">Start Date</label>
-                    <input type="date" name="start_date" id="start_date" value="{{ start_date | default('', true) }}" class="form-input w-full">
-                </div>
-                <div class="w-44">
-                    <label for="end_date" class="form-label">End Date</label>
-                    <input type="date" name="end_date" id="end_date" value="{{ end_date | default('', true) }}" class="form-input w-full">
-                </div>
-                <div class="w-52">
-                    <label for="employee_id" class="form-label">Employee ID</label>
-                    <input type="text" name="employee_id" id="employee_id" value="{{ employee_id | default('', true) }}" class="form-input w-full" placeholder="UUID">
-                </div>
-                <button type="submit" class="btn btn-secondary h-10">Filter</button>
-            </div>
-        </form>
     </div>
+    {% endcall %}
+
+    <div id="results-container">
 
     <div class="card p-6">
         <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Reports</h2>
@@ -226,6 +221,8 @@
             </a>
         </div>
     </div>
+    </div>
+
 
     {% if records %}
     <div class="card overflow-hidden">

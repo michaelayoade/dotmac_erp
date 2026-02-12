@@ -19,6 +19,7 @@ from app.models.people.hr.employee import EmployeeStatus
 from app.models.people.recruit import InterviewStatus
 from app.models.people.recruit.interview import InterviewRound
 from app.services.common import PaginationParams, coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.people.hr import EmployeeFilters, EmployeeService
 from app.services.people.recruit import RecruitmentService
 from app.templates import templates
@@ -84,6 +85,16 @@ class InterviewWebService:
             pagination=PaginationParams(limit=200),
         ).items
 
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "job_opening_id": job_opening_id,
+                "applicant_id": applicant_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            labels={"start_date": "From", "end_date": "To"},
+        )
         return {
             "interviews": result.items,
             "job_openings": job_openings,
@@ -99,6 +110,7 @@ class InterviewWebService:
             "total": result.total,
             "has_prev": result.has_prev,
             "has_next": result.has_next,
+            "active_filters": active_filters,
         }
 
     @staticmethod

@@ -27,6 +27,7 @@ from app.models.people.scheduling import (
 )
 from app.models.person import Person
 from app.services.common import PaginationParams, coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.people.scheduling import (
     ScheduleGenerator,
     SchedulingService,
@@ -1001,6 +1002,7 @@ class SchedulingWebService:
         )
 
         ctx = base_context(request, auth, "Swap Requests", "people", db=db)
+        active_filters = build_active_filters(params={"status": status})
         ctx.update(
             {
                 "swap_requests": swap_requests,
@@ -1010,6 +1012,7 @@ class SchedulingWebService:
                 "total_pages": total_pages,
                 "has_prev": page > 1,
                 "has_next": page < total_pages,
+                "active_filters": active_filters,
             }
         )
 

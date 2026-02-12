@@ -26,7 +26,11 @@
         // Clear the matching form field
         var field = form.querySelector("[name='" + fieldName + "']");
         if (field) {
-            field.value = "";
+            if (field.type === "checkbox" || field.type === "radio") {
+                field.checked = false;
+            } else {
+                field.value = "";
+            }
             // Trigger HTMX change event to refresh results
             if (window.htmx) {
                 htmx.trigger(field, "change");

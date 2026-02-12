@@ -20,7 +20,7 @@
 {% block header_actions %}
 {% if reconciliation and reconciliation.status == 'draft' %}
 <div class="flex items-center gap-2">
-    <button hx-post="/api/v1/banking/reconciliations/{{ reconciliation.reconciliation_id }}/auto-match"
+    <button hx-post="/finance/banking/reconciliations/{{ reconciliation.reconciliation_id }}/auto-match"
             hx-swap="none"
             hx-on::after-request="location.reload()"
             class="btn btn-secondary">
@@ -29,7 +29,7 @@
         </svg>
         Auto Match
     </button>
-    <button hx-post="/api/v1/banking/reconciliations/{{ reconciliation.reconciliation_id }}/submit"
+    <button hx-post="/finance/banking/reconciliations/{{ reconciliation.reconciliation_id }}/submit"
             hx-swap="none"
             hx-on::after-request="location.reload()"
             class="btn btn-primary">
@@ -41,14 +41,14 @@
 </div>
 {% elif reconciliation and reconciliation.status == 'pending_review' %}
 <div class="flex items-center gap-2">
-    <button hx-post="/api/v1/banking/reconciliations/{{ reconciliation.reconciliation_id }}/reject"
+    <button hx-post="/finance/banking/reconciliations/{{ reconciliation.reconciliation_id }}/reject"
             hx-vals='{"notes": "Rejected via UI"}'
             hx-swap="none"
             hx-on::after-request="location.reload()"
             class="btn btn-danger">
         Reject
     </button>
-    <button hx-post="/api/v1/banking/reconciliations/{{ reconciliation.reconciliation_id }}/approve"
+    <button hx-post="/finance/banking/reconciliations/{{ reconciliation.reconciliation_id }}/approve"
             hx-swap="none"
             hx-on::after-request="location.reload()"
             class="btn btn-primary">
@@ -106,7 +106,7 @@
         return this.multiMode ? this.selectedGLs.includes(id) : this.selectedGL === id;
     },
     matchSingle() {
-        fetch("/api/v1/banking/reconciliations/{{ reconciliation.reconciliation_id }}/matches", {
+        fetch("/finance/banking/reconciliations/{{ reconciliation.reconciliation_id }}/matches", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -119,7 +119,7 @@
     acceptSuggestion() {
         let sug = this.suggestions[this.selectedStatement];
         if (!sug) return;
-        fetch("/api/v1/banking/reconciliations/{{ reconciliation.reconciliation_id }}/matches", {
+        fetch("/finance/banking/reconciliations/{{ reconciliation.reconciliation_id }}/matches", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -130,7 +130,7 @@
         }).then(() => location.reload());
     },
     matchMultiple() {
-        fetch("/api/v1/banking/reconciliations/{{ reconciliation.reconciliation_id }}/multi-match", {
+        fetch("/finance/banking/reconciliations/{{ reconciliation.reconciliation_id }}/multi-match", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

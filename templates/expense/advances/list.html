@@ -1,5 +1,6 @@
 {% extends "expense/base_expense.html" %}
-{%- from "components/macros.html" import status_badge, pagination, empty_state %}
+{%- from "components/macros.html" import status_badge, pagination, empty_state, compact_filters %}
+
 
 {% block page_title %}Cash Advances{% endblock %}
 
@@ -29,30 +30,27 @@
     </div>
 
     <!-- Filters -->
-    <div class="card p-4">
-        <form method="get" class="flex flex-wrap items-end gap-4">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/expense/advances/list",
+        active_filters=active_filters | default([])
+    ) %}
+    <div>
             <div class="min-w-[180px]">
-                <label class="form-label">Status</label>
-                <select name="status" class="form-input form-select">
+                <label class="form-label text-xs">Status</label>
+                <select name="status" class="form-select w-full" {{ filter_attrs }}>
                     <option value="">All Statuses</option>
                     {% for s in statuses %}
                     <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace("_", " ") | title }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <button type="submit" class="btn btn-secondary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                </svg>
-                Filter
-            </button>
-            {% if status %}
-            <a href="/expense/advances/list" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300">Clear</a>
-            {% endif %}
-        </form>
     </div>
+    {% endcall %}
 
     <!-- Advances Table -->
+    <div id="results-container">
+
     <div class="card overflow-hidden">
         {% if advances %}
         <div class="table-container">
@@ -118,5 +116,7 @@
         ) }}
         {% endif %}
     </div>
+    </div>
+
 </div>
 {% endblock %}

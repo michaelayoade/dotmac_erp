@@ -1,4 +1,6 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import compact_filters %}
+
 
 {% block page_title %}General ledger{% endblock %}
 
@@ -28,11 +30,18 @@
 {% block content %}
 <div class="max-w-6xl mx-auto space-y-6">
     <!-- Filter Card -->
-    <div class="card p-4">
-        <form method="get" class="flex flex-wrap items-end gap-4">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/finance/reports/general-ledger",
+        active_filters=active_filters | default([]),
+        date_range=true,
+        start_date=start_date | default('', true),
+        end_date=end_date | default('', true)
+    ) %}
+    <div>
             <div class="flex-1 min-w-[200px]">
-                <label class="form-label">Account</label>
-                <select name="account_id" class="form-input form-select">
+                <label class="form-label text-xs">Account</label>
+                <select name="account_id" class="form-select w-full" {{ filter_attrs }}>
                     <option value="">Select an account...</option>
                     {% for acct in accounts %}
                     <option value="{{ acct.account_id }}" {% if acct.account_id == account_id %}selected{% endif %}>
@@ -41,25 +50,13 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="min-w-[150px]">
-                <label class="form-label">Start date</label>
-                <input type="date" name="start_date" value="{{ start_date }}" class="form-input">
-            </div>
-            <div class="min-w-[150px]">
-                <label class="form-label">End date</label>
-                <input type="date" name="end_date" value="{{ end_date }}" class="form-input">
-            </div>
-            <button type="submit" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                </svg>
-                Generate
-            </button>
-        </form>
     </div>
+    {% endcall %}
 
     <!-- Report -->
     {% if selected_account %}
+    <div id="results-container">
+
     <div class="card p-6 print:shadow-none print:border-0">
                 {% set doc_title = "General ledger detail" %}
         {% set doc_number = selected_account.account_code %}
@@ -120,6 +117,8 @@
         </div>
         {% endif %}
     </div>
+    </div>
+
     {% else %}
     <!-- No Account Selected -->
     <div class="card p-6">

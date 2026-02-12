@@ -1,5 +1,6 @@
 {% extends "modules/base_modules.html" %}
-{% from "components/macros.html" import status_badge, pagination, action_buttons %}
+{% from "components/macros.html" import status_badge, pagination, action_buttons, compact_filters %}
+
 
 {% block page_title %}Documents{% endblock %}
 
@@ -85,36 +86,32 @@
     </div>
 
     <!-- Filters -->
-    <div class="card p-4">
-        <form method="get" action="/fleet/documents" class="flex flex-wrap items-center gap-4">
-            <select name="document_type" class="form-select">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/fleet/documents",
+        active_filters=active_filters | default([])
+    ) %}
+    <div>
+            <select name="document_type" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Types</option>
                 {% for dt in document_types %}
                 <option value="{{ dt.value }}" {{ 'selected' if document_type == dt.value else '' }}>{{ dt.value | replace('_', ' ') | title }}</option>
                 {% endfor %}
             </select>
-            <select name="vehicle_id" class="form-select">
+    </div>
+    <div>
+            <select name="vehicle_id" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Vehicles</option>
                 {% for v in vehicles %}
                 <option value="{{ v.vehicle_id }}" {{ 'selected' if vehicle_id|string == v.vehicle_id|string else '' }}>{{ v.registration_number }}</option>
                 {% endfor %}
             </select>
-            <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" name="expired_only" value="true" {{ 'checked' if expired_only else '' }} class="form-checkbox">
-                <span class="text-sm text-slate-600 dark:text-slate-400">Expired only</span>
-            </label>
-            <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" name="expiring_soon" value="true" {{ 'checked' if expiring_soon else '' }} class="form-checkbox">
-                <span class="text-sm text-slate-600 dark:text-slate-400">Expiring soon</span>
-            </label>
-            <button type="submit" class="btn btn-secondary">Filter</button>
-            {% if document_type or vehicle_id or expired_only or expiring_soon %}
-            <a href="/fleet/documents" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400">Clear</a>
-            {% endif %}
-        </form>
     </div>
+    {% endcall %}
 
     <!-- Documents Table -->
+    <div id="results-container">
+
     <div class="card">
         <div class="table-container">
             <table class="table">
@@ -201,5 +198,7 @@
         {{ pagination(page=page, total_pages=total_pages, total_count=total, limit=limit) }}
         {% endif %}
     </div>
+    </div>
+
 </div>
 {% endblock %}

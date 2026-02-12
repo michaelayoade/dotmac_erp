@@ -27,6 +27,7 @@ from app.models.finance.tax.tax_period import (
 from app.models.finance.tax.tax_return import TaxReturn, TaxReturnStatus, TaxReturnType
 from app.models.finance.tax.tax_transaction import TaxTransaction, TaxTransactionType
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.tax import (
     TaxReturnInput,
@@ -600,6 +601,7 @@ class TaxWebService:
         )
 
         context = base_context(request, auth, "Tax Periods", "tax")
+        active_filters = build_active_filters(params={"status": status})
         context.update(
             {
                 "periods": periods,
@@ -608,6 +610,7 @@ class TaxWebService:
                 "status": status,
                 "year": year,
                 "page": page,
+                "active_filters": active_filters,
             }
         )
 
@@ -710,6 +713,9 @@ class TaxWebService:
         filed_count = sum(1 for r in returns if r.status == TaxReturnStatus.FILED)
 
         context = base_context(request, auth, "Tax Returns", "tax")
+        active_filters = build_active_filters(
+            params={"status": status, "period_id": period_id},
+        )
         context.update(
             {
                 "returns": formatted_returns,
@@ -724,6 +730,7 @@ class TaxWebService:
                 "prepared_count": prepared_count,
                 "reviewed_count": reviewed_count,
                 "filed_count": filed_count,
+                "active_filters": active_filters,
             }
         )
 

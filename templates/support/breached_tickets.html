@@ -1,4 +1,6 @@
 {% extends "modules/base_modules.html" %}
+{% from "components/macros.html" import compact_filters %}
+
 
 {% block page_title %}Breached Tickets{% endblock %}
 
@@ -19,30 +21,29 @@
 {% block content %}
 <div class="space-y-6">
     {# Filters #}
-    <div class="card p-4">
-        <form method="get" class="flex flex-wrap gap-4 items-end">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/support/breached-tickets",
+        active_filters=active_filters | default([])
+    ) %}
+    <div>
             <div>
-                <label for="breach_type" class="form-label">Breach Type</label>
-                <select name="breach_type" id="breach_type" class="form-input">
+                <label class="form-label text-xs">Breach Type</label>
+                <select name="breach_type" class="form-input" {{ filter_attrs }}>
                     <option value="all" {{ 'selected' if breach_type == 'all' }}>All Breaches</option>
                     <option value="response" {{ 'selected' if breach_type == 'response' }}>Response Only</option>
                     <option value="resolution" {{ 'selected' if breach_type == 'resolution' }}>Resolution Only</option>
                 </select>
             </div>
             <div class="flex items-center gap-2">
-                <input type="checkbox" name="include_resolved" id="include_resolved" value="true"
+                <input type="checkbox" name="include_resolved" value="true"
                     class="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                    {{ filter_attrs }}
                     {{ 'checked' if include_resolved }}>
-                <label for="include_resolved" class="text-sm text-slate-700 dark:text-slate-300">Include resolved tickets</label>
+                <label class="text-sm text-slate-700 dark:text-slate-300">Include resolved tickets</label>
             </div>
-            <button type="submit" class="btn btn-primary h-10">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                </svg>
-                Filter
-            </button>
-        </form>
     </div>
+    {% endcall %}
 
     {# Summary #}
     <div class="flex items-center gap-3">

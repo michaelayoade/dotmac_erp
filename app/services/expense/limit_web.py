@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.models.expense import LimitActionType, LimitPeriodType, LimitScopeType
 from app.models.expense.limit_rule import ExpenseApproverLimit
 from app.services.common import PaginationParams, coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.expense import ExpenseLimitService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
@@ -75,6 +76,9 @@ class ExpenseLimitWebService:
         # Calculate pagination
         total_pages = (result.total + per_page - 1) // per_page
 
+        active_filters = build_active_filters(
+            params={"scope_type": scope_type, "is_active": is_active},
+        )
         context = base_context(request, auth, "Expense Limits", "limits")
         context.update(
             {
@@ -90,6 +94,7 @@ class ExpenseLimitWebService:
                     "is_active": is_active,
                     "search": search,
                 },
+                "active_filters": active_filters,
             }
         )
         return templates.TemplateResponse(request, "expense/limits/list.html", context)
@@ -907,6 +912,10 @@ class ExpenseLimitWebService:
         total_pages = (evaluations.total + per_page - 1) // per_page
 
         context = base_context(request, auth, "Limit Evaluations", "limits")
+        active_filters = build_active_filters(
+            params={"result": result, "from_date": from_date, "to_date": to_date},
+            labels={"from_date": "From", "to_date": "To"},
+        )
         context.update(
             {
                 "evaluations": evaluations.items,
@@ -919,6 +928,7 @@ class ExpenseLimitWebService:
                     "from_date": from_date,
                     "to_date": to_date,
                 },
+                "active_filters": active_filters,
             }
         )
         return templates.TemplateResponse(

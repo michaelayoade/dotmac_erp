@@ -1,4 +1,6 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import compact_filters %}
+
 
 {% block page_title %}360° Feedback{% endblock %}
 
@@ -41,35 +43,37 @@
     </div>
 
     <!-- Filters -->
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap gap-4 items-end">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/perf/feedback",
+        active_filters=active_filters | default([])
+    ) %}
+    <div>
                 <div class="w-40">
-                    <label for="feedback_type" class="form-label">Type</label>
-                    <select name="feedback_type" id="feedback_type" class="form-select w-full">
+                    <label class="form-label text-xs">Type</label>
+                    <select name="feedback_type" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All Types</option>
                         {% for ft in feedback_types %}
                         <option value="{{ ft }}" {% if feedback_type == ft %}selected{% endif %}>{{ ft | title }}</option>
                         {% endfor %}
                     </select>
                 </div>
+    </div>
+    <div>
                 <div class="w-40">
-                    <label for="submitted" class="form-label">Status</label>
-                    <select name="submitted" id="submitted" class="form-select w-full">
+                    <label class="form-label text-xs">Status</label>
+                    <select name="submitted" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All</option>
                         <option value="false" {% if submitted == 'false' %}selected{% endif %}>Pending</option>
                         <option value="true" {% if submitted == 'true' %}selected{% endif %}>Submitted</option>
                     </select>
                 </div>
-                <button type="submit" class="btn btn-secondary h-10">Filter</button>
-                {% if feedback_type or submitted or appraisal_id %}
-                <a href="/people/perf/feedback" class="btn btn-ghost h-10">Clear</a>
-                {% endif %}
-            </div>
-        </form>
     </div>
+    {% endcall %}
 
     {% if feedback_list %}
+    <div id="results-container">
+
     <div class="card overflow-hidden">
         <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
@@ -145,6 +149,8 @@
             </table>
         </div>
     </div>
+    </div>
+
     {% else %}
     <div class="card p-8 text-center">
         <svg class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

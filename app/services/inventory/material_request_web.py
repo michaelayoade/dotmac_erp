@@ -27,6 +27,7 @@ from app.models.people.hr import Employee, EmployeeStatus
 from app.models.person import Person
 from app.models.support.ticket import Ticket
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.formatters import format_currency as _format_currency
 from app.services.formatters import format_date as _format_date
 from app.services.formatters import format_datetime as _format_datetime
@@ -160,6 +161,7 @@ class MaterialRequestWebService:
         )
         type_count_dict = {t.value: c for t, c in type_counts}
 
+        active_filters = build_active_filters(params={"status": status})
         return {
             "requests": items,
             "filter_status": status,
@@ -171,6 +173,7 @@ class MaterialRequestWebService:
             "type_counts": type_count_dict,
             "statuses": [s.value for s in MaterialRequestStatus],
             "request_types": [t.value for t in MaterialRequestType],
+            "active_filters": active_filters,
         }
 
     @staticmethod

@@ -1,5 +1,6 @@
 {% extends "inventory/base_inventory.html" %}
-{% from "components/macros.html" import pagination %}
+{% from "components/macros.html" import pagination, compact_filters %}
+
 
 {% block page_title %}Stock on Hand Report{% endblock %}
 
@@ -60,9 +61,13 @@
     </div>
 
     <!-- Filters -->
-    <div class="card p-4">
-        <form method="get" action="/inventory/reports/stock-on-hand" class="flex flex-wrap items-center gap-4">
-            <select name="warehouse" class="form-select">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/inventory/reports/stock-on-hand",
+        active_filters=active_filters | default([])
+    ) %}
+    <div>
+            <select name="warehouse" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Warehouses</option>
                 {% for wh in warehouses | default([]) %}
                 <option value="{{ wh.warehouse_id }}" {{ 'selected' if warehouse == wh.warehouse_id|string else '' }}>
@@ -70,7 +75,9 @@
                 </option>
                 {% endfor %}
             </select>
-            <select name="category" class="form-select">
+    </div>
+    <div>
+            <select name="category" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Categories</option>
                 {% for cat in categories | default([]) %}
                 <option value="{{ cat.category_id }}" {{ 'selected' if category == cat.category_id|string else '' }}>
@@ -78,16 +85,12 @@
                 </option>
                 {% endfor %}
             </select>
-            <label class="flex items-center gap-2">
-                <input type="checkbox" name="show_zero" value="1" class="form-checkbox"
-                       {{ 'checked' if show_zero else '' }}>
-                <span class="text-sm text-slate-600 dark:text-slate-400">Show zero stock</span>
-            </label>
-            <button type="submit" class="btn btn-secondary">Apply</button>
-        </form>
     </div>
+    {% endcall %}
 
     <!-- Report Table -->
+    <div id="results-container">
+
     <div class="card overflow-hidden">
         <div class="table-container">
             <table class="table-ledger">
@@ -157,6 +160,8 @@
             </table>
         </div>
     </div>
+    </div>
+
 
     {% if stock_data | default([]) | length > 0 %}
     {{ pagination(

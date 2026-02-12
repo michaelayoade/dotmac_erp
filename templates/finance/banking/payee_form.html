@@ -23,10 +23,7 @@
 {% block content %}
 <div class="mx-auto max-w-3xl">
     <form method="post"
-          action="{{ '/api/v1/banking/payees/' + payee.payee_id|string if payee else '/api/v1/banking/payees' }}"
-          hx-post="{{ '/api/v1/banking/payees/' + payee.payee_id|string if payee else '/api/v1/banking/payees' }}"
-          hx-swap="none"
-          hx-on::after-request="if(event.detail.successful) window.location.href='/finance/banking/payees'"
+          action="{{ '/finance/banking/payees/' + payee.payee_id|string + '/edit' if payee else '/finance/banking/payees/new' }}"
           class="space-y-6">
         {{ request.state.csrf_form | safe }}
 

@@ -21,6 +21,7 @@ from starlette.datastructures import UploadFile
 from app.models.people.attendance import AttendanceStatus
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.services.common import PaginationParams, coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.people.attendance import AttendanceService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
@@ -988,6 +989,10 @@ class AttendanceWebService:
         context = base_context(
             request, auth, "Attendance Requests", "attendance", db=db
         )
+        active_filters = build_active_filters(
+            params={"status": status, "start_date": start_date, "end_date": end_date},
+            labels={"start_date": "From", "end_date": "To"},
+        )
         context.update(
             {
                 "requests": result.items,
@@ -1003,6 +1008,7 @@ class AttendanceWebService:
                 "has_next": result.has_next,
                 "success": success,
                 "error": error,
+                "active_filters": active_filters,
             }
         )
         return templates.TemplateResponse(

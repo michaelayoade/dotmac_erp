@@ -21,6 +21,7 @@ from app.models.sync import (
     SyncHistory,
     SyncStatus,
 )
+from app.services.common_filters import build_active_filters
 from app.services.erpnext.sync.orchestrator import SUPPORTED_ENTITIES, SYNC_PHASES
 from app.tasks.sync import (
     run_full_erpnext_sync,
@@ -264,6 +265,7 @@ class SyncWebService:
         context["total"] = total
         context["total_pages"] = (total + per_page - 1) // per_page
         context["filter_status"] = status
+        context["active_filters"] = build_active_filters(params={"status": status})
 
         return templates.TemplateResponse(request, "admin/sync/history.html", context)
 
@@ -564,6 +566,9 @@ class SyncWebService:
         context["total_pages"] = (context["total"] + per_page - 1) // per_page
         context["filter_doctype"] = doctype
         context["filter_status"] = status
+        context["active_filters"] = build_active_filters(
+            params={"doctype": doctype, "status": status},
+        )
 
         return templates.TemplateResponse(request, "admin/sync/entities.html", context)
 

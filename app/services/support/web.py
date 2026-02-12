@@ -40,6 +40,7 @@ from app.templates import templates
 
 if TYPE_CHECKING:
     from app.web.deps import WebAuthContext
+from app.services.common_filters import build_active_filters
 
 logger = logging.getLogger(__name__)
 
@@ -1212,12 +1213,29 @@ class SupportWebService:
                 }
             )
 
+        active_filters = build_active_filters(
+            params={
+                "breach_type": breach_type,
+                # Only consider this active if it's explicitly enabled.
+                "include_resolved": "true" if include_resolved else None,
+            },
+            labels={"include_resolved": "Include resolved"},
+            options={
+                "breach_type": {
+                    "all": "All",
+                    "response": "Response",
+                    "resolution": "Resolution",
+                },
+                "include_resolved": {"true": "Yes"},
+            },
+        )
         context = {
             **base_context(request, auth, "Breached Tickets", "support", db=db),
             "tickets": breached_formatted,
             "breach_type": breach_type,
             "include_resolved": include_resolved,
             "total_count": len(breached_formatted),
+            "active_filters": active_filters,
         }
 
         return templates.TemplateResponse(

@@ -1,4 +1,4 @@
-.PHONY: help test lint type-check format check migrate dev docker-up docker-down docker-logs worker beat css coverage clean
+.PHONY: help test lint type-check format security check migrate dev docker-up docker-down docker-logs worker beat css coverage clean
 
 # Default target
 help: ## Show this help
@@ -16,7 +16,10 @@ format: ## Format code with ruff
 type-check: ## Run mypy type checker
 	poetry run mypy app/ --ignore-missing-imports
 
-check: lint type-check ## Run all quality checks (lint + type-check)
+security: ## Run bandit security scan
+	poetry run bandit -r app/ -c pyproject.toml -q
+
+check: lint type-check security ## Run all quality checks (lint + type-check + security)
 
 # ─── Testing ──────────────────────────────────────────────
 

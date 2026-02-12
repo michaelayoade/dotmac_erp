@@ -34,6 +34,7 @@ from app.models.finance.automation import (
     WorkflowRule,
 )
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.finance.automation.custom_fields import (
     CustomFieldInput,
     custom_fields_service,
@@ -588,6 +589,9 @@ class AutomationWebService:
             _recurring_list_view(t, counts.get(t.template_id, 0)) for t in templates
         ]
 
+        active_filters = build_active_filters(
+            params={"entity_type": entity_type, "status": status}
+        )
         return {
             "templates": items,
             "total": total,
@@ -606,6 +610,7 @@ class AutomationWebService:
                 "entity_type": entity_type,
                 "status": status,
             },
+            "active_filters": active_filters,
         }
 
     def recurring_form_context(
@@ -724,6 +729,15 @@ class AutomationWebService:
 
         items = [_workflow_list_view(r) for r in rules]
 
+        active_filters = build_active_filters(
+            params={
+                "entity_type": entity_type,
+                "trigger_event": trigger_event,
+                "is_active": str(is_active).lower() if is_active is not None else None,
+            },
+            labels={"is_active": "Active"},
+            options={"is_active": {"true": "Yes", "false": "No"}},
+        )
         return {
             "rules": items,
             "total": len(items),
@@ -744,6 +758,7 @@ class AutomationWebService:
                 "trigger_event": trigger_event,
                 "is_active": is_active,
             },
+            "active_filters": active_filters,
         }
 
     def workflow_form_context(
@@ -891,6 +906,7 @@ class AutomationWebService:
                 grouped[key] = []
             grouped[key].append(item)
 
+        active_filters = build_active_filters(params={"entity_type": entity_type})
         return {
             "fields": items,
             "grouped_fields": grouped,
@@ -907,6 +923,7 @@ class AutomationWebService:
                 "entity_type": entity_type,
                 "is_active": is_active,
             },
+            "active_filters": active_filters,
         }
 
     def custom_field_form_context(
@@ -1029,6 +1046,7 @@ class AutomationWebService:
         doc_templates = [i for i in items if i["category"] == "Document Templates"]
         email_templates = [i for i in items if i["category"] == "Email Templates"]
 
+        active_filters = build_active_filters(params={"template_type": template_type})
         return {
             "templates": items,
             "doc_templates": doc_templates,
@@ -1042,6 +1060,7 @@ class AutomationWebService:
                 "template_type": template_type,
                 "is_active": is_active,
             },
+            "active_filters": active_filters,
         }
 
     def template_form_context(

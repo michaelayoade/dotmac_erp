@@ -1921,8 +1921,13 @@ class ReportsWebService:
         as_of_date: str | None,
         db: Session,
     ) -> HTMLResponse:
+        from app.services.common_filters import build_active_filters
         from app.web.deps import base_context
 
+        active_filters = build_active_filters(
+            params={"as_of_date": as_of_date},
+            labels={"as_of_date": "As of"},
+        )
         context = base_context(request, auth, "AP Aging Report", "reports")
         context.update(
             self.ap_aging_context(
@@ -1931,6 +1936,7 @@ class ReportsWebService:
                 as_of_date=as_of_date,
             )
         )
+        context["active_filters"] = active_filters
         return templates.TemplateResponse(
             request, "finance/reports/ap_aging.html", context
         )
@@ -1942,8 +1948,13 @@ class ReportsWebService:
         as_of_date: str | None,
         db: Session,
     ) -> HTMLResponse:
+        from app.services.common_filters import build_active_filters
         from app.web.deps import base_context
 
+        active_filters = build_active_filters(
+            params={"as_of_date": as_of_date},
+            labels={"as_of_date": "As of"},
+        )
         context = base_context(request, auth, "AR Aging Report", "reports")
         context.update(
             self.ar_aging_context(
@@ -1952,6 +1963,7 @@ class ReportsWebService:
                 as_of_date=as_of_date,
             )
         )
+        context["active_filters"] = active_filters
         return templates.TemplateResponse(
             request, "finance/reports/ar_aging.html", context
         )

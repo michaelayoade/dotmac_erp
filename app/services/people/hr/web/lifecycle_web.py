@@ -20,6 +20,7 @@ from app.models.people.hr.checklist_template import (
 )
 from app.models.person import Person
 from app.services.common import ValidationError, coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.people.hr import BulkUpdateData, EmployeeService
 from app.services.people.hr.lifecycle import LifecycleService
 from app.services.people.hr.web import hr_web_service
@@ -448,6 +449,7 @@ class LifecycleWebService:
         )
 
         context = base_context(request, auth, "Promotions", "employees", db=db)
+        active_filters = build_active_filters(params={"employee_id": employee_id})
         context.update(
             {
                 "promotions": result.items,
@@ -456,6 +458,7 @@ class LifecycleWebService:
                 "total_pages": result.total_pages,
                 "has_prev": result.has_prev,
                 "has_next": result.has_next,
+                "active_filters": active_filters,
             }
         )
         return templates.TemplateResponse(request, "people/hr/promotions.html", context)
@@ -648,6 +651,7 @@ class LifecycleWebService:
         )
 
         context = base_context(request, auth, "Transfers", "employees", db=db)
+        active_filters = build_active_filters(params={"employee_id": employee_id})
         context.update(
             {
                 "transfers": result.items,
@@ -656,6 +660,7 @@ class LifecycleWebService:
                 "total_pages": result.total_pages,
                 "has_prev": result.has_prev,
                 "has_next": result.has_next,
+                "active_filters": active_filters,
             }
         )
         return templates.TemplateResponse(request, "people/hr/transfers.html", context)

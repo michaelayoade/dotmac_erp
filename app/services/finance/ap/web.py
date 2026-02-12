@@ -43,6 +43,7 @@ from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.services.audit_info import get_audit_service
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.finance.ap.ap_aging import ap_aging_service
 from app.services.finance.ap.goods_receipt import goods_receipt_service
 from app.services.finance.ap.payment_batch import payment_batch_service
@@ -553,6 +554,7 @@ class APWebService:
             or 0
         )
 
+        active_filters = build_active_filters(params={"status": status})
         return {
             "suppliers": suppliers_view,
             "search": search,
@@ -568,6 +570,7 @@ class APWebService:
             "active_count": active_count,
             "total_payables": _format_currency(total_payables_raw),
             "overdue_count": overdue_count,
+            "active_filters": active_filters,
         }
 
     @staticmethod
@@ -832,6 +835,20 @@ class APWebService:
             pending_count=pending_count,
         )
 
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "supplier_id": supplier_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            labels={"start_date": "From", "end_date": "To"},
+            options={
+                "supplier_id": {
+                    str(s["supplier_id"]): s["supplier_name"] for s in suppliers_list
+                }
+            },
+        )
         return {
             "invoices": invoices_view,
             "suppliers_list": suppliers_list,
@@ -846,6 +863,7 @@ class APWebService:
             "offset": offset,
             "total_count": total_count,
             "total_pages": total_pages,
+            "active_filters": active_filters,
         }
 
     @staticmethod
@@ -1146,6 +1164,20 @@ class APWebService:
 
         total_pages = max(1, (total_count + limit - 1) // limit)
 
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "supplier_id": supplier_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            labels={"start_date": "From", "end_date": "To"},
+            options={
+                "supplier_id": {
+                    str(s["supplier_id"]): s["supplier_name"] for s in suppliers_list
+                }
+            },
+        )
         return {
             "payments": payments_view,
             "suppliers_list": suppliers_list,
@@ -1159,6 +1191,7 @@ class APWebService:
             "offset": offset,
             "total_count": total_count,
             "total_pages": total_pages,
+            "active_filters": active_filters,
         }
 
     @staticmethod
@@ -1671,6 +1704,15 @@ class APWebService:
 
         total_pages = max(1, (total_count + limit - 1) // limit)
 
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "supplier_id": supplier_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            labels={"start_date": "From", "end_date": "To"},
+        )
         return {
             "orders": orders_view,
             "suppliers_list": suppliers_list,
@@ -1691,6 +1733,7 @@ class APWebService:
             "total_count": total_count,
             "total_pages": total_pages,
             "po_statuses": [s.value for s in POStatus],
+            "active_filters": active_filters,
         }
 
     @staticmethod
@@ -2042,6 +2085,15 @@ class APWebService:
 
         total_pages = max(1, (total_count + limit - 1) // limit)
 
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "supplier_id": supplier_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            labels={"start_date": "From", "end_date": "To"},
+        )
         return {
             "receipts": receipts_view,
             "suppliers_list": suppliers_list,
@@ -2062,6 +2114,7 @@ class APWebService:
             "total_count": total_count,
             "total_pages": total_pages,
             "gr_statuses": [s.value for s in ReceiptStatus],
+            "active_filters": active_filters,
         }
 
     @staticmethod

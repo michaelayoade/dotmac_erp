@@ -1,4 +1,6 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import compact_filters %}
+
 
 {% block page_title %}Attendance Trends{% endblock %}
 
@@ -29,25 +31,28 @@
     </div>
 
     <!-- Period Filter -->
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap gap-4 items-end">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/attendance/reports/trends",
+        active_filters=active_filters | default([])
+    ) %}
+    <div>
                 <div class="w-44">
-                    <label for="months" class="form-label">Period</label>
-                    <select name="months" id="months" class="form-select w-full">
+                    <label class="form-label text-xs">Period</label>
+                    <select name="months" class="form-select w-full" {{ filter_attrs }}>
                         <option value="3" {% if months == 3 %}selected{% endif %}>Last 3 months</option>
                         <option value="6" {% if months == 6 %}selected{% endif %}>Last 6 months</option>
                         <option value="12" {% if months == 12 %}selected{% endif %}>Last 12 months</option>
                         <option value="24" {% if months == 24 %}selected{% endif %}>Last 24 months</option>
                     </select>
                 </div>
-                <button type="submit" class="btn btn-secondary h-10">Apply Filter</button>
-            </div>
-        </form>
     </div>
+    {% endcall %}
 
     <!-- Summary Cards -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div id="results-container">
+
         <div class="card p-5">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-teal-100 dark:bg-teal-900/30">
@@ -61,6 +66,8 @@
                 </div>
             </div>
         </div>
+        </div>
+
 
         <div class="card p-5">
             <div class="flex items-center gap-4">

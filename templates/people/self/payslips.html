@@ -1,4 +1,6 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import compact_filters %}
+
 
 {% block page_title %}My Payslips{% endblock %}
 
@@ -22,15 +24,21 @@
 
         {# Year Filter #}
         {% if available_years %}
-        <form method="get" class="flex items-center gap-2">
-            <label for="year" class="text-sm text-slate-600 dark:text-slate-400">Year:</label>
-            <select name="year" id="year" onchange="this.form.submit()" class="form-select text-sm py-1.5">
+        {# Filters #}
+        {% call(filter_attrs) compact_filters(
+            base_url="/people/self/payslips",
+            active_filters=active_filters | default([])
+        ) %}
+        <div>
+            <label class="form-label text-xs">Year:</label>
+            <select name="year" onchange="this.form.submit()" class="form-select w-full text-sm py-1.5" {{ filter_attrs }}>
                 <option value="">All Years</option>
                 {% for y in available_years %}
                 <option value="{{ y }}" {% if year == y %}selected{% endif %}>{{ y }}</option>
                 {% endfor %}
             </select>
-        </form>
+        </div>
+        {% endcall %}
         {% endif %}
     </div>
 
@@ -38,7 +46,11 @@
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {% for slip in slips %}
         <a href="/people/self/payslips/{{ slip.slip_id }}"
+           <div id="results-container">
+
            class="card p-5 hover:shadow-lg hover:border-violet-300 dark:hover:border-violet-700 transition-all group">
+           </div>
+
             <div class="flex items-start justify-between mb-4">
                 <div>
                     <p class="text-xs text-slate-500 dark:text-slate-400 mb-1">{{ slip.slip_number }}</p>

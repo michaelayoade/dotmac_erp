@@ -36,6 +36,7 @@ from app.schemas.people.discipline import (
     ScheduleHearingRequest,
 )
 from app.services.common import PaginationParams, ValidationError, coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.formatters import parse_date
 from app.services.people.discipline import DisciplineService
 from app.services.people.hr import EmployeeService
@@ -100,6 +101,7 @@ class DisciplineWebService:
         context = base_context(
             request, auth, "Disciplinary Cases", "hr-discipline", db=db
         )
+        active_filters = build_active_filters(params={"status": status})
         context.update(
             {
                 "cases": cases,
@@ -116,6 +118,7 @@ class DisciplineWebService:
                 "total": total,
                 "has_prev": page > 1,
                 "has_next": page < total_pages,
+                "active_filters": active_filters,
             }
         )
         return templates.TemplateResponse(

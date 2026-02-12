@@ -34,6 +34,7 @@ from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
 from app.models.people.payroll.salary_assignment import SalaryStructureAssignment
 from app.models.person import Gender, Person
 from app.services.common import PaginationParams, coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.people.attendance.attendance_service import AttendanceService
 from app.services.people.hr import (
     DepartmentFilters,
@@ -165,6 +166,13 @@ class HRWebService:
                 }
             )
 
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "department_id": department_id,
+                "designation_id": designation_id,
+            }
+        )
         context = {
             **base_context(request, auth, "Employees", "employees"),
             "employees": employees_view,
@@ -189,6 +197,7 @@ class HRWebService:
             "has_next": result.has_next,
             "success": success,
             "error": error,
+            "active_filters": active_filters,
         }
 
         return templates.TemplateResponse(

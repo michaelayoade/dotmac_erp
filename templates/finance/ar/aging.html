@@ -1,4 +1,6 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import compact_filters %}
+
 
 {% block page_title %}AR Aging Report{% endblock %}
 
@@ -33,39 +35,42 @@
 {% block content %}
 <div class="max-w-7xl mx-auto space-y-6" x-data="agingReport()" x-init="initCharts()">
     <!-- Filter Card -->
-    <div class="card p-4">
-        <form method="get" class="flex flex-wrap items-end gap-4">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/finance/ar/aging",
+        active_filters=active_filters | default([])
+    ) %}
+    <div>
             <div class="flex-1 min-w-[150px]">
-                <label class="form-label">As of Date</label>
-                <input type="date" name="as_of_date" value="{{ as_of_date }}" class="form-input">
-            </div>
-            <div class="flex-1 min-w-[150px]">
-                <label class="form-label">Customer</label>
-                <select name="customer_id" class="form-select">
+                <label class="form-label text-xs">Customer</label>
+                <select name="customer_id" class="form-select w-full" {{ filter_attrs }}>
                     <option value="">All Customers</option>
                     {% for customer in customers %}
                     <option value="{{ customer.customer_id }}" {{ 'selected' if customer.customer_id == selected_customer_id }}>{{ customer.legal_name }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <button type="submit" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-                </svg>
-                Refresh
-            </button>
-        </form>
     </div>
+    <div>
+        <label class="form-label text-xs">As Of Date</label>
+        <input type="date" name="as_of_date" value="{{ as_of_date | default('', true) }}"
+               class="form-input w-full" {{ filter_attrs }}>
+    </div>
+    {% endcall %}
 
     {% if aging_summary %}
     <!-- Summary Cards -->
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <!-- Total Outstanding -->
+        <div id="results-container">
+
         <div class="card p-5 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/80 dark:to-slate-800/40 border-slate-200/80 dark:border-slate-700/50">
             <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Outstanding</p>
             <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono mt-2">{{ aging_summary.total }}</p>
             <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ aging_summary.invoice_count }} invoices</p>
         </div>
+        </div>
+
 
         <!-- Current -->
         <div class="card p-5 border-l-4 border-l-emerald-500">

@@ -92,6 +92,33 @@ def vehicle_new(
     return templates.TemplateResponse(request, "fleet/vehicle_form.html", context)
 
 
+@router.post("/vehicles/new")
+async def vehicle_new_submit(
+    request: Request,
+    auth: WebAuthContext = Depends(require_fleet_access),
+    db: Session = Depends(get_db),
+):
+    """Create new vehicle from form."""
+    web_service = FleetWebService(db)
+    return await web_service.create_vehicle_response(
+        request, auth.organization_id, auth.user_id, db
+    )
+
+
+@router.post("/vehicles/{vehicle_id}/edit")
+async def vehicle_edit_submit(
+    request: Request,
+    vehicle_id: UUID,
+    auth: WebAuthContext = Depends(require_fleet_access),
+    db: Session = Depends(get_db),
+):
+    """Update existing vehicle from form."""
+    web_service = FleetWebService(db)
+    return await web_service.update_vehicle_response(
+        request, auth.organization_id, vehicle_id, db
+    )
+
+
 @router.get("/vehicles/import", response_class=HTMLResponse)
 def vehicle_import_form(
     request: Request,
@@ -348,6 +375,17 @@ def maintenance_new(
     return templates.TemplateResponse(request, "fleet/maintenance_form.html", context)
 
 
+@router.post("/maintenance/new")
+async def maintenance_create(
+    request: Request,
+    auth: WebAuthContext = Depends(require_fleet_access),
+    db: Session = Depends(get_db),
+):
+    """Create maintenance record from form submission."""
+    web_service = FleetWebService(db)
+    return await web_service.create_entity_response(request, auth, db, "maintenance")
+
+
 @router.get("/maintenance/{record_id}", response_class=HTMLResponse)
 def maintenance_detail(
     request: Request,
@@ -415,6 +453,17 @@ def fuel_new(
     return templates.TemplateResponse(request, "fleet/fuel_form.html", context)
 
 
+@router.post("/fuel/new")
+async def fuel_create(
+    request: Request,
+    auth: WebAuthContext = Depends(require_fleet_access),
+    db: Session = Depends(get_db),
+):
+    """Create fuel log from form submission."""
+    web_service = FleetWebService(db)
+    return await web_service.create_entity_response(request, auth, db, "fuel")
+
+
 @router.get("/expense-claims/search")
 def fleet_expense_claim_search(
     q: str = Query(..., min_length=1),
@@ -478,6 +527,17 @@ def incident_new(
         web_service.incident_form_context(auth.organization_id, vehicle_id=vehicle_id)
     )
     return templates.TemplateResponse(request, "fleet/incident_form.html", context)
+
+
+@router.post("/incidents/new")
+async def incident_create(
+    request: Request,
+    auth: WebAuthContext = Depends(require_fleet_access),
+    db: Session = Depends(get_db),
+):
+    """Create incident from form submission."""
+    web_service = FleetWebService(db)
+    return await web_service.create_entity_response(request, auth, db, "incident")
 
 
 @router.get("/incidents/{incident_id}", response_class=HTMLResponse)
@@ -544,6 +604,17 @@ def reservation_new(
     return templates.TemplateResponse(request, "fleet/reservation_form.html", context)
 
 
+@router.post("/reservations/new")
+async def reservation_create(
+    request: Request,
+    auth: WebAuthContext = Depends(require_fleet_access),
+    db: Session = Depends(get_db),
+):
+    """Create reservation from form submission."""
+    web_service = FleetWebService(db)
+    return await web_service.create_entity_response(request, auth, db, "reservation")
+
+
 @router.get("/reservations/{reservation_id}", response_class=HTMLResponse)
 def reservation_detail(
     request: Request,
@@ -565,6 +636,20 @@ def reservation_detail(
         return RedirectResponse(
             url="/fleet/reservations?error=not_found", status_code=303
         )
+
+
+@router.post("/reservations/{reservation_id}/cancel")
+async def reservation_cancel(
+    request: Request,
+    reservation_id: UUID,
+    auth: WebAuthContext = Depends(require_fleet_access),
+    db: Session = Depends(get_db),
+):
+    """Cancel a reservation from form submission."""
+    web_service = FleetWebService(db)
+    return await web_service.cancel_reservation_response(
+        request, auth, db, reservation_id
+    )
 
 
 # =============================================================================
@@ -615,6 +700,17 @@ def document_new(
         web_service.document_form_context(auth.organization_id, vehicle_id=vehicle_id)
     )
     return templates.TemplateResponse(request, "fleet/document_form.html", context)
+
+
+@router.post("/documents/new")
+async def document_create(
+    request: Request,
+    auth: WebAuthContext = Depends(require_fleet_access),
+    db: Session = Depends(get_db),
+):
+    """Create document from form submission."""
+    web_service = FleetWebService(db)
+    return await web_service.create_entity_response(request, auth, db, "document")
 
 
 @router.get("/documents/{document_id}", response_class=HTMLResponse)

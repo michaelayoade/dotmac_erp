@@ -119,6 +119,10 @@ exclude_lines = [
 ]
 show_missing = true
 
+[tool.bandit]
+targets = ["app"]
+exclude_dirs = ["tests", "alembic", "scripts"]
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"

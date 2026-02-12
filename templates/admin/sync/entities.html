@@ -1,6 +1,7 @@
 {% extends "admin/base_admin.html" %}
 
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, compact_filters %}
+
 {% block page_title %}Sync Entities{% endblock %}
 {% block page_subtitle %}View synced record status{% endblock %}
 
@@ -17,19 +18,26 @@
 
     <!-- Filters -->
     <div class="admin-card p-4">
-        <form method="get" class="flex flex-wrap items-end gap-4">
+        {# Filters #}
+        {% call(filter_attrs) compact_filters(
+            base_url="/admin/sync/entities",
+            active_filters=active_filters | default([])
+        ) %}
+        <div>
             <div class="flex-1 min-w-[200px]">
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">DocType</label>
-                <select name="doctype" class="w-full rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:border-primary-500 focus:ring-primary-500">
+                <label class="form-label text-xs">DocType</label>
+                <select name="doctype" class="w-full rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:border-primary-500 focus:ring-primary-500" {{ filter_attrs }}>
                     <option value="">All DocTypes</option>
                     {% for dt in doctypes %}
                     <option value="{{ dt }}" {{ 'selected' if filter_doctype == dt }}>{{ dt }}</option>
                     {% endfor %}
                 </select>
             </div>
+        </div>
+        <div>
             <div class="flex-1 min-w-[200px]">
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">Status</label>
-                <select name="status" class="w-full rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:border-primary-500 focus:ring-primary-500">
+                <label class="form-label text-xs">Status</label>
+                <select name="status" class="w-full rounded-xl border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm focus:border-primary-500 focus:ring-primary-500" {{ filter_attrs }}>
                     <option value="">All Statuses</option>
                     <option value="SYNCED" {{ 'selected' if filter_status == 'SYNCED' }}>Synced</option>
                     <option value="PENDING" {{ 'selected' if filter_status == 'PENDING' }}>Pending</option>
@@ -37,19 +45,8 @@
                     <option value="SKIPPED" {{ 'selected' if filter_status == 'SKIPPED' }}>Skipped</option>
                 </select>
             </div>
-            <button type="submit" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200 text-sm font-medium hover:bg-slate-200 dark:hover:bg-slate-600 transition">
-                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                </svg>
-                Filter
-            </button>
-            {% if filter_doctype or filter_status %}
-            <a href="/admin/sync/entities" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
-                Clear filters
-            </a>
-            {% endif %}
-        </form>
-    </div>
+        </div>
+        {% endcall %}
 
     <!-- Summary Stats -->
     {% if entities %}

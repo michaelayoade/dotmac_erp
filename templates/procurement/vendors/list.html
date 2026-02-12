@@ -1,4 +1,6 @@
 {% extends "procurement/base_procurement.html" %}
+{% from "components/macros.html" import compact_filters %}
+
 
 {% block page_title %}Vendor Registry{% endblock %}
 
@@ -31,24 +33,27 @@
     {% endif %}
 
     <!-- Filters -->
-    <div class="card p-4">
-        <form method="get" class="flex flex-wrap gap-3 items-end">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/procurement/vendors/list",
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=filter_q | default('', true),
+        search_name="q",
+        search_placeholder="Supplier name, registration number..."
+    ) %}
+    <div>
             <div>
-                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Status</label>
-                <select name="status" class="form-select text-sm">
+                <label class="form-label text-xs">Status</label>
+                <select name="status" class="form-select w-full text-sm" {{ filter_attrs }}>
                     <option value="">All</option>
                     {% for s in vendor_statuses %}
                     <option value="{{ s.value }}" {% if filter_status == s.value %}selected{% endif %}>{{ s.value }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div>
-                <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">Search</label>
-                <input type="text" name="q" value="{{ filter_q or '' }}" class="form-input text-sm" placeholder="Supplier name...">
-            </div>
-            <button type="submit" class="btn btn-secondary text-sm">Filter</button>
-        </form>
     </div>
+    {% endcall %}
 
     <div id="results-container">
     <!-- Table -->

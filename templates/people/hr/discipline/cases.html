@@ -1,6 +1,7 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import empty_state %}
+{% from "components/macros.html" import empty_state, compact_filters %}
+
 {% block page_title %}Disciplinary Cases{% endblock %}
 
 {% block breadcrumbs %}
@@ -42,50 +43,50 @@
 
     <!-- Filters -->
     <div class="card">
-        <div class="card-body">
-            <form method="get" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {# Filters #}
+        {% call(filter_attrs) compact_filters(
+            base_url="/people/hr/discipline/cases",
+            active_filters=active_filters | default([])
+        ) %}
+        <div>
                 <div>
-                    <label class="label">Status</label>
-                    <select name="status" class="input">
+                    <label class="form-label text-xs">Status</label>
+                    <select name="status" class="input" {{ filter_attrs }}>
                         <option value="">All Statuses</option>
                         {% for s in statuses %}
                         <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
                         {% endfor %}
                     </select>
                 </div>
+        </div>
+        <div>
                 <div>
-                    <label class="label">Violation Type</label>
-                    <select name="violation_type" class="input">
+                    <label class="form-label text-xs">Violation Type</label>
+                    <select name="violation_type" class="input" {{ filter_attrs }}>
                         <option value="">All Types</option>
                         {% for v in violation_types %}
                         <option value="{{ v }}" {% if violation_type == v %}selected{% endif %}>{{ v | replace('_', ' ') | title }}</option>
                         {% endfor %}
                     </select>
                 </div>
+        </div>
+        <div>
                 <div>
-                    <label class="label">Severity</label>
-                    <select name="severity" class="input">
+                    <label class="form-label text-xs">Severity</label>
+                    <select name="severity" class="input" {{ filter_attrs }}>
                         <option value="">All Severities</option>
                         {% for s in severities %}
                         <option value="{{ s }}" {% if severity == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="flex items-end">
-                    <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" name="include_closed" value="true" {% if include_closed %}checked{% endif %} class="checkbox">
-                        <span class="text-sm text-slate-600 dark:text-slate-400">Include Closed</span>
-                    </label>
-                </div>
-                <div class="flex items-end gap-2">
-                    <button type="submit" class="btn btn-secondary flex-1">Filter</button>
-                    <a href="/people/hr/discipline" class="btn btn-ghost">Clear</a>
-                </div>
-            </form>
         </div>
+        {% endcall %}
     </div>
 
     {% if cases %}
+    <div id="results-container">
+
     <div class="card overflow-hidden">
         <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
@@ -174,6 +175,8 @@
             </table>
         </div>
     </div>
+    </div>
+
 
     {% if total_pages > 1 %}
     <div class="flex items-center justify-between">

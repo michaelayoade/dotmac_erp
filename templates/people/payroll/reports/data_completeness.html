@@ -1,4 +1,6 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import compact_filters %}
+
 
 {% block page_title %}Data Completeness Report{% endblock %}
 
@@ -173,39 +175,38 @@
     </div>
 
     <!-- Filters -->
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap gap-4 items-end">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/payroll/reports/data-completeness",
+        active_filters=active_filters | default([])
+    ) %}
+    <div>
                 <div class="w-48">
-                    <label for="department_id" class="form-label">Department</label>
-                    <select name="department_id" id="department_id" class="form-select w-full">
+                    <label class="form-label text-xs">Department</label>
+                    <select name="department_id" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All Departments</option>
                         {% for dept in departments %}
                         <option value="{{ dept.department_id }}" {% if selected_department_id == dept.department_id|string %}selected{% endif %}>{{ dept.department_name }}</option>
                         {% endfor %}
                     </select>
                 </div>
+    </div>
+    <div>
                 <div class="w-48">
-                    <label for="designation_id" class="form-label">Designation</label>
-                    <select name="designation_id" id="designation_id" class="form-select w-full">
+                    <label class="form-label text-xs">Designation</label>
+                    <select name="designation_id" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All Designations</option>
                         {% for desig in designations %}
                         <option value="{{ desig.designation_id }}" {% if selected_designation_id == desig.designation_id|string %}selected{% endif %}>{{ desig.designation_name }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="flex items-center gap-2">
-                    <input type="checkbox" name="show_complete" id="show_complete" value="true"
-                        class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500"
-                        {% if show_complete %}checked{% endif %}>
-                    <label for="show_complete" class="text-sm text-slate-700 dark:text-slate-300">Show complete employees</label>
-                </div>
-                <button type="submit" class="btn btn-secondary h-10">Apply Filter</button>
-            </div>
-        </form>
     </div>
+    {% endcall %}
 
     <!-- Employee Table -->
+    <div id="results-container">
+
     <div class="card overflow-hidden">
         <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
             <h2 class="text-lg font-medium text-slate-900 dark:text-white">
@@ -310,6 +311,8 @@
         </div>
         {% endif %}
     </div>
+    </div>
+
 
     <!-- Legend -->
     <div class="card p-4">

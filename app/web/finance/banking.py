@@ -39,6 +39,29 @@ def new_bank_account_form(
     return banking_web_service.account_new_form_response(request, auth, db)
 
 
+@router.post("/accounts/new")
+async def new_bank_account_submit(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Create new bank account from form."""
+    return await banking_web_service.create_account_response(request, auth, db)
+
+
+@router.post("/accounts/{account_id}/edit")
+async def edit_bank_account_submit(
+    request: Request,
+    account_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Update bank account from form."""
+    return await banking_web_service.update_account_response(
+        request, auth, db, account_id
+    )
+
+
 @router.get("/accounts/{account_id}", response_class=HTMLResponse)
 def view_bank_account(
     request: Request,
@@ -216,6 +239,34 @@ async def delete_statement(
     )
 
 
+@router.post("/statements/{statement_id}/lines/{line_id}/match")
+async def match_statement_line(
+    request: Request,
+    statement_id: str,
+    line_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Accept a GL transaction match for a statement line (JSON from Alpine.js)."""
+    return await banking_web_service.match_statement_line_response(
+        request, auth, db, statement_id, line_id
+    )
+
+
+@router.post("/statements/{statement_id}/lines/{line_id}/unmatch")
+async def unmatch_statement_line(
+    request: Request,
+    statement_id: str,
+    line_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Remove a direct match from a statement line (JSON from Alpine.js)."""
+    return await banking_web_service.unmatch_statement_line_response(
+        request, auth, db, statement_id, line_id
+    )
+
+
 @router.get("/reconciliations", response_class=HTMLResponse)
 def list_reconciliations(
     request: Request,
@@ -250,6 +301,98 @@ def new_reconciliation_form(
     """New reconciliation form page."""
     return banking_web_service.reconciliation_new_form_response(
         request, auth, db, account_id=account_id
+    )
+
+
+@router.post("/reconciliations/new")
+async def create_reconciliation_submit(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Create a new reconciliation from form submission."""
+    from fastapi.responses import RedirectResponse
+
+    return await banking_web_service.create_reconciliation_response(
+        request, auth, db, RedirectResponse
+    )
+
+
+@router.post("/reconciliations/{reconciliation_id}/auto-match")
+async def reconciliation_auto_match(
+    request: Request,
+    reconciliation_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Run auto-match on a reconciliation (HTMX action)."""
+    return await banking_web_service.reconciliation_action_response(
+        request, auth, db, reconciliation_id, "auto_match"
+    )
+
+
+@router.post("/reconciliations/{reconciliation_id}/submit")
+async def reconciliation_submit_for_review(
+    request: Request,
+    reconciliation_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Submit reconciliation for review (HTMX action)."""
+    return await banking_web_service.reconciliation_action_response(
+        request, auth, db, reconciliation_id, "submit"
+    )
+
+
+@router.post("/reconciliations/{reconciliation_id}/approve")
+async def reconciliation_approve(
+    request: Request,
+    reconciliation_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Approve a reconciliation (HTMX action)."""
+    return await banking_web_service.reconciliation_action_response(
+        request, auth, db, reconciliation_id, "approve"
+    )
+
+
+@router.post("/reconciliations/{reconciliation_id}/reject")
+async def reconciliation_reject(
+    request: Request,
+    reconciliation_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Reject a reconciliation (HTMX action)."""
+    return await banking_web_service.reconciliation_action_response(
+        request, auth, db, reconciliation_id, "reject"
+    )
+
+
+@router.post("/reconciliations/{reconciliation_id}/matches")
+async def reconciliation_add_match(
+    request: Request,
+    reconciliation_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Add a manual match (JSON from Alpine.js fetch)."""
+    return await banking_web_service.reconciliation_match_response(
+        request, auth, db, reconciliation_id
+    )
+
+
+@router.post("/reconciliations/{reconciliation_id}/multi-match")
+async def reconciliation_multi_match(
+    request: Request,
+    reconciliation_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Add multi-match (JSON from Alpine.js fetch)."""
+    return await banking_web_service.reconciliation_multi_match_response(
+        request, auth, db, reconciliation_id
     )
 
 
@@ -305,6 +448,27 @@ def new_payee_form(
 ):
     """New payee form page."""
     return banking_web_service.payee_new_form_response(request, auth, db)
+
+
+@router.post("/payees/new")
+async def new_payee_submit(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Create new payee from form."""
+    return await banking_web_service.create_payee_response(request, auth, db)
+
+
+@router.post("/payees/{payee_id}/edit")
+async def edit_payee_submit(
+    request: Request,
+    payee_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Update payee from form."""
+    return await banking_web_service.update_payee_response(request, auth, db, payee_id)
 
 
 @router.get("/payees/{payee_id}", response_class=HTMLResponse)

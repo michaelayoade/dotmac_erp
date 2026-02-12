@@ -1005,6 +1005,342 @@ class BankReconciliationService:
 
         return bonus
 
+    def get_statement_match_suggestions(
+        self,
+        db: Session,
+        organization_id: UUID,
+        statement_id: UUID,
+        min_confidence: float = 30.0,
+        date_buffer_days: int = 7,
+    ) -> dict[UUID, MatchSuggestion]:
+        """Get best GL transaction match per unmatched statement line.
+
+        Unlike ``get_match_suggestions`` which operates within a
+        reconciliation, this works directly against a bank statement —
+        enabling match suggestions on the statement detail page before a
+        reconciliation is created.
+
+        Returns a dict keyed by statement_line_id.  Read-only — does NOT
+        create any matches.
+        """
+        from datetime import timedelta
+
+        statement = db.get(BankStatement, statement_id)
+        if not statement or statement.organization_id != organization_id:
+            return {}
+
+        bank_account = statement.bank_account
+        if not bank_account or not bank_account.gl_account_id:
+            return {}
+
+        # Get unmatched lines from this statement
+        unmatched_lines = _list(
+            db.execute(
+                select(BankStatementLine).where(
+                    and_(
+                        BankStatementLine.statement_id == statement_id,
+                        BankStatementLine.is_matched == False,  # noqa: E712
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        if not unmatched_lines:
+            return {}
+
+        # Get posted GL journal lines for the bank's GL account
+        # within the statement period (with buffer for date proximity scoring)
+        period_start = statement.period_start - timedelta(days=date_buffer_days)
+        period_end = statement.period_end + timedelta(days=date_buffer_days)
+
+        gl_lines = _list(
+            db.execute(
+                select(JournalEntryLine)
+                .join(JournalEntry)
+                .where(
+                    and_(
+                        JournalEntry.organization_id == organization_id,
+                        JournalEntryLine.account_id == bank_account.gl_account_id,
+                        JournalEntry.status == JournalStatus.POSTED,
+                        JournalEntry.entry_date >= period_start,
+                        JournalEntry.entry_date <= period_end,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        if not gl_lines:
+            return {}
+
+        gl_metadata = self._resolve_gl_metadata(db, gl_lines)
+
+        # Build GL amount index
+        gl_by_amount: dict[Decimal, _list[JournalEntryLine]] = {}
+        for gl_line in gl_lines:
+            amount = (gl_line.debit_amount or Decimal("0")) - (
+                gl_line.credit_amount or Decimal("0")
+            )
+            gl_by_amount.setdefault(amount, []).append(gl_line)
+
+        suggestions: dict[UUID, MatchSuggestion] = {}
+        tolerance = Decimal("0.01")
+
+        for stmt_line in unmatched_lines:
+            stmt_amount = stmt_line.signed_amount
+
+            candidates = list(gl_by_amount.get(stmt_amount, []))
+            if not candidates:
+                for gl_amount, lines in gl_by_amount.items():
+                    if abs(gl_amount - stmt_amount) <= tolerance:
+                        candidates.extend(lines)
+
+            best_score = 0.0
+            best_gl: JournalEntryLine | None = None
+
+            for gl_line in candidates:
+                score = self._calculate_match_score(
+                    stmt_line, gl_line, db=db, gl_metadata=gl_metadata
+                )
+                if score > best_score:
+                    best_score = score
+                    best_gl = gl_line
+
+            if best_gl and best_score >= min_confidence:
+                entry = getattr(best_gl, "journal_entry", None) or getattr(
+                    best_gl, "entry", None
+                )
+                source_doc_id = (
+                    getattr(entry, "source_document_id", None) if entry else None
+                )
+                meta = gl_metadata.get(source_doc_id) if source_doc_id else None
+
+                suggestions[stmt_line.line_id] = MatchSuggestion(
+                    statement_line_id=stmt_line.line_id,
+                    journal_line_id=best_gl.line_id,
+                    confidence=best_score,
+                    counterparty_name=meta.counterparty_name if meta else None,
+                    payment_number=meta.payment_number if meta else None,
+                )
+
+        return suggestions
+
+    def get_gl_candidates_for_statement(
+        self,
+        db: Session,
+        organization_id: UUID,
+        statement_id: UUID,
+        max_results: int = 500,
+    ) -> dict:
+        """Return all posted GL journal lines for a statement's bank account.
+
+        No date restriction — returns the most recent *max_results* entries
+        so users can search and match freely.  Client-side filters in the
+        modal let them narrow by date, source type, etc.
+
+        Returns dict with keys:
+            candidates: list of dicts with GL line details
+            source_types: sorted list of distinct source_document_type values
+        """
+        statement = db.get(BankStatement, statement_id)
+        if not statement or statement.organization_id != organization_id:
+            return {"candidates": [], "source_types": []}
+
+        bank_account = statement.bank_account
+        if not bank_account or not bank_account.gl_account_id:
+            return {"candidates": [], "source_types": []}
+
+        gl_lines: _list[JournalEntryLine] = _list(
+            db.execute(
+                select(JournalEntryLine)
+                .join(JournalEntry)
+                .where(
+                    and_(
+                        JournalEntry.organization_id == organization_id,
+                        JournalEntryLine.account_id == bank_account.gl_account_id,
+                        JournalEntry.status == JournalStatus.POSTED,
+                    )
+                )
+                .order_by(JournalEntry.entry_date.desc(), JournalEntryLine.line_number)
+                .limit(max_results)
+            )
+            .scalars()
+            .all()
+        )
+
+        if not gl_lines:
+            return {"candidates": [], "source_types": []}
+
+        gl_metadata = self._resolve_gl_metadata(db, gl_lines)
+
+        candidates: _list[dict] = []
+        source_types: set[str] = set()
+        for gl_line in gl_lines:
+            entry = getattr(gl_line, "journal_entry", None) or getattr(
+                gl_line, "entry", None
+            )
+            source_doc_id = (
+                getattr(entry, "source_document_id", None) if entry else None
+            )
+            meta = gl_metadata.get(source_doc_id) if source_doc_id else None
+
+            debit = gl_line.debit_amount or Decimal("0")
+            credit = gl_line.credit_amount or Decimal("0")
+            amount = debit - credit
+
+            src_type = getattr(entry, "source_document_type", "") or ""
+            if src_type:
+                source_types.add(src_type)
+
+            candidates.append(
+                {
+                    "journal_line_id": str(gl_line.line_id),
+                    "entry_date": entry.entry_date.isoformat() if entry else "",
+                    "entry_date_display": (
+                        entry.entry_date.strftime("%d %b %Y") if entry else ""
+                    ),
+                    "description": (
+                        getattr(entry, "description", "") or gl_line.description or ""
+                    ),
+                    "reference": getattr(entry, "reference", "") or "",
+                    "amount": float(amount),
+                    "amount_display": f"{amount:,.2f}",
+                    "source_type": src_type,
+                    "source_type_display": src_type.replace("_", " ").title()
+                    if src_type
+                    else "Journal",
+                    "counterparty_name": meta.counterparty_name if meta else "",
+                    "payment_number": meta.payment_number if meta else "",
+                }
+            )
+
+        return {
+            "candidates": candidates,
+            "source_types": sorted(source_types),
+        }
+
+    def match_statement_line(
+        self,
+        db: Session,
+        organization_id: UUID,
+        statement_line_id: UUID,
+        journal_line_id: UUID,
+        matched_by: UUID | None = None,
+    ) -> BankStatementLine:
+        """Directly match a statement line to a GL journal line.
+
+        This sets the matching fields on the statement line without
+        requiring a reconciliation.  When a reconciliation is later
+        created, these pre-matched lines will already appear as matched.
+        """
+        stmt_line = db.get(BankStatementLine, statement_line_id)
+        if not stmt_line:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Statement line {statement_line_id} not found",
+            )
+
+        # Validate ownership via statement
+        statement = stmt_line.statement
+        if not statement or statement.organization_id != organization_id:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Statement line {statement_line_id} not found",
+            )
+
+        if stmt_line.is_matched:
+            raise HTTPException(
+                status_code=400,
+                detail="Statement line is already matched",
+            )
+
+        # Validate GL line exists and belongs to org
+        gl_line = db.get(JournalEntryLine, journal_line_id)
+        if not gl_line:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Journal line {journal_line_id} not found",
+            )
+        journal_entry = getattr(gl_line, "journal_entry", None) or getattr(
+            gl_line, "entry", None
+        )
+        if journal_entry:
+            journal_org_id = getattr(journal_entry, "organization_id", None)
+            if journal_org_id is not None and journal_org_id != organization_id:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Journal line {journal_line_id} not found",
+                )
+
+        # Mark as matched
+        stmt_line.is_matched = True
+        stmt_line.matched_at = datetime.now(tz=UTC)
+        stmt_line.matched_by = matched_by
+        stmt_line.matched_journal_line_id = journal_line_id
+
+        # Update statement counters
+        statement.matched_lines = (statement.matched_lines or 0) + 1
+        statement.unmatched_lines = max((statement.unmatched_lines or 0) - 1, 0)
+
+        db.flush()
+
+        logger.info(
+            "Matched statement line %s to GL line %s (direct, no reconciliation)",
+            statement_line_id,
+            journal_line_id,
+        )
+
+        return stmt_line
+
+    def unmatch_statement_line(
+        self,
+        db: Session,
+        organization_id: UUID,
+        statement_line_id: UUID,
+    ) -> BankStatementLine:
+        """Remove a direct match from a statement line.
+
+        Only works for lines matched directly (not via reconciliation).
+        """
+        stmt_line = db.get(BankStatementLine, statement_line_id)
+        if not stmt_line:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Statement line {statement_line_id} not found",
+            )
+
+        statement = stmt_line.statement
+        if not statement or statement.organization_id != organization_id:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Statement line {statement_line_id} not found",
+            )
+
+        if not stmt_line.is_matched:
+            raise HTTPException(
+                status_code=400,
+                detail="Statement line is not matched",
+            )
+
+        # Clear match
+        stmt_line.is_matched = False
+        stmt_line.matched_at = None
+        stmt_line.matched_by = None
+        stmt_line.matched_journal_line_id = None
+
+        # Update statement counters
+        statement.matched_lines = max((statement.matched_lines or 0) - 1, 0)
+        statement.unmatched_lines = (statement.unmatched_lines or 0) + 1
+
+        db.flush()
+
+        logger.info("Unmatched statement line %s (direct)", statement_line_id)
+
+        return stmt_line
+
     def _get_gl_balance(
         self,
         db: Session,

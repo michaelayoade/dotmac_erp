@@ -26,6 +26,7 @@ from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 from app.models.finance.tax.tax_code import TaxCode
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.finance.exp.expense import expense_service
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.platform.org_context import org_context_service
@@ -114,6 +115,10 @@ class ExpenseWebService:
         )
         counts = {s.value: c for s, c in status_counts}
 
+        active_filters = build_active_filters(
+            params={"status": status, "start_date": start_date, "end_date": end_date},
+            labels={"start_date": "From", "end_date": "To"},
+        )
         return {
             "expenses": items,
             "search": search or "",
@@ -125,6 +130,7 @@ class ExpenseWebService:
             "total": total,
             "offset": offset,
             "limit": limit,
+            "active_filters": active_filters,
         }
 
     @staticmethod

@@ -19,10 +19,7 @@
 {% block content %}
 <div class="mx-auto max-w-3xl">
     <form method="post"
-          action="{{ '/api/v1/banking/accounts/' + account.bank_account_id|string if account else '/api/v1/banking/accounts' }}"
-          hx-post="{{ '/api/v1/banking/accounts/' + account.bank_account_id|string if account else '/api/v1/banking/accounts' }}"
-          hx-swap="none"
-          hx-on::after-request="if(event.detail.successful) window.location.href='/finance/banking/accounts'"
+          action="{{ '/finance/banking/accounts/' + account.bank_account_id|string + '/edit' if account else '/finance/banking/accounts/new' }}"
           class="space-y-6">
         {{ request.state.csrf_form | safe }}
 

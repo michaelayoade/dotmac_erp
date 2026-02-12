@@ -1,4 +1,6 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import compact_filters %}
+
 
 {% block page_title %}Pattern Assignments{% endblock %}
 
@@ -38,12 +40,15 @@
         </div>
     </div>
 
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap gap-4 items-end">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/scheduling/assignments",
+        active_filters=active_filters | default([])
+    ) %}
+    <div>
                 <div class="w-64">
-                    <label for="department_id" class="form-label">Department</label>
-                    <select name="department_id" id="department_id" class="form-select w-full">
+                    <label class="form-label text-xs">Department</label>
+                    <select name="department_id" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All Departments</option>
                         {% for dept in departments %}
                         <option value="{{ dept.department_id }}" {% if department_id == dept.department_id | string %}selected{% endif %}>
@@ -52,12 +57,12 @@
                         {% endfor %}
                     </select>
                 </div>
-                <button type="submit" class="btn btn-secondary h-10">Filter</button>
-            </div>
-        </form>
     </div>
+    {% endcall %}
 
     {% if assignments %}
+    <div id="results-container">
+
     <div class="card overflow-hidden">
         <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
@@ -112,6 +117,8 @@
             </table>
         </div>
     </div>
+    </div>
+
     {% else %}
     <div class="card p-8 text-center">
         <p class="text-slate-500 dark:text-slate-400">No pattern assignments found.</p>

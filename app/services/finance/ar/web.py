@@ -37,6 +37,7 @@ from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.models.inventory.item import Item
 from app.services.audit_info import get_audit_service
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.finance.ar.ar_aging import ar_aging_service
 from app.services.finance.ar.customer import CustomerInput, customer_service
 from app.services.finance.ar.customer_payment import (
@@ -607,6 +608,7 @@ class ARWebService:
 
         total_pages = max(1, (total_count + limit - 1) // limit)
 
+        active_filters = build_active_filters(params={"status": status})
         return {
             "customers": customers_view,
             "search": search,
@@ -616,6 +618,7 @@ class ARWebService:
             "offset": offset,
             "total_count": total_count,
             "total_pages": total_pages,
+            "active_filters": active_filters,
         }
 
     @staticmethod
@@ -906,6 +909,16 @@ class ARWebService:
             this_month=_format_currency(this_month) or "$0.00",
         )
 
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "customer_id": customer_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            labels={"start_date": "From", "end_date": "To"},
+            options={"customer_id": {str(c["id"]): c["name"] for c in customers_list}},
+        )
         return {
             "invoices": invoices_view,
             "customers_list": customers_list,
@@ -920,6 +933,7 @@ class ARWebService:
             "offset": offset,
             "total_count": total_count,
             "total_pages": total_pages,
+            "active_filters": active_filters,
         }
 
     @staticmethod
@@ -1138,6 +1152,15 @@ class ARWebService:
 
         total_pages = max(1, (total_count + limit - 1) // limit)
 
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "customer_id": customer_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            labels={"start_date": "From", "end_date": "To"},
+        )
         return {
             "receipts": receipts_view,
             "customers_list": customers_list,
@@ -1151,6 +1174,7 @@ class ARWebService:
             "offset": offset,
             "total_count": total_count,
             "total_pages": total_pages,
+            "active_filters": active_filters,
         }
 
     @staticmethod

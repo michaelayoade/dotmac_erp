@@ -1,5 +1,6 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card %}
+{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card, compact_filters %}
+
 
 {% block page_title %}Tax Returns{% endblock %}
 
@@ -33,10 +34,13 @@
     </div>
 
     {# Filters #}
-    <div class="card p-4">
-        <form method="get" action="/finance/tax/returns" class="flex flex-wrap items-center gap-4">
-            {# Return Type Filter #}
-            <select name="return_type" class="form-select">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/finance/tax/returns",
+        active_filters=active_filters | default([])
+    ) %}
+    <div>
+            <select name="return_type" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Types</option>
                 {% for rt in return_types %}
                 <option value="{{ rt.value }}" {{ 'selected' if return_type == rt.value else '' }}>
@@ -44,9 +48,9 @@
                 </option>
                 {% endfor %}
             </select>
-
-            {# Status Filter #}
-            <select name="status" class="form-select">
+    </div>
+    <div>
+            <select name="status" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Status</option>
                 <option value="DRAFT" {{ 'selected' if status == 'DRAFT' else '' }}>Draft</option>
                 <option value="PREPARED" {{ 'selected' if status == 'PREPARED' else '' }}>Prepared</option>
@@ -54,9 +58,9 @@
                 <option value="FILED" {{ 'selected' if status == 'FILED' else '' }}>Filed</option>
                 <option value="AMENDED" {{ 'selected' if status == 'AMENDED' else '' }}>Amended</option>
             </select>
-
-            {# Period Filter #}
-            <select name="period_id" class="form-select">
+    </div>
+    <div>
+            <select name="period_id" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Periods</option>
                 {% for period in periods %}
                 <option value="{{ period.period_id }}"
@@ -65,24 +69,12 @@
                 </option>
                 {% endfor %}
             </select>
-
-            {# Actions #}
-            <button type="submit" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                </svg>
-                Filter
-            </button>
-
-            {% if return_type or status or period_id %}
-            <a href="/finance/tax/returns" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
-                Clear
-            </a>
-            {% endif %}
-        </form>
     </div>
+    {% endcall %}
 
     {# Tax Returns Table #}
+    <div id="results-container">
+
     <div class="card">
         <div class="table-container">
             <table class="table" data-testid="tax-returns-table">
@@ -167,5 +159,7 @@
             filters={"return_type": return_type, "status": status, "period_id": period_id}
         ) }}
     </div>
+    </div>
+
 </div>
 {% endblock %}

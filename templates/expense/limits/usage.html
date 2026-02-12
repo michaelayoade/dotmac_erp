@@ -1,6 +1,7 @@
 {% extends "expense/base_expense.html" %}
 
-{% from "components/macros.html" import status_badge, empty_state %}
+{% from "components/macros.html" import status_badge, empty_state, compact_filters %}
+
 {% block content %}
 <div class="space-y-6">
     <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -17,11 +18,15 @@
     </div>
 
     <!-- Employee Selector -->
-    <div class="card p-4">
-        <form method="get" class="flex flex-wrap items-end gap-4">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/expense/limits/usage",
+        active_filters=active_filters | default([])
+    ) %}
+    <div>
             <div class="min-w-[300px] flex-1">
-                <label class="form-label">Select Employee</label>
-                <select name="employee_id" class="form-input form-select">
+                <label class="form-label text-xs">Select Employee</label>
+                <select name="employee_id" class="form-select w-full" {{ filter_attrs }}>
                     <option value="">Choose an employee...</option>
                     {% for emp in employees %}
                     <option value="{{ emp.employee_id }}" {{ 'selected' if selected_employee_id == (emp.employee_id | string) else '' }}>
@@ -31,17 +36,13 @@
                     {% endfor %}
                 </select>
             </div>
-            <button type="submit" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                </svg>
-                View Usage
-            </button>
-        </form>
     </div>
+    {% endcall %}
 
     {% if usage_summary %}
     <!-- Employee Info -->
+    <div id="results-container">
+
     <div class="card p-6">
         <div class="flex items-center gap-4">
             <div class="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-amber-500 to-orange-600 text-lg font-semibold text-white">
@@ -59,6 +60,8 @@
             </div>
         </div>
     </div>
+    </div>
+
 
     <!-- Usage by Period -->
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">

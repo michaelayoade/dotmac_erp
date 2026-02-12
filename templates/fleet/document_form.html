@@ -22,7 +22,7 @@
 
 {% block content %}
 <div class="max-w-4xl mx-auto">
-    <form method="POST" action="/api/v1/fleet/documents" class="space-y-6">
+    <form method="POST" action="/fleet/documents/new" class="space-y-6">
         {{ request.state.csrf_form | safe }}
         <!-- Vehicle & Type -->
         <div class="card">

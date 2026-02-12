@@ -8,7 +8,7 @@ import logging
 from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.procurement.enums import PrequalificationStatus
@@ -45,6 +45,7 @@ class VendorPrequalificationService:
         organization_id: UUID,
         *,
         status: str | None = None,
+        q: str | None = None,
         offset: int = 0,
         limit: int = 25,
     ) -> tuple[list[VendorPrequalification], int]:
@@ -55,6 +56,22 @@ class VendorPrequalificationService:
         if status:
             base = base.where(
                 VendorPrequalification.status == PrequalificationStatus(status),
+            )
+        if q:
+            # Search across supplier identity fields. Done via join to Supplier so
+            # pagination/count are consistent.
+            from app.models.finance.ap.supplier import Supplier
+
+            q_like = f"%{q.strip().lower()}%"
+            base = base.join(
+                Supplier,
+                Supplier.supplier_id == VendorPrequalification.supplier_id,
+            ).where(
+                or_(
+                    func.lower(Supplier.legal_name).like(q_like),
+                    func.lower(Supplier.trading_name).like(q_like),
+                    func.lower(Supplier.registration_number).like(q_like),
+                )
             )
 
         total = self.db.scalar(select(func.count()).select_from(base.subquery()))

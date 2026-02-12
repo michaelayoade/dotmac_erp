@@ -1,6 +1,7 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, compact_filters %}
+
 {% block page_title %}Sales Orders{% endblock %}
 
 {% block breadcrumbs %}
@@ -25,49 +26,48 @@
 {% block content %}
 <div class="space-y-6">
     <!-- Filters -->
-    <div class="card p-4">
-        <form method="get" class="flex flex-wrap items-end gap-4">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/finance/sales-orders",
+        active_filters=active_filters | default([]),
+        date_range=true,
+        start_date=start_date | default('', true),
+        end_date=end_date | default('', true)
+    ) %}
+    <div>
             <div class="min-w-[150px]">
-                <label class="form-label">Status</label>
-                <select name="status" class="form-input form-select">
+                <label class="form-label text-xs">Status</label>
+                <select name="status" class="form-select w-full" {{ filter_attrs }}>
                     <option value="">All Statuses</option>
                     {% for s in statuses %}
                     <option value="{{ s }}" {% if filter_status == s %}selected{% endif %}>{{ s }}</option>
                     {% endfor %}
                 </select>
             </div>
+    </div>
+    <div>
             <div class="min-w-[200px]">
-                <label class="form-label">Customer</label>
-                <select name="customer_id" class="form-input form-select">
+                <label class="form-label text-xs">Customer</label>
+                <select name="customer_id" class="form-select w-full" {{ filter_attrs }}>
                     <option value="">All Customers</option>
                     {% for c in customers %}
                     <option value="{{ c.id }}" {% if filter_customer_id == c.id %}selected{% endif %}>{{ c.name }}</option>
                     {% endfor %}
                 </select>
             </div>
-            <div class="min-w-[150px]">
-                <label class="form-label">Start Date</label>
-                <input type="date" name="start_date" value="{{ filter_start_date or '' }}" class="form-input">
-            </div>
-            <div class="min-w-[150px]">
-                <label class="form-label">End Date</label>
-                <input type="date" name="end_date" value="{{ filter_end_date or '' }}" class="form-input">
-            </div>
-            <button type="submit" class="btn btn-secondary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                </svg>
-                Filter
-            </button>
-        </form>
     </div>
+    {% endcall %}
 
     <!-- Status Summary -->
     <div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-9">
+        <div id="results-container">
+
         <div class="card p-4">
             <p class="text-sm text-slate-500 dark:text-slate-400">Draft</p>
             <p class="text-2xl font-bold text-slate-900 dark:text-white">{{ status_counts.get('DRAFT', 0) }}</p>
         </div>
+        </div>
+
         <div class="card p-4">
             <p class="text-sm text-slate-500 dark:text-slate-400">Submitted</p>
             <p class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ status_counts.get('SUBMITTED', 0) }}</p>

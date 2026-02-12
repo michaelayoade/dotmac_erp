@@ -1,6 +1,7 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import empty_state %}
+{% from "components/macros.html" import empty_state, compact_filters %}
+
 {% block page_title %}Appraisals{% endblock %}
 
 {% block breadcrumbs %}
@@ -46,32 +47,27 @@
 
 {% block content %}
 <div class="space-y-6">
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap gap-4 items-end">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/perf/appraisals",
+        active_filters=active_filters | default([])
+    ) %}
+    <div>
                 <div class="w-48">
-                    <label for="status" class="form-label">Status</label>
-                    <select name="status" id="status" class="form-select w-full">
+                    <label class="form-label text-xs">Status</label>
+                    <select name="status" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All</option>
                         {% for s in statuses %}
                         <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s | replace('_', ' ') | title }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="w-56">
-                    <label for="employee_id" class="form-label">Employee ID</label>
-                    <input type="text" name="employee_id" id="employee_id" value="{{ employee_id | default('', true) }}" class="form-input w-full" placeholder="UUID">
-                </div>
-                <div class="w-56">
-                    <label for="manager_id" class="form-label">Manager ID</label>
-                    <input type="text" name="manager_id" id="manager_id" value="{{ manager_id | default('', true) }}" class="form-input w-full" placeholder="UUID">
-                </div>
-                <button type="submit" class="btn btn-secondary h-10">Filter</button>
-            </div>
-        </form>
     </div>
+    {% endcall %}
 
     {% if appraisals %}
+    <div id="results-container">
+
     <div class="card overflow-hidden">
         <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
@@ -133,6 +129,8 @@
             </table>
         </div>
     </div>
+    </div>
+
     {% else %}
     <div class="card p-8 text-center">
         <p class="text-slate-500 dark:text-slate-400">No appraisals found.</p>

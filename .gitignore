@@ -48,6 +48,9 @@ htmlcov/
 # mypy
 .mypy_cache/
 
+# Playwright / MCP artifacts
+.playwright-mcp/
+
 # Celery
 celerybeat-schedule
 celerybeat.pid

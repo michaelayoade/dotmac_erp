@@ -5,8 +5,14 @@ Provides methods to build template context for fleet management pages.
 """
 
 import logging
-from typing import Any
+from datetime import date
+from decimal import Decimal
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
+
+if TYPE_CHECKING:
+    from fastapi import Request
+    from fastapi.responses import RedirectResponse
 
 from sqlalchemy import inspect, or_
 from sqlalchemy import select as sa_select
@@ -30,6 +36,7 @@ from app.models.fleet.enums import (
 )
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.services.common import NotFoundError, PaginationParams, coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.fleet.assignment_service import AssignmentService
 from app.services.fleet.document_service import DocumentService
 from app.services.fleet.fuel_service import FuelService
@@ -404,6 +411,13 @@ class FleetWebService:
             params=params,
         )
 
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "maintenance_type": maintenance_type,
+                "vehicle_id": str(vehicle_id) if vehicle_id else None,
+            }
+        )
         return {
             "maintenance_records": result.items,
             "total": result.total,
@@ -416,6 +430,7 @@ class FleetWebService:
             "current_status": status,
             "current_maintenance_type": maintenance_type,
             "current_vehicle_id": vehicle_id,
+            "active_filters": active_filters,
         }
 
     def maintenance_form_context(
@@ -501,6 +516,9 @@ class FleetWebService:
         # Get monthly summary
         monthly_summary = service.get_monthly_summary(vehicle_id=vehicle_id)
 
+        active_filters = build_active_filters(
+            params={"vehicle_id": str(vehicle_id) if vehicle_id else None}
+        )
         return {
             "fuel_logs": result.items,
             "total": result.total,
@@ -511,6 +529,7 @@ class FleetWebService:
             "monthly_summary": monthly_summary[:6],
             "fuel_types": [f.value for f in FuelType],
             "current_vehicle_id": vehicle_id,
+            "active_filters": active_filters,
         }
 
     def fuel_form_context(
@@ -587,6 +606,13 @@ class FleetWebService:
         # Get cost summary
         cost_summary = service.get_cost_summary(vehicle_id=vehicle_id)
 
+        active_filters = build_active_filters(
+            params={
+                "vehicle_id": str(vehicle_id) if vehicle_id else None,
+                "status": status,
+                "severity": severity,
+            }
+        )
         return {
             "incidents": result.items,
             "total": result.total,
@@ -601,6 +627,7 @@ class FleetWebService:
             "current_status": status,
             "current_severity": severity,
             "current_vehicle_id": vehicle_id,
+            "active_filters": active_filters,
         }
 
     def incident_form_context(
@@ -699,6 +726,12 @@ class FleetWebService:
             params=PaginationParams(limit=100),
         )
 
+        active_filters = build_active_filters(
+            params={
+                "vehicle_id": str(vehicle_id) if vehicle_id else None,
+                "status": status,
+            }
+        )
         return {
             "reservations": result.items,
             "total": result.total,
@@ -711,6 +744,7 @@ class FleetWebService:
             "statuses": [s.value for s in ReservationStatus],
             "current_status": status,
             "current_vehicle_id": vehicle_id,
+            "active_filters": active_filters,
         }
 
     def reservation_form_context(
@@ -798,6 +832,12 @@ class FleetWebService:
         expiring = service.get_expiring_documents(days_before=30)
         expired = service.get_expired_documents()
 
+        active_filters = build_active_filters(
+            params={
+                "vehicle_id": str(vehicle_id) if vehicle_id else None,
+                "document_type": document_type,
+            }
+        )
         return {
             "documents": result.items,
             "total": result.total,
@@ -810,6 +850,7 @@ class FleetWebService:
             "document_types": [t.value for t in DocumentType],
             "current_type": document_type,
             "current_vehicle_id": vehicle_id,
+            "active_filters": active_filters,
         }
 
     def document_form_context(
@@ -855,3 +896,324 @@ class FleetWebService:
             "document": doc,
             "document_types": [t.value for t in DocumentType],
         }
+
+    # ─── POST form handlers ──────────────────────────────────────────────
+
+    async def create_vehicle_response(
+        self,
+        request: "Request",
+        organization_id: Any,
+        user_id: Any,
+        db: Session,
+    ) -> "RedirectResponse":
+        """Handle POST to create a new vehicle from form data."""
+        from fastapi.responses import RedirectResponse
+
+        from app.schemas.fleet.vehicle import VehicleCreate
+        from app.services.fleet.vehicle_service import VehicleService
+
+        form = await request.form()
+        org_id = coerce_uuid(organization_id)
+        try:
+            reg_number = str(form.get("registration_number", ""))
+            # Auto-generate vehicle_code from registration number
+            vehicle_code = f"VEH-{reg_number.replace(' ', '').replace('-', '').upper()}"
+
+            data = VehicleCreate(
+                vehicle_code=vehicle_code,
+                registration_number=reg_number,
+                make=str(form.get("make", "")),
+                model=str(form.get("model", "")),
+                year=int(str(form.get("year", "2024"))),
+                vehicle_type=VehicleType(str(form.get("vehicle_type", "sedan"))),
+                fuel_type=FuelType(str(form.get("fuel_type", "petrol"))),
+                ownership_type=OwnershipType(str(form.get("ownership_type", "owned"))),
+                color=str(form.get("color", "")) or None,
+                vin=str(form.get("vin_number", "")) or None,
+                engine_number=str(form.get("engine_number", "")) or None,
+                seating_capacity=int(str(form.get("seating_capacity", "5") or "5")),
+                current_odometer=int(str(form.get("current_odometer_km", "0") or "0")),
+                license_expiry_date=date.fromisoformat(str(form["license_expiry_date"]))
+                if form.get("license_expiry_date")
+                else None,
+                purchase_date=date.fromisoformat(str(form["acquisition_date"]))
+                if form.get("acquisition_date")
+                else None,
+                purchase_price=Decimal(str(form["purchase_price"]))
+                if form.get("purchase_price")
+                else None,
+                location_id=UUID(str(form["location_id"]))
+                if form.get("location_id")
+                else None,
+                vendor_id=UUID(str(form["supplier_id"]))
+                if form.get("supplier_id")
+                else None,
+                assigned_employee_id=UUID(str(form["assigned_employee_id"]))
+                if form.get("assigned_employee_id")
+                else None,
+                assignment_type=AssignmentType.POOL
+                if "is_pool_vehicle" in form
+                else AssignmentType.PERSONAL,
+                notes=str(form.get("notes", "")) or None,
+            )
+            svc = VehicleService(db, org_id)
+            vehicle = svc.create(data)
+            db.commit()
+            return RedirectResponse(
+                url=f"/fleet/vehicles/{vehicle.vehicle_id}",
+                status_code=303,
+            )
+        except (ValueError, RuntimeError) as exc:
+            logger.warning("Vehicle creation failed: %s", exc)
+            return RedirectResponse(
+                url=f"/fleet/vehicles/new?error={exc}",
+                status_code=303,
+            )
+
+    async def update_vehicle_response(
+        self,
+        request: "Request",
+        organization_id: Any,
+        vehicle_id: Any,
+        db: Session,
+    ) -> "RedirectResponse":
+        """Handle POST to update an existing vehicle from form data."""
+        from app.schemas.fleet.vehicle import VehicleUpdate
+        from app.services.fleet.vehicle_service import VehicleService
+
+        form = await request.form()
+        org_id = coerce_uuid(organization_id)
+        vid = coerce_uuid(vehicle_id)
+        try:
+            vtype_raw = str(form.get("vehicle_type", "")) or None
+            ftype_raw = str(form.get("fuel_type", "")) or None
+            otype_raw = str(form.get("ownership_type", "")) or None
+            data = VehicleUpdate(
+                registration_number=str(form.get("registration_number", "")) or None,
+                vehicle_type=VehicleType(vtype_raw) if vtype_raw else None,
+                fuel_type=FuelType(ftype_raw) if ftype_raw else None,
+                color=str(form.get("color", "")) or None,
+                vin=str(form.get("vin_number", "")) or None,
+                engine_number=str(form.get("engine_number", "")) or None,
+                seating_capacity=int(str(form.get("seating_capacity", "") or "0"))
+                or None,
+                ownership_type=OwnershipType(otype_raw) if otype_raw else None,
+                purchase_date=date.fromisoformat(str(form["acquisition_date"]))
+                if form.get("acquisition_date")
+                else None,
+                purchase_price=Decimal(str(form["purchase_price"]))
+                if form.get("purchase_price")
+                else None,
+                license_expiry_date=date.fromisoformat(str(form["license_expiry_date"]))
+                if form.get("license_expiry_date")
+                else None,
+                location_id=UUID(str(form["location_id"]))
+                if form.get("location_id")
+                else None,
+                vendor_id=UUID(str(form["supplier_id"]))
+                if form.get("supplier_id")
+                else None,
+                assigned_employee_id=UUID(str(form["assigned_employee_id"]))
+                if form.get("assigned_employee_id")
+                else None,
+                assignment_type=AssignmentType.POOL
+                if "is_pool_vehicle" in form
+                else AssignmentType.PERSONAL,
+                notes=str(form.get("notes", "")) or None,
+            )
+            svc = VehicleService(db, org_id)
+            svc.update(vid, data)
+            db.commit()
+            return RedirectResponse(
+                url=f"/fleet/vehicles/{vehicle_id}",
+                status_code=303,
+            )
+        except (ValueError, RuntimeError) as exc:
+            logger.warning("Vehicle update failed: %s", exc)
+            return RedirectResponse(
+                url=f"/fleet/vehicles/{vehicle_id}/edit?error={exc}",
+                status_code=303,
+            )
+
+    async def create_entity_response(
+        self,
+        request: "Request",
+        auth: Any,
+        db: Session,
+        entity_type: str,
+    ) -> Any:
+        """Generic handler for fleet entity form creation.
+
+        Parses form data, calls the appropriate service, and redirects.
+        """
+        from datetime import date, datetime
+        from decimal import Decimal, InvalidOperation
+
+        from fastapi import HTTPException
+        from fastapi.responses import RedirectResponse
+
+        form = await request.form()
+        form_data = dict(form)
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        user_id = getattr(auth, "user_id", None) or getattr(auth, "person_id", None)
+
+        # Build a cleaned data dict, coercing types
+        data: dict[str, Any] = {}
+        for key, val in form_data.items():
+            if key.startswith("csrf") or key == "_method":
+                continue
+            str_val = str(val).strip() if val else ""
+            if not str_val:
+                data[key] = None
+                continue
+            # UUID fields
+            if key.endswith("_id"):
+                try:
+                    data[key] = UUID(str_val)
+                except ValueError:
+                    data[key] = str_val
+            # Date fields
+            elif key.endswith("_date") or key in (
+                "scheduled_date",
+                "issue_date",
+                "expiry_date",
+                "incident_date",
+                "log_date",
+            ):
+                try:
+                    data[key] = date.fromisoformat(str_val)
+                except ValueError:
+                    data[key] = str_val
+            # Datetime fields
+            elif key.endswith("_datetime"):
+                try:
+                    data[key] = datetime.fromisoformat(str_val)
+                except ValueError:
+                    data[key] = str_val
+            # Numeric fields
+            elif key in (
+                "estimated_repair_cost",
+                "estimated_cost",
+                "price_per_liter",
+                "total_cost",
+                "quantity_liters",
+                "odometer_reading",
+                "odometer_at_service",
+                "estimated_distance_km",
+                "coverage_amount",
+                "premium_amount",
+                "reminder_days_before",
+            ):
+                try:
+                    data[key] = Decimal(str_val)
+                except (ValueError, InvalidOperation):
+                    data[key] = str_val
+            # Boolean fields
+            elif key in ("third_party_involved", "is_full_tank"):
+                data[key] = str_val.lower() in ("true", "1", "on", "yes")
+            else:
+                data[key] = str_val
+
+        # Map entity type to service + schema + list URL
+        from app.schemas.fleet.document import DocumentCreate
+        from app.schemas.fleet.fuel import FuelLogCreate
+        from app.schemas.fleet.incident import IncidentCreate
+        from app.schemas.fleet.maintenance import MaintenanceCreate
+        from app.schemas.fleet.reservation import ReservationCreate
+
+        entity_map: dict[str, dict[str, Any]] = {
+            "incident": {
+                "service_cls": IncidentService,
+                "schema_cls": IncidentCreate,
+                "list_url": "/fleet/incidents",
+                "extra_fields": {"reported_by_id": user_id},
+            },
+            "reservation": {
+                "service_cls": ReservationService,
+                "schema_cls": ReservationCreate,
+                "list_url": "/fleet/reservations",
+                "extra_fields": {"employee_id": user_id},
+            },
+            "document": {
+                "service_cls": DocumentService,
+                "schema_cls": DocumentCreate,
+                "list_url": "/fleet/documents",
+                "extra_fields": {},
+            },
+            "fuel": {
+                "service_cls": FuelService,
+                "schema_cls": FuelLogCreate,
+                "list_url": "/fleet/fuel",
+                "extra_fields": {"employee_id": user_id},
+            },
+            "maintenance": {
+                "service_cls": MaintenanceService,
+                "schema_cls": MaintenanceCreate,
+                "list_url": "/fleet/maintenance",
+                "extra_fields": {},
+            },
+        }
+
+        cfg = entity_map.get(entity_type)
+        if not cfg:
+            raise HTTPException(
+                status_code=400, detail=f"Unknown entity type: {entity_type}"
+            )
+
+        # Add inferred fields
+        data.update(cfg["extra_fields"])
+
+        try:
+            schema = cfg["schema_cls"](**data)
+            service = cfg["service_cls"](db, org_id)
+            service.create(schema)
+            db.commit()
+            logger.info("Created fleet %s for org %s", entity_type, org_id)
+        except Exception as e:
+            logger.warning("Fleet %s creation failed: %s", entity_type, e)
+            db.rollback()
+            return RedirectResponse(
+                url=f"{cfg['list_url']}?error={str(e)[:200]}",
+                status_code=303,
+            )
+
+        return RedirectResponse(
+            url=cfg["list_url"],
+            status_code=303,
+        )
+
+    async def cancel_reservation_response(
+        self,
+        request: "Request",
+        auth: Any,
+        db: Session,
+        reservation_id: UUID,
+    ) -> Any:
+        """Cancel a reservation and redirect."""
+        from fastapi import HTTPException
+        from fastapi.responses import RedirectResponse
+
+        await request.form()  # consume form body for CSRF validation
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        try:
+            service = ReservationService(db, org_id)
+            service.cancel(reservation_id)
+            db.commit()
+        except Exception as e:
+            logger.warning("Reservation cancel failed: %s", e)
+            db.rollback()
+            return RedirectResponse(
+                url=f"/fleet/reservations/{reservation_id}?error={str(e)[:200]}",
+                status_code=303,
+            )
+
+        return RedirectResponse(
+            url="/fleet/reservations",
+            status_code=303,
+        )

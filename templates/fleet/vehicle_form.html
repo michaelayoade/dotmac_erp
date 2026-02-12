@@ -22,11 +22,8 @@
 
 {% block content %}
 <div class="max-w-4xl mx-auto">
-    <form method="POST" action="{{ '/api/v1/fleet/vehicles/' ~ vehicle.vehicle_id if vehicle else '/api/v1/fleet/vehicles' }}" class="space-y-6">
+    <form method="POST" action="{{ '/fleet/vehicles/' ~ vehicle.vehicle_id ~ '/edit' if vehicle else '/fleet/vehicles/new' }}" class="space-y-6">
         {{ request.state.csrf_form | safe }}
-        {% if vehicle %}
-        <input type="hidden" name="_method" value="PATCH">
-        {% endif %}
 
         <!-- Basic Information -->
         <div class="card">

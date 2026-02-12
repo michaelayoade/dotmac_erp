@@ -1,4 +1,6 @@
 {% extends "expense/base_expense.html" %}
+{% from "components/macros.html" import compact_filters %}
+
 
 {% block content %}
 <div class="space-y-6">
@@ -17,22 +19,18 @@
     </div>
 
     <!-- Filters -->
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap gap-4 items-end">
-                <div class="w-44">
-                    <label for="start_date" class="form-label">From</label>
-                    <input type="date" name="start_date" id="start_date" value="{{ start_date }}"
-                        class="form-input w-full">
-                </div>
-                <div class="w-44">
-                    <label for="end_date" class="form-label">To</label>
-                    <input type="date" name="end_date" id="end_date" value="{{ end_date }}"
-                        class="form-input w-full">
-                </div>
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/expense/reports/by_employee",
+        active_filters=active_filters | default([]),
+        date_range=true,
+        start_date=start_date | default('', true),
+        end_date=end_date | default('', true)
+    ) %}
+    <div>
                 <div class="w-56">
-                    <label for="department_id" class="form-label">Department</label>
-                    <select name="department_id" id="department_id" class="form-select w-full">
+                    <label class="form-label text-xs">Department</label>
+                    <select name="department_id" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All Departments</option>
                         {% for dept in departments %}
                         <option value="{{ dept.department_id }}" {% if department_id == dept.department_id|string %}selected{% endif %}>
@@ -41,13 +39,13 @@
                         {% endfor %}
                     </select>
                 </div>
-                <button type="submit" class="btn btn-secondary h-10">Apply Filter</button>
-            </div>
-        </form>
     </div>
+    {% endcall %}
 
     <!-- Summary Cards -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div id="results-container">
+
         <div class="card p-5">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-900/30">
@@ -61,6 +59,8 @@
                 </div>
             </div>
         </div>
+        </div>
+
 
         <div class="card p-5">
             <div class="flex items-center gap-4">

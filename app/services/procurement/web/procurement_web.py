@@ -25,6 +25,7 @@ from app.models.procurement.enums import (
 )
 from app.models.procurement.rfq import RequestForQuotation
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.procurement.contract import ContractService
 from app.services.procurement.evaluation import BidEvaluationService
 from app.services.procurement.procurement_plan import ProcurementPlanService
@@ -182,6 +183,9 @@ class ProcurementWebService:
             offset=offset,
             limit=limit,
         )
+        active_filters = build_active_filters(
+            params={"status": status, "fiscal_year": fiscal_year}
+        )
         return {
             "plans": plans,
             "total": total,
@@ -192,6 +196,7 @@ class ProcurementWebService:
             "filter_fiscal_year": fiscal_year,
             "status_labels": PLAN_STATUS_LABELS,
             "plan_statuses": list(ProcurementPlanStatus),
+            "active_filters": active_filters,
         }
 
     def plan_detail_context(
@@ -249,6 +254,9 @@ class ProcurementWebService:
             offset=offset,
             limit=limit,
         )
+        active_filters = build_active_filters(
+            params={"status": status, "urgency": urgency}
+        )
         return {
             "requisitions": requisitions,
             "total": total,
@@ -260,6 +268,7 @@ class ProcurementWebService:
             "status_labels": REQUISITION_STATUS_LABELS,
             "req_statuses": list(RequisitionStatus),
             "urgency_levels": list(UrgencyLevel),
+            "active_filters": active_filters,
         }
 
     def requisition_detail_context(
@@ -314,6 +323,7 @@ class ProcurementWebService:
             offset=offset,
             limit=limit,
         )
+        active_filters = build_active_filters(params={"status": status})
         return {
             "rfqs": rfqs,
             "total": total,
@@ -325,6 +335,7 @@ class ProcurementWebService:
             "status_labels": RFQ_STATUS_LABELS,
             "rfq_statuses": list(RFQStatus),
             "procurement_methods": list(ProcurementMethod),
+            "active_filters": active_filters,
         }
 
     def rfq_detail_context(
@@ -395,6 +406,7 @@ class ProcurementWebService:
             ).all()
             rfq_map = {rfq.rfq_id: rfq for rfq in rfqs}
 
+        active_filters = build_active_filters(params={"status": status})
         return {
             "evaluations": evaluations,
             "total": total,
@@ -405,6 +417,7 @@ class ProcurementWebService:
             "status_labels": EVALUATION_STATUS_LABELS,
             "evaluation_statuses": list(EvaluationStatus),
             "rfq_map": rfq_map,
+            "active_filters": active_filters,
         }
 
     def evaluation_matrix_context(
@@ -485,6 +498,7 @@ class ProcurementWebService:
             offset=offset,
             limit=limit,
         )
+        active_filters = build_active_filters(params={"status": status})
         return {
             "contracts": contracts,
             "total": total,
@@ -494,6 +508,7 @@ class ProcurementWebService:
             "filter_status": status,
             "status_labels": CONTRACT_STATUS_LABELS,
             "contract_statuses": list(ContractStatus),
+            "active_filters": active_filters,
         }
 
     def contract_detail_context(
@@ -550,6 +565,7 @@ class ProcurementWebService:
         prequalifications, total = service.list_prequalifications(
             organization_id,
             status=status,
+            q=q,
             offset=offset,
             limit=limit,
         )
@@ -575,6 +591,10 @@ class ProcurementWebService:
                 supplier.registration_number if supplier else None
             )
 
+        active_filters = build_active_filters(
+            params={"status": status, "q": q},
+            labels={"q": "Search"},
+        )
         return {
             "vendors": prequalifications,
             "total": total,
@@ -584,6 +604,7 @@ class ProcurementWebService:
             "filter_q": q,
             "status_labels": PREQUALIFICATION_STATUS_LABELS,
             "vendor_statuses": list(PrequalificationStatus),
+            "active_filters": active_filters,
         }
 
     def prequalification_detail_context(

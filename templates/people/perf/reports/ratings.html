@@ -1,4 +1,6 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import compact_filters %}
+
 
 {% block page_title %}Performance Ratings{% endblock %}
 
@@ -29,25 +31,28 @@
     </div>
 
     <!-- Filters -->
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap gap-4 items-end">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/perf/reports/ratings",
+        active_filters=active_filters | default([])
+    ) %}
+    <div>
                 <div class="w-64">
-                    <label for="cycle_id" class="form-label">Appraisal Cycle</label>
-                    <select name="cycle_id" id="cycle_id" class="form-select w-full">
+                    <label class="form-label text-xs">Appraisal Cycle</label>
+                    <select name="cycle_id" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All Cycles</option>
                         {% for c in report.cycles %}
                         <option value="{{ c.cycle_id }}" {% if cycle_id == c.cycle_id|string %}selected{% endif %}>{{ c.cycle_name }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <button type="submit" class="btn btn-secondary h-10">Apply Filter</button>
-            </div>
-        </form>
     </div>
+    {% endcall %}
 
     <!-- Summary Cards -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div id="results-container">
+
         <div class="card p-5">
             <div class="flex items-center gap-4">
                 <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-100 dark:bg-violet-900/30">
@@ -61,6 +66,8 @@
                 </div>
             </div>
         </div>
+        </div>
+
 
         <div class="card p-5">
             <div class="flex items-center gap-4">

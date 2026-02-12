@@ -19,10 +19,7 @@
 {% block content %}
 <div class="mx-auto max-w-2xl">
     <form method="post"
-          action="/api/v1/banking/reconciliations"
-          hx-post="/api/v1/banking/reconciliations"
-          hx-swap="none"
-          hx-on::after-request="if(event.detail.successful) { const data = JSON.parse(event.detail.xhr.response); window.location.href='/finance/banking/reconciliations/' + data.reconciliation_id; }"
+          action="/finance/banking/reconciliations/new"
           class="space-y-6">
         {{ request.state.csrf_form | safe }}
 

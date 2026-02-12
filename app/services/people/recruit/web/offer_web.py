@@ -17,6 +17,7 @@ from starlette.datastructures import UploadFile
 
 from app.models.people.recruit import OfferStatus
 from app.services.common import PaginationParams, coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.people.hr import (
     DepartmentFilters,
     DesignationFilters,
@@ -84,6 +85,13 @@ class OfferWebService:
             pagination=PaginationParams(limit=200),
         ).items
 
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "job_opening_id": job_opening_id,
+                "applicant_id": applicant_id,
+            }
+        )
         return {
             "offers": result.items,
             "job_openings": job_openings,
@@ -97,6 +105,7 @@ class OfferWebService:
             "total": result.total,
             "has_prev": result.has_prev,
             "has_next": result.has_next,
+            "active_filters": active_filters,
         }
 
     @staticmethod

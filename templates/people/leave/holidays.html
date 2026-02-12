@@ -1,4 +1,6 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import compact_filters %}
+
 
 {% block page_title %}Holiday Lists{% endblock %}
 
@@ -33,27 +35,26 @@
         </div>
     </div>
 
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap items-end gap-4">
-                <div class="w-32">
-                    <label for="year" class="form-label">Year</label>
-                    <input type="number" name="year" id="year" value="{{ year | default('', true) }}" class="form-input w-full" placeholder="2024">
-                </div>
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/leave/holidays",
+        active_filters=active_filters | default([])
+    ) %}
+    <div>
                 <div class="w-44">
-                    <label for="is_active" class="form-label">Status</label>
-                    <select name="is_active" id="is_active" class="form-select w-full">
+                    <label class="form-label text-xs">Status</label>
+                    <select name="is_active" class="form-select w-full" {{ filter_attrs }}>
                         <option value="" {% if is_active is none %}selected{% endif %}>All</option>
                         <option value="true" {% if is_active is sameas true %}selected{% endif %}>Active</option>
                         <option value="false" {% if is_active is sameas false %}selected{% endif %}>Inactive</option>
                     </select>
                 </div>
-                <button type="submit" class="btn btn-secondary h-10">Filter</button>
-            </div>
-        </form>
     </div>
+    {% endcall %}
 
     {% if lists %}
+    <div id="results-container">
+
     <div class="card overflow-hidden">
         <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
@@ -97,6 +98,8 @@
             </table>
         </div>
     </div>
+    </div>
+
     {% else %}
     <div class="card p-8 text-center">
         <p class="text-slate-500 dark:text-slate-400">No holiday lists found.</p>

@@ -21,6 +21,7 @@ from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.models.finance.tax.tax_code import TaxCode
 from app.models.inventory.item import Item
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.finance.ar.quote import quote_service
 from app.services.finance.common import format_currency, format_date
 from app.services.finance.platform.currency_context import get_currency_context
@@ -243,6 +244,20 @@ class QuoteWebService:
 
         logger.debug("list_context: found %d quotes", len(items))
 
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "customer_id": customer_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            labels={"start_date": "From", "end_date": "To"},
+            options={
+                "customer_id": {
+                    str(c.customer_id): _customer_display_name(c) for c in customers
+                }
+            },
+        )
         return {
             "quotes": items,
             "filter_status": status,
@@ -252,6 +267,7 @@ class QuoteWebService:
             "status_counts": status_counts,
             "statuses": [s.value for s in QuoteStatus],
             "customers": customer_options,
+            "active_filters": active_filters,
         }
 
     @staticmethod

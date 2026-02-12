@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.people.recruit import RecruitmentService
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
@@ -41,9 +42,13 @@ class ReportWebService:
             job_opening_id=parse_uuid(job_opening_id),
         )
 
+        active_filters = build_active_filters(
+            params={"job_opening_id": job_opening_id},
+        )
         return {
             "report": report,
             "job_opening_id": job_opening_id,
+            "active_filters": active_filters,
         }
 
     @staticmethod

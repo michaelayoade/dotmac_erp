@@ -1,4 +1,6 @@
 {% extends "modules/base_modules.html" %}
+{% from "components/macros.html" import compact_filters %}
+
 
 {% block title %}Time Entries - {{ project.project_name }}{% endblock %}
 
@@ -50,20 +52,23 @@
         </div>
     </div>
 
-    <!-- Filters -->
-    <form method="get" class="flex flex-wrap items-center gap-4">
-        <input type="date" name="start_date" value="{{ start_date or '' }}"
-               class="rounded-lg border-slate-300 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
-               placeholder="Start Date">
-        <input type="date" name="end_date" value="{{ end_date or '' }}"
-               class="rounded-lg border-slate-300 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
-               placeholder="End Date">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/projects/time/list",
+        active_filters=active_filters | default([]),
+        date_range=true,
+        start_date=start_date | default('', true),
+        end_date=end_date | default('', true)
+    ) %}
+    <div>
         <select name="billable"
                 class="rounded-lg border-slate-300 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
             <option value="">All Types</option>
             <option value="true" {{ 'selected' if billable_filter == 'true' else '' }}>Billable Only</option>
             <option value="false" {{ 'selected' if billable_filter == 'false' else '' }}>Non-Billable Only</option>
         </select>
+    </div>
+    <div>
         <select name="billing_status"
                 class="rounded-lg border-slate-300 text-sm focus:border-amber-500 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-700 dark:text-white">
             <option value="">All Statuses</option>
@@ -71,8 +76,8 @@
             <option value="BILLED" {{ 'selected' if billing_status_filter == 'BILLED' else '' }}>Billed</option>
             <option value="NON_BILLABLE" {{ 'selected' if billing_status_filter == 'NON_BILLABLE' else '' }}>Non-Billable</option>
         </select>
-        <button type="submit" class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600 transition-colors">Filter</button>
-    </form>
+    </div>
+    {% endcall %}
 
     <!-- Bulk Actions Bar -->
     <div x-show="selectedEntries.length > 0" x-cloak

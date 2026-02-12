@@ -1,5 +1,6 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card %}
+{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card, compact_filters %}
+
 
 {% block page_title %}Quotes{% endblock %}
 
@@ -37,47 +38,35 @@
     </div>
 
     {# Filters #}
-    <div class="card p-4">
-        <form method="get" action="/finance/quotes" class="flex flex-wrap items-center gap-4">
-            {# Status Filter #}
-            <select name="status" class="form-select">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/finance/quotes",
+        active_filters=active_filters | default([]),
+        date_range=true,
+        start_date=start_date | default('', true),
+        end_date=end_date | default('', true)
+    ) %}
+    <div>
+            <select name="status" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Statuses</option>
                 {% for s in statuses %}
                 <option value="{{ s }}" {{ 'selected' if filter_status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
                 {% endfor %}
             </select>
-
-            {# Customer Filter #}
-            <select name="customer_id" class="form-select">
+    </div>
+    <div>
+            <select name="customer_id" class="form-select w-full" {{ filter_attrs }}>
                 <option value="">All Customers</option>
                 {% for c in customers %}
                 <option value="{{ c.id }}" {{ 'selected' if filter_customer_id == c.id else '' }}>{{ c.name }}</option>
                 {% endfor %}
             </select>
-
-            {# Date Range #}
-            <input type="date" name="start_date" value="{{ filter_start_date | default('', true) }}"
-                   class="form-input" placeholder="Start Date">
-            <input type="date" name="end_date" value="{{ filter_end_date | default('', true) }}"
-                   class="form-input" placeholder="End Date">
-
-            {# Actions #}
-            <button type="submit" class="btn btn-primary">
-                <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                </svg>
-                Filter
-            </button>
-
-            {% if filter_status or filter_customer_id or filter_start_date or filter_end_date %}
-            <a href="/finance/quotes" class="text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-300 transition-colors">
-                Clear
-            </a>
-            {% endif %}
-        </form>
     </div>
+    {% endcall %}
 
     {# Quote List #}
+    <div id="results-container">
+
     <div class="card">
         <div class="table-container">
             <table class="table">
@@ -158,5 +147,7 @@
             filters={"status": filter_status, "customer_id": filter_customer_id, "start_date": filter_start_date, "end_date": filter_end_date}
         ) }}
     </div>
+    </div>
+
 </div>
 {% endblock %}

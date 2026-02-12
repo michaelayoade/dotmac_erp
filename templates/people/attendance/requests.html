@@ -1,6 +1,7 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import status_badge %}
+{% from "components/macros.html" import status_badge, compact_filters %}
+
 {% block page_title %}Attendance Requests{% endblock %}
 
 {% block breadcrumbs %}
@@ -59,33 +60,31 @@
     </div>
 
     {# Filters #}
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap gap-4 items-end">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/attendance/requests",
+        active_filters=active_filters | default([]),
+        date_range=true,
+        start_date=start_date | default('', true),
+        end_date=end_date | default('', true)
+    ) %}
+    <div>
                 <div class="w-44">
-                    <label for="status" class="form-label">Status</label>
-                    <select name="status" id="status" class="form-select w-full">
+                    <label class="form-label text-xs">Status</label>
+                    <select name="status" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All Statuses</option>
                         {% for s in statuses %}
                         <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s | replace("_", " ") | title }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="w-44">
-                    <label for="start_date" class="form-label">From Date</label>
-                    <input type="date" name="start_date" id="start_date" value="{{ start_date | default('', true) }}" class="form-input w-full">
-                </div>
-                <div class="w-44">
-                    <label for="end_date" class="form-label">To Date</label>
-                    <input type="date" name="end_date" id="end_date" value="{{ end_date | default('', true) }}" class="form-input w-full">
-                </div>
-                <button type="submit" class="btn btn-secondary h-10">Filter</button>
-            </div>
-        </form>
     </div>
+    {% endcall %}
 
     {# Pending Requests Summary #}
     {% if pending_count > 0 %}
+    <div id="results-container">
+
     <div class="card p-4 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800">
         <div class="flex items-center gap-3">
             <div class="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/40">
@@ -99,6 +98,8 @@
             </div>
         </div>
     </div>
+    </div>
+
     {% endif %}
 
     {% if requests %}

@@ -1,4 +1,6 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import compact_filters %}
+
 
 {% block page_title %}Scorecards{% endblock %}
 
@@ -50,12 +52,15 @@
     </div>
 
     <!-- Filters -->
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap gap-4 items-end">
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/perf/scorecards",
+        active_filters=active_filters | default([])
+    ) %}
+    <div>
                 <div class="w-48">
-                    <label for="employee_id" class="form-label">Employee</label>
-                    <select name="employee_id" id="employee_id" class="form-select w-full">
+                    <label class="form-label text-xs">Employee</label>
+                    <select name="employee_id" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All Employees</option>
                         {% for emp in employees %}
                         <option value="{{ emp.employee_id }}" {% if employee_id == emp.employee_id | string %}selected{% endif %}>
@@ -64,9 +69,11 @@
                         {% endfor %}
                     </select>
                 </div>
+    </div>
+    <div>
                 <div class="w-48">
-                    <label for="department_id" class="form-label">Department</label>
-                    <select name="department_id" id="department_id" class="form-select w-full">
+                    <label class="form-label text-xs">Department</label>
+                    <select name="department_id" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All Departments</option>
                         {% for dept in departments %}
                         <option value="{{ dept.department_id }}" {% if department_id == dept.department_id | string %}selected{% endif %}>
@@ -75,23 +82,22 @@
                         {% endfor %}
                     </select>
                 </div>
+    </div>
+    <div>
                 <div class="w-40">
-                    <label for="is_finalized" class="form-label">Status</label>
-                    <select name="is_finalized" id="is_finalized" class="form-select w-full">
+                    <label class="form-label text-xs">Status</label>
+                    <select name="is_finalized" class="form-select w-full" {{ filter_attrs }}>
                         <option value="">All</option>
                         <option value="false" {% if is_finalized == 'false' %}selected{% endif %}>In Progress</option>
                         <option value="true" {% if is_finalized == 'true' %}selected{% endif %}>Finalized</option>
                     </select>
                 </div>
-                <button type="submit" class="btn btn-secondary h-10">Filter</button>
-                {% if employee_id or department_id or is_finalized %}
-                <a href="/people/perf/scorecards" class="btn btn-ghost h-10">Clear</a>
-                {% endif %}
-            </div>
-        </form>
     </div>
+    {% endcall %}
 
     {% if scorecards %}
+    <div id="results-container">
+
     <div class="card overflow-hidden">
         <div class="table-container">
             <table class="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
@@ -178,6 +184,8 @@
             </table>
         </div>
     </div>
+    </div>
+
     {% else %}
     <div class="card p-8 text-center">
         <svg class="w-12 h-12 mx-auto text-slate-300 dark:text-slate-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

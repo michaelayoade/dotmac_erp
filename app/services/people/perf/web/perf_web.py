@@ -17,6 +17,7 @@ from starlette.datastructures import UploadFile
 
 from app.models.people.perf import AppraisalStatus, KPIStatus
 from app.services.common import PaginationParams, coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.people.hr import (
     DepartmentFilters,
     EmployeeFilters,
@@ -80,6 +81,9 @@ class PerfWebService:
 
         context = base_context(request, auth, "Appraisals", "perf", db=db)
         context["request"] = request
+        active_filters = build_active_filters(
+            params={"status": status, "cycle_id": cycle_id}
+        )
         context.update(
             {
                 "appraisals": result.items,
@@ -93,6 +97,7 @@ class PerfWebService:
                 "total": result.total,
                 "has_prev": result.has_prev,
                 "has_next": result.has_next,
+                "active_filters": active_filters,
             }
         )
         return templates.TemplateResponse(
