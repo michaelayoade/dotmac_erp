@@ -1,0 +1,188 @@
+{% extends "expense/base_expense.html" %}
+{% from "components/macros.html" import status_badge %}
+
+{% block page_title %}Expense Item{% endblock %}
+
+{% block breadcrumbs %}
+<nav class="flex items-center gap-2 text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
+    <a href="/expense" class="hover:text-slate-700 dark:hover:text-slate-300">Expense</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/expense/claims/list" class="hover:text-slate-700 dark:hover:text-slate-300">Claims</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <a href="/expense/claims/{{ claim.claim_id }}" class="hover:text-slate-700 dark:hover:text-slate-300">{{ claim.claim_number }}</a>
+    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    </svg>
+    <span class="text-slate-700 dark:text-slate-300" aria-current="page">Item {{ item.sequence }}</span>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <div class="card p-6">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+            <div>
+                <h1 class="text-2xl font-semibold text-slate-900 dark:text-white">Item {{ item.sequence }}</h1>
+                <p class="text-sm text-slate-500 dark:text-slate-400">{{ claim.claim_number }} • {{ item.category.category_name if item.category else 'Uncategorized' }}</p>
+            </div>
+            <div class="flex items-center gap-3">
+                {{ status_badge(claim.status.value if claim.status else 'DRAFT') }}
+                <a href="/expense/claims/{{ claim.claim_id }}" class="btn btn-secondary">Back to Claim</a>
+            </div>
+        </div>
+        <div class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Claim Date</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ claim.claim_date }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Purpose</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ claim.purpose }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Expense Date</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ item.expense_date }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Amount</p>
+                <p class="text-sm font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ item.claimed_amount | format_currency }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Approved Amount</p>
+                <p class="text-sm font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ item.approved_amount | format_currency if item.approved_amount is not none else '-' }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Category</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ item.category.category_name if item.category else '-' }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Expense Approver</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">
+                    {% if requested_approver %}
+                    {{ requested_approver.full_name }}
+                    {% elif claim.approver %}
+                    {{ claim.approver.full_name }}
+                    {% elif claim.requested_approver_id %}
+                    {{ claim.requested_approver_id }}
+                    {% else %}
+                    -
+                    {% endif %}
+                </p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Beneficiary Name</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ claim.recipient_name or '-' }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Bank Name</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ claim.recipient_bank_name or '-' }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Bank Code</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ claim.recipient_bank_code or '-' }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Account Number</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ claim.recipient_account_number or '-' }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Vendor</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ item.vendor_name or '-' }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Receipt Number</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ item.receipt_number or '-' }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Travel Expense</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ "Yes" if item.is_travel_expense else "No" }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Travel Route</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ item.travel_from or '-' }} to {{ item.travel_to or '-' }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Distance (KM)</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ item.distance_km if item.distance_km is not none else '-' }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Project (Optional)</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">
+                    {% if claim.project %}
+                    {{ claim.project.project_code }} - {{ claim.project.project_name }}
+                    {% elif claim.project_id %}
+                    {{ claim.project_id }}
+                    {% else %}
+                    -
+                    {% endif %}
+                </p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Support Ticket (Optional)</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">
+                    {% if claim.ticket %}
+                    {{ claim.ticket.ticket_number }} - {{ claim.ticket.subject }}
+                    {% elif claim.ticket_id %}
+                    {{ claim.ticket_id }}
+                    {% else %}
+                    -
+                    {% endif %}
+                </p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wider text-slate-400 dark:text-slate-500">Task (Optional)</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">
+                    {% if claim.task %}
+                    {{ claim.task.task_code }} - {{ claim.task.task_name }}
+                    {% elif claim.task_id %}
+                    {{ claim.task_id }}
+                    {% else %}
+                    -
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-6">
+        <h2 class="text-base font-semibold text-slate-900 dark:text-white">Description</h2>
+        <p class="mt-2 text-sm text-slate-700 dark:text-slate-300">{{ item.description }}</p>
+    </div>
+
+    <div class="card p-6">
+        <h2 class="text-base font-semibold text-slate-900 dark:text-white">Additional Notes</h2>
+        <p class="mt-2 text-sm text-slate-700 dark:text-slate-300">{{ item.notes or '-' }}</p>
+    </div>
+
+    <div class="card p-6">
+        <h2 class="text-base font-semibold text-slate-900 dark:text-white">Receipt URL</h2>
+        <p class="mt-2 text-sm text-slate-700 dark:text-slate-300 break-all">{{ item.receipt_url or '-' }}</p>
+    </div>
+
+    <div class="card p-6">
+        <h2 class="text-base font-semibold text-slate-900 dark:text-white">Receipt Files</h2>
+        {% if item.receipt_urls %}
+        <div class="mt-3 space-y-2">
+            {% for receipt_url in item.receipt_urls %}
+            <a href="/expense/claims/{{ claim.claim_id }}/items/{{ item.item_id }}/receipt?index={{ loop.index0 }}"
+               target="_blank"
+               rel="noopener noreferrer"
+               class="inline-flex items-center gap-1 text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300">
+                View receipt {{ loop.index }}
+                <svg class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                    <path d="M12.293 3.293a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-8.5 8.5a1 1 0 01-.39.243l-4 1.5a1 1 0 01-1.285-1.285l1.5-4a1 1 0 01.243-.39l8.5-8.5z"/>
+                </svg>
+            </a>
+            <p class="font-mono text-[11px] text-slate-400 dark:text-slate-500 break-all">{{ receipt_url }}</p>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="mt-2 text-sm text-slate-500 dark:text-slate-400">No receipt attached.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

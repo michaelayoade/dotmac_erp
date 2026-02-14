@@ -77,6 +77,13 @@ def post_payment(
             message=f"Payment must be APPROVED or SENT to post (current: {payment.status.value})",
         )
 
+    # Skip zero-amount payments — nothing meaningful to post to GL
+    if payment.amount == Decimal("0"):
+        return APPostingResult(
+            success=True,
+            message="Zero amount payment — no GL posting needed",
+        )
+
     # Load supplier
     supplier = db.get(Supplier, payment.supplier_id)
     if not supplier:

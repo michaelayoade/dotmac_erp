@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import live_search, pagination, status_badge, empty_state, stats_card %}
+{% from "components/macros.html" import compact_filters, pagination, status_badge, empty_state, stats_card, filter_select_field, filter_entity_select_field, action_buttons %}
 
 {% block page_title %}Purchase Orders{% endblock %}
 
@@ -24,36 +24,28 @@
 
 {% block content %}
 <div class="space-y-6">
+    {% set zero_amount = ((presentation_currency_code or default_currency_code) ~ ' 0.00') if (presentation_currency_code or default_currency_code) else '0.00' %}
     {# Stats Summary #}
     <div class="grid gap-4 sm:grid-cols-4">
         {{ stats_card("Draft Orders", stats.draft_count | default(0), icon="edit", color="slate") }}
         {{ stats_card("Pending Approval", stats.pending_count | default(0), icon="clock", color="amber") }}
-        {{ stats_card("Approved Total", stats.approved_total | default("₦0.00"), icon="check-circle", color="emerald") }}
-        {{ stats_card("Open Balance", stats.open_total | default("₦0.00"), icon="currency", color="teal") }}
+        {{ stats_card("Approved Total", stats.approved_total | default(zero_amount), icon="check-circle", color="emerald") }}
+        {{ stats_card("Open Balance", stats.open_total | default(zero_amount), icon="currency", color="teal") }}
     </div>
 
     {# Search and Filters #}
-    {% call(search_attrs) live_search(
-        search=search,
+    {% call(filter_attrs) compact_filters(
         base_url="/finance/ap/purchase-orders",
-        placeholder="Search PO number or supplier..."
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search | default('', true),
+        search_placeholder="Search PO number or supplier...",
+        date_range=true,
+        start_date=start_date | default('', true),
+        end_date=end_date | default('', true)
     ) %}
-        <select name="supplier_id" class="form-select" {{ search_attrs }}>
-            <option value="">All Suppliers</option>
-            {% for s in suppliers_list %}
-            <option value="{{ s.supplier_id }}" {{ 'selected' if supplier_id == s.supplier_id|string else '' }}>{{ s.supplier_name }}</option>
-            {% endfor %}
-        </select>
-        <select name="status" class="form-select" {{ search_attrs }}>
-            <option value="">All Status</option>
-            {% for s in po_statuses %}
-            <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
-            {% endfor %}
-        </select>
-        <input type="date" name="start_date" value="{{ start_date if start_date else '' }}"
-               class="form-input" placeholder="Start Date" {{ search_attrs }}>
-        <input type="date" name="end_date" value="{{ end_date if end_date else '' }}"
-               class="form-input" placeholder="End Date" {{ search_attrs }}>
+        {{ filter_entity_select_field("supplier_id", "Supplier", supplier_id, suppliers_list, "supplier_id", "supplier_name", filter_attrs) }}
+        {{ filter_select_field("status", "Status", status, po_statuses, filter_attrs) }}
     {% endcall %}
 
     <div id="results-container">
@@ -63,9 +55,9 @@
             <table class="table">
                 <thead>
                     <tr>
+                        <th scope="col">PO Date</th>
                         <th scope="col">PO Number</th>
                         <th scope="col">Supplier</th>
-                        <th scope="col">PO Date</th>
                         <th scope="col">Expected Delivery</th>
                         <th scope="col" class="text-right">Total Amount</th>
                         <th scope="col" class="text-right">Received</th>
@@ -76,6 +68,7 @@
                 <tbody>
                     {% for order in orders %}
                     <tr class="group">
+                        <td class="text-slate-600 dark:text-slate-400">{{ order.po_date }}</td>
                         <td>
                             <a href="/finance/ap/purchase-orders/{{ order.po_id }}" class="font-mono text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
                                 {{ order.po_number }}
@@ -84,42 +77,26 @@
                         <td>
                             <p class="text-sm font-medium text-slate-900 dark:text-white">{{ order.supplier_name }}</p>
                         </td>
-                        <td class="text-slate-600 dark:text-slate-400">{{ order.po_date }}</td>
                         <td class="text-slate-600 dark:text-slate-400">{{ order.expected_delivery_date | default('—') }}</td>
-                        <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ order.total_amount | default("₦0.00") }}</td>
-                        <td class="text-right font-mono text-slate-600 dark:text-slate-400">{{ order.amount_received | default("₦0.00") }}</td>
+                        <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ order.total_amount | default(zero_amount) }}</td>
+                        <td class="text-right font-mono text-slate-600 dark:text-slate-400">{{ order.amount_received | default(zero_amount) }}</td>
                         <td class="text-center">
                             {{ status_badge(order.status | default('draft'), 'sm') }}
                         </td>
                         <td>
-                            <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <a href="/finance/ap/purchase-orders/{{ order.po_id }}"
-                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
-                                   title="View" aria-label="View">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                    </svg>
-                                </a>
-                                {% if order.status == 'DRAFT' %}
-                                <a href="/finance/ap/purchase-orders/{{ order.po_id }}/edit"
-                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
-                                   title="Edit" aria-label="Edit">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                                    </svg>
-                                </a>
-                                {% endif %}
-                                {% if order.status in ['APPROVED', 'PARTIALLY_RECEIVED'] %}
-                                <a href="/finance/ap/goods-receipts/new?po_id={{ order.po_id }}"
-                                   class="rounded-lg p-2 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400 transition-colors"
-                                   title="Receive Goods">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
-                                    </svg>
-                                </a>
-                                {% endif %}
-                            </div>
+                            {{ action_buttons(
+                                view_href="/finance/ap/purchase-orders/" ~ order.po_id,
+                                edit_href="/finance/ap/purchase-orders/" ~ order.po_id ~ "/edit" if order.status == "DRAFT" else none,
+                                extra_actions=[
+                                    {
+                                        "href": "/finance/ap/goods-receipts/new?po_id=" ~ order.po_id,
+                                        "title": "Receive Goods",
+                                        "icon": "box",
+                                        "aria_label": "Receive Goods",
+                                        "class": "rounded-lg p-2 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400 transition-colors"
+                                    }
+                                ] if order.status in ["APPROVED", "PARTIALLY_RECEIVED"] else []
+                            ) }}
                         </td>
                     </tr>
                     {% else %}

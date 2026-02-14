@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Enum, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.ext.mutable import MutableDict
 from sqlalchemy.orm import Mapped, mapped_column
@@ -28,6 +28,15 @@ class AuditEvent(Base):
     )
     actor_type: Mapped[AuditActorType] = mapped_column(
         Enum(AuditActorType), default=AuditActorType.system
+    )
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
+    actor_person_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("people.id"),
+        nullable=True,
+        index=True,
     )
     actor_id: Mapped[str | None] = mapped_column(String(120))
     action: Mapped[str] = mapped_column(String(80))

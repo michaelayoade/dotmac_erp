@@ -34,6 +34,7 @@ from app.services.finance.ar.web.base import (
     get_projects,
     invoice_line_view,
     invoice_status_label,
+    normalize_date_range_filters,
     parse_date,
     parse_invoice_status,
 )
@@ -442,6 +443,11 @@ class CreditNoteWebService:
         page: int,
     ) -> HTMLResponse:
         """Render credit note list page."""
+        start_date, end_date = normalize_date_range_filters(
+            start_date,
+            end_date,
+            request.query_params,
+        )
         context = base_context(request, auth, "AR Credit Notes", "ar")
         context.update(
             self.list_credit_notes_context(

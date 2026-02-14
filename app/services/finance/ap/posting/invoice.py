@@ -111,6 +111,13 @@ def post_invoice(
             message=f"Invoice must be APPROVED or already posted to create GL entries (current: {invoice.status.value})",
         )
 
+    # Skip zero-amount invoices — nothing meaningful to post to GL
+    if invoice.total_amount == Decimal("0"):
+        return APPostingResult(
+            success=True,
+            message="Zero amount invoice — no GL posting needed",
+        )
+
     # Load supplier for control account
     supplier = db.get(Supplier, invoice.supplier_id)
     if not supplier:

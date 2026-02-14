@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import live_search, pagination %}
+{% from "components/macros.html" import compact_filters, filter_select_field, pagination %}
 
 {% block page_title %}Appraisal Templates{% endblock %}
 
@@ -37,23 +37,14 @@
     </div>
     {% endif %}
 
-    {% call(search_attrs) live_search(
-        search=search,
-        filters=[
-            {
-                "name": "is_active",
-                "label": "All Status",
-                "value": is_active,
-                "options": [
-                    {"value": "true", "label": "Active"},
-                    {"value": "false", "label": "Inactive"}
-                ]
-            }
-        ],
+    {% call(filter_attrs) compact_filters(
         base_url="/people/perf/appraisal-templates",
-        placeholder="Search appraisal templates..."
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search appraisal templates..."
     ) %}
-        <select name="department_id" class="form-select" {{ search_attrs }}>
+        <select name="department_id" class="form-select" {{ filter_attrs }}>
             <option value="">All Departments</option>
             {% for dept in departments %}
             <option value="{{ dept.department_id }}" {{ 'selected' if department_id == dept.department_id|string else '' }}>{{ dept.department_name }}</option>

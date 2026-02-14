@@ -1,0 +1,1149 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - link "Default Organization logo Default Organization Finance" [ref=e5] [cursor=pointer]:
+          - /url: /finance/dashboard
+          - img "Default Organization logo" [ref=e6]
+          - generic [ref=e7]:
+            - paragraph [ref=e8]: Default Organization
+            - generic [ref=e9]: Finance
+        - button "Close sidebar" [ref=e10] [cursor=pointer]:
+          - img [ref=e11]
+      - navigation "Finance navigation" [ref=e13]:
+        - link "Dashboard" [ref=e14] [cursor=pointer]:
+          - /url: /finance/dashboard
+          - img [ref=e15]
+          - generic [ref=e17]: Dashboard
+        - generic [ref=e18]: Core
+        - button "General Ledger" [ref=e20] [cursor=pointer]:
+          - img [ref=e21]
+          - generic [ref=e23]: General Ledger
+          - img [ref=e24]
+        - generic [ref=e26]: Sub-Ledgers
+        - button "Accounts Payable" [ref=e28] [cursor=pointer]:
+          - img [ref=e29]
+          - generic [ref=e31]: Accounts Payable
+          - img [ref=e32]
+        - button "Accounts Receivable" [ref=e35] [cursor=pointer]:
+          - img [ref=e36]
+          - generic [ref=e38]: Accounts Receivable
+          - img [ref=e39]
+        - button "Fixed Assets" [ref=e42] [cursor=pointer]:
+          - img [ref=e43]
+          - generic [ref=e45]: Fixed Assets
+          - img [ref=e46]
+        - button "Tax" [ref=e49] [cursor=pointer]:
+          - img [ref=e50]
+          - generic [ref=e52]: Tax
+          - img [ref=e53]
+        - generic [ref=e55]: Treasury
+        - generic [ref=e56]:
+          - button "Banking" [ref=e57] [cursor=pointer]:
+            - img [ref=e58]
+            - generic [ref=e60]: Banking
+            - img [ref=e61]
+          - generic [ref=e63]:
+            - link "Bank Accounts" [ref=e64] [cursor=pointer]:
+              - /url: /finance/banking/accounts
+            - link "Statements" [ref=e65] [cursor=pointer]:
+              - /url: /finance/banking/statements
+            - link "Reconciliations" [ref=e66] [cursor=pointer]:
+              - /url: /finance/banking/reconciliations
+            - link "Transaction Rules" [ref=e67] [cursor=pointer]:
+              - /url: /finance/banking/rules
+            - link "Payees" [ref=e68] [cursor=pointer]:
+              - /url: /finance/banking/payees
+        - generic [ref=e69]: Reporting
+        - button "Reports" [ref=e71] [cursor=pointer]:
+          - img [ref=e72]
+          - generic [ref=e74]: Reports
+          - img [ref=e75]
+        - generic [ref=e77]: Automation
+        - button "Automation" [ref=e79] [cursor=pointer]:
+          - img [ref=e80]
+          - generic [ref=e82]: Automation
+          - img [ref=e83]
+        - generic [ref=e85]: Switch Module
+        - link "People" [ref=e86] [cursor=pointer]:
+          - /url: /people/hr/employees
+          - img [ref=e87]
+          - generic [ref=e89]: People
+        - link "Inventory" [ref=e90] [cursor=pointer]:
+          - /url: /inventory/items
+          - img [ref=e91]
+          - generic [ref=e93]: Inventory
+        - link "Fleet" [ref=e94] [cursor=pointer]:
+          - /url: /fleet
+          - img [ref=e95]
+          - generic [ref=e97]: Fleet
+        - link "Support" [ref=e98] [cursor=pointer]:
+          - /url: /support/tickets
+          - img [ref=e99]
+          - generic [ref=e101]: Support
+        - link "Procurement" [ref=e102] [cursor=pointer]:
+          - /url: /procurement
+          - img [ref=e103]
+          - generic [ref=e105]: Procurement
+        - link "Projects" [ref=e106] [cursor=pointer]:
+          - /url: /projects
+          - img [ref=e107]
+          - generic [ref=e109]: Projects
+        - link "Expenses" [ref=e110] [cursor=pointer]:
+          - /url: /expense
+          - img [ref=e111]
+          - generic [ref=e113]: Expenses
+        - link "Admin" [ref=e114] [cursor=pointer]:
+          - /url: /admin
+          - img [ref=e115]
+          - generic [ref=e118]: Admin
+      - generic [ref=e119]:
+        - link "Settings" [ref=e120] [cursor=pointer]:
+          - /url: /settings
+          - img [ref=e121]
+          - generic [ref=e124]: Settings
+        - link "Help & Support" [ref=e125] [cursor=pointer]:
+          - /url: /support/dashboard
+          - img [ref=e126]
+          - generic [ref=e128]: Help & Support
+        - button "A admin" [ref=e131] [cursor=pointer]:
+          - generic [ref=e132]: A
+          - generic [ref=e134]: admin
+          - img [ref=e135]
+    - generic [ref=e137]:
+      - banner [ref=e138]:
+        - generic [ref=e139]:
+          - generic [ref=e140]:
+            - button "Open sidebar" [ref=e141] [cursor=pointer]:
+              - img [ref=e142]
+            - generic [ref=e144]:
+              - heading "Bank Statements" [level=1] [ref=e145]
+              - navigation "Breadcrumb" [ref=e146]:
+                - link "Dashboard" [ref=e147] [cursor=pointer]:
+                  - /url: /dashboard
+                - img [ref=e148]
+                - generic [ref=e150]: Bank Statements
+            - button "Search..." [ref=e151] [cursor=pointer]:
+              - img [ref=e152]
+              - generic [ref=e154]: Search...
+          - generic [ref=e155]:
+            - link "Import Statement" [ref=e156] [cursor=pointer]:
+              - /url: /finance/banking/statements/import
+              - img [ref=e157]
+              - text: Import Statement
+            - button "Toggle theme" [ref=e159] [cursor=pointer]:
+              - img [ref=e160]
+            - button "Notifications" [ref=e163] [cursor=pointer]:
+              - img [ref=e164]
+      - main [ref=e166]:
+        - generic [ref=e168]:
+          - generic [ref=e169]:
+            - generic [ref=e170]:
+              - generic [ref=e171]:
+                - generic [ref=e172]: Total Statements
+                - img [ref=e174]
+              - paragraph [ref=e176]: "135"
+            - generic [ref=e177]:
+              - generic [ref=e178]:
+                - generic [ref=e179]: Total Lines
+                - img [ref=e181]
+              - paragraph [ref=e183]: "47228"
+            - generic [ref=e184]:
+              - generic [ref=e185]:
+                - generic [ref=e186]: Matched
+                - img [ref=e188]
+              - paragraph [ref=e190]: "1"
+            - generic [ref=e191]:
+              - generic [ref=e192]:
+                - generic [ref=e193]: Unmatched
+                - img [ref=e195]
+              - paragraph [ref=e197]: "47227"
+          - button "Filters" [ref=e201] [cursor=pointer]:
+            - img [ref=e202]
+            - img [ref=e204]
+            - text: Filters
+          - generic [ref=e207]:
+            - table [ref=e209]:
+              - rowgroup [ref=e210]:
+                - 'row "Select all rows Statement # Bank Account Period Opening Closing Lines Status Actions" [ref=e211]':
+                  - columnheader "Select all rows" [ref=e212]:
+                    - checkbox "Select all rows" [ref=e213] [cursor=pointer]
+                  - 'columnheader "Statement #" [ref=e214]'
+                  - columnheader "Bank Account" [ref=e215]
+                  - columnheader "Period" [ref=e216]
+                  - columnheader "Opening" [ref=e217]
+                  - columnheader "Closing" [ref=e218]
+                  - columnheader "Lines" [ref=e219]
+                  - columnheader "Status" [ref=e220]
+                  - columnheader "Actions" [ref=e221]
+              - rowgroup [ref=e222]:
+                - row "Select row PSK-20260213-20260214 14/02/2026 Paystack PSK-COLLECTIONS 13/02/2026 - 14/02/2026 NGN -2,945,338.81 NGN -3,440,574.70 0/29 Imported View" [ref=e223]:
+                  - cell "Select row" [ref=e224]:
+                    - checkbox "Select row" [ref=e225] [cursor=pointer]
+                  - cell "PSK-20260213-20260214 14/02/2026" [ref=e226]:
+                    - link "PSK-20260213-20260214" [ref=e227] [cursor=pointer]:
+                      - /url: /finance/banking/statements/49c8857c-2fe0-4ca3-a309-b4dac233d4ae
+                    - paragraph [ref=e228]: 14/02/2026
+                  - cell "Paystack PSK-COLLECTIONS" [ref=e229]:
+                    - paragraph [ref=e230]: Paystack
+                    - paragraph [ref=e231]: PSK-COLLECTIONS
+                  - cell "13/02/2026 - 14/02/2026" [ref=e232]
+                  - cell "NGN -2,945,338.81" [ref=e233]
+                  - cell "NGN -3,440,574.70" [ref=e234]
+                  - cell "0/29" [ref=e235]: 0/29
+                  - cell "Imported" [ref=e237]
+                  - cell "View" [ref=e238]:
+                    - link "View" [ref=e240] [cursor=pointer]:
+                      - /url: /finance/banking/statements/49c8857c-2fe0-4ca3-a309-b4dac233d4ae
+                      - img [ref=e241]
+                - row "Select row PSK-20260213-20260214 14/02/2026 Paystack PSK-OPEX 13/02/2026 - 14/02/2026 NGN -11,465,810.00 NGN -11,593,210.00 0/18 Imported View" [ref=e244]:
+                  - cell "Select row" [ref=e245]:
+                    - checkbox "Select row" [ref=e246] [cursor=pointer]
+                  - cell "PSK-20260213-20260214 14/02/2026" [ref=e247]:
+                    - link "PSK-20260213-20260214" [ref=e248] [cursor=pointer]:
+                      - /url: /finance/banking/statements/726ea68d-d5f6-4739-b740-467a27e6c0ba
+                    - paragraph [ref=e249]: 14/02/2026
+                  - cell "Paystack PSK-OPEX" [ref=e250]:
+                    - paragraph [ref=e251]: Paystack
+                    - paragraph [ref=e252]: PSK-OPEX
+                  - cell "13/02/2026 - 14/02/2026" [ref=e253]
+                  - cell "NGN -11,465,810.00" [ref=e254]
+                  - cell "NGN -11,593,210.00" [ref=e255]
+                  - cell "0/18" [ref=e256]: 0/18
+                  - cell "Imported" [ref=e258]
+                  - cell "View" [ref=e259]:
+                    - link "View" [ref=e261] [cursor=pointer]:
+                      - /url: /finance/banking/statements/726ea68d-d5f6-4739-b740-467a27e6c0ba
+                      - img [ref=e262]
+                - row "Select row STMT2026-00006 13/02/2026 Zenith Bank 1016946461 10/02/2026 - 12/02/2026 — — 0/41 Imported View" [ref=e265]:
+                  - cell "Select row" [ref=e266]:
+                    - checkbox "Select row" [ref=e267] [cursor=pointer]
+                  - cell "STMT2026-00006 13/02/2026" [ref=e268]:
+                    - link "STMT2026-00006" [ref=e269] [cursor=pointer]:
+                      - /url: /finance/banking/statements/22c63380-ad7d-4d51-9b14-0f0959a1fb9f
+                    - paragraph [ref=e270]: 13/02/2026
+                  - cell "Zenith Bank 1016946461" [ref=e271]:
+                    - paragraph [ref=e272]: Zenith Bank
+                    - paragraph [ref=e273]: "1016946461"
+                  - cell "10/02/2026 - 12/02/2026" [ref=e274]
+                  - cell "—" [ref=e275]
+                  - cell "—" [ref=e276]
+                  - cell "0/41" [ref=e277]: 0/41
+                  - cell "Imported" [ref=e279]
+                  - cell "View" [ref=e280]:
+                    - link "View" [ref=e282] [cursor=pointer]:
+                      - /url: /finance/banking/statements/22c63380-ad7d-4d51-9b14-0f0959a1fb9f
+                      - img [ref=e283]
+                - row "Select row STMT2026-00005 13/02/2026 United Bank for Africa 1018904696 01/02/2026 - 28/02/2026 — — 1/15 Imported View" [ref=e286]:
+                  - cell "Select row" [ref=e287]:
+                    - checkbox "Select row" [ref=e288] [cursor=pointer]
+                  - cell "STMT2026-00005 13/02/2026" [ref=e289]:
+                    - link "STMT2026-00005" [ref=e290] [cursor=pointer]:
+                      - /url: /finance/banking/statements/db69abdd-f3c9-408d-8d45-8ab02060130c
+                    - paragraph [ref=e291]: 13/02/2026
+                  - cell "United Bank for Africa 1018904696" [ref=e292]:
+                    - paragraph [ref=e293]: United Bank for Africa
+                    - paragraph [ref=e294]: "1018904696"
+                  - cell "01/02/2026 - 28/02/2026" [ref=e295]
+                  - cell "—" [ref=e296]
+                  - cell "—" [ref=e297]
+                  - cell "1/15" [ref=e298]: 1/15
+                  - cell "Imported" [ref=e301]
+                  - cell "View" [ref=e302]:
+                    - link "View" [ref=e304] [cursor=pointer]:
+                      - /url: /finance/banking/statements/db69abdd-f3c9-408d-8d45-8ab02060130c
+                      - img [ref=e305]
+                - row "Select row PSK-20260212-20260213 13/02/2026 Paystack PSK-COLLECTIONS 12/02/2026 - 13/02/2026 NGN -3,048,238.99 NGN -2,945,338.81 0/55 Imported View" [ref=e308]:
+                  - cell "Select row" [ref=e309]:
+                    - checkbox "Select row" [ref=e310] [cursor=pointer]
+                  - cell "PSK-20260212-20260213 13/02/2026" [ref=e311]:
+                    - link "PSK-20260212-20260213" [ref=e312] [cursor=pointer]:
+                      - /url: /finance/banking/statements/f0dcdbf5-f648-40a7-808d-e081f9497e46
+                    - paragraph [ref=e313]: 13/02/2026
+                  - cell "Paystack PSK-COLLECTIONS" [ref=e314]:
+                    - paragraph [ref=e315]: Paystack
+                    - paragraph [ref=e316]: PSK-COLLECTIONS
+                  - cell "12/02/2026 - 13/02/2026" [ref=e317]
+                  - cell "NGN -3,048,238.99" [ref=e318]
+                  - cell "NGN -2,945,338.81" [ref=e319]
+                  - cell "0/55" [ref=e320]: 0/55
+                  - cell "Imported" [ref=e322]
+                  - cell "View" [ref=e323]:
+                    - link "View" [ref=e325] [cursor=pointer]:
+                      - /url: /finance/banking/statements/f0dcdbf5-f648-40a7-808d-e081f9497e46
+                      - img [ref=e326]
+                - row "Select row PSK-20260212-20260213 13/02/2026 Paystack PSK-OPEX 12/02/2026 - 13/02/2026 NGN -11,146,410.00 NGN -11,465,810.00 0/26 Imported View" [ref=e329]:
+                  - cell "Select row" [ref=e330]:
+                    - checkbox "Select row" [ref=e331] [cursor=pointer]
+                  - cell "PSK-20260212-20260213 13/02/2026" [ref=e332]:
+                    - link "PSK-20260212-20260213" [ref=e333] [cursor=pointer]:
+                      - /url: /finance/banking/statements/aec37ca3-a11e-4bee-9e07-71d7af442095
+                    - paragraph [ref=e334]: 13/02/2026
+                  - cell "Paystack PSK-OPEX" [ref=e335]:
+                    - paragraph [ref=e336]: Paystack
+                    - paragraph [ref=e337]: PSK-OPEX
+                  - cell "12/02/2026 - 13/02/2026" [ref=e338]
+                  - cell "NGN -11,146,410.00" [ref=e339]
+                  - cell "NGN -11,465,810.00" [ref=e340]
+                  - cell "0/26" [ref=e341]: 0/26
+                  - cell "Imported" [ref=e343]
+                  - cell "View" [ref=e344]:
+                    - link "View" [ref=e346] [cursor=pointer]:
+                      - /url: /finance/banking/statements/aec37ca3-a11e-4bee-9e07-71d7af442095
+                      - img [ref=e347]
+                - row "Select row STMT2026-00002 13/02/2026 Zenith Bank 1016946454 01/01/2026 - 31/01/2026 — — 0/5 Imported View" [ref=e350]:
+                  - cell "Select row" [ref=e351]:
+                    - checkbox "Select row" [ref=e352] [cursor=pointer]
+                  - cell "STMT2026-00002 13/02/2026" [ref=e353]:
+                    - link "STMT2026-00002" [ref=e354] [cursor=pointer]:
+                      - /url: /finance/banking/statements/75c65bb9-a0df-4bbf-9b7d-2b125c6902db
+                    - paragraph [ref=e355]: 13/02/2026
+                  - cell "Zenith Bank 1016946454" [ref=e356]:
+                    - paragraph [ref=e357]: Zenith Bank
+                    - paragraph [ref=e358]: "1016946454"
+                  - cell "01/01/2026 - 31/01/2026" [ref=e359]
+                  - cell "—" [ref=e360]
+                  - cell "—" [ref=e361]
+                  - cell "0/5" [ref=e362]: 0/5
+                  - cell "Imported" [ref=e364]
+                  - cell "View" [ref=e365]:
+                    - link "View" [ref=e367] [cursor=pointer]:
+                      - /url: /finance/banking/statements/75c65bb9-a0df-4bbf-9b7d-2b125c6902db
+                      - img [ref=e368]
+                - row "Select row STMT2026-00003 13/02/2026 Zenith Bank 1016946454 01/01/2026 - 31/01/2026 — — 0/20 Imported View" [ref=e371]:
+                  - cell "Select row" [ref=e372]:
+                    - checkbox "Select row" [ref=e373] [cursor=pointer]
+                  - cell "STMT2026-00003 13/02/2026" [ref=e374]:
+                    - link "STMT2026-00003" [ref=e375] [cursor=pointer]:
+                      - /url: /finance/banking/statements/c7b6eedd-695f-4f03-833f-ed8df5a4a4c8
+                    - paragraph [ref=e376]: 13/02/2026
+                  - cell "Zenith Bank 1016946454" [ref=e377]:
+                    - paragraph [ref=e378]: Zenith Bank
+                    - paragraph [ref=e379]: "1016946454"
+                  - cell "01/01/2026 - 31/01/2026" [ref=e380]
+                  - cell "—" [ref=e381]
+                  - cell "—" [ref=e382]
+                  - cell "0/20" [ref=e383]: 0/20
+                  - cell "Imported" [ref=e385]
+                  - cell "View" [ref=e386]:
+                    - link "View" [ref=e388] [cursor=pointer]:
+                      - /url: /finance/banking/statements/c7b6eedd-695f-4f03-833f-ed8df5a4a4c8
+                      - img [ref=e389]
+                - row "Select row PSK-20260211-20260212 12/02/2026 Paystack PSK-OPEX 11/02/2026 - 12/02/2026 NGN -10,998,710.00 NGN -11,146,410.00 0/13 Imported View" [ref=e392]:
+                  - cell "Select row" [ref=e393]:
+                    - checkbox "Select row" [ref=e394] [cursor=pointer]
+                  - cell "PSK-20260211-20260212 12/02/2026" [ref=e395]:
+                    - link "PSK-20260211-20260212" [ref=e396] [cursor=pointer]:
+                      - /url: /finance/banking/statements/7473576f-01ff-4b8d-aef2-97be58d015fa
+                    - paragraph [ref=e397]: 12/02/2026
+                  - cell "Paystack PSK-OPEX" [ref=e398]:
+                    - paragraph [ref=e399]: Paystack
+                    - paragraph [ref=e400]: PSK-OPEX
+                  - cell "11/02/2026 - 12/02/2026" [ref=e401]
+                  - cell "NGN -10,998,710.00" [ref=e402]
+                  - cell "NGN -11,146,410.00" [ref=e403]
+                  - cell "0/13" [ref=e404]: 0/13
+                  - cell "Imported" [ref=e406]
+                  - cell "View" [ref=e407]:
+                    - link "View" [ref=e409] [cursor=pointer]:
+                      - /url: /finance/banking/statements/7473576f-01ff-4b8d-aef2-97be58d015fa
+                      - img [ref=e410]
+                - row "Select row PSK-20260211-20260212 12/02/2026 Paystack PSK-COLLECTIONS 11/02/2026 - 12/02/2026 NGN -2,303,380.36 NGN -3,048,238.99 0/15 Imported View" [ref=e413]:
+                  - cell "Select row" [ref=e414]:
+                    - checkbox "Select row" [ref=e415] [cursor=pointer]
+                  - cell "PSK-20260211-20260212 12/02/2026" [ref=e416]:
+                    - link "PSK-20260211-20260212" [ref=e417] [cursor=pointer]:
+                      - /url: /finance/banking/statements/92d9559a-120e-44ce-bd6f-c1c92adc9948
+                    - paragraph [ref=e418]: 12/02/2026
+                  - cell "Paystack PSK-COLLECTIONS" [ref=e419]:
+                    - paragraph [ref=e420]: Paystack
+                    - paragraph [ref=e421]: PSK-COLLECTIONS
+                  - cell "11/02/2026 - 12/02/2026" [ref=e422]
+                  - cell "NGN -2,303,380.36" [ref=e423]
+                  - cell "NGN -3,048,238.99" [ref=e424]
+                  - cell "0/15" [ref=e425]: 0/15
+                  - cell "Imported" [ref=e427]
+                  - cell "View" [ref=e428]:
+                    - link "View" [ref=e430] [cursor=pointer]:
+                      - /url: /finance/banking/statements/92d9559a-120e-44ce-bd6f-c1c92adc9948
+                      - img [ref=e431]
+                - row "Select row PSK-20260210-20260211 11/02/2026 Paystack PSK-OPEX 10/02/2026 - 11/02/2026 NGN -10,869,510.00 NGN -10,998,710.00 0/11 Imported View" [ref=e434]:
+                  - cell "Select row" [ref=e435]:
+                    - checkbox "Select row" [ref=e436] [cursor=pointer]
+                  - cell "PSK-20260210-20260211 11/02/2026" [ref=e437]:
+                    - link "PSK-20260210-20260211" [ref=e438] [cursor=pointer]:
+                      - /url: /finance/banking/statements/54e1ee38-10db-4bec-89de-f462ac1ba48f
+                    - paragraph [ref=e439]: 11/02/2026
+                  - cell "Paystack PSK-OPEX" [ref=e440]:
+                    - paragraph [ref=e441]: Paystack
+                    - paragraph [ref=e442]: PSK-OPEX
+                  - cell "10/02/2026 - 11/02/2026" [ref=e443]
+                  - cell "NGN -10,869,510.00" [ref=e444]
+                  - cell "NGN -10,998,710.00" [ref=e445]
+                  - cell "0/11" [ref=e446]: 0/11
+                  - cell "Imported" [ref=e448]
+                  - cell "View" [ref=e449]:
+                    - link "View" [ref=e451] [cursor=pointer]:
+                      - /url: /finance/banking/statements/54e1ee38-10db-4bec-89de-f462ac1ba48f
+                      - img [ref=e452]
+                - row "Select row PSK-20260210-20260211 11/02/2026 Paystack PSK-COLLECTIONS 10/02/2026 - 11/02/2026 NGN 103,847.29 NGN -2,303,380.36 0/30 Imported View" [ref=e455]:
+                  - cell "Select row" [ref=e456]:
+                    - checkbox "Select row" [ref=e457] [cursor=pointer]
+                  - cell "PSK-20260210-20260211 11/02/2026" [ref=e458]:
+                    - link "PSK-20260210-20260211" [ref=e459] [cursor=pointer]:
+                      - /url: /finance/banking/statements/867bb0fb-3471-4718-bfcd-4f03145d6d04
+                    - paragraph [ref=e460]: 11/02/2026
+                  - cell "Paystack PSK-COLLECTIONS" [ref=e461]:
+                    - paragraph [ref=e462]: Paystack
+                    - paragraph [ref=e463]: PSK-COLLECTIONS
+                  - cell "10/02/2026 - 11/02/2026" [ref=e464]
+                  - cell "NGN 103,847.29" [ref=e465]
+                  - cell "NGN -2,303,380.36" [ref=e466]
+                  - cell "0/30" [ref=e467]: 0/30
+                  - cell "Imported" [ref=e469]
+                  - cell "View" [ref=e470]:
+                    - link "View" [ref=e472] [cursor=pointer]:
+                      - /url: /finance/banking/statements/867bb0fb-3471-4718-bfcd-4f03145d6d04
+                      - img [ref=e473]
+                - row "Select row PSK-20260209-20260210 10/02/2026 Paystack PSK-COLLECTIONS 09/02/2026 - 10/02/2026 NGN 241,534.26 NGN 103,847.29 0/52 Imported View" [ref=e476]:
+                  - cell "Select row" [ref=e477]:
+                    - checkbox "Select row" [ref=e478] [cursor=pointer]
+                  - cell "PSK-20260209-20260210 10/02/2026" [ref=e479]:
+                    - link "PSK-20260209-20260210" [ref=e480] [cursor=pointer]:
+                      - /url: /finance/banking/statements/c65053d7-74e2-4a95-91fe-cb0307103d90
+                    - paragraph [ref=e481]: 10/02/2026
+                  - cell "Paystack PSK-COLLECTIONS" [ref=e482]:
+                    - paragraph [ref=e483]: Paystack
+                    - paragraph [ref=e484]: PSK-COLLECTIONS
+                  - cell "09/02/2026 - 10/02/2026" [ref=e485]
+                  - cell "NGN 241,534.26" [ref=e486]
+                  - cell "NGN 103,847.29" [ref=e487]
+                  - cell "0/52" [ref=e488]: 0/52
+                  - cell "Imported" [ref=e490]
+                  - cell "View" [ref=e491]:
+                    - link "View" [ref=e493] [cursor=pointer]:
+                      - /url: /finance/banking/statements/c65053d7-74e2-4a95-91fe-cb0307103d90
+                      - img [ref=e494]
+                - row "Select row PSK-20260209-20260210 10/02/2026 Paystack PSK-OPEX 09/02/2026 - 10/02/2026 NGN -10,617,010.00 NGN -10,869,510.00 0/25 Imported View" [ref=e497]:
+                  - cell "Select row" [ref=e498]:
+                    - checkbox "Select row" [ref=e499] [cursor=pointer]
+                  - cell "PSK-20260209-20260210 10/02/2026" [ref=e500]:
+                    - link "PSK-20260209-20260210" [ref=e501] [cursor=pointer]:
+                      - /url: /finance/banking/statements/680e5c10-d942-4bbd-99b3-ef81e49a0b27
+                    - paragraph [ref=e502]: 10/02/2026
+                  - cell "Paystack PSK-OPEX" [ref=e503]:
+                    - paragraph [ref=e504]: Paystack
+                    - paragraph [ref=e505]: PSK-OPEX
+                  - cell "09/02/2026 - 10/02/2026" [ref=e506]
+                  - cell "NGN -10,617,010.00" [ref=e507]
+                  - cell "NGN -10,869,510.00" [ref=e508]
+                  - cell "0/25" [ref=e509]: 0/25
+                  - cell "Imported" [ref=e511]
+                  - cell "View" [ref=e512]:
+                    - link "View" [ref=e514] [cursor=pointer]:
+                      - /url: /finance/banking/statements/680e5c10-d942-4bbd-99b3-ef81e49a0b27
+                      - img [ref=e515]
+                - row "Select row STMT-2026-TEST-002 09/02/2026 Zenith Bank 1011649523 01/02/2026 - 28/02/2026 NGN 1,000,000.00 NGN 1,325,000.00 0/3 Imported View" [ref=e518]:
+                  - cell "Select row" [ref=e519]:
+                    - checkbox "Select row" [ref=e520] [cursor=pointer]
+                  - cell "STMT-2026-TEST-002 09/02/2026" [ref=e521]:
+                    - link "STMT-2026-TEST-002" [ref=e522] [cursor=pointer]:
+                      - /url: /finance/banking/statements/a20e5ccd-590e-428b-a460-0d6b3016c473
+                    - paragraph [ref=e523]: 09/02/2026
+                  - cell "Zenith Bank 1011649523" [ref=e524]:
+                    - paragraph [ref=e525]: Zenith Bank
+                    - paragraph [ref=e526]: "1011649523"
+                  - cell "01/02/2026 - 28/02/2026" [ref=e527]
+                  - cell "NGN 1,000,000.00" [ref=e528]
+                  - cell "NGN 1,325,000.00" [ref=e529]
+                  - cell "0/3" [ref=e530]: 0/3
+                  - cell "Imported" [ref=e532]
+                  - cell "View" [ref=e533]:
+                    - link "View" [ref=e535] [cursor=pointer]:
+                      - /url: /finance/banking/statements/a20e5ccd-590e-428b-a460-0d6b3016c473
+                      - img [ref=e536]
+                - row "Select row PSK-20260208-20260209 09/02/2026 Paystack PSK-OPEX 08/02/2026 - 09/02/2026 NGN -10,557,410.00 NGN -10,617,010.00 0/7 Imported View" [ref=e539]:
+                  - cell "Select row" [ref=e540]:
+                    - checkbox "Select row" [ref=e541] [cursor=pointer]
+                  - cell "PSK-20260208-20260209 09/02/2026" [ref=e542]:
+                    - link "PSK-20260208-20260209" [ref=e543] [cursor=pointer]:
+                      - /url: /finance/banking/statements/6b9c0ffc-f2b7-4f9f-a995-993151e9a0f5
+                    - paragraph [ref=e544]: 09/02/2026
+                  - cell "Paystack PSK-OPEX" [ref=e545]:
+                    - paragraph [ref=e546]: Paystack
+                    - paragraph [ref=e547]: PSK-OPEX
+                  - cell "08/02/2026 - 09/02/2026" [ref=e548]
+                  - cell "NGN -10,557,410.00" [ref=e549]
+                  - cell "NGN -10,617,010.00" [ref=e550]
+                  - cell "0/7" [ref=e551]: 0/7
+                  - cell "Imported" [ref=e553]
+                  - cell "View" [ref=e554]:
+                    - link "View" [ref=e556] [cursor=pointer]:
+                      - /url: /finance/banking/statements/6b9c0ffc-f2b7-4f9f-a995-993151e9a0f5
+                      - img [ref=e557]
+                - row "Select row STM-2026-001 09/02/2026 Zenith Bank 1011649523 01/02/2026 - 28/02/2026 NGN 1,000,000.00 NGN 1,500,000.00 0/3 Imported View" [ref=e560]:
+                  - cell "Select row" [ref=e561]:
+                    - checkbox "Select row" [ref=e562] [cursor=pointer]
+                  - cell "STM-2026-001 09/02/2026" [ref=e563]:
+                    - link "STM-2026-001" [ref=e564] [cursor=pointer]:
+                      - /url: /finance/banking/statements/008dfff5-30a2-4737-9a72-8a400714c65d
+                    - paragraph [ref=e565]: 09/02/2026
+                  - cell "Zenith Bank 1011649523" [ref=e566]:
+                    - paragraph [ref=e567]: Zenith Bank
+                    - paragraph [ref=e568]: "1011649523"
+                  - cell "01/02/2026 - 28/02/2026" [ref=e569]
+                  - cell "NGN 1,000,000.00" [ref=e570]
+                  - cell "NGN 1,500,000.00" [ref=e571]
+                  - cell "0/3" [ref=e572]: 0/3
+                  - cell "Imported" [ref=e574]
+                  - cell "View" [ref=e575]:
+                    - link "View" [ref=e577] [cursor=pointer]:
+                      - /url: /finance/banking/statements/008dfff5-30a2-4737-9a72-8a400714c65d
+                      - img [ref=e578]
+                - row "Select row PSK-20260208-20260209 09/02/2026 Paystack PSK-COLLECTIONS 08/02/2026 - 09/02/2026 NGN -403,086.87 NGN 241,534.26 0/18 Imported View" [ref=e581]:
+                  - cell "Select row" [ref=e582]:
+                    - checkbox "Select row" [ref=e583] [cursor=pointer]
+                  - cell "PSK-20260208-20260209 09/02/2026" [ref=e584]:
+                    - link "PSK-20260208-20260209" [ref=e585] [cursor=pointer]:
+                      - /url: /finance/banking/statements/6a8affa6-f81d-45d0-a1d6-4ff208e1ec46
+                    - paragraph [ref=e586]: 09/02/2026
+                  - cell "Paystack PSK-COLLECTIONS" [ref=e587]:
+                    - paragraph [ref=e588]: Paystack
+                    - paragraph [ref=e589]: PSK-COLLECTIONS
+                  - cell "08/02/2026 - 09/02/2026" [ref=e590]
+                  - cell "NGN -403,086.87" [ref=e591]
+                  - cell "NGN 241,534.26" [ref=e592]
+                  - cell "0/18" [ref=e593]: 0/18
+                  - cell "Imported" [ref=e595]
+                  - cell "View" [ref=e596]:
+                    - link "View" [ref=e598] [cursor=pointer]:
+                      - /url: /finance/banking/statements/6a8affa6-f81d-45d0-a1d6-4ff208e1ec46
+                      - img [ref=e599]
+                - row "Select row PSK-20260207-20260208 08/02/2026 Paystack PSK-OPEX 07/02/2026 - 08/02/2026 NGN -10,380,710.00 NGN -10,557,410.00 0/10 Imported View" [ref=e602]:
+                  - cell "Select row" [ref=e603]:
+                    - checkbox "Select row" [ref=e604] [cursor=pointer]
+                  - cell "PSK-20260207-20260208 08/02/2026" [ref=e605]:
+                    - link "PSK-20260207-20260208" [ref=e606] [cursor=pointer]:
+                      - /url: /finance/banking/statements/335b9b03-ec90-4b46-9024-fae1bdffc4a2
+                    - paragraph [ref=e607]: 08/02/2026
+                  - cell "Paystack PSK-OPEX" [ref=e608]:
+                    - paragraph [ref=e609]: Paystack
+                    - paragraph [ref=e610]: PSK-OPEX
+                  - cell "07/02/2026 - 08/02/2026" [ref=e611]
+                  - cell "NGN -10,380,710.00" [ref=e612]
+                  - cell "NGN -10,557,410.00" [ref=e613]
+                  - cell "0/10" [ref=e614]: 0/10
+                  - cell "Imported" [ref=e616]
+                  - cell "View" [ref=e617]:
+                    - link "View" [ref=e619] [cursor=pointer]:
+                      - /url: /finance/banking/statements/335b9b03-ec90-4b46-9024-fae1bdffc4a2
+                      - img [ref=e620]
+                - row "Select row PSK-20260207-20260208 08/02/2026 Paystack PSK-COLLECTIONS 07/02/2026 - 08/02/2026 NGN 352,119.59 NGN -403,086.87 0/23 Imported View" [ref=e623]:
+                  - cell "Select row" [ref=e624]:
+                    - checkbox "Select row" [ref=e625] [cursor=pointer]
+                  - cell "PSK-20260207-20260208 08/02/2026" [ref=e626]:
+                    - link "PSK-20260207-20260208" [ref=e627] [cursor=pointer]:
+                      - /url: /finance/banking/statements/06bd0d62-f9d8-412f-b576-3922c5155eea
+                    - paragraph [ref=e628]: 08/02/2026
+                  - cell "Paystack PSK-COLLECTIONS" [ref=e629]:
+                    - paragraph [ref=e630]: Paystack
+                    - paragraph [ref=e631]: PSK-COLLECTIONS
+                  - cell "07/02/2026 - 08/02/2026" [ref=e632]
+                  - cell "NGN 352,119.59" [ref=e633]
+                  - cell "NGN -403,086.87" [ref=e634]
+                  - cell "0/23" [ref=e635]: 0/23
+                  - cell "Imported" [ref=e637]
+                  - cell "View" [ref=e638]:
+                    - link "View" [ref=e640] [cursor=pointer]:
+                      - /url: /finance/banking/statements/06bd0d62-f9d8-412f-b576-3922c5155eea
+                      - img [ref=e641]
+                - row "Select row STM-TEST-FEB 08/02/2026 Zenith Bank 1011649523 01/01/2026 - 31/01/2026 NGN 100,000.00 NGN 145,000.00 0/3 Imported View" [ref=e644]:
+                  - cell "Select row" [ref=e645]:
+                    - checkbox "Select row" [ref=e646] [cursor=pointer]
+                  - cell "STM-TEST-FEB 08/02/2026" [ref=e647]:
+                    - link "STM-TEST-FEB" [ref=e648] [cursor=pointer]:
+                      - /url: /finance/banking/statements/a8b94742-f579-486d-af77-6d5dd59122c9
+                    - paragraph [ref=e649]: 08/02/2026
+                  - cell "Zenith Bank 1011649523" [ref=e650]:
+                    - paragraph [ref=e651]: Zenith Bank
+                    - paragraph [ref=e652]: "1011649523"
+                  - cell "01/01/2026 - 31/01/2026" [ref=e653]
+                  - cell "NGN 100,000.00" [ref=e654]
+                  - cell "NGN 145,000.00" [ref=e655]
+                  - cell "0/3" [ref=e656]: 0/3
+                  - cell "Imported" [ref=e658]
+                  - cell "View" [ref=e659]:
+                    - link "View" [ref=e661] [cursor=pointer]:
+                      - /url: /finance/banking/statements/a8b94742-f579-486d-af77-6d5dd59122c9
+                      - img [ref=e662]
+                - row "Select row PSK-20260206-20260207 07/02/2026 Paystack PSK-COLLECTIONS 06/02/2026 - 07/02/2026 NGN 1,200,744.59 NGN 352,119.59 0/37 Imported View" [ref=e665]:
+                  - cell "Select row" [ref=e666]:
+                    - checkbox "Select row" [ref=e667] [cursor=pointer]
+                  - cell "PSK-20260206-20260207 07/02/2026" [ref=e668]:
+                    - link "PSK-20260206-20260207" [ref=e669] [cursor=pointer]:
+                      - /url: /finance/banking/statements/3faf9d29-5127-4f51-b334-479eb8a81c2c
+                    - paragraph [ref=e670]: 07/02/2026
+                  - cell "Paystack PSK-COLLECTIONS" [ref=e671]:
+                    - paragraph [ref=e672]: Paystack
+                    - paragraph [ref=e673]: PSK-COLLECTIONS
+                  - cell "06/02/2026 - 07/02/2026" [ref=e674]
+                  - cell "NGN 1,200,744.59" [ref=e675]
+                  - cell "NGN 352,119.59" [ref=e676]
+                  - cell "0/37" [ref=e677]: 0/37
+                  - cell "Imported" [ref=e679]
+                  - cell "View" [ref=e680]:
+                    - link "View" [ref=e682] [cursor=pointer]:
+                      - /url: /finance/banking/statements/3faf9d29-5127-4f51-b334-479eb8a81c2c
+                      - img [ref=e683]
+                - row "Select row PSK-20260206-20260207 07/02/2026 Paystack PSK-OPEX 06/02/2026 - 07/02/2026 NGN -10,194,310.00 NGN -10,380,710.00 0/23 Imported View" [ref=e686]:
+                  - cell "Select row" [ref=e687]:
+                    - checkbox "Select row" [ref=e688] [cursor=pointer]
+                  - cell "PSK-20260206-20260207 07/02/2026" [ref=e689]:
+                    - link "PSK-20260206-20260207" [ref=e690] [cursor=pointer]:
+                      - /url: /finance/banking/statements/4f6e67ea-425d-46f5-8811-f0d8127cea4a
+                    - paragraph [ref=e691]: 07/02/2026
+                  - cell "Paystack PSK-OPEX" [ref=e692]:
+                    - paragraph [ref=e693]: Paystack
+                    - paragraph [ref=e694]: PSK-OPEX
+                  - cell "06/02/2026 - 07/02/2026" [ref=e695]
+                  - cell "NGN -10,194,310.00" [ref=e696]
+                  - cell "NGN -10,380,710.00" [ref=e697]
+                  - cell "0/23" [ref=e698]: 0/23
+                  - cell "Imported" [ref=e700]
+                  - cell "View" [ref=e701]:
+                    - link "View" [ref=e703] [cursor=pointer]:
+                      - /url: /finance/banking/statements/4f6e67ea-425d-46f5-8811-f0d8127cea4a
+                      - img [ref=e704]
+                - row "Select row PSK-20260205-20260206 06/02/2026 Paystack PSK-OPEX 05/02/2026 - 06/02/2026 NGN -10,067,210.00 NGN -10,194,310.00 0/15 Imported View" [ref=e707]:
+                  - cell "Select row" [ref=e708]:
+                    - checkbox "Select row" [ref=e709] [cursor=pointer]
+                  - cell "PSK-20260205-20260206 06/02/2026" [ref=e710]:
+                    - link "PSK-20260205-20260206" [ref=e711] [cursor=pointer]:
+                      - /url: /finance/banking/statements/854cca62-9740-4043-88b4-33a19c82ea54
+                    - paragraph [ref=e712]: 06/02/2026
+                  - cell "Paystack PSK-OPEX" [ref=e713]:
+                    - paragraph [ref=e714]: Paystack
+                    - paragraph [ref=e715]: PSK-OPEX
+                  - cell "05/02/2026 - 06/02/2026" [ref=e716]
+                  - cell "NGN -10,067,210.00" [ref=e717]
+                  - cell "NGN -10,194,310.00" [ref=e718]
+                  - cell "0/15" [ref=e719]: 0/15
+                  - cell "Imported" [ref=e721]
+                  - cell "View" [ref=e722]:
+                    - link "View" [ref=e724] [cursor=pointer]:
+                      - /url: /finance/banking/statements/854cca62-9740-4043-88b4-33a19c82ea54
+                      - img [ref=e725]
+                - row "Select row PSK-20260205-20260206 06/02/2026 Paystack PSK-COLLECTIONS 05/02/2026 - 06/02/2026 NGN 2,186,525.84 NGN 1,200,744.59 0/32 Imported View" [ref=e728]:
+                  - cell "Select row" [ref=e729]:
+                    - checkbox "Select row" [ref=e730] [cursor=pointer]
+                  - cell "PSK-20260205-20260206 06/02/2026" [ref=e731]:
+                    - link "PSK-20260205-20260206" [ref=e732] [cursor=pointer]:
+                      - /url: /finance/banking/statements/f89b2f2e-f2c7-45ce-bc57-082c9e80484b
+                    - paragraph [ref=e733]: 06/02/2026
+                  - cell "Paystack PSK-COLLECTIONS" [ref=e734]:
+                    - paragraph [ref=e735]: Paystack
+                    - paragraph [ref=e736]: PSK-COLLECTIONS
+                  - cell "05/02/2026 - 06/02/2026" [ref=e737]
+                  - cell "NGN 2,186,525.84" [ref=e738]
+                  - cell "NGN 1,200,744.59" [ref=e739]
+                  - cell "0/32" [ref=e740]: 0/32
+                  - cell "Imported" [ref=e742]
+                  - cell "View" [ref=e743]:
+                    - link "View" [ref=e745] [cursor=pointer]:
+                      - /url: /finance/banking/statements/f89b2f2e-f2c7-45ce-bc57-082c9e80484b
+                      - img [ref=e746]
+                - row "Select row PSK-20260203-20260204 04/02/2026 Paystack PSK-COLLECTIONS 03/02/2026 - 04/02/2026 NGN 3,073,160.72 NGN 2,186,525.84 0/34 Imported View" [ref=e749]:
+                  - cell "Select row" [ref=e750]:
+                    - checkbox "Select row" [ref=e751] [cursor=pointer]
+                  - cell "PSK-20260203-20260204 04/02/2026" [ref=e752]:
+                    - link "PSK-20260203-20260204" [ref=e753] [cursor=pointer]:
+                      - /url: /finance/banking/statements/fc43c980-2f5d-4457-bcf6-1baeb78e27d2
+                    - paragraph [ref=e754]: 04/02/2026
+                  - cell "Paystack PSK-COLLECTIONS" [ref=e755]:
+                    - paragraph [ref=e756]: Paystack
+                    - paragraph [ref=e757]: PSK-COLLECTIONS
+                  - cell "03/02/2026 - 04/02/2026" [ref=e758]
+                  - cell "NGN 3,073,160.72" [ref=e759]
+                  - cell "NGN 2,186,525.84" [ref=e760]
+                  - cell "0/34" [ref=e761]: 0/34
+                  - cell "Imported" [ref=e763]
+                  - cell "View" [ref=e764]:
+                    - link "View" [ref=e766] [cursor=pointer]:
+                      - /url: /finance/banking/statements/fc43c980-2f5d-4457-bcf6-1baeb78e27d2
+                      - img [ref=e767]
+                - row "Select row PSK-20260203-20260204 04/02/2026 Paystack PSK-OPEX 03/02/2026 - 04/02/2026 NGN -9,855,370.00 NGN -10,067,210.00 0/30 Imported View" [ref=e770]:
+                  - cell "Select row" [ref=e771]:
+                    - checkbox "Select row" [ref=e772] [cursor=pointer]
+                  - cell "PSK-20260203-20260204 04/02/2026" [ref=e773]:
+                    - link "PSK-20260203-20260204" [ref=e774] [cursor=pointer]:
+                      - /url: /finance/banking/statements/4dfc51e8-3179-470b-9ceb-edaee37a1051
+                    - paragraph [ref=e775]: 04/02/2026
+                  - cell "Paystack PSK-OPEX" [ref=e776]:
+                    - paragraph [ref=e777]: Paystack
+                    - paragraph [ref=e778]: PSK-OPEX
+                  - cell "03/02/2026 - 04/02/2026" [ref=e779]
+                  - cell "NGN -9,855,370.00" [ref=e780]
+                  - cell "NGN -10,067,210.00" [ref=e781]
+                  - cell "0/30" [ref=e782]: 0/30
+                  - cell "Imported" [ref=e784]
+                  - cell "View" [ref=e785]:
+                    - link "View" [ref=e787] [cursor=pointer]:
+                      - /url: /finance/banking/statements/4dfc51e8-3179-470b-9ceb-edaee37a1051
+                      - img [ref=e788]
+                - row "Select row PSK-20260202-20260203 03/02/2026 Paystack PSK-COLLECTIONS 02/02/2026 - 03/02/2026 NGN 3,557,285.72 NGN 3,073,160.72 0/38 Imported View" [ref=e791]:
+                  - cell "Select row" [ref=e792]:
+                    - checkbox "Select row" [ref=e793] [cursor=pointer]
+                  - cell "PSK-20260202-20260203 03/02/2026" [ref=e794]:
+                    - link "PSK-20260202-20260203" [ref=e795] [cursor=pointer]:
+                      - /url: /finance/banking/statements/2e35afc8-0eb7-4df0-8e3b-37b60708f552
+                    - paragraph [ref=e796]: 03/02/2026
+                  - cell "Paystack PSK-COLLECTIONS" [ref=e797]:
+                    - paragraph [ref=e798]: Paystack
+                    - paragraph [ref=e799]: PSK-COLLECTIONS
+                  - cell "02/02/2026 - 03/02/2026" [ref=e800]
+                  - cell "NGN 3,557,285.72" [ref=e801]
+                  - cell "NGN 3,073,160.72" [ref=e802]
+                  - cell "0/38" [ref=e803]: 0/38
+                  - cell "Imported" [ref=e805]
+                  - cell "View" [ref=e806]:
+                    - link "View" [ref=e808] [cursor=pointer]:
+                      - /url: /finance/banking/statements/2e35afc8-0eb7-4df0-8e3b-37b60708f552
+                      - img [ref=e809]
+                - row "Select row PSK-20260202-20260203 03/02/2026 Paystack PSK-OPEX 02/02/2026 - 03/02/2026 NGN -9,690,770.00 NGN -9,855,370.00 0/19 Imported View" [ref=e812]:
+                  - cell "Select row" [ref=e813]:
+                    - checkbox "Select row" [ref=e814] [cursor=pointer]
+                  - cell "PSK-20260202-20260203 03/02/2026" [ref=e815]:
+                    - link "PSK-20260202-20260203" [ref=e816] [cursor=pointer]:
+                      - /url: /finance/banking/statements/787a8aed-ad57-472b-9dce-359c6ab8fcc6
+                    - paragraph [ref=e817]: 03/02/2026
+                  - cell "Paystack PSK-OPEX" [ref=e818]:
+                    - paragraph [ref=e819]: Paystack
+                    - paragraph [ref=e820]: PSK-OPEX
+                  - cell "02/02/2026 - 03/02/2026" [ref=e821]
+                  - cell "NGN -9,690,770.00" [ref=e822]
+                  - cell "NGN -9,855,370.00" [ref=e823]
+                  - cell "0/19" [ref=e824]: 0/19
+                  - cell "Imported" [ref=e826]
+                  - cell "View" [ref=e827]:
+                    - link "View" [ref=e829] [cursor=pointer]:
+                      - /url: /finance/banking/statements/787a8aed-ad57-472b-9dce-359c6ab8fcc6
+                      - img [ref=e830]
+                - row "Select row PSK-20260201-20260202 02/02/2026 Paystack PSK-OPEX 01/02/2026 - 02/02/2026 NGN -9,655,720.00 NGN -9,690,770.00 0/9 Imported View" [ref=e833]:
+                  - cell "Select row" [ref=e834]:
+                    - checkbox "Select row" [ref=e835] [cursor=pointer]
+                  - cell "PSK-20260201-20260202 02/02/2026" [ref=e836]:
+                    - link "PSK-20260201-20260202" [ref=e837] [cursor=pointer]:
+                      - /url: /finance/banking/statements/a3a88e14-e052-4012-8b81-1a77d6a9b69c
+                    - paragraph [ref=e838]: 02/02/2026
+                  - cell "Paystack PSK-OPEX" [ref=e839]:
+                    - paragraph [ref=e840]: Paystack
+                    - paragraph [ref=e841]: PSK-OPEX
+                  - cell "01/02/2026 - 02/02/2026" [ref=e842]
+                  - cell "NGN -9,655,720.00" [ref=e843]
+                  - cell "NGN -9,690,770.00" [ref=e844]
+                  - cell "0/9" [ref=e845]: 0/9
+                  - cell "Imported" [ref=e847]
+                  - cell "View" [ref=e848]:
+                    - link "View" [ref=e850] [cursor=pointer]:
+                      - /url: /finance/banking/statements/a3a88e14-e052-4012-8b81-1a77d6a9b69c
+                      - img [ref=e851]
+                - row "Select row PSK-20260201-20260202 02/02/2026 Paystack PSK-COLLECTIONS 01/02/2026 - 02/02/2026 NGN 4,203,162.90 NGN 3,557,285.72 0/31 Imported View" [ref=e854]:
+                  - cell "Select row" [ref=e855]:
+                    - checkbox "Select row" [ref=e856] [cursor=pointer]
+                  - cell "PSK-20260201-20260202 02/02/2026" [ref=e857]:
+                    - link "PSK-20260201-20260202" [ref=e858] [cursor=pointer]:
+                      - /url: /finance/banking/statements/f0ec3933-3c19-4dfd-b490-f151e020e281
+                    - paragraph [ref=e859]: 02/02/2026
+                  - cell "Paystack PSK-COLLECTIONS" [ref=e860]:
+                    - paragraph [ref=e861]: Paystack
+                    - paragraph [ref=e862]: PSK-COLLECTIONS
+                  - cell "01/02/2026 - 02/02/2026" [ref=e863]
+                  - cell "NGN 4,203,162.90" [ref=e864]
+                  - cell "NGN 3,557,285.72" [ref=e865]
+                  - cell "0/31" [ref=e866]: 0/31
+                  - cell "Imported" [ref=e868]
+                  - cell "View" [ref=e869]:
+                    - link "View" [ref=e871] [cursor=pointer]:
+                      - /url: /finance/banking/statements/f0ec3933-3c19-4dfd-b490-f151e020e281
+                      - img [ref=e872]
+                - row "Select row PSK-20260101-20260131 31/01/2026 Paystack PSK-OPEX 01/01/2026 - 31/01/2026 NGN -5,412,960.00 NGN -9,655,720.00 0/457 Imported View" [ref=e875]:
+                  - cell "Select row" [ref=e876]:
+                    - checkbox "Select row" [ref=e877] [cursor=pointer]
+                  - cell "PSK-20260101-20260131 31/01/2026" [ref=e878]:
+                    - link "PSK-20260101-20260131" [ref=e879] [cursor=pointer]:
+                      - /url: /finance/banking/statements/2942b90b-3e35-442f-a925-ad9c151e763a
+                    - paragraph [ref=e880]: 31/01/2026
+                  - cell "Paystack PSK-OPEX" [ref=e881]:
+                    - paragraph [ref=e882]: Paystack
+                    - paragraph [ref=e883]: PSK-OPEX
+                  - cell "01/01/2026 - 31/01/2026" [ref=e884]
+                  - cell "NGN -5,412,960.00" [ref=e885]
+                  - cell "NGN -9,655,720.00" [ref=e886]
+                  - cell "0/457" [ref=e887]: 0/457
+                  - cell "Imported" [ref=e889]
+                  - cell "View" [ref=e890]:
+                    - link "View" [ref=e892] [cursor=pointer]:
+                      - /url: /finance/banking/statements/2942b90b-3e35-442f-a925-ad9c151e763a
+                      - img [ref=e893]
+                - row "Select row PSK-20260101-20260131 31/01/2026 Paystack PSK-COLLECTIONS 01/01/2026 - 31/01/2026 NGN 4,270,098.22 NGN 4,203,162.90 0/886 Imported View" [ref=e896]:
+                  - cell "Select row" [ref=e897]:
+                    - checkbox "Select row" [ref=e898] [cursor=pointer]
+                  - cell "PSK-20260101-20260131 31/01/2026" [ref=e899]:
+                    - link "PSK-20260101-20260131" [ref=e900] [cursor=pointer]:
+                      - /url: /finance/banking/statements/c8195685-ec08-4f75-ba53-52c29ebdfc4e
+                    - paragraph [ref=e901]: 31/01/2026
+                  - cell "Paystack PSK-COLLECTIONS" [ref=e902]:
+                    - paragraph [ref=e903]: Paystack
+                    - paragraph [ref=e904]: PSK-COLLECTIONS
+                  - cell "01/01/2026 - 31/01/2026" [ref=e905]
+                  - cell "NGN 4,270,098.22" [ref=e906]
+                  - cell "NGN 4,203,162.90" [ref=e907]
+                  - cell "0/886" [ref=e908]: 0/886
+                  - cell "Imported" [ref=e910]
+                  - cell "View" [ref=e911]:
+                    - link "View" [ref=e913] [cursor=pointer]:
+                      - /url: /finance/banking/statements/c8195685-ec08-4f75-ba53-52c29ebdfc4e
+                      - img [ref=e914]
+                - row "Select row UBA-1018904696-20221225-20260126 26/01/2026 United Bank for Africa 1018904696 25/12/2022 - 26/01/2026 NGN 8,020.29 NGN 20,422,338.00 0/3412 Imported View" [ref=e917]:
+                  - cell "Select row" [ref=e918]:
+                    - checkbox "Select row" [ref=e919] [cursor=pointer]
+                  - cell "UBA-1018904696-20221225-20260126 26/01/2026" [ref=e920]:
+                    - link "UBA-1018904696-20221225-20260126" [ref=e921] [cursor=pointer]:
+                      - /url: /finance/banking/statements/65d49e7c-acac-4ec4-a6fe-5b276a886976
+                    - paragraph [ref=e922]: 26/01/2026
+                  - cell "United Bank for Africa 1018904696" [ref=e923]:
+                    - paragraph [ref=e924]: United Bank for Africa
+                    - paragraph [ref=e925]: "1018904696"
+                  - cell "25/12/2022 - 26/01/2026" [ref=e926]
+                  - cell "NGN 8,020.29" [ref=e927]
+                  - cell "NGN 20,422,338.00" [ref=e928]
+                  - cell "0/3412" [ref=e929]: 0/3412
+                  - cell "Imported" [ref=e931]
+                  - cell "View" [ref=e932]:
+                    - link "View" [ref=e934] [cursor=pointer]:
+                      - /url: /finance/banking/statements/65d49e7c-acac-4ec4-a6fe-5b276a886976
+                      - img [ref=e935]
+                - row "Select row UBA-3004154294-20240101-20260126 26/01/2026 United Bank for Africa 3004154294 01/01/2024 - 26/01/2026 USD 0.00 USD 100.00 0/1 Imported View" [ref=e938]:
+                  - cell "Select row" [ref=e939]:
+                    - checkbox "Select row" [ref=e940] [cursor=pointer]
+                  - cell "UBA-3004154294-20240101-20260126 26/01/2026" [ref=e941]:
+                    - link "UBA-3004154294-20240101-20260126" [ref=e942] [cursor=pointer]:
+                      - /url: /finance/banking/statements/1482858f-39fa-4801-a60e-4a3e0587a576
+                    - paragraph [ref=e943]: 26/01/2026
+                  - cell "United Bank for Africa 3004154294" [ref=e944]:
+                    - paragraph [ref=e945]: United Bank for Africa
+                    - paragraph [ref=e946]: "3004154294"
+                  - cell "01/01/2024 - 26/01/2026" [ref=e947]
+                  - cell "USD 0.00" [ref=e948]
+                  - cell "USD 100.00" [ref=e949]
+                  - cell "0/1" [ref=e950]: 0/1
+                  - cell "Imported" [ref=e952]
+                  - cell "View" [ref=e953]:
+                    - link "View" [ref=e955] [cursor=pointer]:
+                      - /url: /finance/banking/statements/1482858f-39fa-4801-a60e-4a3e0587a576
+                      - img [ref=e956]
+                - row "Select row PSK-20251201-20251231 31/12/2025 Paystack PSK-COLLECTIONS 01/12/2025 - 31/12/2025 NGN 28,063,908.05 NGN 27,979,408.05 0/825 Imported View" [ref=e959]:
+                  - cell "Select row" [ref=e960]:
+                    - checkbox "Select row" [ref=e961] [cursor=pointer]
+                  - cell "PSK-20251201-20251231 31/12/2025" [ref=e962]:
+                    - link "PSK-20251201-20251231" [ref=e963] [cursor=pointer]:
+                      - /url: /finance/banking/statements/a237a061-9843-49df-80f6-96023e8fc5ac
+                    - paragraph [ref=e964]: 31/12/2025
+                  - cell "Paystack PSK-COLLECTIONS" [ref=e965]:
+                    - paragraph [ref=e966]: Paystack
+                    - paragraph [ref=e967]: PSK-COLLECTIONS
+                  - cell "01/12/2025 - 31/12/2025" [ref=e968]
+                  - cell "NGN 28,063,908.05" [ref=e969]
+                  - cell "NGN 27,979,408.05" [ref=e970]
+                  - cell "0/825" [ref=e971]: 0/825
+                  - cell "Imported" [ref=e973]
+                  - cell "View" [ref=e974]:
+                    - link "View" [ref=e976] [cursor=pointer]:
+                      - /url: /finance/banking/statements/a237a061-9843-49df-80f6-96023e8fc5ac
+                      - img [ref=e977]
+                - row "Select row PSK-20251201-20251231 31/12/2025 Paystack PSK-OPEX 01/12/2025 - 31/12/2025 NGN -5,412,960.00 NGN -9,243,680.00 0/368 Imported View" [ref=e980]:
+                  - cell "Select row" [ref=e981]:
+                    - checkbox "Select row" [ref=e982] [cursor=pointer]
+                  - cell "PSK-20251201-20251231 31/12/2025" [ref=e983]:
+                    - link "PSK-20251201-20251231" [ref=e984] [cursor=pointer]:
+                      - /url: /finance/banking/statements/298067af-d80e-455d-9b2f-776f36429bf1
+                    - paragraph [ref=e985]: 31/12/2025
+                  - cell "Paystack PSK-OPEX" [ref=e986]:
+                    - paragraph [ref=e987]: Paystack
+                    - paragraph [ref=e988]: PSK-OPEX
+                  - cell "01/12/2025 - 31/12/2025" [ref=e989]
+                  - cell "NGN -5,412,960.00" [ref=e990]
+                  - cell "NGN -9,243,680.00" [ref=e991]
+                  - cell "0/368" [ref=e992]: 0/368
+                  - cell "Imported" [ref=e994]
+                  - cell "View" [ref=e995]:
+                    - link "View" [ref=e997] [cursor=pointer]:
+                      - /url: /finance/banking/statements/298067af-d80e-455d-9b2f-776f36429bf1
+                      - img [ref=e998]
+                - row "Select row ZENITH-1016946454-20220117-20251231 31/12/2025 Zenith Bank 1016946454 17/01/2022 - 31/12/2025 NGN 101,447.98 NGN 77,738.18 0/333 Imported View" [ref=e1001]:
+                  - cell "Select row" [ref=e1002]:
+                    - checkbox "Select row" [ref=e1003] [cursor=pointer]
+                  - cell "ZENITH-1016946454-20220117-20251231 31/12/2025" [ref=e1004]:
+                    - link "ZENITH-1016946454-20220117-20251231" [ref=e1005] [cursor=pointer]:
+                      - /url: /finance/banking/statements/8a91ced0-ba84-454b-b8a7-07d73bceb131
+                    - paragraph [ref=e1006]: 31/12/2025
+                  - cell "Zenith Bank 1016946454" [ref=e1007]:
+                    - paragraph [ref=e1008]: Zenith Bank
+                    - paragraph [ref=e1009]: "1016946454"
+                  - cell "17/01/2022 - 31/12/2025" [ref=e1010]
+                  - cell "NGN 101,447.98" [ref=e1011]
+                  - cell "NGN 77,738.18" [ref=e1012]
+                  - cell "0/333" [ref=e1013]: 0/333
+                  - cell "Imported" [ref=e1015]
+                  - cell "View" [ref=e1016]:
+                    - link "View" [ref=e1018] [cursor=pointer]:
+                      - /url: /finance/banking/statements/8a91ced0-ba84-454b-b8a7-07d73bceb131
+                      - img [ref=e1019]
+                - row "Select row ZENITH-1016946461-20220101-20251231 31/12/2025 Zenith Bank 1016946461 01/01/2022 - 31/12/2025 NGN 6,153,868.71 NGN 118,054.84 0/22656 Imported View" [ref=e1022]:
+                  - cell "Select row" [ref=e1023]:
+                    - checkbox "Select row" [ref=e1024] [cursor=pointer]
+                  - cell "ZENITH-1016946461-20220101-20251231 31/12/2025" [ref=e1025]:
+                    - link "ZENITH-1016946461-20220101-20251231" [ref=e1026] [cursor=pointer]:
+                      - /url: /finance/banking/statements/575181e7-75d3-4d34-b6e5-a20120c21392
+                    - paragraph [ref=e1027]: 31/12/2025
+                  - cell "Zenith Bank 1016946461" [ref=e1028]:
+                    - paragraph [ref=e1029]: Zenith Bank
+                    - paragraph [ref=e1030]: "1016946461"
+                  - cell "01/01/2022 - 31/12/2025" [ref=e1031]
+                  - cell "NGN 6,153,868.71" [ref=e1032]
+                  - cell "NGN 118,054.84" [ref=e1033]
+                  - cell "0/22656" [ref=e1034]: 0/22656
+                  - cell "Imported" [ref=e1036]
+                  - cell "View" [ref=e1037]:
+                    - link "View" [ref=e1039] [cursor=pointer]:
+                      - /url: /finance/banking/statements/575181e7-75d3-4d34-b6e5-a20120c21392
+                      - img [ref=e1040]
+                - row "Select row ZENITH-1011649523-20220101-20251231 31/12/2025 Zenith Bank 1011649523 01/01/2022 - 31/12/2025 NGN 1,282,951.33 NGN 2,562,798.73 0/10905 Imported View" [ref=e1043]:
+                  - cell "Select row" [ref=e1044]:
+                    - checkbox "Select row" [ref=e1045] [cursor=pointer]
+                  - cell "ZENITH-1011649523-20220101-20251231 31/12/2025" [ref=e1046]:
+                    - link "ZENITH-1011649523-20220101-20251231" [ref=e1047] [cursor=pointer]:
+                      - /url: /finance/banking/statements/b69d7e62-c2d0-41c0-b0b8-f5694423c10c
+                    - paragraph [ref=e1048]: 31/12/2025
+                  - cell "Zenith Bank 1011649523" [ref=e1049]:
+                    - paragraph [ref=e1050]: Zenith Bank
+                    - paragraph [ref=e1051]: "1011649523"
+                  - cell "01/01/2022 - 31/12/2025" [ref=e1052]
+                  - cell "NGN 1,282,951.33" [ref=e1053]
+                  - cell "NGN 2,562,798.73" [ref=e1054]
+                  - cell "0/10905" [ref=e1055]: 0/10905
+                  - cell "Imported" [ref=e1057]
+                  - cell "View" [ref=e1058]:
+                    - link "View" [ref=e1060] [cursor=pointer]:
+                      - /url: /finance/banking/statements/b69d7e62-c2d0-41c0-b0b8-f5694423c10c
+                      - img [ref=e1061]
+                - row "Select row ZENITH-5070061296-20220106-20251230 30/12/2025 Zenith Bank 5070061296 06/01/2022 - 30/12/2025 USD 3,766.31 USD 5.98 0/735 Imported View" [ref=e1064]:
+                  - cell "Select row" [ref=e1065]:
+                    - checkbox "Select row" [ref=e1066] [cursor=pointer]
+                  - cell "ZENITH-5070061296-20220106-20251230 30/12/2025" [ref=e1067]:
+                    - link "ZENITH-5070061296-20220106-20251230" [ref=e1068] [cursor=pointer]:
+                      - /url: /finance/banking/statements/bee3fa83-d6be-467d-98c2-f6fe3d824ee6
+                    - paragraph [ref=e1069]: 30/12/2025
+                  - cell "Zenith Bank 5070061296" [ref=e1070]:
+                    - paragraph [ref=e1071]: Zenith Bank
+                    - paragraph [ref=e1072]: "5070061296"
+                  - cell "06/01/2022 - 30/12/2025" [ref=e1073]
+                  - cell "USD 3,766.31" [ref=e1074]
+                  - cell "USD 5.98" [ref=e1075]
+                  - cell "0/735" [ref=e1076]: 0/735
+                  - cell "Imported" [ref=e1078]
+                  - cell "View" [ref=e1079]:
+                    - link "View" [ref=e1081] [cursor=pointer]:
+                      - /url: /finance/banking/statements/bee3fa83-d6be-467d-98c2-f6fe3d824ee6
+                      - img [ref=e1082]
+                - row "Select row PSK-20251101-20251130 30/11/2025 Paystack PSK-COLLECTIONS 01/11/2025 - 30/11/2025 NGN 28,063,908.05 NGN 28,397,658.05 0/847 Imported View" [ref=e1085]:
+                  - cell "Select row" [ref=e1086]:
+                    - checkbox "Select row" [ref=e1087] [cursor=pointer]
+                  - cell "PSK-20251101-20251130 30/11/2025" [ref=e1088]:
+                    - link "PSK-20251101-20251130" [ref=e1089] [cursor=pointer]:
+                      - /url: /finance/banking/statements/409cfcd5-ece3-4a57-ad1a-7a8a9f80a3bc
+                    - paragraph [ref=e1090]: 30/11/2025
+                  - cell "Paystack PSK-COLLECTIONS" [ref=e1091]:
+                    - paragraph [ref=e1092]: Paystack
+                    - paragraph [ref=e1093]: PSK-COLLECTIONS
+                  - cell "01/11/2025 - 30/11/2025" [ref=e1094]
+                  - cell "NGN 28,063,908.05" [ref=e1095]
+                  - cell "NGN 28,397,658.05" [ref=e1096]
+                  - cell "0/847" [ref=e1097]: 0/847
+                  - cell "Imported" [ref=e1099]
+                  - cell "View" [ref=e1100]:
+                    - link "View" [ref=e1102] [cursor=pointer]:
+                      - /url: /finance/banking/statements/409cfcd5-ece3-4a57-ad1a-7a8a9f80a3bc
+                      - img [ref=e1103]
+                - row "Select row PSK-20251101-20251130 30/11/2025 Paystack PSK-OPEX 01/11/2025 - 30/11/2025 NGN -5,412,960.00 NGN -9,134,400.00 0/374 Imported View" [ref=e1106]:
+                  - cell "Select row" [ref=e1107]:
+                    - checkbox "Select row" [ref=e1108] [cursor=pointer]
+                  - cell "PSK-20251101-20251130 30/11/2025" [ref=e1109]:
+                    - link "PSK-20251101-20251130" [ref=e1110] [cursor=pointer]:
+                      - /url: /finance/banking/statements/f24673d0-c474-4b21-99c2-7d96c22b9550
+                    - paragraph [ref=e1111]: 30/11/2025
+                  - cell "Paystack PSK-OPEX" [ref=e1112]:
+                    - paragraph [ref=e1113]: Paystack
+                    - paragraph [ref=e1114]: PSK-OPEX
+                  - cell "01/11/2025 - 30/11/2025" [ref=e1115]
+                  - cell "NGN -5,412,960.00" [ref=e1116]
+                  - cell "NGN -9,134,400.00" [ref=e1117]
+                  - cell "0/374" [ref=e1118]: 0/374
+                  - cell "Imported" [ref=e1120]
+                  - cell "View" [ref=e1121]:
+                    - link "View" [ref=e1123] [cursor=pointer]:
+                      - /url: /finance/banking/statements/f24673d0-c474-4b21-99c2-7d96c22b9550
+                      - img [ref=e1124]
+                - row "Select row PSK-20251001-20251031 31/10/2025 Paystack PSK-COLLECTIONS 01/10/2025 - 31/10/2025 NGN 28,063,908.05 NGN 27,830,408.05 0/922 Imported View" [ref=e1127]:
+                  - cell "Select row" [ref=e1128]:
+                    - checkbox "Select row" [ref=e1129] [cursor=pointer]
+                  - cell "PSK-20251001-20251031 31/10/2025" [ref=e1130]:
+                    - link "PSK-20251001-20251031" [ref=e1131] [cursor=pointer]:
+                      - /url: /finance/banking/statements/a02d2ecc-a6bf-4d09-8fee-5ec5c11dc19f
+                    - paragraph [ref=e1132]: 31/10/2025
+                  - cell "Paystack PSK-COLLECTIONS" [ref=e1133]:
+                    - paragraph [ref=e1134]: Paystack
+                    - paragraph [ref=e1135]: PSK-COLLECTIONS
+                  - cell "01/10/2025 - 31/10/2025" [ref=e1136]
+                  - cell "NGN 28,063,908.05" [ref=e1137]
+                  - cell "NGN 27,830,408.05" [ref=e1138]
+                  - cell "0/922" [ref=e1139]: 0/922
+                  - cell "Imported" [ref=e1141]
+                  - cell "View" [ref=e1142]:
+                    - link "View" [ref=e1144] [cursor=pointer]:
+                      - /url: /finance/banking/statements/a02d2ecc-a6bf-4d09-8fee-5ec5c11dc19f
+                      - img [ref=e1145]
+                - row "Select row PSK-20251001-20251031 31/10/2025 Paystack PSK-OPEX 01/10/2025 - 31/10/2025 NGN -5,412,960.00 NGN -10,136,277.00 0/533 Imported View" [ref=e1148]:
+                  - cell "Select row" [ref=e1149]:
+                    - checkbox "Select row" [ref=e1150] [cursor=pointer]
+                  - cell "PSK-20251001-20251031 31/10/2025" [ref=e1151]:
+                    - link "PSK-20251001-20251031" [ref=e1152] [cursor=pointer]:
+                      - /url: /finance/banking/statements/01610d57-af57-4506-ac53-218a5b4ff7ce
+                    - paragraph [ref=e1153]: 31/10/2025
+                  - cell "Paystack PSK-OPEX" [ref=e1154]:
+                    - paragraph [ref=e1155]: Paystack
+                    - paragraph [ref=e1156]: PSK-OPEX
+                  - cell "01/10/2025 - 31/10/2025" [ref=e1157]
+                  - cell "NGN -5,412,960.00" [ref=e1158]
+                  - cell "NGN -10,136,277.00" [ref=e1159]
+                  - cell "0/533" [ref=e1160]: 0/533
+                  - cell "Imported" [ref=e1162]
+                  - cell "View" [ref=e1163]:
+                    - link "View" [ref=e1165] [cursor=pointer]:
+                      - /url: /finance/banking/statements/01610d57-af57-4506-ac53-218a5b4ff7ce
+                      - img [ref=e1166]
+                - row "Select row PSK-20250901-20250930 30/09/2025 Paystack PSK-OPEX 01/09/2025 - 30/09/2025 NGN -5,412,960.00 NGN -9,506,860.00 0/453 Imported View" [ref=e1169]:
+                  - cell "Select row" [ref=e1170]:
+                    - checkbox "Select row" [ref=e1171] [cursor=pointer]
+                  - cell "PSK-20250901-20250930 30/09/2025" [ref=e1172]:
+                    - link "PSK-20250901-20250930" [ref=e1173] [cursor=pointer]:
+                      - /url: /finance/banking/statements/7ab0e1e7-2460-4661-9b98-26d1b145dd37
+                    - paragraph [ref=e1174]: 30/09/2025
+                  - cell "Paystack PSK-OPEX" [ref=e1175]:
+                    - paragraph [ref=e1176]: Paystack
+                    - paragraph [ref=e1177]: PSK-OPEX
+                  - cell "01/09/2025 - 30/09/2025" [ref=e1178]
+                  - cell "NGN -5,412,960.00" [ref=e1179]
+                  - cell "NGN -9,506,860.00" [ref=e1180]
+                  - cell "0/453" [ref=e1181]: 0/453
+                  - cell "Imported" [ref=e1183]
+                  - cell "View" [ref=e1184]:
+                    - link "View" [ref=e1186] [cursor=pointer]:
+                      - /url: /finance/banking/statements/7ab0e1e7-2460-4661-9b98-26d1b145dd37
+                      - img [ref=e1187]
+                - row "Select row PSK-20250901-20250930 30/09/2025 Paystack PSK-COLLECTIONS 01/09/2025 - 30/09/2025 NGN 28,063,908.05 NGN 28,407,928.05 0/908 Imported View" [ref=e1190]:
+                  - cell "Select row" [ref=e1191]:
+                    - checkbox "Select row" [ref=e1192] [cursor=pointer]
+                  - cell "PSK-20250901-20250930 30/09/2025" [ref=e1193]:
+                    - link "PSK-20250901-20250930" [ref=e1194] [cursor=pointer]:
+                      - /url: /finance/banking/statements/e8a1c4b0-8797-4b74-8900-11a50551cb10
+                    - paragraph [ref=e1195]: 30/09/2025
+                  - cell "Paystack PSK-COLLECTIONS" [ref=e1196]:
+                    - paragraph [ref=e1197]: Paystack
+                    - paragraph [ref=e1198]: PSK-COLLECTIONS
+                  - cell "01/09/2025 - 30/09/2025" [ref=e1199]
+                  - cell "NGN 28,063,908.05" [ref=e1200]
+                  - cell "NGN 28,407,928.05" [ref=e1201]
+                  - cell "0/908" [ref=e1202]: 0/908
+                  - cell "Imported" [ref=e1204]
+                  - cell "View" [ref=e1205]:
+                    - link "View" [ref=e1207] [cursor=pointer]:
+                      - /url: /finance/banking/statements/e8a1c4b0-8797-4b74-8900-11a50551cb10
+                      - img [ref=e1208]
+                - row "Select row PSK-20250801-20250831 31/08/2025 Paystack PSK-OPEX 01/08/2025 - 31/08/2025 NGN -5,412,960.00 NGN -9,650,660.00 0/486 Imported View" [ref=e1211]:
+                  - cell "Select row" [ref=e1212]:
+                    - checkbox "Select row" [ref=e1213] [cursor=pointer]
+                  - cell "PSK-20250801-20250831 31/08/2025" [ref=e1214]:
+                    - link "PSK-20250801-20250831" [ref=e1215] [cursor=pointer]:
+                      - /url: /finance/banking/statements/5922574e-bd2c-4e58-9383-3eb77b5d65df
+                    - paragraph [ref=e1216]: 31/08/2025
+                  - cell "Paystack PSK-OPEX" [ref=e1217]:
+                    - paragraph [ref=e1218]: Paystack
+                    - paragraph [ref=e1219]: PSK-OPEX
+                  - cell "01/08/2025 - 31/08/2025" [ref=e1220]
+                  - cell "NGN -5,412,960.00" [ref=e1221]
+                  - cell "NGN -9,650,660.00" [ref=e1222]
+                  - cell "0/486" [ref=e1223]: 0/486
+                  - cell "Imported" [ref=e1225]
+                  - cell "View" [ref=e1226]:
+                    - link "View" [ref=e1228] [cursor=pointer]:
+                      - /url: /finance/banking/statements/5922574e-bd2c-4e58-9383-3eb77b5d65df
+                      - img [ref=e1229]
+                - row "Select row PSK-20250801-20250831 31/08/2025 Paystack PSK-COLLECTIONS 01/08/2025 - 31/08/2025 NGN 28,063,908.05 NGN 27,910,888.05 0/905 Imported View" [ref=e1232]:
+                  - cell "Select row" [ref=e1233]:
+                    - checkbox "Select row" [ref=e1234] [cursor=pointer]
+                  - cell "PSK-20250801-20250831 31/08/2025" [ref=e1235]:
+                    - link "PSK-20250801-20250831" [ref=e1236] [cursor=pointer]:
+                      - /url: /finance/banking/statements/dc3dcf17-498a-49c2-8fa2-3315098b41af
+                    - paragraph [ref=e1237]: 31/08/2025
+                  - cell "Paystack PSK-COLLECTIONS" [ref=e1238]:
+                    - paragraph [ref=e1239]: Paystack
+                    - paragraph [ref=e1240]: PSK-COLLECTIONS
+                  - cell "01/08/2025 - 31/08/2025" [ref=e1241]
+                  - cell "NGN 28,063,908.05" [ref=e1242]
+                  - cell "NGN 27,910,888.05" [ref=e1243]
+                  - cell "0/905" [ref=e1244]: 0/905
+                  - cell "Imported" [ref=e1246]
+                  - cell "View" [ref=e1247]:
+                    - link "View" [ref=e1249] [cursor=pointer]:
+                      - /url: /finance/banking/statements/dc3dcf17-498a-49c2-8fa2-3315098b41af
+                      - img [ref=e1250]
+                - row "Select row PSK-20250701-20250731 31/07/2025 Paystack PSK-OPEX 01/07/2025 - 31/07/2025 NGN -5,412,960.00 NGN -10,195,110.00 0/532 Imported View" [ref=e1253]:
+                  - cell "Select row" [ref=e1254]:
+                    - checkbox "Select row" [ref=e1255] [cursor=pointer]
+                  - cell "PSK-20250701-20250731 31/07/2025" [ref=e1256]:
+                    - link "PSK-20250701-20250731" [ref=e1257] [cursor=pointer]:
+                      - /url: /finance/banking/statements/98c806ff-f37b-4399-8368-9884f05754fe
+                    - paragraph [ref=e1258]: 31/07/2025
+                  - cell "Paystack PSK-OPEX" [ref=e1259]:
+                    - paragraph [ref=e1260]: Paystack
+                    - paragraph [ref=e1261]: PSK-OPEX
+                  - cell "01/07/2025 - 31/07/2025" [ref=e1262]
+                  - cell "NGN -5,412,960.00" [ref=e1263]
+                  - cell "NGN -10,195,110.00" [ref=e1264]
+                  - cell "0/532" [ref=e1265]: 0/532
+                  - cell "Imported" [ref=e1267]
+                  - cell "View" [ref=e1268]:
+                    - link "View" [ref=e1270] [cursor=pointer]:
+                      - /url: /finance/banking/statements/98c806ff-f37b-4399-8368-9884f05754fe
+                      - img [ref=e1271]
+            - generic [ref=e1275]:
+              - generic [ref=e1276]:
+                - paragraph [ref=e1277]: Showing 1 to 50 of 135 results
+                - generic [ref=e1278]:
+                  - generic [ref=e1279]: "Show:"
+                  - combobox [ref=e1280]:
+                    - option "25"
+                    - option "50" [selected]
+                    - option "100"
+                    - option "200"
+              - navigation [ref=e1281]:
+                - generic [ref=e1282]: "1"
+                - link "2" [ref=e1283] [cursor=pointer]:
+                  - /url: "?page=2"
+                - link "3" [ref=e1284] [cursor=pointer]:
+                  - /url: "?page=3"
+                - link [ref=e1285] [cursor=pointer]:
+                  - /url: "?page=2"
+                  - img [ref=e1286]
+  - status

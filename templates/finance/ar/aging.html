@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import compact_filters %}
+{% from "components/macros.html" import compact_filters, filter_entity_select_field, filter_date_field %}
 
 
 {% block page_title %}AR Aging Report{% endblock %}
@@ -40,35 +40,19 @@
         base_url="/finance/ar/aging",
         active_filters=active_filters | default([])
     ) %}
-    <div>
-            <div class="flex-1 min-w-[150px]">
-                <label class="form-label text-xs">Customer</label>
-                <select name="customer_id" class="form-select w-full" {{ filter_attrs }}>
-                    <option value="">All Customers</option>
-                    {% for customer in customers %}
-                    <option value="{{ customer.customer_id }}" {{ 'selected' if customer.customer_id == selected_customer_id }}>{{ customer.legal_name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-    </div>
-    <div>
-        <label class="form-label text-xs">As Of Date</label>
-        <input type="date" name="as_of_date" value="{{ as_of_date | default('', true) }}"
-               class="form-input w-full" {{ filter_attrs }}>
-    </div>
+    {{ filter_entity_select_field("customer_id", "Customer", selected_customer_id, customers, "customer_id", "legal_name", filter_attrs) }}
+    {{ filter_date_field("as_of_date", "As Of Date", as_of_date | default('', true), filter_attrs) }}
     {% endcall %}
 
+    <div id="results-container">
     {% if aging_summary %}
     <!-- Summary Cards -->
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <!-- Total Outstanding -->
-        <div id="results-container">
-
         <div class="card p-5 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/80 dark:to-slate-800/40 border-slate-200/80 dark:border-slate-700/50">
             <p class="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Total Outstanding</p>
             <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono mt-2">{{ aging_summary.total }}</p>
             <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">{{ aging_summary.invoice_count }} invoices</p>
-        </div>
         </div>
 
 
@@ -277,6 +261,7 @@
         </div>
     </div>
     {% endif %}
+    </div>
 </div>
 
 <!-- Chart Data -->

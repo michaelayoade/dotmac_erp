@@ -9,6 +9,8 @@ from app.models.audit import AuditActorType
 class AuditEventBase(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     actor_type: AuditActorType = AuditActorType.system
+    organization_id: UUID | None = None
+    actor_person_id: UUID | None = None
     actor_id: str | None = None
     action: str
     entity_type: str

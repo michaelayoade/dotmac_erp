@@ -5,7 +5,7 @@ HTML template routes for Bank Accounts, Statements, and Reconciliations.
 """
 
 from fastapi import APIRouter, Depends, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.banking.web import banking_web_service
@@ -128,6 +128,18 @@ async def import_statement_submit(
     return await banking_web_service.statement_import_submit_response(request, auth, db)
 
 
+@router.post("/statements/import/preview", response_class=JSONResponse)
+async def import_statement_preview(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Preview uploaded statement columns/sample rows for mapping."""
+    return await banking_web_service.statement_import_preview_response(
+        request, auth, db
+    )
+
+
 @router.get("/statements/sample-csv")
 def download_sample_csv(
     _auth: WebAuthContext = Depends(require_finance_access),
@@ -195,6 +207,20 @@ async def apply_rules(
     return banking_web_service.apply_rules_response(request, auth, db, statement_id)
 
 
+@router.post("/statements/{statement_id}/auto-match")
+async def statement_auto_match(
+    request: Request,
+    statement_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Run auto-match on a statement's unmatched lines (HTMX action)."""
+    await request.form()  # consume form body for CSRF validation
+    return banking_web_service.statement_auto_match_response(
+        request, auth, db, statement_id
+    )
+
+
 @router.post("/statements/{statement_id}/lines/{line_id}/accept")
 async def accept_suggestion(
     request: Request,
@@ -239,6 +265,33 @@ async def delete_statement(
     )
 
 
+@router.post("/statements/{statement_id}/batch-match")
+async def batch_match_statement_lines(
+    request: Request,
+    statement_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Match multiple statement lines to GL entries in one request (JSON)."""
+    return await banking_web_service.batch_match_statement_lines_response(
+        request, auth, db, statement_id
+    )
+
+
+@router.post("/statements/{statement_id}/lines/{line_id}/create-and-match")
+async def create_journal_and_match(
+    request: Request,
+    statement_id: str,
+    line_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Create a GL journal entry and match it to a bank line (JSON)."""
+    return await banking_web_service.create_journal_and_match_response(
+        request, auth, db, statement_id, line_id
+    )
+
+
 @router.post("/statements/{statement_id}/lines/{line_id}/match")
 async def match_statement_line(
     request: Request,
@@ -263,6 +316,37 @@ async def unmatch_statement_line(
 ):
     """Remove a direct match from a statement line (JSON from Alpine.js)."""
     return await banking_web_service.unmatch_statement_line_response(
+        request, auth, db, statement_id, line_id
+    )
+
+
+@router.get(
+    "/statements/{statement_id}/lines/{line_id}/candidates",
+    response_class=JSONResponse,
+)
+def scored_candidates(
+    request: Request,
+    statement_id: str,
+    line_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Return scored GL candidates for a specific bank statement line."""
+    return banking_web_service.scored_candidates_response(
+        request, auth, db, statement_id, line_id
+    )
+
+
+@router.post("/statements/{statement_id}/lines/{line_id}/multi-match")
+async def multi_match_statement_line(
+    request: Request,
+    statement_id: str,
+    line_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Match one bank line to multiple GL entries (JSON from Alpine.js)."""
+    return await banking_web_service.multi_match_statement_line_response(
         request, auth, db, statement_id, line_id
     )
 
@@ -558,4 +642,83 @@ async def update_rule(
     form_data = dict(form)
     return banking_web_service.update_rule_response(
         request, auth, db, rule_id, form_data
+    )
+
+
+@router.get("/rules/{rule_id}/duplicate", response_class=HTMLResponse)
+def duplicate_rule_form(
+    request: Request,
+    rule_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Duplicate-rule form page."""
+    return banking_web_service.rule_duplicate_form_response(request, auth, db, rule_id)
+
+
+@router.post("/rules/{rule_id}/duplicate")
+async def duplicate_rule(
+    request: Request,
+    rule_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Duplicate a rule to selected bank accounts."""
+    form = await request.form()
+    bank_account_ids = [str(v) for v in form.getlist("bank_account_ids")]
+    include_global = str(form.get("include_global", "")).lower() in {
+        "on",
+        "true",
+        "1",
+        "yes",
+    }
+    return banking_web_service.duplicate_rule_response(
+        request=request,
+        auth=auth,
+        db=db,
+        rule_id=rule_id,
+        bank_account_ids=bank_account_ids,
+        include_global=include_global,
+    )
+
+
+@router.get("/rules/duplicate/bulk", response_class=HTMLResponse)
+def duplicate_rules_bulk_form(
+    request: Request,
+    rule_ids: list[str] = Query(default=[]),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Bulk duplicate-rules form page."""
+    return banking_web_service.bulk_rule_duplicate_form_response(
+        request=request,
+        auth=auth,
+        db=db,
+        rule_ids=rule_ids,
+    )
+
+
+@router.post("/rules/duplicate/bulk")
+async def duplicate_rules_bulk(
+    request: Request,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Duplicate selected rules to selected bank accounts."""
+    form = await request.form()
+    rule_ids = [str(v) for v in form.getlist("rule_ids")]
+    bank_account_ids = [str(v) for v in form.getlist("bank_account_ids")]
+    include_global = str(form.get("include_global", "")).lower() in {
+        "on",
+        "true",
+        "1",
+        "yes",
+    }
+    return banking_web_service.bulk_duplicate_rules_response(
+        request=request,
+        auth=auth,
+        db=db,
+        rule_ids=rule_ids,
+        bank_account_ids=bank_account_ids,
+        include_global=include_global,
     )

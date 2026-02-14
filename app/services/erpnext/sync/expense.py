@@ -129,12 +129,19 @@ class ExpenseClaimSyncService(BaseSyncService[ExpenseClaim]):
                 doctype="Expense Claim",
                 since=since,
             ):
-                # Fetch items for each claim
-                claim["expenses"] = client.list_documents(
-                    doctype="Expense Claim Detail",
-                    filters={"parent": claim["name"]},
-                )
-                yield claim
+                # Incremental list calls may omit required employee/amount fields.
+                try:
+                    full_doc = client.get_document("Expense Claim", claim["name"])
+                    if claim.get("modified"):
+                        full_doc["modified"] = claim["modified"]
+                    yield full_doc
+                except Exception:
+                    claim["expenses"] = client.list_documents(
+                        doctype="Expense Claim Detail",
+                        filters={"parent": claim["name"]},
+                        parent="Expense Claim",
+                    )
+                    yield claim
         else:
             yield from client.get_expense_claims()
 
@@ -170,9 +177,11 @@ class ExpenseClaimSyncService(BaseSyncService[ExpenseClaim]):
 
     def _create_claim_items(self, claim: ExpenseClaim, items_data: list[dict]) -> None:
         """Create expense claim items."""
+        from datetime import date as date_type
+
         for seq, item_data in enumerate(items_data, 1):
             expense_type_source = item_data.pop("_expense_type_source_name", None)
-            item_data.pop("_cost_center_source_name", None)
+            cost_center_source = item_data.pop("_cost_center_source_name", None)
             item_data.pop("_source_modified", None)
             item_data.pop("_source_name", None)
 
@@ -189,14 +198,28 @@ class ExpenseClaimSyncService(BaseSyncService[ExpenseClaim]):
                 )
                 continue
 
+            # Resolve cost center if available
+            cost_center_id = (
+                self._resolve_entity_id(cost_center_source, "Cost Center")
+                if cost_center_source
+                else None
+            )
+
+            # expense_date fallback: use claim_date if item date missing
+            expense_date = item_data.get("expense_date")
+            if not isinstance(expense_date, date_type):
+                expense_date = claim.claim_date
+
             item = ExpenseClaimItem(
+                organization_id=self.organization_id,
                 claim_id=claim.claim_id,
-                expense_date=item_data["expense_date"],
+                expense_date=expense_date,
                 category_id=category_id,
                 description=item_data.get("description")
                 or f"Expense: {expense_type_source}",
                 claimed_amount=item_data.get("claimed_amount", Decimal("0")),
                 approved_amount=item_data.get("approved_amount"),
+                cost_center_id=cost_center_id,
                 sequence=seq,
             )
             self.db.add(item)
@@ -212,6 +235,8 @@ class ExpenseClaimSyncService(BaseSyncService[ExpenseClaim]):
 
         # Resolve foreign keys
         employee_id = self._resolve_entity_id(emp_source, "Employee")
+        if not employee_id:
+            raise ValueError(f"Employee '{emp_source}' not found")
 
         # Map status
         status_str = data.get("status", "DRAFT")
@@ -255,11 +280,14 @@ class ExpenseClaimSyncService(BaseSyncService[ExpenseClaim]):
 
         # Update claim fields
         entity.purpose = data.get("purpose", entity.purpose)[:500]
-        entity.total_claimed_amount = data.get(
-            "total_claimed_amount", entity.total_claimed_amount
-        )
-        entity.total_approved_amount = data.get("total_approved_amount")
-        entity.net_payable_amount = data.get("net_payable_amount")
+        total_claimed = data.get("total_claimed_amount")
+        if total_claimed is not None:
+            entity.total_claimed_amount = total_claimed
+
+        if "total_approved_amount" in data and data.get("total_approved_amount") is not None:
+            entity.total_approved_amount = data.get("total_approved_amount")
+        if "net_payable_amount" in data and data.get("net_payable_amount") is not None:
+            entity.net_payable_amount = data.get("net_payable_amount")
 
         # Map status
         status_str = data.get("status", "DRAFT")
@@ -286,10 +314,8 @@ class ExpenseClaimSyncService(BaseSyncService[ExpenseClaim]):
         return entity.claim_id
 
     def post_sync_hook(self, entity: ExpenseClaim) -> None:
-        """Ensure GL entries exist for synced expense claims."""
-        from app.services.expense.expense_service import ExpenseService
-
-        ExpenseService.ensure_gl_posted(self.db, entity)
+        """GL posting deferred to backfill script."""
+        pass
 
     def find_existing_entity(self, source_name: str) -> ExpenseClaim | None:
         if source_name in self._claim_cache:

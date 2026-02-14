@@ -20,6 +20,7 @@ from app.models.finance.gl.account_balance import AccountBalance, BalanceType
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 from app.services.audit_info import get_audit_service
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.finance.gl.chart_of_accounts import chart_of_accounts_service
 from app.services.finance.gl.web.base import (
     account_detail_view,
@@ -211,7 +212,45 @@ class AccountWebService:
                 }
             )
 
+        active_count = (
+            build_account_query(
+                db=db,
+                organization_id=organization_id,
+                search=search,
+                category=category,
+                status="active",
+            )
+            .with_entities(func.count(Account.account_id))
+            .scalar()
+            or 0
+        )
+        inactive_count = (
+            build_account_query(
+                db=db,
+                organization_id=organization_id,
+                search=search,
+                category=category,
+                status="inactive",
+            )
+            .with_entities(func.count(Account.account_id))
+            .scalar()
+            or 0
+        )
         total_pages = max(1, (total_count + limit - 1) // limit)
+        active_filters = build_active_filters(
+            params={"category": category, "status": status, "search": search},
+            labels={"category": "Category", "status": "Status", "search": "Search"},
+            options={
+                "category": {
+                    "ASSET": "Assets",
+                    "LIABILITY": "Liabilities",
+                    "EQUITY": "Equity",
+                    "REVENUE": "Revenue",
+                    "EXPENSE": "Expenses",
+                },
+                "status": {"active": "Active", "inactive": "Inactive"},
+            },
+        )
 
         logger.debug("list_accounts_context: found %d accounts", total_count)
 
@@ -220,6 +259,9 @@ class AccountWebService:
             "search": search,
             "category": category,
             "status": status,
+            "active_filters": active_filters,
+            "active_count": active_count,
+            "inactive_count": inactive_count,
             "page": page,
             "limit": limit,
             "offset": offset,
@@ -434,7 +476,7 @@ class AccountWebService:
         page: int,
     ) -> HTMLResponse:
         """Render accounts list page."""
-        context = base_context(request, auth, "Chart of Accounts", "gl")
+        context = base_context(request, auth, "Chart of Accounts", "gl", db=db)
         context.update(
             self.list_accounts_context(
                 db,

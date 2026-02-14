@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import empty_state, status_badge, pagination, live_search %}
+{% from "components/macros.html" import empty_state, status_badge, pagination, compact_filters, filter_select_field %}
 
 {% block page_title %}Payees{% endblock %}
 
@@ -49,17 +49,14 @@
     </div>
 
     <!-- Filters -->
-    {% call(search_attrs) live_search(
-        search=search,
+    {% call(filter_attrs) compact_filters(
         base_url="/finance/banking/payees",
-        placeholder="Search payees..."
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search | default('', true),
+        search_placeholder="Search payees..."
     ) %}
-        <select name="payee_type" class="form-select" {{ search_attrs }}>
-            <option value="">All Types</option>
-            {% for t in payee_types %}
-            <option value="{{ t }}" {{ 'selected' if payee_type == t else '' }}>{{ t | title }}</option>
-            {% endfor %}
-        </select>
+        {{ filter_select_field("payee_type", "Type", payee_type, payee_types, filter_attrs, "All Types", true) }}
     {% endcall %}
 
     <div id="results-container">

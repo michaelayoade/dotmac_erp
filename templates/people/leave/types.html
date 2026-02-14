@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import live_search, pagination %}
+{% from "components/macros.html" import compact_filters, filter_select_field, pagination %}
 
 {% block page_title %}Leave Types{% endblock %}
 
@@ -34,12 +34,14 @@
         </div>
     </div>
 
-    {% call(search_attrs) live_search(
-        search=search,
+    {% call(filter_attrs) compact_filters(
         base_url="/people/leave/types",
-        placeholder="Search leave types..."
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search leave types..."
     ) %}
-        <select name="is_active" class="form-select" {{ search_attrs }}>
+        <select name="is_active" class="form-select" {{ filter_attrs }}>
             <option value="" {% if is_active is none %}selected{% endif %}>All</option>
             <option value="true" {% if is_active is sameas true %}selected{% endif %}>Active</option>
             <option value="false" {% if is_active is sameas false %}selected{% endif %}>Inactive</option>

@@ -13,7 +13,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 from starlette.datastructures import UploadFile
 
@@ -46,6 +46,28 @@ logger = logging.getLogger(__name__)
 
 class SelfServiceWebService:
     """View service for employee self-service pages."""
+
+    @staticmethod
+    def _has_named_role(db: Session, person_id: UUID, role_names: set[str]) -> bool:
+        normalized_names = {name.strip().lower() for name in role_names if name}
+        if not normalized_names:
+            return False
+        rows = (
+            db.query(Role.name)
+            .join(PersonRole, PersonRole.role_id == Role.id)
+            .filter(
+                PersonRole.person_id == person_id,
+                Role.is_active == True,  # noqa: E712
+            )
+            .all()
+        )
+        for (raw_name,) in rows:
+            if not raw_name:
+                continue
+            n = raw_name.strip().lower()
+            if n in normalized_names or n.replace(" ", "_") in normalized_names:
+                return True
+        return False
 
     @staticmethod
     def _nigeria_states() -> list[str]:
@@ -186,6 +208,13 @@ class SelfServiceWebService:
     ) -> bool:
         if org_id is None or person_id is None:
             return False
+        has_leave_role = SelfServiceWebService._has_named_role(
+            db,
+            person_id,
+            {"admin", "leave_approver", "Leave approver"},
+        )
+        if has_leave_role:
+            return True
         try:
             manager_employee_id = employee_id or SelfServiceWebService._get_employee_id(
                 db, org_id, person_id
@@ -210,6 +239,13 @@ class SelfServiceWebService:
     ) -> bool:
         if org_id is None or person_id is None:
             return False
+        has_expense_role = SelfServiceWebService._has_named_role(
+            db,
+            person_id,
+            {"admin", "expense_approver", "Expense approver"},
+        )
+        if has_expense_role:
+            return True
         try:
             approver_employee_id = (
                 employee_id
@@ -1356,7 +1392,7 @@ class SelfServiceWebService:
 
         employee_svc = EmployeeService(db, org_id)
         reports = employee_svc.list_employees(
-            filters=EmployeeFilters(expense_approver_id=manager_employee_id),
+            filters=EmployeeFilters(reports_to_id=manager_employee_id),
             pagination=PaginationParams(offset=0, limit=1000),
         ).items
         report_ids = [emp.employee_id for emp in reports]
@@ -1364,27 +1400,26 @@ class SelfServiceWebService:
         total = 0
         pagination = PaginationParams.from_page(page, per_page=20)
 
+        scope_filters = [LeaveApplication.leave_approver_id == manager_employee_id]
         if report_ids:
-            query = select(LeaveApplication).where(
-                LeaveApplication.organization_id == org_id,
-                LeaveApplication.employee_id.in_(report_ids),
-            )
-            if status:
-                try:
-                    status_value = LeaveApplicationStatus(status)
-                except ValueError as exc:
-                    raise HTTPException(
-                        status_code=400, detail="Invalid status"
-                    ) from exc
-                query = query.where(LeaveApplication.status == status_value)
-            query = query.order_by(LeaveApplication.from_date.desc())
-            count_query = select(func.count()).select_from(query.subquery())
-            total = db.scalar(count_query) or 0
-            items = list(
-                db.scalars(
-                    query.offset(pagination.offset).limit(pagination.limit)
-                ).all()
-            )
+            scope_filters.append(LeaveApplication.employee_id.in_(report_ids))
+
+        query = select(LeaveApplication).where(
+            LeaveApplication.organization_id == org_id,
+            or_(*scope_filters),
+        )
+        if status:
+            try:
+                status_value = LeaveApplicationStatus(status)
+            except ValueError as exc:
+                raise HTTPException(status_code=400, detail="Invalid status") from exc
+            query = query.where(LeaveApplication.status == status_value)
+        query = query.order_by(LeaveApplication.from_date.desc())
+        count_query = select(func.count()).select_from(query.subquery())
+        total = db.scalar(count_query) or 0
+        items = list(
+            db.scalars(query.offset(pagination.offset).limit(pagination.limit)).all()
+        )
 
         total_pages = (total + pagination.limit - 1) // pagination.limit if total else 1
         context = base_context(request, auth, "Team Leave", "self-team-leave", db=db)
@@ -1426,11 +1461,14 @@ class SelfServiceWebService:
 
         employee_svc = EmployeeService(db, org_id)
         reports = employee_svc.list_employees(
-            filters=EmployeeFilters(expense_approver_id=manager_employee_id),
+            filters=EmployeeFilters(reports_to_id=manager_employee_id),
             pagination=PaginationParams(offset=0, limit=1000),
         ).items
         report_ids = {emp.employee_id for emp in reports}
-        if application.employee_id not in report_ids:
+        if (
+            application.employee_id not in report_ids
+            and application.leave_approver_id != manager_employee_id
+        ):
             raise HTTPException(status_code=403, detail="Forbidden")
 
         LeaveService(db, auth).approve_application(
@@ -1456,11 +1494,14 @@ class SelfServiceWebService:
         application = LeaveService(db, auth).get_application(org_id, application_id)
         employee_svc = EmployeeService(db, org_id)
         reports = employee_svc.list_employees(
-            filters=EmployeeFilters(expense_approver_id=manager_employee_id),
+            filters=EmployeeFilters(reports_to_id=manager_employee_id),
             pagination=PaginationParams(offset=0, limit=1000),
         ).items
         report_ids = {emp.employee_id for emp in reports}
-        if application.employee_id not in report_ids:
+        if (
+            application.employee_id not in report_ids
+            and application.leave_approver_id != manager_employee_id
+        ):
             raise HTTPException(status_code=403, detail="Forbidden")
 
         LeaveService(db, auth).reject_application(
@@ -1499,7 +1540,7 @@ class SelfServiceWebService:
 
         employee_svc = EmployeeService(db, org_id)
         reports = employee_svc.list_employees(
-            filters=EmployeeFilters(reports_to_id=manager_employee_id),
+            filters=EmployeeFilters(expense_approver_id=manager_employee_id),
             pagination=PaginationParams(offset=0, limit=1000),
         ).items
         report_ids = [emp.employee_id for emp in reports]
@@ -1571,8 +1612,10 @@ class SelfServiceWebService:
                 "has_next": pagination.offset + pagination.limit < total,
             }
         )
-        context["has_team_approvals"] = True
-        context["can_team_leave"] = True
+        context["has_team_approvals"] = self._has_team_approvals(
+            db, org_id, person_id, employee_id=manager_employee_id
+        )
+        context["can_team_leave"] = context["has_team_approvals"]
         context["can_team_expenses"] = self._has_team_expense_approvals(
             db, org_id, person_id, employee_id=manager_employee_id
         )
@@ -1594,7 +1637,7 @@ class SelfServiceWebService:
         claim = ExpenseService(db, auth).get_claim(org_id, claim_id)
         employee_svc = EmployeeService(db, org_id)
         reports = employee_svc.list_employees(
-            filters=EmployeeFilters(reports_to_id=manager_employee_id),
+            filters=EmployeeFilters(expense_approver_id=manager_employee_id),
             pagination=PaginationParams(offset=0, limit=1000),
         ).items
         report_ids = {emp.employee_id for emp in reports}
@@ -1624,7 +1667,7 @@ class SelfServiceWebService:
         claim = ExpenseService(db, auth).get_claim(org_id, claim_id)
         employee_svc = EmployeeService(db, org_id)
         reports = employee_svc.list_employees(
-            filters=EmployeeFilters(reports_to_id=manager_employee_id),
+            filters=EmployeeFilters(expense_approver_id=manager_employee_id),
             pagination=PaginationParams(offset=0, limit=1000),
         ).items
         report_ids = {emp.employee_id for emp in reports}

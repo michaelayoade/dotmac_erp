@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card, compact_filters %}
+{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card, compact_filters, filter_select_field, filter_custom_select_field, action_buttons %}
 
 {% block page_title %}Bank Reconciliations{% endblock %}
 
@@ -40,26 +40,22 @@
         start_date=start_date | default('', true),
         end_date=end_date | default('', true)
     ) %}
-    <div>
-        <label class="form-label text-xs">Account</label>
-        <select name="account_id" data-testid="bank-reconciliations-account" class="form-select w-full" {{ filter_attrs }}>
-            <option value="">All Accounts</option>
-            {% for acc in accounts %}
-            <option value="{{ acc.bank_account_id }}" {{ 'selected' if account_id == acc.bank_account_id|string else '' }}>
-                {{ acc.bank_name }} - {{ acc.account_number }}
-            </option>
-            {% endfor %}
-        </select>
-    </div>
-    <div>
-        <label class="form-label text-xs">Status</label>
-        <select name="status" data-testid="bank-reconciliations-status" class="form-select w-full" {{ filter_attrs }}>
-            <option value="">All Status</option>
-            {% for s in statuses | default(['draft', 'in_progress', 'pending_review', 'approved', 'rejected']) %}
-            <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
-            {% endfor %}
-        </select>
-    </div>
+    {% call filter_custom_select_field("account_id", "Account", "data-testid='bank-reconciliations-account' " ~ filter_attrs) %}
+    {% for acc in accounts %}
+    <option value="{{ acc.bank_account_id }}" {{ 'selected' if account_id == acc.bank_account_id|string else '' }}>
+        {{ acc.bank_name }} - {{ acc.account_number }}
+    </option>
+    {% endfor %}
+    {% endcall %}
+    {{ filter_select_field(
+        "status",
+        "Status",
+        status,
+        statuses | default(['draft', 'in_progress', 'pending_review', 'approved', 'rejected']),
+        'data-testid="bank-reconciliations-status" ' ~ filter_attrs,
+        none,
+        true
+    ) }}
     {% endcall %}
 
     {# Results Container (HTMX target) #}
@@ -69,6 +65,7 @@
             <table class="table" data-testid="bank-reconciliations-table">
                 <thead>
                     <tr>
+                        <th scope="col">Date</th>
                         <th scope="col">Bank Account</th>
                         <th scope="col">Period</th>
                         <th scope="col" class="text-right">Statement Balance</th>
@@ -81,6 +78,9 @@
                 <tbody>
                     {% for recon in reconciliations %}
                     <tr class="group">
+                        <td class="text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                            {{ recon.reconciliation_date }}
+                        </td>
                         <td>
                             <a href="/finance/banking/reconciliations/{{ recon.reconciliation_id }}" class="text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
                                 {{ recon.bank_name | default("Bank Account") }}
@@ -88,8 +88,7 @@
                             <p class="font-mono text-xs text-slate-500 dark:text-slate-400">{{ recon.account_number | default("") }}</p>
                         </td>
                         <td>
-                            <p class="text-sm text-slate-900 dark:text-white">{{ recon.reconciliation_date }}</p>
-                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ recon.period_start }} - {{ recon.period_end }}</p>
+                            <p class="text-sm text-slate-900 dark:text-white">{{ recon.period_start }} - {{ recon.period_end }}</p>
                         </td>
                         <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ recon.statement_closing_balance }}</td>
                         <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ recon.gl_closing_balance }}</td>
@@ -100,30 +99,22 @@
                             {{ status_badge(recon.status | default('draft'), 'sm') }}
                         </td>
                         <td>
-                            <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <a href="/finance/banking/reconciliations/{{ recon.reconciliation_id }}"
-                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
-                                   title="View reconciliation" aria-label="View reconciliation">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                    </svg>
-                                </a>
-                                {% if recon.status == 'approved' %}
-                                <a href="/finance/banking/reconciliations/{{ recon.reconciliation_id }}/report"
-                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
-                                   title="View report">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                    </svg>
-                                </a>
-                                {% endif %}
-                            </div>
+                            {{ action_buttons(
+                                view_href="/finance/banking/reconciliations/" ~ recon.reconciliation_id,
+                                extra_actions=[
+                                    {
+                                        "href": "/finance/banking/reconciliations/" ~ recon.reconciliation_id ~ "/report",
+                                        "title": "View report",
+                                        "icon": "document",
+                                        "aria_label": "View reconciliation report"
+                                    }
+                                ] if recon.status == "approved" else []
+                            ) }}
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="7" class="py-12">
+                        <td colspan="8" class="py-12">
                             {{ empty_state(
                                 'No reconciliations found',
                                 'Start your first bank reconciliation' if not (active_filters | default([])) else 'Try adjusting your filter criteria',

@@ -32,6 +32,17 @@ class PaymentMetadata:
     invoice_numbers: list[str]
 
 
+def _party_name(entity: object | None) -> str | None:
+    """Resolve counterparty name across old/new attribute conventions."""
+    if not entity:
+        return None
+    return (
+        getattr(entity, "legal_name", None)
+        or getattr(entity, "customer_name", None)
+        or getattr(entity, "supplier_name", None)
+    )
+
+
 def resolve_payment_metadata(
     db: Session,
     source_document_type: str | None,
@@ -113,7 +124,7 @@ def _resolve_customer_payment(db: Session, payment_id: UUID) -> PaymentMetadata 
         payment_id=payment.payment_id,
         payment_number=getattr(payment, "payment_number", None)
         or getattr(payment, "receipt_number", None),
-        counterparty_name=customer.customer_name if customer else None,
+        counterparty_name=_party_name(customer),
         counterparty_id=customer.customer_id if customer else None,
         counterparty_type="customer",
         invoice_numbers=invoice_numbers,
@@ -139,7 +150,7 @@ def _resolve_supplier_payment(db: Session, payment_id: UUID) -> PaymentMetadata 
         source_type="supplier_payment",
         payment_id=payment.payment_id,
         payment_number=getattr(payment, "payment_number", None),
-        counterparty_name=supplier.supplier_name if supplier else None,
+        counterparty_name=_party_name(supplier),
         counterparty_id=supplier.supplier_id if supplier else None,
         counterparty_type="supplier",
         invoice_numbers=[],
@@ -166,7 +177,7 @@ def _resolve_customer_payments_batch(
             payment_id=payment.payment_id,
             payment_number=getattr(payment, "payment_number", None)
             or getattr(payment, "receipt_number", None),
-            counterparty_name=customer.customer_name if customer else None,
+            counterparty_name=_party_name(customer),
             counterparty_id=customer.customer_id if customer else None,
             counterparty_type="customer",
             invoice_numbers=[],
@@ -193,7 +204,7 @@ def _resolve_supplier_payments_batch(
             source_type="supplier_payment",
             payment_id=payment.payment_id,
             payment_number=getattr(payment, "payment_number", None),
-            counterparty_name=supplier.supplier_name if supplier else None,
+            counterparty_name=_party_name(supplier),
             counterparty_id=supplier.supplier_id if supplier else None,
             counterparty_type="supplier",
             invoice_numbers=[],

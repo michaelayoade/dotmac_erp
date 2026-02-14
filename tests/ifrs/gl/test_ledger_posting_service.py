@@ -171,6 +171,19 @@ class TestPostJournalEntry:
         assert exc.value.status_code == 400
         assert "already posted" in exc.value.detail.lower()
 
+    def test_non_approved_status_raises(self, mock_db, posting_request, org_id):
+        """Test posting a non-approved journal fails."""
+        draft_journal = MockJournalEntry(
+            organization_id=org_id, status=JournalStatus.DRAFT
+        )
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.get.return_value = draft_journal
+
+        with pytest.raises(HTTPException) as exc:
+            LedgerPostingService.post_journal_entry(mock_db, posting_request)
+
+        assert exc.value.status_code == 400
+
     def test_period_guard_blocks_posting(self, mock_db, posting_request, org_id):
         """Test that closed period blocks posting."""
         journal = MockJournalEntry(organization_id=org_id)

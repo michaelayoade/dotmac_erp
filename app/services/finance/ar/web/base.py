@@ -10,6 +10,7 @@ Provides common functions for AR web services including:
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
@@ -53,8 +54,14 @@ def parse_invoice_status(value: str | None) -> InvoiceStatus | None:
     """Parse invoice status from string value."""
     if not value:
         return None
-    if value == "PARTIAL":
-        return InvoiceStatus.PARTIALLY_PAID
+    status_map = {
+        "PARTIAL": InvoiceStatus.PARTIALLY_PAID,
+        "APPLIED": InvoiceStatus.PAID,
+        "VOIDED": InvoiceStatus.VOID,
+        "CANCELLED": InvoiceStatus.VOID,
+    }
+    if value in status_map:
+        return status_map[value]
     try:
         return InvoiceStatus(value)
     except ValueError:
@@ -69,8 +76,22 @@ def parse_receipt_status(value: str | None) -> PaymentStatus | None:
         "DRAFT": PaymentStatus.PENDING,
         "POSTED": PaymentStatus.CLEARED,
         "VOIDED": PaymentStatus.VOID,
+        # Backward-compatible alias used by older list filter links/UI.
+        "CANCELLED": PaymentStatus.VOID,
     }
     return status_map.get(value)
+
+
+def normalize_date_range_filters(
+    start_date: str | None,
+    end_date: str | None,
+    query_params: Mapping[str, str] | None = None,
+) -> tuple[str | None, str | None]:
+    """Normalize date-range inputs, including backward-compatible aliases."""
+    params = query_params or {}
+    normalized_start = start_date or params.get("from_date") or params.get("date_from")
+    normalized_end = end_date or params.get("to_date") or params.get("date_to")
+    return normalized_start, normalized_end
 
 
 # ==============================================================================

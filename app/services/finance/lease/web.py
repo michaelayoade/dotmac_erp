@@ -21,6 +21,7 @@ from app.models.finance.lease.lease_contract import (
 from app.models.finance.lease.lease_liability import LeaseLiability
 from app.models.finance.lease.lease_payment_schedule import LeasePaymentSchedule
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.finance.lease import (
     lease_contract_service,
     lease_variable_payment_service,
@@ -271,12 +272,40 @@ class LeaseWebService:
         )
 
         total_pages = max(1, (total_count + limit - 1) // limit)
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "lease_type": lease_type,
+                "search": search,
+            },
+            labels={
+                "status": "Status",
+                "lease_type": "Type",
+                "search": "Search",
+            },
+            options={
+                "lease_type": {
+                    "FINANCE": "Finance",
+                    "OPERATING": "Operating",
+                    "SHORT_TERM": "Short Term",
+                    "LOW_VALUE": "Low Value",
+                },
+                "status": {
+                    "DRAFT": "Draft",
+                    "ACTIVE": "Active",
+                    "MODIFIED": "Modified",
+                    "TERMINATED": "Terminated",
+                    "EXPIRED": "Expired",
+                },
+            },
+        )
 
         return {
             "contracts": [_contract_list_view(contract) for contract in contracts],
             "search": search,
             "status": status,
             "lease_type": lease_type,
+            "active_filters": active_filters,
             "page": page,
             "limit": limit,
             "offset": offset,

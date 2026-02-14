@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import date
+from datetime import UTC, date, datetime
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -110,11 +110,15 @@ class ReversalService(ListResponseMixin):
 
         # 4. Check period is open if auto_post
         if auto_post:
-            result = PeriodGuardService.can_post_to_date(
-                db, org_id, reversal_date, allow_adjustment, reopen_session_id
+            fiscal_period_id = PeriodGuardService.require_open_period(
+                db,
+                org_id,
+                reversal_date,
+                allow_adjustment,
+                reopen_session_id,
             )
-            if not result.is_allowed:
-                raise HTTPException(status_code=400, detail=result.message)
+        else:
+            fiscal_period_id = period.fiscal_period_id
 
         # 5. Generate reversal journal number
         reversal_number = SequenceService.get_next_number(
@@ -136,7 +140,7 @@ class ReversalService(ListResponseMixin):
             journal_type=JournalType.REVERSAL,
             entry_date=reversal_date,
             posting_date=reversal_date,
-            fiscal_period_id=period.fiscal_period_id,
+            fiscal_period_id=fiscal_period_id,
             description=f"Reversal of {original.journal_number}: {reason}",
             reference=f"REV:{original.journal_number}",
             currency_code=original.currency_code,
@@ -146,7 +150,7 @@ class ReversalService(ListResponseMixin):
             total_credit=original.total_debit,  # Swapped
             total_debit_functional=original.total_credit_functional,
             total_credit_functional=original.total_debit_functional,
-            status=JournalStatus.DRAFT,
+            status=JournalStatus.APPROVED if auto_post else JournalStatus.DRAFT,
             is_reversal=True,
             reversed_journal_id=journal_id,
             source_module=original.source_module,
@@ -155,6 +159,9 @@ class ReversalService(ListResponseMixin):
             created_by_user_id=user_id,
             correlation_id=original.correlation_id,
         )
+        if auto_post:
+            reversal.approved_by_user_id = user_id
+            reversal.approved_at = datetime.now(UTC)
 
         db.add(reversal)
         db.flush()  # Get reversal ID
@@ -181,10 +188,7 @@ class ReversalService(ListResponseMixin):
 
         # 9. Link original to reversal
         original.reversal_journal_id = reversal.journal_entry_id
-        original.status = JournalStatus.REVERSED
-
-        db.commit()
-        db.refresh(reversal)
+        db.flush()
 
         # 10. Auto-post if requested
         if auto_post:
@@ -213,6 +217,13 @@ class ReversalService(ListResponseMixin):
                     message=f"Reversal created but posting failed: {post_result.message}",
                 )
 
+            # Mark original as reversed after successful posting
+            original.status = JournalStatus.REVERSED
+            db.commit()
+            db.refresh(reversal)
+            db.refresh(original)
+        else:
+            db.commit()
             db.refresh(reversal)
 
         return ReversalResult(

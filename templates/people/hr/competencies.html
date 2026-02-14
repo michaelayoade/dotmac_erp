@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import live_search %}
+{% from "components/macros.html" import compact_filters, filter_select_field %}
 
 {% block page_title %}Competencies{% endblock %}
 
@@ -46,8 +46,14 @@
     </div>
     {% endif %}
 
-    {% call(search_attrs) live_search(search=search, base_url="/people/hr/competencies", placeholder="Search competencies...") %}
-    <select name="category" class="form-select" {{ search_attrs }}>
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/hr/competencies",
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search competencies..."
+    ) %}
+    <select name="category" class="form-select" {{ filter_attrs }}>
         <option value="">All Categories</option>
         {% for cat in categories %}
         <option value="{{ cat.value }}" {{ 'selected' if selected_category == cat.value }}>

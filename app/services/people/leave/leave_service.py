@@ -12,11 +12,14 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, TypedDict
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import and_, case, delete, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.finance.audit.audit_log import AuditAction
+from app.models.finance.core_org import Organization
+from app.models.people.hr import Employee, EmployeeStatus
 from app.models.people.leave import (
     Holiday,
     HolidayList,
@@ -175,6 +178,123 @@ class LeaveService:
     ) -> None:
         self.db = db
         self.ctx = ctx
+
+    def get_org_today(self, org_id: UUID) -> date:
+        """Return the current date in the organization's timezone."""
+        org = self.db.get(Organization, org_id)
+        tz_name = org.timezone if org and org.timezone else "UTC"
+        try:
+            return datetime.now(tz=ZoneInfo(tz_name)).date()
+        except Exception:
+            return datetime.now(tz=UTC).date()
+
+    @staticmethod
+    def _status_managed_by_leave(status: EmployeeStatus) -> bool:
+        """Only ACTIVE/ON_LEAVE are auto-managed by leave workflow."""
+        return status in {EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE}
+
+    def sync_employee_leave_status(
+        self,
+        org_id: UUID,
+        employee_id: UUID,
+        *,
+        as_of_date: date | None = None,
+    ) -> str | None:
+        """Sync one employee's status from approved leave coverage.
+
+        Returns the new status string when changed, otherwise None.
+        """
+        check_date = as_of_date or self.get_org_today(org_id)
+        employee = self.db.scalar(
+            select(Employee).where(
+                Employee.organization_id == org_id,
+                Employee.employee_id == employee_id,
+            )
+        )
+        if not employee or not self._status_managed_by_leave(employee.status):
+            return None
+
+        has_active_leave = (
+            self.db.scalar(
+                select(LeaveApplication.application_id).where(
+                    LeaveApplication.organization_id == org_id,
+                    LeaveApplication.employee_id == employee_id,
+                    LeaveApplication.status == LeaveApplicationStatus.APPROVED,
+                    LeaveApplication.from_date <= check_date,
+                    LeaveApplication.to_date >= check_date,
+                )
+            )
+            is not None
+        )
+
+        if has_active_leave and employee.status == EmployeeStatus.ACTIVE:
+            employee.status = EmployeeStatus.ON_LEAVE
+            employee.updated_at = datetime.now(UTC)
+            employee.updated_by_id = self.ctx.person_id if self.ctx else None
+            self.db.flush()
+            return EmployeeStatus.ON_LEAVE.value
+
+        if not has_active_leave and employee.status == EmployeeStatus.ON_LEAVE:
+            employee.status = EmployeeStatus.ACTIVE
+            employee.updated_at = datetime.now(UTC)
+            employee.updated_by_id = self.ctx.person_id if self.ctx else None
+            self.db.flush()
+            return EmployeeStatus.ACTIVE.value
+
+        return None
+
+    def sync_employee_statuses_for_date(
+        self,
+        org_id: UUID,
+        *,
+        as_of_date: date | None = None,
+    ) -> dict[str, int]:
+        """Reconcile ACTIVE/ON_LEAVE statuses from approved leave for a date."""
+        check_date = as_of_date or self.get_org_today(org_id)
+        approved_on_date = set(
+            self.db.scalars(
+                select(LeaveApplication.employee_id).where(
+                    LeaveApplication.organization_id == org_id,
+                    LeaveApplication.status == LeaveApplicationStatus.APPROVED,
+                    LeaveApplication.from_date <= check_date,
+                    LeaveApplication.to_date >= check_date,
+                )
+            ).all()
+        )
+        candidates = list(
+            self.db.scalars(
+                select(Employee).where(
+                    Employee.organization_id == org_id,
+                    Employee.status.in_(
+                        [EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]
+                    ),
+                )
+            ).all()
+        )
+
+        set_on_leave = 0
+        set_active = 0
+        for employee in candidates:
+            should_be_on_leave = employee.employee_id in approved_on_date
+            if should_be_on_leave and employee.status == EmployeeStatus.ACTIVE:
+                employee.status = EmployeeStatus.ON_LEAVE
+                employee.updated_at = datetime.now(UTC)
+                employee.updated_by_id = self.ctx.person_id if self.ctx else None
+                set_on_leave += 1
+            elif not should_be_on_leave and employee.status == EmployeeStatus.ON_LEAVE:
+                employee.status = EmployeeStatus.ACTIVE
+                employee.updated_at = datetime.now(UTC)
+                employee.updated_by_id = self.ctx.person_id if self.ctx else None
+                set_active += 1
+
+        if set_on_leave or set_active:
+            self.db.flush()
+
+        return {
+            "set_on_leave": set_on_leave,
+            "set_active": set_active,
+            "checked": len(candidates),
+        }
 
     def _validate_transition(
         self,
@@ -1124,6 +1244,14 @@ class LeaveService:
         if allocation:
             allocation.leaves_used += application.total_leave_days
 
+        today = self.get_org_today(org_id)
+        if application.from_date <= today <= application.to_date:
+            self.sync_employee_leave_status(
+                org_id,
+                application.employee_id,
+                as_of_date=today,
+            )
+
         self.db.flush()
 
         fire_audit_event(
@@ -1287,6 +1415,14 @@ class LeaveService:
 
         old_status = application.status.value
         application.status = LeaveApplicationStatus.CANCELLED
+
+        today = self.get_org_today(org_id)
+        if application.from_date <= today <= application.to_date:
+            self.sync_employee_leave_status(
+                org_id,
+                application.employee_id,
+                as_of_date=today,
+            )
 
         self.db.flush()
 

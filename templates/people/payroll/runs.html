@@ -1,6 +1,6 @@
 {% extends "people/base_people.html" %}
 
-{% from "components/macros.html" import empty_state %}
+{% from "components/macros.html" import compact_filters, filter_date_field, empty_state %}
 {% block page_title %}Payroll Runs{% endblock %}
 
 {% block breadcrumbs %}
@@ -71,27 +71,16 @@
         </nav>
     </div>
 
-    <!-- Filters -->
-    <div class="card">
-        <form method="get" class="p-4">
-            <div class="flex flex-wrap items-end gap-4">
-                <div class="w-44">
-                    <label for="from_date" class="form-label">Period From</label>
-                    <input type="date" name="from_date" id="from_date" value="{{ from_date | default('', true) }}" class="form-input w-full">
-                </div>
-                <div class="w-44">
-                    <label for="to_date" class="form-label">Period To</label>
-                    <input type="date" name="to_date" id="to_date" value="{{ to_date | default('', true) }}" class="form-input w-full">
-                </div>
-                {% if status %}
-                <input type="hidden" name="status" value="{{ status }}">
-                {% endif %}
-                <button type="submit" class="btn btn-secondary h-10">Filter</button>
-                <a href="/people/payroll/runs" class="btn btn-ghost h-10">Clear</a>
-            </div>
-        </form>
-    </div>
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/payroll/runs",
+        active_filters=active_filters | default([])
+    ) %}
+        {{ filter_date_field("from_date", "Period From", from_date | default('', true), filter_attrs) }}
+        {{ filter_date_field("to_date", "Period To", to_date | default('', true), filter_attrs) }}
+    {% endcall %}
 
+    <div id="results-container">
     {% if runs %}
     <div class="card overflow-hidden">
         <div class="table-container">
@@ -196,5 +185,6 @@
         <a href="/people/payroll/runs/new" class="btn btn-primary">Create First Run</a>
     </div>
     {% endif %}
+    </div>
 </div>
 {% endblock %}

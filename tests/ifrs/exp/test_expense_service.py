@@ -6,7 +6,7 @@ Tests expense entry creation, workflow (submit/approve/reject), and GL posting.
 
 from datetime import date
 from decimal import Decimal
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -401,8 +401,6 @@ class TestPostExpense:
 
         # Mock expense lookup via query().filter().first()
         mock_db.query.return_value.filter.return_value.first.return_value = expense
-        # Mock journal entry query for number generation (order_by chain)
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
 
         # Mock fiscal period lookup via db.get()
         fiscal_period_id = uuid4()
@@ -410,22 +408,44 @@ class TestPostExpense:
         mock_fiscal_period.organization_id = expense.organization_id
         mock_db.get.return_value = mock_fiscal_period
 
-        # Mock savepoint
-        mock_db.begin_nested.return_value = MagicMock()
+        journal = MagicMock()
+        journal.journal_entry_id = uuid4()
 
-        ExpenseService.post(
-            mock_db,
-            str(expense.organization_id),
-            str(expense.expense_id),
-            str(user_id),
-            str(fiscal_period_id),
-        )
+        with (
+            patch(
+                "app.services.finance.gl.period_guard.PeriodGuardService.get_period_for_date",
+                return_value=MagicMock(fiscal_period_id=fiscal_period_id),
+            ),
+            patch(
+                "app.services.finance.gl.period_guard.PeriodGuardService.require_open_period",
+                return_value=fiscal_period_id,
+            ),
+            patch(
+                "app.services.finance.posting.base.BasePostingAdapter.create_and_approve_journal",
+                return_value=(journal, None),
+            ) as mock_create,
+            patch(
+                "app.services.finance.posting.base.BasePostingAdapter.post_to_ledger",
+                return_value=MagicMock(
+                    success=True, posting_batch_id=uuid4(), message="ok"
+                ),
+            ) as mock_post,
+        ):
+            ExpenseService.post(
+                mock_db,
+                str(expense.organization_id),
+                str(expense.expense_id),
+                str(user_id),
+                str(fiscal_period_id),
+            )
+
+        mock_create.assert_called_once()
+        mock_post.assert_called_once()
 
         assert expense.status == ExpenseStatus.POSTED
         assert expense.posted_by is not None
         assert expense.posted_at is not None
-        # Should add journal entry + 2 lines (debit expense, credit payment)
-        assert mock_db.add.call_count == 3
+        assert expense.journal_entry_id == journal.journal_entry_id
 
     def test_post_expense_with_tax(self, mock_db, user_id):
         """Test posting expense with tax."""
@@ -441,8 +461,6 @@ class TestPostExpense:
 
         # Mock expense lookup via query().filter().first()
         mock_db.query.return_value.filter.return_value.first.return_value = expense
-        # Mock journal entry query for number generation (order_by chain)
-        mock_db.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
 
         # Mock fiscal period and tax code lookups via db.get()
         tax_code = MockTaxCode(tax_code_id=tax_code_id)
@@ -460,20 +478,42 @@ class TestPostExpense:
 
         mock_db.get.side_effect = mock_get
 
-        # Mock savepoint
-        mock_db.begin_nested.return_value = MagicMock()
+        journal = MagicMock()
+        journal.journal_entry_id = uuid4()
 
-        ExpenseService.post(
-            mock_db,
-            str(expense.organization_id),
-            str(expense.expense_id),
-            str(user_id),
-            str(fiscal_period_id),
-        )
+        with (
+            patch(
+                "app.services.finance.gl.period_guard.PeriodGuardService.get_period_for_date",
+                return_value=MagicMock(fiscal_period_id=fiscal_period_id),
+            ),
+            patch(
+                "app.services.finance.gl.period_guard.PeriodGuardService.require_open_period",
+                return_value=fiscal_period_id,
+            ),
+            patch(
+                "app.services.finance.posting.base.BasePostingAdapter.create_and_approve_journal",
+                return_value=(journal, None),
+            ) as mock_create,
+            patch(
+                "app.services.finance.posting.base.BasePostingAdapter.post_to_ledger",
+                return_value=MagicMock(
+                    success=True, posting_batch_id=uuid4(), message="ok"
+                ),
+            ),
+        ):
+            ExpenseService.post(
+                mock_db,
+                str(expense.organization_id),
+                str(expense.expense_id),
+                str(user_id),
+                str(fiscal_period_id),
+            )
+
+        journal_input = mock_create.call_args.kwargs["journal_input"]
+        assert len(journal_input.lines) == 3
 
         assert expense.status == ExpenseStatus.POSTED
-        # Should add journal entry + 3 lines (debit expense, debit tax, credit payment)
-        assert mock_db.add.call_count == 4
+        assert expense.journal_entry_id == journal.journal_entry_id
 
     def test_post_expense_not_found(self, mock_db, user_id):
         """Test posting non-existent expense."""

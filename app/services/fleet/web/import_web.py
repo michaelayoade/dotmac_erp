@@ -23,11 +23,13 @@ from app.services.fleet.import_export import (
     VehicleDocumentImporter,
     VehicleImporter,
 )
+from app.services.imports.formats import (
+    SPREADSHEET_EXTENSIONS,
+    spreadsheet_formats_label,
+)
 from app.services.upload_utils import get_env_max_bytes, write_upload_to_temp
 
 logger = logging.getLogger(__name__)
-
-_ALLOWED_EXTENSIONS = (".csv", ".xlsx", ".xlsm")
 
 
 class FleetImportWebService:
@@ -168,8 +170,10 @@ class FleetImportWebService:
     ) -> dict[str, Any]:
         if entity_type not in self.ENTITY_TYPES:
             raise ValueError(f"Unsupported entity type: {entity_type}")
-        if not file.filename or not file.filename.lower().endswith(_ALLOWED_EXTENSIONS):
-            raise ValueError("Only CSV, XLSX, or XLSM files are supported")
+        if not file.filename or not file.filename.lower().endswith(
+            SPREADSHEET_EXTENSIONS
+        ):
+            raise ValueError(f"Only {spreadsheet_formats_label()} files are supported")
 
         ext = Path(file.filename).suffix.lower()
         max_bytes = get_env_max_bytes("MAX_IMPORT_FILE_SIZE", 50 * 1024 * 1024)
@@ -207,8 +211,10 @@ class FleetImportWebService:
     ) -> dict[str, Any]:
         if entity_type not in self.ENTITY_TYPES:
             raise ValueError(f"Unsupported entity type: {entity_type}")
-        if not file.filename or not file.filename.lower().endswith(_ALLOWED_EXTENSIONS):
-            raise ValueError("Only CSV, XLSX, or XLSM files are supported")
+        if not file.filename or not file.filename.lower().endswith(
+            SPREADSHEET_EXTENSIONS
+        ):
+            raise ValueError(f"Only {spreadsheet_formats_label()} files are supported")
 
         ext = Path(file.filename).suffix.lower()
         max_bytes = get_env_max_bytes("MAX_IMPORT_FILE_SIZE", 50 * 1024 * 1024)

@@ -443,7 +443,7 @@
                                 {{ payment.receipt_number }}
                             </a>
                         </td>
-                        <td class="py-2 pr-4 text-slate-600 dark:text-slate-400">{{ payment.payment_method | default("-") }}</td>
+                        <td class="py-2 pr-4 text-slate-600 dark:text-slate-400">{{ payment.payment_method | default("-") | replace('_', ' ') | title }}</td>
                         <td class="py-2 text-right font-mono font-medium text-emerald-600 dark:text-emerald-400">{{ payment.amount }}</td>
                     </tr>
                     {% else %}

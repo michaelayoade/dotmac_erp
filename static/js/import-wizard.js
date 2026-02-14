@@ -86,9 +86,9 @@ window.importWizard = function importWizard(config) {
         handleFile(file) {
             if (!file) return;
             const ext = file.name.split('.').pop().toLowerCase();
-            const allowed = ['csv', 'xlsx', 'xlsm'];
+            const allowed = ['csv', 'xls', 'xlsx', 'xlsm'];
             if (!allowed.includes(ext)) {
-                this.parseError = 'Only CSV, XLSX, or XLSM files are supported.';
+                this.parseError = 'Only CSV, XLS, XLSX, or XLSM files are supported.';
                 return;
             }
             this.parseError = '';

@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import status_badge, live_search, empty_state, pagination %}
+{% from "components/macros.html" import compact_filters, filter_select_field, status_badge, empty_state, pagination %}
 
 {% block page_title %}Payroll Run {{ entry.entry_number }}{% endblock %}
 
@@ -228,12 +228,14 @@
         {% endif %}
     </div>
 
-    {% call(search_attrs) live_search(
-        search=slip_search,
-        base_url="/people/payroll/runs/" ~ entry.entry_id|string,
-        placeholder="Search..."
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/payroll/runs/",
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search..."
     ) %}
-        <select name="status" class="form-select" {{ search_attrs }}>
+        <select name="status" class="form-select" {{ filter_attrs }}>
             <option value="">All</option>
             {% for s in slip_statuses %}
             <option value="{{ s }}" {{ 'selected' if slip_status == s else '' }}>{{ s | title }}</option>

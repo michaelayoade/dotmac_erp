@@ -6,6 +6,7 @@ Transforms customer invoices into journal entries with:
 - Credit: Revenue accounts (from invoice lines)
 """
 
+import logging
 from datetime import date
 from decimal import Decimal
 from uuid import UUID
@@ -17,6 +18,7 @@ from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.models.finance.ar.invoice_line import InvoiceLine
 from app.models.finance.gl.fiscal_period import FiscalPeriod
 from app.models.finance.gl.journal_entry import JournalType
+from app.models.finance.tax.tax_code import TaxCode
 from app.services.common import coerce_uuid
 from app.services.finance.ar.ar_inventory_integration import ARInventoryIntegration
 from app.services.finance.ar.posting.helpers import create_tax_transactions
@@ -26,6 +28,68 @@ from app.services.finance.gl.journal import (
     JournalLineInput,
 )
 from app.services.finance.posting.base import BasePostingAdapter
+
+logger = logging.getLogger(__name__)
+
+
+def _allocate_delta_across_lines(
+    base_amounts: list[Decimal],
+    delta: Decimal,
+) -> list[Decimal]:
+    """Allocate a header/line delta across lines, keeping total exact."""
+    if not base_amounts:
+        return []
+
+    # Use absolute base amounts for proportional allocation to avoid sign issues.
+    weights = [abs(v) for v in base_amounts]
+    total_weight = sum(weights)
+
+    if total_weight == Decimal("0"):
+        # Degenerate case: push the full delta to first line.
+        adjusted = [Decimal("0")] * len(base_amounts)
+        adjusted[0] = delta
+        return adjusted
+
+    allocated: list[Decimal] = []
+    running = Decimal("0")
+    last_idx = len(base_amounts) - 1
+
+    for idx, weight in enumerate(weights):
+        if idx == last_idx:
+            part = delta - running
+        else:
+            part = (delta * weight) / total_weight
+            running += part
+        allocated.append(part)
+
+    return allocated
+
+
+def _resolve_tax_accounts(
+    db: Session,
+    organization_id: UUID,
+    lines: list[InvoiceLine],
+) -> dict[UUID, UUID]:
+    """Resolve tax code -> tax_collected_account_id for the invoice lines."""
+    tax_code_ids = {line.tax_code_id for line in lines if line.tax_code_id}
+    if not tax_code_ids:
+        return {}
+
+    accounts_by_tax_code: dict[UUID, UUID] = {}
+    for tax_code in (
+        db.query(TaxCode)
+        .filter(
+            TaxCode.organization_id == organization_id,
+            TaxCode.tax_code_id.in_(tax_code_ids),
+            TaxCode.tax_collected_account_id.isnot(None),
+        )
+        .all()
+    ):
+        if tax_code.tax_collected_account_id:
+            accounts_by_tax_code[tax_code.tax_code_id] = (
+                tax_code.tax_collected_account_id
+            )
+    return accounts_by_tax_code
 
 
 def post_invoice(
@@ -78,6 +142,13 @@ def post_invoice(
             message=f"Invoice must be APPROVED or already posted to create GL entries (current: {invoice.status.value})",
         )
 
+    # Skip zero-amount invoices — nothing meaningful to post to GL
+    if invoice.total_amount == Decimal("0"):
+        return ARPostingResult(
+            success=True,
+            message="Zero amount invoice — no GL posting needed",
+        )
+
     # Load customer
     customer = db.get(Customer, invoice.customer_id)
     if not customer:
@@ -127,6 +198,45 @@ def post_invoice(
     # Build journal entry lines
     journal_lines: list[JournalLineInput] = []
     exchange_rate = invoice.exchange_rate or Decimal("1.0")
+    tax_accounts_by_code = _resolve_tax_accounts(db, org_id, lines)
+
+    # For strict tax-account posting, tax should go to tax liability accounts.
+    # When unavailable (legacy/sync data), keep backward-compatible behavior by
+    # rolling tax into revenue for that line.
+    revenue_base_totals: list[Decimal] = []
+    line_tax_posting: list[tuple[UUID, Decimal] | None] = []
+    for line in lines:
+        line_revenue = line.line_amount
+        line_tax = line.tax_amount or Decimal("0")
+        tax_account_id = (
+            tax_accounts_by_code.get(line.tax_code_id) if line.tax_code_id else None
+        )
+        if line_tax != Decimal("0") and tax_account_id:
+            line_tax_posting.append((tax_account_id, line_tax))
+        else:
+            # Fallback keeps invoice postable even when tax-account mapping is missing.
+            line_revenue += line_tax
+            line_tax_posting.append(None)
+        revenue_base_totals.append(line_revenue)
+
+    # Backfill imports can have header/line deltas. Keep balancing behavior.
+    lines_total = sum(revenue_base_totals, Decimal("0")) + sum(
+        (t[1] for t in line_tax_posting if t is not None),
+        Decimal("0"),
+    )
+    header_total = invoice.total_amount
+    line_adjustments = [Decimal("0")] * len(lines)
+
+    if invoice.status != InvoiceStatus.APPROVED and header_total != lines_total:
+        delta = header_total - lines_total
+        line_adjustments = _allocate_delta_across_lines(revenue_base_totals, delta)
+        logger.info(
+            "Applying ERPNext line delta allocation for invoice %s: header=%s, lines=%s, delta=%s",
+            invoice.invoice_id,
+            header_total,
+            lines_total,
+            delta,
+        )
 
     # Debit line (AR Control account)
     total_functional = invoice.functional_currency_amount
@@ -157,7 +267,7 @@ def post_invoice(
         )
 
     # Credit lines (revenue accounts)
-    for inv_line in lines:
+    for idx, inv_line in enumerate(lines):
         account_id: UUID | None = inv_line.revenue_account_id
         if not account_id:
             account_id = customer.default_revenue_account_id
@@ -168,17 +278,19 @@ def post_invoice(
                 message=f"No revenue account for line {inv_line.line_number}",
             )
 
-        line_total = inv_line.line_amount + inv_line.tax_amount
-        functional_amount = line_total * exchange_rate
+        revenue_total = revenue_base_totals[idx] + line_adjustments[idx]
+        if revenue_total == Decimal("0"):
+            continue  # Skip zero-amount lines (e.g. bundled equipment at no charge)
+        functional_revenue = revenue_total * exchange_rate
 
         if invoice.invoice_type == InvoiceType.CREDIT_NOTE:
             # Credit note: debit revenue (reduce revenue)
             journal_lines.append(
                 JournalLineInput(
                     account_id=account_id,
-                    debit_amount=abs(line_total),
+                    debit_amount=abs(revenue_total),
                     credit_amount=Decimal("0"),
-                    debit_amount_functional=abs(functional_amount),
+                    debit_amount_functional=abs(functional_revenue),
                     credit_amount_functional=Decimal("0"),
                     description=f"AR Credit Note: {inv_line.description}",
                     cost_center_id=inv_line.cost_center_id,
@@ -187,20 +299,63 @@ def post_invoice(
                 )
             )
         else:
-            # Standard: credit revenue
-            journal_lines.append(
-                JournalLineInput(
-                    account_id=account_id,
-                    debit_amount=Decimal("0"),
-                    credit_amount=line_total,
-                    debit_amount_functional=Decimal("0"),
-                    credit_amount_functional=functional_amount,
-                    description=f"AR Invoice: {inv_line.description}",
-                    cost_center_id=inv_line.cost_center_id,
-                    project_id=inv_line.project_id,
-                    segment_id=inv_line.segment_id,
+            # Standard: credit revenue.  Negative lines (discounts) flip to debit.
+            if revenue_total < Decimal("0"):
+                journal_lines.append(
+                    JournalLineInput(
+                        account_id=account_id,
+                        debit_amount=abs(revenue_total),
+                        credit_amount=Decimal("0"),
+                        debit_amount_functional=abs(functional_revenue),
+                        credit_amount_functional=Decimal("0"),
+                        description=f"AR Discount: {inv_line.description}",
+                        cost_center_id=inv_line.cost_center_id,
+                        project_id=inv_line.project_id,
+                        segment_id=inv_line.segment_id,
+                    )
                 )
-            )
+            else:
+                journal_lines.append(
+                    JournalLineInput(
+                        account_id=account_id,
+                        debit_amount=Decimal("0"),
+                        credit_amount=revenue_total,
+                        debit_amount_functional=Decimal("0"),
+                        credit_amount_functional=functional_revenue,
+                        description=f"AR Invoice: {inv_line.description}",
+                        cost_center_id=inv_line.cost_center_id,
+                        project_id=inv_line.project_id,
+                        segment_id=inv_line.segment_id,
+                    )
+                )
+
+        # Dedicated tax-account posting rule (when tax account is configured).
+        tax_post = line_tax_posting[idx]
+        if tax_post is not None:
+            tax_account_id, tax_amount = tax_post
+            functional_tax = tax_amount * exchange_rate
+            if invoice.invoice_type == InvoiceType.CREDIT_NOTE:
+                journal_lines.append(
+                    JournalLineInput(
+                        account_id=tax_account_id,
+                        debit_amount=abs(tax_amount),
+                        credit_amount=Decimal("0"),
+                        debit_amount_functional=abs(functional_tax),
+                        credit_amount_functional=Decimal("0"),
+                        description=f"AR Credit Note Tax: {inv_line.description}",
+                    )
+                )
+            else:
+                journal_lines.append(
+                    JournalLineInput(
+                        account_id=tax_account_id,
+                        debit_amount=Decimal("0"),
+                        credit_amount=tax_amount,
+                        debit_amount_functional=Decimal("0"),
+                        credit_amount_functional=functional_tax,
+                        description=f"AR Invoice Tax: {inv_line.description}",
+                    )
+                )
 
     # Process inventory lines and get COGS journal entries
     inventory_result = None

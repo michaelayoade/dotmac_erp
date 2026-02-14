@@ -458,6 +458,79 @@ class NotificationService:
     # Query Methods
     # ========================================================================
 
+    def was_sent_since(
+        self,
+        db: Session,
+        *,
+        organization_id: uuid.UUID,
+        entity_type: EntityType,
+        entity_id: uuid.UUID,
+        notification_type: NotificationType,
+        since: datetime,
+        recipient_id: uuid.UUID | None = None,
+    ) -> bool:
+        """Return True if a matching notification exists since the given time."""
+        query = select(func.count(Notification.notification_id)).where(
+            Notification.organization_id == organization_id,
+            Notification.entity_type == entity_type,
+            Notification.entity_id == entity_id,
+            Notification.notification_type == notification_type,
+            Notification.created_at >= since,
+        )
+        if recipient_id:
+            query = query.where(Notification.recipient_id == recipient_id)
+        return (db.scalar(query) or 0) > 0
+
+    def create_if_not_sent_since(
+        self,
+        db: Session,
+        organization_id: uuid.UUID,
+        recipient_id: uuid.UUID,
+        entity_type: EntityType,
+        entity_id: uuid.UUID,
+        notification_type: NotificationType,
+        title: str,
+        message: str,
+        *,
+        since: datetime,
+        dedup_by_recipient: bool = True,
+        channel: NotificationChannel = NotificationChannel.IN_APP,
+        action_url: str | None = None,
+        actor_id: uuid.UUID | None = None,
+    ) -> Notification | None:
+        """
+        Create a notification if one was not sent recently.
+
+        Args:
+            dedup_by_recipient: If True, deduplicate per recipient. If False,
+                deduplicate across all recipients for the entity/type.
+        """
+        dedup_recipient = recipient_id if dedup_by_recipient else None
+        if self.was_sent_since(
+            db,
+            organization_id=organization_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            notification_type=notification_type,
+            since=since,
+            recipient_id=dedup_recipient,
+        ):
+            return None
+
+        return self.create(
+            db,
+            organization_id=organization_id,
+            recipient_id=recipient_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            notification_type=notification_type,
+            title=title,
+            message=message,
+            channel=channel,
+            action_url=action_url,
+            actor_id=actor_id,
+        )
+
     def get_unread_count(
         self,
         db: Session,

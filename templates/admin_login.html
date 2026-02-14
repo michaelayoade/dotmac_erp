@@ -31,7 +31,7 @@
             <a href="/" class="inline-flex flex-col items-center gap-3">
                 <div class="relative">
                     {% if brand_logo_url %}
-                        <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo" class="h-16 w-16 rounded-2xl object-cover shadow-lg shadow-primary-500/30" />
+                        <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo" class="h-16 w-auto max-w-[240px] rounded-2xl object-contain shadow-lg shadow-primary-500/30" />
                     {% else %}
                         <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-slate-700 via-slate-800 to-slate-900 text-xl font-semibold uppercase text-white shadow-lg border border-slate-600">
                             {{ brand_mark }}

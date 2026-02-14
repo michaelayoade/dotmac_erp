@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import live_search, pagination %}
+{% from "components/macros.html" import compact_filters, filter_select_field, pagination %}
 
 {% block page_title %}Designations{% endblock %}
 
@@ -24,7 +24,14 @@
 
 {% block content %}
 <div class="space-y-6">
-    {{ live_search(search=search, base_url="/people/hr/designations", placeholder="Search designations...") }}
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/hr/designations",
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search designations..."
+    ) %}
+    {% endcall %}
 
     <div id="results-container">
     {# Designations Table #}

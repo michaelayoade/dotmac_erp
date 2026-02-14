@@ -1102,7 +1102,7 @@ class InventoryWebService:
         limit: int,
         db: Session,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Item Categories", "categories")
+        context = base_context(request, auth, "Item Categories", "categories", db=db)
         context.update(
             self.list_categories_context(
                 db,

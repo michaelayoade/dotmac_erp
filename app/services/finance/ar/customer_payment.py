@@ -33,6 +33,7 @@ from app.services.finance.ar.input_utils import (
     require_uuid,
     resolve_currency_code,
 )
+from app.services.finance.ar.posting.payment import _resolve_bank_gl_account_id
 from app.services.finance.platform.sequence import SequenceService
 from app.services.response import ListResponseMixin
 
@@ -336,6 +337,23 @@ class CustomerPaymentService(ListResponseMixin):
                 detail="Bank account is required to post payment",
             )
 
+        bank_gl_account_id = _resolve_bank_gl_account_id(
+            db,
+            org_id,
+            payment.bank_account_id,
+        )
+        if not bank_gl_account_id:
+            # Backward-compatible fallback: some legacy posted receipts may have
+            # direct GL account IDs in bank_account_id. Restrict this to payments
+            # that already carry allocations to avoid weakening validation broadly.
+            if getattr(payment, "allocations", None):
+                bank_gl_account_id = payment.bank_account_id
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Payment bank account is not mapped to a valid GL account",
+                )
+
         # Temporarily update status for posting adapter check
         # The adapter expects APPROVED but AR model uses PENDING
 
@@ -367,7 +385,7 @@ class CustomerPaymentService(ListResponseMixin):
         journal_lines = [
             # Dr Bank (net amount received)
             JournalLineInput(
-                account_id=payment.bank_account_id,
+                account_id=bank_gl_account_id,
                 debit_amount=net_amount,
                 credit_amount=Decimal("0"),
                 debit_amount_functional=net_functional,
@@ -567,6 +585,9 @@ class CustomerPaymentService(ListResponseMixin):
             return False
         if payment.journal_entry_id is not None:
             return False  # Already has GL entries
+        # Zero-amount payments have nothing to post
+        if payment.amount == Decimal("0"):
+            return False
 
         try:
             from app.services.finance.ar.ar_posting_adapter import ARPostingAdapter

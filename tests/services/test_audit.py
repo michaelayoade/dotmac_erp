@@ -7,6 +7,7 @@ and request logging functionality.
 
 import uuid
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -560,7 +561,10 @@ class TestLogRequest:
         path="/api/test",
         actor_type="user",
         actor_id=None,
+        state_actor_id=None,
+        state_actor_type=None,
         request_id=None,
+        state_request_id=None,
         entity_id=None,
         ip_address="127.0.0.1",
         user_agent="pytest",
@@ -586,6 +590,13 @@ class TestLogRequest:
         request.client.host = ip_address
 
         request.query_params = query_params or {}
+        request.state = SimpleNamespace()
+        if state_actor_id is not None:
+            request.state.actor_id = state_actor_id
+        if state_actor_type is not None:
+            request.state.actor_type = state_actor_type
+        if state_request_id is not None:
+            request.state.request_id = state_request_id
 
         return request
 
@@ -645,6 +656,27 @@ class TestLogRequest:
 
             call_kwargs = MockEvent.call_args[1]
             assert call_kwargs.get("actor_id") == actor_id
+
+    def test_log_request_falls_back_to_request_state_actor(self, mock_db):
+        """request.state.actor_id should be used when header is missing."""
+        actor_id = str(uuid.uuid4())
+        request = self._create_mock_request(
+            actor_id=None,
+            actor_type=None,
+            state_actor_id=actor_id,
+            state_actor_type="user",
+        )
+        response = MagicMock(status_code=200)
+
+        with patch("app.services.audit.AuditEvent") as MockEvent:
+            mock_event = MagicMock()
+            MockEvent.return_value = mock_event
+
+            AuditEvents.log_request(mock_db, request, response)
+
+            call_kwargs = MockEvent.call_args[1]
+            assert call_kwargs.get("actor_id") == actor_id
+            assert call_kwargs.get("actor_type") == AuditActorType.user
 
     def test_log_request_extracts_request_id_header(self, mock_db):
         """x-request-id header should set request_id."""

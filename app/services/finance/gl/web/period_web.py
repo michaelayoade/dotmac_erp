@@ -21,6 +21,7 @@ from app.models.finance.gl.account_category import AccountCategory
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 from app.models.finance.gl.fiscal_year import FiscalYear
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.finance.gl.fiscal_period import fiscal_period_service
 from app.services.finance.gl.web.base import (
     fiscal_year_option_view,
@@ -195,12 +196,17 @@ class PeriodWebService:
         logger.debug("trial_balance_context: found %d account balances", len(balances))
 
         zero_value = f"{settings.default_presentation_currency_code} 0.00"
+        active_filters = build_active_filters(
+            params={"as_of_date": as_of_date},
+            labels={"as_of_date": "As Of"},
+        )
 
         return {
             "balances": balances,
             "as_of_date": as_of_date or format_date(ref_date),
             "total_debit": format_currency(total_debit) or zero_value,
             "total_credit": format_currency(total_credit) or zero_value,
+            "active_filters": active_filters,
         }
 
     # =========================================================================

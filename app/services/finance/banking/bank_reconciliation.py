@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from app.services.finance.banking.payment_metadata import PaymentMetadata
 
 from fastapi import HTTPException
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.audit.audit_log import AuditAction
@@ -33,6 +33,7 @@ from app.models.finance.banking.bank_reconciliation import (
 from app.models.finance.banking.bank_statement import (
     BankStatement,
     BankStatementLine,
+    BankStatementLineMatch,
 )
 from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
@@ -43,6 +44,44 @@ logger = logging.getLogger(__name__)
 # Alias: BankReconciliationService.list shadows builtin `list` in
 # PEP 563 string annotations, causing mypy valid-type errors.
 _list = list
+
+# Map source_document_type → URL pattern for linking to source documents.
+# The placeholder {} is replaced with the source_document_id (UUID).
+SOURCE_URL_MAP: dict[str, str] = {
+    "CUSTOMER_PAYMENT": "/finance/ar/receipts/{}",
+    "SUPPLIER_PAYMENT": "/finance/ap/payments/{}",
+    "INVOICE": "/finance/ar/invoices/{}",
+    "AR_INVOICE": "/finance/ar/invoices/{}",
+    "CUSTOMER_INVOICE": "/finance/ar/invoices/{}",
+    "SUPPLIER_INVOICE": "/finance/ap/invoices/{}",
+    "AP_INVOICE": "/finance/ap/invoices/{}",
+    "EXPENSE": "/finance/expenses/{}",
+    "EXPENSE_CLAIM": "/finance/expenses/{}",
+    "JOURNAL_ENTRY": "/finance/gl/journals/{}",
+}
+
+AMOUNT_MISMATCH_RELATIVE_THRESHOLD = Decimal("0.01")
+AMOUNT_MISMATCH_ABSOLUTE_TOLERANCE = Decimal("0.01")
+
+
+def _build_source_url(
+    source_type: str | None,
+    source_id: UUID | None,
+    entry_id: UUID | None = None,
+) -> str:
+    """Build a URL to the source document for a GL journal entry.
+
+    Falls back to the journal entry URL if no specific mapping exists.
+    Returns empty string if nothing is resolvable.
+    """
+    if source_type and source_id:
+        pattern = SOURCE_URL_MAP.get(source_type)
+        if pattern:
+            return pattern.format(source_id)
+    # Fallback: link to the journal entry itself
+    if entry_id:
+        return f"/finance/gl/journals/{entry_id}"
+    return ""
 
 
 @dataclass
@@ -87,10 +126,41 @@ class MatchSuggestion:
     confidence: float
     counterparty_name: str | None = None
     payment_number: str | None = None
+    source_url: str = ""
+    amount_matched: bool = False
 
 
 class BankReconciliationService:
     """Service for bank reconciliation."""
+
+    def _validate_amount_match(
+        self,
+        statement_amount: Decimal,
+        gl_amount: Decimal,
+        *,
+        force_match: bool = False,
+    ) -> None:
+        """Block obvious mismatches unless explicitly overridden."""
+        abs_statement = abs(statement_amount)
+        abs_gl = abs(gl_amount)
+        max_amount = max(abs_statement, abs_gl)
+        diff = abs(abs_statement - abs_gl)
+
+        # Absolute tolerance handles harmless rounding deltas.
+        if diff <= AMOUNT_MISMATCH_ABSOLUTE_TOLERANCE:
+            return
+
+        # If one side is zero and the other is not, always require override.
+        mismatch_ratio = Decimal("1") if max_amount == 0 else (diff / max_amount)
+        if mismatch_ratio > AMOUNT_MISMATCH_RELATIVE_THRESHOLD and not force_match:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Amount mismatch requires review: statement amount "
+                    f"{statement_amount:,.2f} vs GL amount {gl_amount:,.2f}. "
+                    "Confirm and retry with force_match=true to proceed."
+                ),
+            )
 
     def _get_for_org(
         self,
@@ -286,6 +356,7 @@ class BankReconciliationService:
         input: ReconciliationMatchInput,
         created_by: UUID | None = None,
         commit: bool = True,
+        force_match: bool = False,
     ) -> BankReconciliationLine:
         """Add a match between statement line and GL entry."""
         reconciliation = self._get_for_org(db, organization_id, reconciliation_id)
@@ -341,6 +412,11 @@ class BankReconciliationService:
             gl_line.credit_amount or Decimal("0")
         )
         difference = statement_amount - gl_amount
+        self._validate_amount_match(
+            statement_amount,
+            gl_amount,
+            force_match=force_match,
+        )
 
         # Create reconciliation line
         recon_line = BankReconciliationLine(
@@ -511,6 +587,55 @@ class BankReconciliationService:
             )
 
         return statement_lines, gl_lines
+
+    @staticmethod
+    def _get_matched_gl_ids(db: Session, organization_id: UUID) -> set[UUID]:
+        """Return GL line IDs already matched to any statement line for this org.
+
+        Checks both the junction table and the legacy FK column, scoped
+        to the given *organization_id* to prevent cross-tenant leaks.
+        """
+        from app.models.finance.banking.bank_statement import BankStatementLineMatch
+
+        # Junction table — join through statement_line → statement for org scope
+        junction_matched: set[UUID] = {
+            row
+            for row in db.execute(
+                select(BankStatementLineMatch.journal_line_id)
+                .join(
+                    BankStatementLine,
+                    BankStatementLineMatch.statement_line_id
+                    == BankStatementLine.line_id,
+                )
+                .join(
+                    BankStatement,
+                    BankStatementLine.statement_id == BankStatement.statement_id,
+                )
+                .where(BankStatement.organization_id == organization_id)
+            )
+            .scalars()
+            .all()
+            if row is not None
+        }
+        # Legacy FK column — join through statement for org scope
+        legacy_matched: set[UUID] = {
+            row
+            for row in db.execute(
+                select(BankStatementLine.matched_journal_line_id)
+                .join(
+                    BankStatement,
+                    BankStatementLine.statement_id == BankStatement.statement_id,
+                )
+                .where(
+                    BankStatement.organization_id == organization_id,
+                    BankStatementLine.matched_journal_line_id.isnot(None),
+                )
+            )
+            .scalars()
+            .all()
+            if row is not None
+        }
+        return junction_matched | legacy_matched
 
     def _resolve_gl_metadata(
         self,
@@ -683,14 +808,20 @@ class BankReconciliationService:
         suggestions: dict[UUID, MatchSuggestion] = {}
         tolerance = Decimal("0.01")
 
+        # Phase 1: compute best candidate + score for every statement line
+        _Candidate = tuple[BankStatementLine, JournalEntryLine, float, bool]
+        raw: list[_Candidate] = []
+
         for stmt_line in statement_lines:
             stmt_amount = stmt_line.signed_amount
 
             candidates = list(gl_by_amount.get(stmt_amount, []))
+            amt_matched = bool(candidates)
             if not candidates:
                 for gl_amount, lines in gl_by_amount.items():
                     if abs(gl_amount - stmt_amount) <= tolerance:
                         candidates.extend(lines)
+                        amt_matched = True
 
             best_score = 0.0
             best_gl: JournalEntryLine | None = None
@@ -704,21 +835,36 @@ class BankReconciliationService:
                     best_gl = gl_line
 
             if best_gl and best_score >= min_confidence:
-                entry = getattr(best_gl, "journal_entry", None) or getattr(
-                    best_gl, "entry", None
-                )
-                source_doc_id = (
-                    getattr(entry, "source_document_id", None) if entry else None
-                )
-                meta = gl_metadata.get(source_doc_id) if source_doc_id else None
+                raw.append((stmt_line, best_gl, best_score, amt_matched))
 
-                suggestions[stmt_line.line_id] = MatchSuggestion(
-                    statement_line_id=stmt_line.line_id,
-                    journal_line_id=best_gl.line_id,
-                    confidence=best_score,
-                    counterparty_name=meta.counterparty_name if meta else None,
-                    payment_number=meta.payment_number if meta else None,
-                )
+        # Phase 2: greedy assignment — highest score first, consume GL lines
+        raw.sort(key=lambda r: r[2], reverse=True)
+        consumed_gl_ids: set[UUID] = set()
+
+        for stmt_line, best_gl, best_score, amt_matched in raw:
+            if best_gl.line_id in consumed_gl_ids:
+                continue
+            consumed_gl_ids.add(best_gl.line_id)
+
+            entry = getattr(best_gl, "journal_entry", None) or getattr(
+                best_gl, "entry", None
+            )
+            source_doc_id = (
+                getattr(entry, "source_document_id", None) if entry else None
+            )
+            src_type = getattr(entry, "source_document_type", None) if entry else None
+            entry_id = getattr(entry, "entry_id", None) if entry else None
+            meta = gl_metadata.get(source_doc_id) if source_doc_id else None
+
+            suggestions[stmt_line.line_id] = MatchSuggestion(
+                statement_line_id=stmt_line.line_id,
+                journal_line_id=best_gl.line_id,
+                confidence=best_score,
+                counterparty_name=meta.counterparty_name if meta else None,
+                payment_number=meta.payment_number if meta else None,
+                source_url=_build_source_url(src_type, source_doc_id, entry_id),
+                amount_matched=amt_matched,
+            )
 
         return suggestions
 
@@ -1076,6 +1222,13 @@ class BankReconciliationService:
         if not gl_lines:
             return {}
 
+        # Exclude GL lines already matched to other statement lines
+        matched_gl_ids = self._get_matched_gl_ids(db, organization_id)
+        gl_lines = [gl for gl in gl_lines if gl.line_id not in matched_gl_ids]
+
+        if not gl_lines:
+            return {}
+
         gl_metadata = self._resolve_gl_metadata(db, gl_lines)
 
         # Build GL amount index
@@ -1089,14 +1242,58 @@ class BankReconciliationService:
         suggestions: dict[UUID, MatchSuggestion] = {}
         tolerance = Decimal("0.01")
 
+        # Phase 1: compute best candidate + score for every statement line
+        _Candidate = tuple[BankStatementLine, JournalEntryLine, float, bool]
+        raw: list[_Candidate] = []
+
         for stmt_line in unmatched_lines:
             stmt_amount = stmt_line.signed_amount
 
+            # Primary pass: exact or near-exact amount match
             candidates = list(gl_by_amount.get(stmt_amount, []))
+            amt_matched = bool(candidates)
             if not candidates:
                 for gl_amount, lines in gl_by_amount.items():
                     if abs(gl_amount - stmt_amount) <= tolerance:
                         candidates.extend(lines)
+                        amt_matched = True
+
+            # Secondary pass: if no amount match, search by
+            # description/reference keywords (e.g. email, payment ref)
+            if not candidates:
+                stmt_desc = (stmt_line.description or "").lower()
+                stmt_ref = (stmt_line.reference or "").lower()
+                search_text = f"{stmt_desc} {stmt_ref}".strip()
+                if search_text:
+                    stmt_words = {
+                        w
+                        for w in search_text.split()
+                        if len(w) >= 4
+                        and w
+                        not in {
+                            "via",
+                            "bank",
+                            "card",
+                            "transfer",
+                            "bank_transfer",
+                            "payment:",
+                        }
+                    }
+                    if stmt_words:
+                        for gl_line in gl_lines:
+                            entry = getattr(gl_line, "journal_entry", None) or getattr(
+                                gl_line, "entry", None
+                            )
+                            gl_desc = (getattr(entry, "description", "") or "").lower()
+                            gl_ref = (getattr(entry, "reference", "") or "").lower()
+                            meta = self._get_gl_line_metadata(gl_line, gl_metadata)
+                            cp_name = (
+                                (meta.counterparty_name or "").lower() if meta else ""
+                            )
+                            gl_text = f"{gl_desc} {gl_ref} {cp_name}"
+                            common = sum(1 for w in stmt_words if w in gl_text)
+                            if common >= 1:
+                                candidates.append(gl_line)
 
             best_score = 0.0
             best_gl: JournalEntryLine | None = None
@@ -1110,21 +1307,36 @@ class BankReconciliationService:
                     best_gl = gl_line
 
             if best_gl and best_score >= min_confidence:
-                entry = getattr(best_gl, "journal_entry", None) or getattr(
-                    best_gl, "entry", None
-                )
-                source_doc_id = (
-                    getattr(entry, "source_document_id", None) if entry else None
-                )
-                meta = gl_metadata.get(source_doc_id) if source_doc_id else None
+                raw.append((stmt_line, best_gl, best_score, amt_matched))
 
-                suggestions[stmt_line.line_id] = MatchSuggestion(
-                    statement_line_id=stmt_line.line_id,
-                    journal_line_id=best_gl.line_id,
-                    confidence=best_score,
-                    counterparty_name=meta.counterparty_name if meta else None,
-                    payment_number=meta.payment_number if meta else None,
-                )
+        # Phase 2: greedy assignment — highest score first, consume GL lines
+        raw.sort(key=lambda r: r[2], reverse=True)
+        consumed_gl_ids: set[UUID] = set()
+
+        for stmt_line, best_gl, best_score, amt_matched in raw:
+            if best_gl.line_id in consumed_gl_ids:
+                continue
+            consumed_gl_ids.add(best_gl.line_id)
+
+            entry = getattr(best_gl, "journal_entry", None) or getattr(
+                best_gl, "entry", None
+            )
+            source_doc_id = (
+                getattr(entry, "source_document_id", None) if entry else None
+            )
+            src_type = getattr(entry, "source_document_type", None) if entry else None
+            entry_id = getattr(entry, "entry_id", None) if entry else None
+            meta = gl_metadata.get(source_doc_id) if source_doc_id else None
+
+            suggestions[stmt_line.line_id] = MatchSuggestion(
+                statement_line_id=stmt_line.line_id,
+                journal_line_id=best_gl.line_id,
+                confidence=best_score,
+                counterparty_name=meta.counterparty_name if meta else None,
+                payment_number=meta.payment_number if meta else None,
+                source_url=_build_source_url(src_type, source_doc_id, entry_id),
+                amount_matched=amt_matched,
+            )
 
         return suggestions
 
@@ -1152,6 +1364,9 @@ class BankReconciliationService:
         bank_account = statement.bank_account
         if not bank_account or not bank_account.gl_account_id:
             return {"candidates": [], "source_types": []}
+
+        # Get GL line IDs already matched so we can flag them in the UI
+        matched_gl_ids = self._get_matched_gl_ids(db, organization_id)
 
         gl_lines: _list[JournalEntryLine] = _list(
             db.execute(
@@ -1195,6 +1410,9 @@ class BankReconciliationService:
             if src_type:
                 source_types.add(src_type)
 
+            entry_id = getattr(entry, "entry_id", None) if entry else None
+            source_url = _build_source_url(src_type, source_doc_id, entry_id)
+
             candidates.append(
                 {
                     "journal_line_id": str(gl_line.line_id),
@@ -1214,6 +1432,8 @@ class BankReconciliationService:
                     else "Journal",
                     "counterparty_name": meta.counterparty_name if meta else "",
                     "payment_number": meta.payment_number if meta else "",
+                    "source_url": source_url,
+                    "is_already_matched": gl_line.line_id in matched_gl_ids,
                 }
             )
 
@@ -1222,6 +1442,275 @@ class BankReconciliationService:
             "source_types": sorted(source_types),
         }
 
+    def get_scored_candidates_for_line(
+        self,
+        db: Session,
+        organization_id: UUID,
+        statement_id: UUID,
+        statement_line_id: UUID,
+        max_results: int = 500,
+    ) -> dict:
+        """Return GL candidates scored against a specific bank statement line.
+
+        Scores each candidate using ``_calculate_match_score()`` for the
+        given bank line, then returns them sorted by score DESC.
+
+        Returns dict with keys:
+            candidates: list of dicts (same shape as get_gl_candidates_for_statement
+                        plus ``match_score``)
+            source_types: sorted list of distinct source_document_type values
+        """
+        from datetime import timedelta
+
+        stmt_line = db.get(BankStatementLine, statement_line_id)
+        if not stmt_line:
+            return {"candidates": [], "source_types": []}
+
+        statement = db.get(BankStatement, statement_id)
+        if not statement or statement.organization_id != organization_id:
+            return {"candidates": [], "source_types": []}
+
+        bank_account = statement.bank_account
+        if not bank_account or not bank_account.gl_account_id:
+            return {"candidates": [], "source_types": []}
+
+        # Include GL accounts from sibling bank accounts (same bank_name)
+        # so we also surface customer payment entries posted to related
+        # GL accounts (e.g. Paystack OPEX 1211 vs Paystack settlement 1210).
+        all_bank_gl_ids: set[UUID] = {bank_account.gl_account_id}
+        if bank_account.bank_name:
+            sibling_gl_ids = set(
+                db.scalars(
+                    select(BankAccount.gl_account_id).where(
+                        BankAccount.organization_id == organization_id,
+                        BankAccount.bank_name == bank_account.bank_name,
+                        BankAccount.gl_account_id.isnot(None),
+                    )
+                ).all()
+            )
+            all_bank_gl_ids.update(sibling_gl_ids)
+
+        # Get GL line IDs already matched (scoped to this org)
+        matched_gl_ids = self._get_matched_gl_ids(db, organization_id)
+
+        # Widen date range for scoring (no hard filter — score handles proximity)
+        date_buffer = timedelta(days=30)
+        period_start = statement.period_start - date_buffer
+        period_end = statement.period_end + date_buffer
+
+        gl_lines: _list[JournalEntryLine] = _list(
+            db.execute(
+                select(JournalEntryLine)
+                .join(JournalEntry)
+                .where(
+                    and_(
+                        JournalEntry.organization_id == organization_id,
+                        JournalEntryLine.account_id.in_(all_bank_gl_ids),
+                        JournalEntry.status == JournalStatus.POSTED,
+                        JournalEntry.entry_date >= period_start,
+                        JournalEntry.entry_date <= period_end,
+                    )
+                )
+                .order_by(JournalEntry.entry_date.desc())
+                .limit(max_results)
+            )
+            .scalars()
+            .all()
+        )
+
+        if not gl_lines:
+            return {"candidates": [], "source_types": []}
+
+        gl_metadata = self._resolve_gl_metadata(db, gl_lines)
+
+        scored: _list[tuple[float, dict]] = []
+        source_types: set[str] = set()
+
+        for gl_line in gl_lines:
+            entry = getattr(gl_line, "journal_entry", None) or getattr(
+                gl_line, "entry", None
+            )
+            source_doc_id = (
+                getattr(entry, "source_document_id", None) if entry else None
+            )
+            meta = gl_metadata.get(source_doc_id) if source_doc_id else None
+
+            debit = gl_line.debit_amount or Decimal("0")
+            credit = gl_line.credit_amount or Decimal("0")
+            amount = debit - credit
+
+            src_type = getattr(entry, "source_document_type", "") or ""
+            if src_type:
+                source_types.add(src_type)
+
+            entry_id = getattr(entry, "entry_id", None) if entry else None
+            source_url = _build_source_url(src_type, source_doc_id, entry_id)
+
+            # Score against this specific bank line
+            score = self._calculate_match_score(
+                stmt_line, gl_line, db=db, gl_metadata=gl_metadata
+            )
+
+            is_matched = gl_line.line_id in matched_gl_ids
+
+            scored.append(
+                (
+                    score,
+                    {
+                        "journal_line_id": str(gl_line.line_id),
+                        "entry_date": entry.entry_date.isoformat() if entry else "",
+                        "entry_date_display": (
+                            entry.entry_date.strftime("%d %b %Y") if entry else ""
+                        ),
+                        "description": (
+                            getattr(entry, "description", "")
+                            or gl_line.description
+                            or ""
+                        ),
+                        "reference": getattr(entry, "reference", "") or "",
+                        "amount": float(amount),
+                        "amount_display": f"{amount:,.2f}",
+                        "source_type": src_type,
+                        "source_type_display": (
+                            src_type.replace("_", " ").title()
+                            if src_type
+                            else "Journal"
+                        ),
+                        "counterparty_name": meta.counterparty_name if meta else "",
+                        "payment_number": meta.payment_number if meta else "",
+                        "source_url": source_url,
+                        "is_already_matched": is_matched,
+                        "match_score": round(score, 1),
+                    },
+                )
+            )
+
+        # Sort by score DESC
+        scored.sort(key=lambda x: x[0], reverse=True)
+        candidates = [item[1] for item in scored]
+
+        return {
+            "candidates": candidates,
+            "source_types": sorted(source_types),
+        }
+
+    def multi_match_statement_line(
+        self,
+        db: Session,
+        organization_id: UUID,
+        statement_line_id: UUID,
+        journal_line_ids: _list[UUID],
+        matched_by: UUID | None = None,
+        tolerance: Decimal = Decimal("0.01"),
+        force_match: bool = False,
+    ) -> BankStatementLine:
+        """Match one statement line to multiple GL journal lines.
+
+        Validates that the sum of GL amounts approximates the bank line
+        amount within *tolerance*, then creates junction table rows and
+        updates the statement line.
+        """
+        from app.models.finance.banking.bank_statement import BankStatementLineMatch
+
+        stmt_line = db.get(BankStatementLine, statement_line_id)
+        if not stmt_line:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Statement line {statement_line_id} not found",
+            )
+
+        statement = stmt_line.statement
+        if not statement or statement.organization_id != organization_id:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Statement line {statement_line_id} not found",
+            )
+
+        if stmt_line.is_matched:
+            raise HTTPException(
+                status_code=400,
+                detail="Statement line is already matched",
+            )
+
+        if not journal_line_ids:
+            raise HTTPException(
+                status_code=400,
+                detail="At least one journal_line_id is required",
+            )
+
+        # Load and validate all GL lines
+        gl_lines: _list[JournalEntryLine] = []
+        for jl_id in journal_line_ids:
+            gl_line = db.get(JournalEntryLine, jl_id)
+            if not gl_line:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Journal line {jl_id} not found",
+                )
+            entry = getattr(gl_line, "journal_entry", None) or getattr(
+                gl_line, "entry", None
+            )
+            if entry:
+                journal_org_id = getattr(entry, "organization_id", None)
+                if journal_org_id is not None and journal_org_id != organization_id:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Journal line {jl_id} not found",
+                    )
+            gl_lines.append(gl_line)
+
+        # Validate amount match: sum of GL amounts vs bank line
+        stmt_amount = stmt_line.signed_amount
+        gl_total = sum(
+            (
+                (gl.debit_amount or Decimal("0")) - (gl.credit_amount or Decimal("0"))
+                for gl in gl_lines
+            ),
+            Decimal("0"),
+        )
+
+        if not force_match:
+            self._validate_amount_match(stmt_amount, gl_total, force_match=False)
+
+        # Remove any stale junction rows (idempotent cleanup)
+        db.execute(
+            delete(BankStatementLineMatch).where(
+                BankStatementLineMatch.statement_line_id == statement_line_id
+            )
+        )
+
+        # Create junction table rows
+        now = datetime.now(tz=UTC)
+        for i, gl_line in enumerate(gl_lines):
+            match_row = BankStatementLineMatch(
+                statement_line_id=statement_line_id,
+                journal_line_id=gl_line.line_id,
+                matched_at=now,
+                matched_by=matched_by,
+                is_primary=(i == 0),
+            )
+            db.add(match_row)
+
+        # Update statement line — primary match is first GL line
+        stmt_line.is_matched = True
+        stmt_line.matched_at = now
+        stmt_line.matched_by = matched_by
+        stmt_line.matched_journal_line_id = gl_lines[0].line_id
+
+        # Update statement counters
+        statement.matched_lines = (statement.matched_lines or 0) + 1
+        statement.unmatched_lines = max((statement.unmatched_lines or 0) - 1, 0)
+
+        db.flush()
+
+        logger.info(
+            "Multi-matched statement line %s to %d GL lines",
+            statement_line_id,
+            len(gl_lines),
+        )
+
+        return stmt_line
+
     def match_statement_line(
         self,
         db: Session,
@@ -1229,6 +1718,7 @@ class BankReconciliationService:
         statement_line_id: UUID,
         journal_line_id: UUID,
         matched_by: UUID | None = None,
+        force_match: bool = False,
     ) -> BankStatementLine:
         """Directly match a statement line to a GL journal line.
 
@@ -1250,6 +1740,34 @@ class BankReconciliationService:
                 status_code=404,
                 detail=f"Statement line {statement_line_id} not found",
             )
+
+        existing_match = db.execute(
+            select(BankStatementLineMatch).where(
+                BankStatementLineMatch.statement_line_id == statement_line_id,
+                BankStatementLineMatch.journal_line_id == journal_line_id,
+            )
+        ).scalar_one_or_none()
+
+        # Idempotency: this exact pair already exists.
+        # Keep statement flags in sync in case of legacy/stale states.
+        if isinstance(existing_match, BankStatementLineMatch):
+            if not stmt_line.is_matched:
+                stmt_line.is_matched = True
+                stmt_line.matched_at = existing_match.matched_at
+                stmt_line.matched_by = existing_match.matched_by
+                stmt_line.matched_journal_line_id = journal_line_id
+                statement.matched_lines = (statement.matched_lines or 0) + 1
+                statement.unmatched_lines = max((statement.unmatched_lines or 0) - 1, 0)
+                db.flush()
+            elif stmt_line.matched_journal_line_id is None:
+                stmt_line.matched_journal_line_id = journal_line_id
+                db.flush()
+            logger.info(
+                "Statement line %s already matched to GL line %s; no-op",
+                statement_line_id,
+                journal_line_id,
+            )
+            return stmt_line
 
         if stmt_line.is_matched:
             raise HTTPException(
@@ -1275,11 +1793,38 @@ class BankReconciliationService:
                     detail=f"Journal line {journal_line_id} not found",
                 )
 
+        statement_amount = stmt_line.signed_amount
+        gl_amount = (gl_line.debit_amount or Decimal("0")) - (
+            gl_line.credit_amount or Decimal("0")
+        )
+        self._validate_amount_match(
+            statement_amount,
+            gl_amount,
+            force_match=force_match,
+        )
+
         # Mark as matched
+        now = datetime.now(tz=UTC)
         stmt_line.is_matched = True
-        stmt_line.matched_at = datetime.now(tz=UTC)
+        stmt_line.matched_at = now
         stmt_line.matched_by = matched_by
         stmt_line.matched_journal_line_id = journal_line_id
+
+        # Remove any stale junction rows first (idempotent cleanup)
+        db.execute(
+            delete(BankStatementLineMatch).where(
+                BankStatementLineMatch.statement_line_id == statement_line_id
+            )
+        )
+
+        match_row = BankStatementLineMatch(
+            statement_line_id=statement_line_id,
+            journal_line_id=journal_line_id,
+            matched_at=now,
+            matched_by=matched_by,
+            is_primary=True,
+        )
+        db.add(match_row)
 
         # Update statement counters
         statement.matched_lines = (statement.matched_lines or 0) + 1
@@ -1324,6 +1869,17 @@ class BankReconciliationService:
                 status_code=400,
                 detail="Statement line is not matched",
             )
+
+        # Delete all junction table rows for this line
+        from sqlalchemy import delete as sa_delete
+
+        from app.models.finance.banking.bank_statement import BankStatementLineMatch
+
+        db.execute(
+            sa_delete(BankStatementLineMatch).where(
+                BankStatementLineMatch.statement_line_id == statement_line_id
+            )
+        )
 
         # Clear match
         stmt_line.is_matched = False
@@ -1634,6 +2190,176 @@ class BankReconciliationService:
                 "items": [o for o in outstanding if o.outstanding_type == "payment"],
             },
         }
+
+    def create_journal_and_match(
+        self,
+        db: Session,
+        organization_id: UUID,
+        statement_line_id: UUID,
+        counterparty_account_id: UUID,
+        description: str | None = None,
+        matched_by: UUID | None = None,
+    ) -> BankStatementLine:
+        """Create a journal entry for a bank line and match it immediately.
+
+        This handles the case where a bank line has no GL entry to match
+        against.  Creates a 2-line journal (Dr bank GL / Cr counterparty GL
+        for credits, or Dr counterparty GL / Cr bank GL for debits), posts
+        it, and matches the bank line to the journal's bank-side line.
+
+        Args:
+            db: Database session
+            organization_id: Organization scope
+            statement_line_id: Bank statement line to match
+            counterparty_account_id: GL account for the other side
+            description: Optional journal description override
+            matched_by: User performing the match
+
+        Returns:
+            Updated BankStatementLine
+
+        Raises:
+            HTTPException(404): Statement line not found
+            HTTPException(400): Line already matched, or journal creation fails
+        """
+        from app.models.finance.gl.journal_entry import JournalType
+        from app.services.finance.gl.journal import (
+            JournalInput,
+            JournalLineInput,
+            JournalService,
+        )
+
+        stmt_line = db.get(BankStatementLine, statement_line_id)
+        if not stmt_line:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Statement line {statement_line_id} not found",
+            )
+
+        statement = stmt_line.statement
+        if not statement or statement.organization_id != organization_id:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Statement line {statement_line_id} not found",
+            )
+
+        if stmt_line.is_matched:
+            raise HTTPException(
+                status_code=400,
+                detail="Statement line is already matched",
+            )
+
+        # Get the bank account's GL account
+        bank_account = db.get(BankAccount, statement.bank_account_id)
+        if not bank_account or not bank_account.gl_account_id:
+            raise HTTPException(
+                status_code=400,
+                detail="Bank account has no linked GL account",
+            )
+
+        bank_gl_account_id = bank_account.gl_account_id
+        amount = stmt_line.amount  # Always positive
+        is_credit = str(stmt_line.transaction_type).lower() == "credit"
+
+        # Build description
+        if not description:
+            description = (
+                f"Bank {('deposit' if is_credit else 'payment')}: "
+                f"{stmt_line.description or ''}"
+            )[:200]
+
+        # For a credit (money IN): Dr bank GL, Cr counterparty GL
+        # For a debit (money OUT): Dr counterparty GL, Cr bank GL
+        if is_credit:
+            line1 = JournalLineInput(
+                account_id=bank_gl_account_id,
+                debit_amount=amount,
+                credit_amount=Decimal("0"),
+                description=description[:200],
+            )
+            line2 = JournalLineInput(
+                account_id=counterparty_account_id,
+                debit_amount=Decimal("0"),
+                credit_amount=amount,
+                description=description[:200],
+            )
+            bank_line_idx = 0  # line1 is the bank side
+        else:
+            line1 = JournalLineInput(
+                account_id=counterparty_account_id,
+                debit_amount=amount,
+                credit_amount=Decimal("0"),
+                description=description[:200],
+            )
+            line2 = JournalLineInput(
+                account_id=bank_gl_account_id,
+                debit_amount=Decimal("0"),
+                credit_amount=amount,
+                description=description[:200],
+            )
+            bank_line_idx = 1  # line2 is the bank side
+
+        user_id = matched_by or UUID("00000000-0000-0000-0000-000000000000")
+
+        journal_input = JournalInput(
+            journal_type=JournalType.STANDARD,
+            entry_date=stmt_line.transaction_date,
+            posting_date=stmt_line.transaction_date,
+            description=description[:200],
+            lines=[line1, line2],
+            source_module="BANKING",
+            source_document_type="BANK_RECONCILIATION",
+        )
+
+        # Create journal
+        journal = JournalService.create_journal(
+            db, organization_id, journal_input, user_id
+        )
+
+        # Submit and approve
+        JournalService.submit_journal(
+            db, organization_id, journal.journal_entry_id, user_id
+        )
+        JournalService.approve_journal(
+            db, organization_id, journal.journal_entry_id, user_id
+        )
+
+        # Post
+        JournalService.post_journal(
+            db,
+            organization_id,
+            journal.journal_entry_id,
+            user_id,
+            idempotency_key=f"bank-recon:{statement_line_id}",
+        )
+
+        # Get the bank-side journal line for matching
+        journal_lines = list(
+            db.scalars(
+                select(JournalEntryLine)
+                .where(JournalEntryLine.journal_entry_id == journal.journal_entry_id)
+                .order_by(JournalEntryLine.line_number)
+            ).all()
+        )
+        bank_journal_line = journal_lines[bank_line_idx]
+
+        # Match
+        self.match_statement_line(
+            db=db,
+            organization_id=organization_id,
+            statement_line_id=statement_line_id,
+            journal_line_id=bank_journal_line.line_id,
+            matched_by=matched_by,
+            force_match=True,
+        )
+
+        logger.info(
+            "Created journal %s and matched to statement line %s",
+            journal.journal_number,
+            statement_line_id,
+        )
+
+        return stmt_line
 
 
 def _check_rule_payee_link(

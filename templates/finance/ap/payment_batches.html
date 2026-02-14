@@ -50,8 +50,8 @@
             <table class="table">
                 <thead>
                     <tr>
-                        <th scope="col">Batch #</th>
                         <th scope="col">Date</th>
+                        <th scope="col">Batch #</th>
                         <th scope="col">Method</th>
                         <th scope="col" class="text-right">Total</th>
                         <th scope="col">Status</th>
@@ -60,11 +60,11 @@
                 <tbody>
                     {% for batch in batches %}
                     <tr>
-                        <td class="whitespace-nowrap font-mono text-sm text-slate-700 dark:text-slate-200">
-                            {{ batch.batch_number }}
-                        </td>
                         <td class="whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
                             {{ batch.batch_date }}
+                        </td>
+                        <td class="whitespace-nowrap font-mono text-sm text-slate-700 dark:text-slate-200">
+                            {{ batch.batch_number }}
                         </td>
                         <td class="whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">
                             {{ batch.payment_method | replace('_', ' ') | title }}

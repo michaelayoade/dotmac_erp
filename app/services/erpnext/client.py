@@ -199,6 +199,7 @@ class ERPNextClient:
         doctype: str,
         filters: dict[str, Any] | None = None,
         fields: list[str] | None = None,
+        parent: str | None = None,
         order_by: str | None = None,
         limit_start: int = 0,
         limit_page_length: int = 100,
@@ -210,6 +211,7 @@ class ERPNextClient:
             doctype: DocType name
             filters: Filter conditions (e.g., {"disabled": 0})
             fields: Fields to return (default: all)
+            parent: Parent DocType for child table queries in Frappe
             order_by: Sort order (e.g., "modified desc")
             limit_start: Offset for pagination
             limit_page_length: Number of records per page
@@ -234,6 +236,10 @@ class ERPNextClient:
         if fields:
             # Frappe expects fields as JSON array
             params["fields"] = json.dumps(fields)
+
+        if parent:
+            # Child DocTypes require parent DocType for permission checks.
+            params["parent"] = parent
 
         if order_by:
             params["order_by"] = order_by
@@ -680,14 +686,14 @@ class ERPNextClient:
         from_date: datetime | None = None,
     ):
         """
-        Get sales invoices.
+        Get sales invoices with line items.
 
         Args:
             company: Company name
             from_date: Start date filter
 
         Yields:
-            Sales Invoice documents
+            Sales Invoice documents (with nested items)
         """
         company = company or self.config.company
         filters: dict[str, Any] = {}
@@ -697,7 +703,7 @@ class ERPNextClient:
         if from_date:
             filters["posting_date"] = [">=", from_date.strftime("%Y-%m-%d")]
 
-        yield from self.get_all_documents(
+        for invoice in self.get_all_documents(
             doctype="Sales Invoice",
             filters=filters,
             fields=[
@@ -706,15 +712,38 @@ class ERPNextClient:
                 "posting_date",
                 "due_date",
                 "currency",
+                "net_total",
+                "total_taxes_and_charges",
                 "grand_total",
+                "base_grand_total",
                 "outstanding_amount",
+                "conversion_rate",
                 "status",
                 "docstatus",
+                "is_return",
+                "return_against",
+                "cost_center",
+                "project",
                 "company",
                 "modified",
             ],
             order_by="posting_date asc",
-        )
+        ):
+            # Fetch full document to get child tables (avoids permission
+            # issues with direct Sales Invoice Item list queries)
+            try:
+                full_doc = self.get_document("Sales Invoice", invoice["name"])
+                invoice["items"] = full_doc.get("items", [])
+                # Carry over custom_splynx_id if present
+                invoice["custom_splynx_id"] = full_doc.get("custom_splynx_id")
+            except ERPNextError as e:
+                logger.warning(
+                    "Could not fetch items for Sales Invoice %s: %s",
+                    invoice["name"],
+                    e.message,
+                )
+                invoice["items"] = []
+            yield invoice
 
     def get_purchase_invoices(
         self,
@@ -722,14 +751,14 @@ class ERPNextClient:
         from_date: datetime | None = None,
     ):
         """
-        Get purchase invoices.
+        Get purchase invoices with line items.
 
         Args:
             company: Company name
             from_date: Start date filter
 
         Yields:
-            Purchase Invoice documents
+            Purchase Invoice documents (with nested items)
         """
         company = company or self.config.company
         filters: dict[str, Any] = {}
@@ -739,24 +768,170 @@ class ERPNextClient:
         if from_date:
             filters["posting_date"] = [">=", from_date.strftime("%Y-%m-%d")]
 
-        yield from self.get_all_documents(
+        for invoice in self.get_all_documents(
             doctype="Purchase Invoice",
             filters=filters,
             fields=[
                 "name",
                 "supplier",
+                "bill_no",
+                "bill_date",
                 "posting_date",
                 "due_date",
                 "currency",
+                "net_total",
+                "total_taxes_and_charges",
                 "grand_total",
+                "base_grand_total",
                 "outstanding_amount",
+                "conversion_rate",
+                "status",
+                "docstatus",
+                "is_return",
+                "cost_center",
+                "project",
+                "company",
+                "modified",
+            ],
+            order_by="posting_date asc",
+        ):
+            # Fetch full document to get child tables
+            try:
+                full_doc = self.get_document("Purchase Invoice", invoice["name"])
+                invoice["items"] = full_doc.get("items", [])
+            except ERPNextError as e:
+                logger.warning(
+                    "Could not fetch items for Purchase Invoice %s: %s",
+                    invoice["name"],
+                    e.message,
+                )
+                invoice["items"] = []
+            yield invoice
+
+    def get_payment_entries(
+        self,
+        company: str | None = None,
+        from_date: datetime | None = None,
+        filters: dict[str, Any] | None = None,
+    ):
+        """
+        Get payment entries with references.
+
+        Args:
+            company: Company name
+            from_date: Start date filter
+            filters: Additional filters (e.g., {"docstatus": 1})
+
+        Yields:
+            Payment Entry documents (with nested references)
+        """
+        company = company or self.config.company
+        combined_filters: dict[str, Any] = dict(filters) if filters else {}
+
+        if company:
+            combined_filters["company"] = company
+        if from_date:
+            combined_filters["posting_date"] = [
+                ">=",
+                from_date.strftime("%Y-%m-%d"),
+            ]
+
+        for pe in self.get_all_documents(
+            doctype="Payment Entry",
+            filters=combined_filters,
+            fields=[
+                "name",
+                "payment_type",
+                "posting_date",
+                "mode_of_payment",
+                "party_type",
+                "party",
+                "paid_amount",
+                "received_amount",
+                "base_paid_amount",
+                "source_exchange_rate",
+                "paid_from",
+                "paid_to",
+                "paid_from_account_currency",
+                "paid_to_account_currency",
+                "reference_no",
+                "reference_date",
                 "status",
                 "docstatus",
                 "company",
                 "modified",
             ],
             order_by="posting_date asc",
-        )
+        ):
+            # Fetch full document to get child tables
+            try:
+                full_doc = self.get_document("Payment Entry", pe["name"])
+                pe["references"] = full_doc.get("references", [])
+                pe["custom_splynx_id"] = full_doc.get("custom_splynx_id")
+            except ERPNextError as e:
+                logger.warning(
+                    "Could not fetch references for Payment Entry %s: %s",
+                    pe["name"],
+                    e.message,
+                )
+                pe["references"] = []
+            yield pe
+
+    def get_journal_entries(
+        self,
+        company: str | None = None,
+        from_date: datetime | None = None,
+    ):
+        """
+        Get journal entries with account lines.
+
+        Args:
+            company: Company name
+            from_date: Start date filter
+
+        Yields:
+            Journal Entry documents (with nested accounts)
+        """
+        company = company or self.config.company
+        filters: dict[str, Any] = {"docstatus": 1}  # Only submitted
+
+        if company:
+            filters["company"] = company
+        if from_date:
+            filters["posting_date"] = [">=", from_date.strftime("%Y-%m-%d")]
+
+        for je in self.get_all_documents(
+            doctype="Journal Entry",
+            filters=filters,
+            fields=[
+                "name",
+                "voucher_type",
+                "posting_date",
+                "total_debit",
+                "total_credit",
+                "multi_currency",
+                "remark",
+                "user_remark",
+                "cheque_no",
+                "cheque_date",
+                "docstatus",
+                "company",
+                "modified",
+            ],
+            order_by="posting_date asc",
+        ):
+            # Fetch full document to get child tables
+            try:
+                full_doc = self.get_document("Journal Entry", je["name"])
+                je["accounts"] = full_doc.get("accounts", [])
+            except ERPNextError as e:
+                logger.warning(
+                    "Could not fetch accounts for Journal Entry %s: %s",
+                    je["name"],
+                    e.message,
+                )
+                je["accounts"] = []
+            yield je
 
     # --------------------------
     # Write operations (for bidirectional sync)
@@ -1328,28 +1503,16 @@ class ERPNextClient:
             ],
             order_by="posting_date desc",
         ):
-            # Fetch expense items for each claim (gracefully handle permission errors)
+            # Fetch full document to get child tables (avoids permission
+            # issues with direct Expense Claim Detail list queries)
             try:
-                claim["expenses"] = self.list_documents(
-                    doctype="Expense Claim Detail",
-                    filters={"parent": claim["name"]},
-                    fields=[
-                        "name",
-                        "expense_date",
-                        "expense_type",
-                        "description",
-                        "amount",
-                        "sanctioned_amount",
-                        "cost_center",
-                        "modified",
-                    ],
-                )
+                full_doc = self.get_document("Expense Claim", claim["name"])
+                claim["expenses"] = full_doc.get("expenses", [])
             except ERPNextError as e:
-                # Permission denied or other error - continue without items
                 import logging
 
                 logging.getLogger(__name__).warning(
-                    "Could not fetch expense items for %s: %s", claim["name"], e.message
+                    "Could not fetch expense doc %s: %s", claim["name"], e.message
                 )
                 claim["expenses"] = []
             yield claim
@@ -1579,6 +1742,7 @@ class ERPNextClient:
             return self.list_documents(
                 doctype="Task Depends On",
                 filters={"parent": task_name},
+                parent="Task",
                 fields=[
                     "name",
                     "task",
@@ -1645,6 +1809,7 @@ class ERPNextClient:
                 request["items"] = self.list_documents(
                     doctype="Material Request Item",
                     filters={"parent": request["name"]},
+                    parent="Material Request",
                     fields=[
                         "name",
                         "item_code",

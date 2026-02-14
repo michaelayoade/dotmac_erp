@@ -35,7 +35,6 @@
   'FULLY_DEPRECIATED': 'badge-draft',
   'FULLY DEPRECIATED': 'badge-draft',
   'ACTIVE': 'badge-approved',
-  'PARTIAL': 'badge-pending',
   'PARTIALLY_PAID': 'badge-pending',
   'OVERDUE': 'badge-overdue',
   'PAST DUE': 'badge-overdue',
@@ -54,7 +53,6 @@
   'OPEN': 'badge-approved',
   'SUBMITTED': 'badge-pending',
   'PROCESSING': 'badge-pending',
-  'RECEIVED': 'badge-paid',
   'VALID': 'badge-approved',
   'EXPIRING SOON': 'badge-overdue',
   'EXPIRING_SOON': 'badge-overdue',
@@ -198,13 +196,14 @@
   'amber': 'from-amber-500 to-yellow-500',
   'teal': 'from-teal-500 to-cyan-500'
 } %}
+{% set pct = [percentage|float, 100]|min %}
 <div class="space-y-1">
   <div class="flex items-center justify-between text-sm">
     <span class="text-slate-600 dark:text-slate-400">{{ label }}</span>
     <span class="font-mono font-medium text-slate-900 dark:text-white">{{ value }}</span>
   </div>
   <div class="{{ height }} bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-    <div class="h-full bg-gradient-to-r {{ colors.get(color, colors.teal) }} rounded-full transition-all" style="width: {{ percentage|min(100) }}%"></div>
+    <div class="h-full bg-gradient-to-r {{ colors.get(color, colors.teal) }} rounded-full transition-all" style="width: {{ pct }}%"></div>
   </div>
 </div>
 {% endmacro %}
@@ -275,6 +274,9 @@
 {% elif name == "check-circle" %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
 {% elif name == "warning" %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
 {% elif name == "box" %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+{% elif name == "plus" %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v12m6-6H6"/>
+{% elif name == "eye" %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+{% elif name == "edit" %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
 {% else %}<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
 {% endif %}
 {% endmacro %}
@@ -378,27 +380,8 @@
                 <svg class="h-4 w-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                 </svg>
-        </template>
-      </div>
-
-      {# Empty state for suggestions #}
-      <div x-show="showSuggestions && !loading && suggestions.length === 0 && query.length >= 2"
-           x-transition:enter="transition ease-out duration-150"
-           x-transition:enter-start="opacity-0 translate-y-1"
-           x-transition:enter-end="opacity-100 translate-y-0"
-           x-transition:leave="transition ease-in duration-100"
-           x-transition:leave-start="opacity-100 translate-y-0"
-           x-transition:leave-end="opacity-0 translate-y-1"
-           class="absolute z-50 left-0 right-0 mt-1 rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800">
-        <div class="px-4 py-3 text-sm text-slate-500 dark:text-slate-400">
-          No matches found. Press Enter to search.
-        </div>
-        {% if entity_type == "customers" %}
-        <div class="px-4 pb-3">
-          <a href="/finance/ar/customers/new" class="btn btn-secondary btn-sm">Add Customer</a>
-        </div>
-        {% endif %}
-      </div>
+              </template>
+            </div>
 
             {# Label and subtitle #}
             <div class="flex-1 min-w-0">
@@ -422,7 +405,12 @@
       {# No results message #}
       <div x-show="showSuggestions && suggestions.length === 0 && query.length >= 2 && !loading"
            class="absolute z-50 left-0 right-0 mt-1 rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800 px-4 py-3 text-sm text-slate-500 dark:text-slate-400 text-center">
-        No results found for "<span x-text="query" class="font-medium"></span>"
+        <p>No results found for "<span x-text="query" class="font-medium"></span>"</p>
+        {% if entity_type == "customers" %}
+        <div class="mt-3">
+          <a href="/finance/ar/customers/new" class="btn btn-secondary btn-sm">Add Customer</a>
+        </div>
+        {% endif %}
       </div>
     </div>
 
@@ -948,6 +936,77 @@ if (typeof window.searchAutosuggest === 'undefined') {
 
 
 {# ============================================
+   FILTER FIELD HELPERS
+   Reusable select fields for compact filter call blocks.
+   ============================================ #}
+{% macro filter_select_field(name, label, value="", options=[], attrs="", placeholder=none, titleize_strings=false) %}
+<div>
+  <label class="form-label text-xs">{{ label }}</label>
+  <select name="{{ name }}" class="form-select w-full" {{ attrs | safe }}>
+    <option value="">{{ placeholder if placeholder is not none else ("All " ~ label) }}</option>
+    {% for option in options %}
+    {% if option is mapping %}
+    {% set option_value = option.get("value", "") %}
+    {% set option_label = option.get("label", option_value) %}
+    {% else %}
+    {% set option_value = option %}
+    {% if titleize_strings %}
+    {% set option_label = option|string|replace("_", " ")|title %}
+    {% else %}
+    {% set option_label = option %}
+    {% endif %}
+    {% endif %}
+    <option value="{{ option_value }}" {{ "selected" if value|string == option_value|string else "" }}>
+      {{ option_label }}
+    </option>
+    {% endfor %}
+  </select>
+</div>
+{% endmacro %}
+
+
+{% macro filter_entity_select_field(name, label, value="", items=[], value_key="id", label_key="name", attrs="", placeholder=none) %}
+<div>
+  <label class="form-label text-xs">{{ label }}</label>
+  <select name="{{ name }}" class="form-select w-full" {{ attrs | safe }}>
+    <option value="">{{ placeholder if placeholder is not none else ("All " ~ label) }}</option>
+    {% for item in items %}
+    {% if item is mapping %}
+    {% set option_value = item.get(value_key) %}
+    {% set option_label = item.get(label_key) %}
+    {% else %}
+    {% set option_value = item | attr(value_key) %}
+    {% set option_label = item | attr(label_key) %}
+    {% endif %}
+    <option value="{{ option_value }}" {{ "selected" if value|string == option_value|string else "" }}>
+      {{ option_label }}
+    </option>
+    {% endfor %}
+  </select>
+</div>
+{% endmacro %}
+
+{% macro filter_custom_select_field(name, label, attrs="", placeholder=none) %}
+<div>
+  <label class="form-label text-xs">{{ label }}</label>
+  <select name="{{ name }}" class="form-select w-full" {{ attrs | safe }}>
+    <option value="">{{ placeholder if placeholder is not none else ("All " ~ label) }}</option>
+    {% if caller %}
+    {{ caller() }}
+    {% endif %}
+  </select>
+</div>
+{% endmacro %}
+
+{% macro filter_date_field(name, label, value="", attrs="") %}
+<div>
+  <label class="form-label text-xs">{{ label }}</label>
+  <input type="date" name="{{ name }}" value="{{ value if value else '' }}" class="form-input w-full" {{ attrs | safe }}>
+</div>
+{% endmacro %}
+
+
+{# ============================================
    PAGINATION
    Reusable pagination component with page size selector
    Usage: {{ pagination(page=1, total_pages=10, total_count=250, limit=50, search=search, filters=filters) }}
@@ -958,6 +1017,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
 {% set result_count = total_count | default(0) | int %}
 {% set page_limit = limit | default(50) | int %}
 {% set search_term = search | default("") %}
+{% set encoded_search = search_term|string|urlencode %}
 {% set active_filters = filters | default({}) %}
 {% if result_count > 0 %}
 <div class="border-t border-slate-200 dark:border-slate-700 px-6 py-4">
@@ -976,11 +1036,11 @@ if (typeof window.searchAutosuggest === 'undefined') {
         <label class="text-sm text-slate-500 dark:text-slate-400">Show:</label>
         <select onchange="window.location.href=this.value" class="form-select py-1 text-sm">
           {% for size in [25, 50, 100, 200] %}
-          {% set params = "page=1" ~ ("&search=" ~ search_term if search_term else "") %}
+          {% set ns = namespace(params="page=1" ~ ("&search=" ~ encoded_search if search_term else "")) %}
           {% for key, val in active_filters.items() if val %}
-          {% set params = params ~ "&" ~ key ~ "=" ~ val %}
+          {% set ns.params = ns.params ~ "&" ~ (key|string|urlencode) ~ "=" ~ (val|string|urlencode) %}
           {% endfor %}
-          <option value="?{{ params }}&limit={{ size }}" {{ 'selected' if page_limit == size else '' }}>{{ size }}</option>
+          <option value="?{{ ns.params }}&limit={{ size }}" {{ 'selected' if page_limit == size else '' }}>{{ size }}</option>
           {% endfor %}
         </select>
       </div>
@@ -992,9 +1052,9 @@ if (typeof window.searchAutosuggest === 'undefined') {
     <nav class="flex items-center gap-1">
       {# Previous Button #}
       {% if current_page > 1 %}
-      {% set prev_params = "page=" ~ (current_page - 1) ~ ("&search=" ~ search_term if search_term else "") ~ ("&limit=" ~ page_limit if page_limit != 50 else "") %}
-      {% for key, val in active_filters.items() if val %}{% set prev_params = prev_params ~ "&" ~ key ~ "=" ~ val %}{% endfor %}
-      <a href="?{{ prev_params }}"
+      {% set prev_ns = namespace(params="page=" ~ (current_page - 1) ~ ("&search=" ~ encoded_search if search_term else "") ~ ("&limit=" ~ page_limit if page_limit != 50 else "")) %}
+      {% for key, val in active_filters.items() if val %}{% set prev_ns.params = prev_ns.params ~ "&" ~ (key|string|urlencode) ~ "=" ~ (val|string|urlencode) %}{% endfor %}
+      <a href="?{{ prev_ns.params }}"
          class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors">
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
@@ -1007,9 +1067,9 @@ if (typeof window.searchAutosuggest === 'undefined') {
         {% if p == current_page %}
         <span class="rounded-lg bg-teal-50 px-3 py-1.5 text-sm font-medium text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">{{ p }}</span>
         {% elif p == 1 or p == page_count or (p >= current_page - 1 and p <= current_page + 1) %}
-        {% set page_params = "page=" ~ p ~ ("&search=" ~ search_term if search_term else "") ~ ("&limit=" ~ page_limit if page_limit != 50 else "") %}
-        {% for key, val in active_filters.items() if val %}{% set page_params = page_params ~ "&" ~ key ~ "=" ~ val %}{% endfor %}
-        <a href="?{{ page_params }}"
+        {% set page_ns = namespace(params="page=" ~ p ~ ("&search=" ~ encoded_search if search_term else "") ~ ("&limit=" ~ page_limit if page_limit != 50 else "")) %}
+        {% for key, val in active_filters.items() if val %}{% set page_ns.params = page_ns.params ~ "&" ~ (key|string|urlencode) ~ "=" ~ (val|string|urlencode) %}{% endfor %}
+        <a href="?{{ page_ns.params }}"
            class="rounded-lg px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors">{{ p }}</a>
         {% elif p == current_page - 2 or p == current_page + 2 %}
         <span class="px-1 text-slate-400">...</span>
@@ -1018,9 +1078,9 @@ if (typeof window.searchAutosuggest === 'undefined') {
 
       {# Next Button #}
       {% if current_page < page_count %}
-      {% set next_params = "page=" ~ (current_page + 1) ~ ("&search=" ~ search_term if search_term else "") ~ ("&limit=" ~ page_limit if page_limit != 50 else "") %}
-      {% for key, val in active_filters.items() if val %}{% set next_params = next_params ~ "&" ~ key ~ "=" ~ val %}{% endfor %}
-      <a href="?{{ next_params }}"
+      {% set next_ns = namespace(params="page=" ~ (current_page + 1) ~ ("&search=" ~ encoded_search if search_term else "") ~ ("&limit=" ~ page_limit if page_limit != 50 else "")) %}
+      {% for key, val in active_filters.items() if val %}{% set next_ns.params = next_ns.params ~ "&" ~ (key|string|urlencode) ~ "=" ~ (val|string|urlencode) %}{% endfor %}
+      <a href="?{{ next_ns.params }}"
          class="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-300 transition-colors">
         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -1047,7 +1107,14 @@ if (typeof window.searchAutosuggest === 'undefined') {
       <thead>
         <tr>
           {% for header in headers %}
-          <th scope="col" class="{{ header.class if header.class else '' }}">{{ header.label if header.label else header }}</th>
+          {% if header is mapping %}
+          {% set header_class = header.get("class", "") %}
+          {% set header_label = header.get("label", header) %}
+          {% else %}
+          {% set header_class = header.class | default("", true) %}
+          {% set header_label = header.label | default(header, true) %}
+          {% endif %}
+          <th scope="col" class="{{ header_class }}">{{ header_label }}</th>
           {% endfor %}
         </tr>
       </thead>
@@ -1069,32 +1136,62 @@ if (typeof window.searchAutosuggest === 'undefined') {
 {% if amount is none %}—{% else %}{{ symbol }}{{ "{:,.2f}".format(amount|float) }}{% endif %}
 {% endmacro %}
 
+{# ============================================
+   LIST HEADER ACTIONS
+   Standardized Export + New action buttons for list pages
+   ============================================ #}
+{% macro list_header_actions(export_url=none, new_url=none, new_label="New", new_icon="plus", export_label="Export") %}
+<div class="flex items-center gap-2">
+  {% if export_url %}
+  <button onclick="exportAll('{{ export_url }}')" class="btn btn-secondary">
+    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+    </svg>
+    {{ export_label }}
+  </button>
+  {% endif %}
+  {% if new_url %}
+  <a href="{{ new_url }}" class="btn btn-primary">
+    {{ icon_svg(new_icon, "h-4 w-4 mr-1.5") }}
+    {{ new_label }}
+  </a>
+  {% endif %}
+</div>
+{% endmacro %}
+
 
 {# ============================================
    ACTION BUTTONS (for table rows)
    Usage: {{ action_buttons(view_href="/items/123", edit_href="/items/123/edit") }}
    ============================================ #}
-{% macro action_buttons(view_href=none, edit_href=none, delete_action=none, extra_actions=[]) %}
-<div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+{% macro action_buttons(view_href=none, edit_href=none, delete_action=none, extra_actions=[], container_class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity") %}
+<div class="{{ container_class }}">
   {% if view_href %}
   <a href="{{ view_href }}" class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors" title="View" aria-label="View">
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-    </svg>
+    {{ icon_svg("eye", "h-4 w-4") }}
   </a>
   {% endif %}
   {% if edit_href %}
   <a href="{{ edit_href }}" class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors" title="Edit" aria-label="Edit">
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-    </svg>
+    {{ icon_svg("edit", "h-4 w-4") }}
   </a>
   {% endif %}
   {% for action in extra_actions %}
-  <a href="{{ action.href }}" class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors" title="{{ action.title }}">
-    {{ icon_svg(action.icon, "h-4 w-4") }}
+  {% set action_href = action.href | default('', true) %}
+  {% set action_class = action.class | default('rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors', true) %}
+  {% set action_title = action.title | default('', true) %}
+  {% set action_aria_label = action.aria_label | default(action_title if action_title else 'Action', true) %}
+  {% set action_svg = action.svg | default('', true) %}
+  {% set action_icon = action.icon | default('document', true) %}
+  {% if action_href %}
+  <a href="{{ action_href }}" class="{{ action_class }}" title="{{ action_title }}" aria-label="{{ action_aria_label }}">
+    {% if action_svg %}
+    {{ action_svg | safe }}
+    {% else %}
+    {{ icon_svg(action_icon, "h-4 w-4") }}
+    {% endif %}
   </a>
+  {% endif %}
   {% endfor %}
 </div>
 {% endmacro %}
@@ -1161,21 +1258,30 @@ if (typeof window.searchAutosuggest === 'undefined') {
     {# Action buttons #}
     <div class="bulk-actions-group">
       {% for action in actions %}
+      {% set action_name = action.name | default("", true) %}
+      {% set action_label = action.label | default(action_name, true) %}
+      {% set action_endpoint = action.endpoint | default("", true) %}
+      {% set action_class = action.class | default("btn-secondary", true) %}
+      {% set action_confirm = action.confirm | default("", true) %}
+      {% set action_title = action.title | default("", true) %}
+      {% set action_icon = action.icon | default("", true) %}
+      {% if action_name and action_endpoint %}
       <button type="button"
-              class="btn btn-sm {{ action.class or 'btn-secondary' }}"
-              @click="performAction('{{ action.name }}', '{{ action.endpoint }}', { {% if action.confirm %}confirm: '{{ action.confirm }}'{% endif %} })"
+              class="btn btn-sm {{ action_class }}"
+              @click="performAction('{{ action_name }}', '{{ action_endpoint }}', { {% if action_confirm %}confirm: '{{ action_confirm }}'{% endif %} })"
               :disabled="loading"
-              {% if action.title %}title="{{ action.title }}"{% endif %}>
-        {% if action.icon %}
-        {{ action.icon|safe }}
+              {% if action_title %}title="{{ action_title }}"{% endif %}>
+        {% if action_icon %}
+        {{ action_icon|safe }}
         {% endif %}
-        <span>{{ action.label }}</span>
+        <span>{{ action_label }}</span>
         {# Loading spinner for this specific action #}
-        <svg x-show="actionInProgress === '{{ action.name }}'" class="ml-1 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+        <svg x-show="actionInProgress === '{{ action_name }}'" class="ml-1 h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
       </button>
+      {% endif %}
       {% endfor %}
 
       {# Clear selection button #}
@@ -1250,7 +1356,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
    {% from "components/macros.html" import topbar %}
    {{ topbar(page_title_html, breadcrumbs_html, header_actions_html, accent="teal") }}
    ============================================ #}
-{% macro topbar(page_title_html, breadcrumbs_html="", header_actions_html="", accent="teal") %}
+{% macro topbar(page_title_html, breadcrumbs_html="", header_actions_html="", accent="teal", back_fallback="/dashboard") %}
 {% set accent_map = {
   'teal': {'hover': 'hover:border-teal-400', 'hover_dark': 'dark:hover:border-teal-500'},
   'violet': {'hover': 'hover:border-violet-400', 'hover_dark': 'dark:hover:border-violet-500'},
@@ -1258,6 +1364,7 @@ if (typeof window.searchAutosuggest === 'undefined') {
   'blue': {'hover': 'hover:border-blue-400', 'hover_dark': 'dark:hover:border-blue-500'}
 } %}
 {% set a = accent_map.get(accent, accent_map.teal) %}
+{% set has_back_button = (back_fallback | default('', true) | trim) != '' %}
 <header class="sticky top-0 z-20 border-b border-slate-200 bg-white/80 backdrop-blur-xl dark:border-slate-800 dark:bg-slate-900/80">
   <div class="app-header flex h-16 items-center justify-between">
     <div class="flex items-center gap-4">
@@ -1270,6 +1377,23 @@ if (typeof window.searchAutosuggest === 'undefined') {
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
         </svg>
       </button>
+      {% if has_back_button %}
+      <button type="button"
+              @click="
+                if (document.referrer && document.referrer.startsWith(window.location.origin)) {
+                  window.history.back();
+                } else {
+                  window.location.href='{{ back_fallback | trim }}';
+                }
+              "
+              class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white/60 px-2 py-1.5 text-sm font-medium text-slate-600 transition-all {{ a.hover }} hover:bg-white dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300 {{ a.hover_dark }} dark:hover:bg-slate-800"
+              aria-label="Go back">
+        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+        <span class="hidden sm:inline">Back</span>
+      </button>
+      {% endif %}
       <div>
         <h1 class="text-xl font-semibold text-slate-900 dark:text-white font-display" data-testid="page-title">
           {{ page_title_html | safe }}

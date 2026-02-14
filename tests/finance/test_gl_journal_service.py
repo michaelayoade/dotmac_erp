@@ -154,6 +154,12 @@ def test_submit_approve_post_void_and_reverse():
     )
     assert approved.status == JournalStatus.APPROVED
 
+    journal.status = JournalStatus.DRAFT
+    with pytest.raises(HTTPException):
+        JournalService.post_journal(
+            db, org_id, journal.journal_entry_id, posted_by_user_id=uuid4()
+        )
+
     journal.status = JournalStatus.APPROVED
     with patch(
         "app.services.finance.gl.journal.LedgerPostingService.post_journal_entry"
@@ -201,14 +207,39 @@ def test_submit_approve_post_void_and_reverse():
         reversal_journal_id=None,
         source_module="GL",
     )
-    db.get.return_value = posted
-    reversal = JournalService.reverse_entry(
-        db,
-        org_id,
-        posted.journal_entry_id,
-        reversal_date=date.today(),
-        reversed_by_user_id=uuid4(),
+    reversal_entry = SimpleNamespace(
+        journal_entry_id=uuid4(),
+        organization_id=org_id,
+        status=JournalStatus.POSTED,
+        journal_type=JournalType.REVERSAL,
+        journal_number="J-REV",
     )
+
+    def _get(model, pk):
+        if pk == posted.journal_entry_id:
+            return posted
+        if pk == reversal_entry.journal_entry_id:
+            return reversal_entry
+        return None
+
+    db.get.side_effect = _get
+
+    with patch(
+        "app.services.finance.gl.reversal.ReversalService.create_reversal",
+        return_value=SimpleNamespace(
+            success=True,
+            reversal_journal_id=reversal_entry.journal_entry_id,
+            reversal_journal_number=reversal_entry.journal_number,
+            message="ok",
+        ),
+    ):
+        reversal = JournalService.reverse_entry(
+            db,
+            org_id,
+            posted.journal_entry_id,
+            reversal_date=date.today(),
+            reversed_by_user_id=uuid4(),
+        )
     assert reversal.journal_type == JournalType.REVERSAL
 
 

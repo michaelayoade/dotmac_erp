@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import empty_state, compact_filters %}
+{% from "components/macros.html" import empty_state, compact_filters, filter_entity_select_field, filter_date_field %}
 
 
 {% block page_title %}AP Aging Report{% endblock %}
@@ -40,22 +40,8 @@
         base_url="/finance/ap/aging",
         active_filters=active_filters | default([])
     ) %}
-    <div>
-            <div class="flex-1 min-w-[150px]">
-                <label class="form-label text-xs">Supplier</label>
-                <select name="supplier_id" class="form-select w-full" {{ filter_attrs }}>
-                    <option value="">All Suppliers</option>
-                    {% for supplier in suppliers %}
-                    <option value="{{ supplier.supplier_id }}" {{ 'selected' if supplier.supplier_id == selected_supplier_id }}>{{ supplier.legal_name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-    </div>
-    <div>
-        <label class="form-label text-xs">As Of Date</label>
-        <input type="date" name="as_of_date" value="{{ as_of_date | default('', true) }}"
-               class="form-input w-full" {{ filter_attrs }}>
-    </div>
+    {{ filter_entity_select_field("supplier_id", "Supplier", selected_supplier_id, suppliers, "supplier_id", "legal_name", filter_attrs) }}
+    {{ filter_date_field("as_of_date", "As Of Date", as_of_date | default('', true), filter_attrs) }}
     {% endcall %}
 
     {% if aging_summary %}

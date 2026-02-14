@@ -53,6 +53,7 @@ services:
         condition: service_healthy
     volumes:
       - dotmac_logs:/var/log/dotmac
+      - ./uploads:/app/uploads
       - ./static:/app/static:ro
       - ./templates:/app/templates:ro
       - ./app:/app/app:ro

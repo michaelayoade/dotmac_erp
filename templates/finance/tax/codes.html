@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import live_search, pagination, status_badge, empty_state, stats_card %}
+{% from "components/macros.html" import compact_filters, pagination, status_badge, empty_state, stats_card %}
 
 {% block page_title %}Tax Codes{% endblock %}
 
@@ -32,30 +32,29 @@
         {{ stats_card("Active", active_count | default(0), icon="check-circle", color="emerald") }}
     </div>
 
-    {# Search with Auto-suggest and Filters #}
-    {{ live_search(
-        search=search,
-        entity_type="tax_codes",
-        filters=[
-            {
-                "name": "tax_type",
-                "label": "All Types",
-                "value": tax_type,
-                "options": tax_type_options | default([]),
-            },
-            {
-                "name": "is_active",
-                "label": "All Status",
-                "value": is_active,
-                "options": [
-                    {"value": "true", "label": "Active"},
-                    {"value": "false", "label": "Inactive"}
-                ]
-            }
-        ],
-        base_url="/tax/codes",
-        placeholder="Search tax codes by code or name..."
-    ) }}
+    {% call(filter_attrs) compact_filters(
+        base_url="/finance/tax/codes",
+        active_filters=active_filters | default([]),
+        show_search=false
+    ) %}
+        <div>
+            <label class="form-label text-xs">Type</label>
+            <select name="tax_type" class="form-select w-full" {{ filter_attrs }}>
+                <option value="">All Types</option>
+                {% for option in tax_type_options | default([]) %}
+                <option value="{{ option.value }}" {{ 'selected' if tax_type == option.value|string else '' }}>{{ option.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label class="form-label text-xs">Status</label>
+            <select name="is_active" class="form-select w-full" {{ filter_attrs }}>
+                <option value="">All Status</option>
+                <option value="true" {{ 'selected' if is_active == 'true' else '' }}>Active</option>
+                <option value="false" {{ 'selected' if is_active == 'false' else '' }}>Inactive</option>
+            </select>
+        </div>
+    {% endcall %}
 
     <div id="results-container">
     {# Tax Codes Table #}

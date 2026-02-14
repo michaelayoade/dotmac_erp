@@ -256,6 +256,188 @@ class TestSyncTicket:
         assert TICKET_STATUS_MAP.get("resolved") == TicketStatus.RESOLVED
         assert TICKET_STATUS_MAP.get("closed") == TicketStatus.CLOSED
 
+    def test_create_ticket_maps_description(self, service, org_id):
+        """Ticket description should be mapped from CRM payload."""
+        payload = CRMTicketPayload(
+            crm_id=str(uuid.uuid4()),
+            subject="Ticket with description",
+            status="open",
+            description="Customer reported intermittent outage",
+        )
+
+        ticket = service._create_ticket(org_id, payload)
+
+        assert ticket.description == "Customer reported intermittent outage"
+
+    def test_update_ticket_maps_description(self, service):
+        """Existing ticket description should update from CRM payload."""
+        ticket = MagicMock()
+        payload = CRMTicketPayload(
+            crm_id=str(uuid.uuid4()),
+            subject="Updated subject",
+            status="open",
+            description="Updated from CRM",
+        )
+
+        service._update_ticket(ticket, payload)
+
+        assert ticket.description == "Updated from CRM"
+
+    def test_update_ticket_keeps_description_when_missing(self, service):
+        """Description should not be cleared when CRM omits/nulls description."""
+        ticket = MagicMock()
+        ticket.description = "Keep me"
+        payload = CRMTicketPayload(
+            crm_id=str(uuid.uuid4()),
+            subject="Updated subject",
+            status="open",
+            description=None,
+        )
+
+        service._update_ticket(ticket, payload)
+
+        assert ticket.description == "Keep me"
+
+    def test_build_ticket_crm_data_includes_new_fields(self, service):
+        """crm_data should include comments/activity_log with metadata."""
+        payload = CRMTicketPayload(
+            crm_id=str(uuid.uuid4()),
+            subject="Test",
+            status="open",
+            description="Desc",
+            metadata={"source": "crm"},
+            comments=[{"id": "c-1", "body": "First comment"}],
+            activity_log=[{"id": "a-1", "action": "status_changed"}],
+        )
+
+        crm_data = service._build_ticket_crm_data(payload)
+
+        assert crm_data is not None
+        assert crm_data["source"] == "crm"
+        assert crm_data["description"] == "Desc"
+        assert crm_data["comments"][0]["id"] == "c-1"
+        assert crm_data["activity_log"][0]["id"] == "a-1"
+
+    def test_sync_ticket_comments_invalid_item_continues(self, service, org_id):
+        """Malformed comment items should be captured as item-level errors."""
+        ticket = MagicMock()
+        ticket.ticket_id = uuid.uuid4()
+
+        with patch.object(
+            service, "_upsert_crm_comment_item", return_value=(MagicMock(), 0)
+        ) as mock_upsert:
+            processed, dedupe_hits, errors = service._sync_ticket_comments(
+                org_id,
+                ticket,
+                [
+                    {"body": "missing-id"},
+                    {"id": "c-1", "body": "ok", "is_internal": False},
+                ],
+            )
+
+        assert processed == 1
+        assert dedupe_hits == 0
+        assert len(errors) == 1
+        mock_upsert.assert_called_once()
+
+    def test_sync_ticket_activity_skips_duplicate_comment_entries(
+        self, service, org_id
+    ):
+        """Activity comment entries duplicated in comments[] should be skipped."""
+        ticket = MagicMock()
+        ticket.ticket_id = uuid.uuid4()
+        ticket.ticket_number = "TKT-001"
+
+        with patch.object(service, "_upsert_crm_activity_item") as mock_upsert:
+            processed, dedupe_hits, errors = service._sync_ticket_activity(
+                org_id,
+                ticket,
+                raw_activity=[{"kind": "comment", "id": "c-1", "body": "same"}],
+                raw_comments=[{"id": "c-1", "body": "same"}],
+            )
+
+        assert processed == 0
+        assert dedupe_hits == 1
+        assert errors == []
+        mock_upsert.assert_not_called()
+
+    def test_upsert_crm_comment_item_dedupe_hit(self, service, org_id, mock_db):
+        """Existing sync mapping should update existing comment instead of inserting duplicate."""
+        from app.models.sync.sync_entity import SyncStatus
+        from app.schemas.sync.dotmac_crm import CRMTicketCommentItem
+
+        ticket = MagicMock()
+        ticket.ticket_id = uuid.uuid4()
+        ticket.ticket_number = "TKT-001"
+
+        existing_comment = MagicMock()
+        existing_comment.comment_id = uuid.uuid4()
+
+        existing_sync = MagicMock()
+        existing_sync.target_id = existing_comment.comment_id
+        existing_sync.sync_status = SyncStatus.SYNCED
+
+        mock_db.scalar.return_value = existing_sync
+        mock_db.get.return_value = existing_comment
+
+        item = CRMTicketCommentItem(
+            id="comment-1",
+            body="Updated body",
+            is_internal=True,
+        )
+
+        _, dedupe = service._upsert_crm_comment_item(org_id, ticket, item)
+
+        assert dedupe == 1
+        mock_db.add.assert_not_called()
+
+    def test_upsert_crm_activity_item_dedupe_hit(self, service, org_id, mock_db):
+        """Existing activity sync mapping should dedupe on replay."""
+        from app.models.sync.sync_entity import SyncStatus
+        from app.schemas.sync.dotmac_crm import CRMTicketActivityEntry
+
+        ticket = MagicMock()
+        ticket.ticket_id = uuid.uuid4()
+        ticket.ticket_number = "TKT-001"
+
+        existing_comment = MagicMock()
+        existing_comment.comment_id = uuid.uuid4()
+
+        existing_sync = MagicMock()
+        existing_sync.target_id = existing_comment.comment_id
+        existing_sync.sync_status = SyncStatus.SYNCED
+
+        mock_db.scalar.return_value = existing_sync
+        mock_db.get.return_value = existing_comment
+
+        entry = CRMTicketActivityEntry(
+            kind="event",
+            id="event-1",
+            event_type="status_changed",
+            status="resolved",
+            details={"from": "open", "to": "resolved"},
+        )
+
+        _, dedupe = service._upsert_crm_activity_item(org_id, ticket, entry)
+
+        assert dedupe == 1
+        mock_db.add.assert_not_called()
+
+    def test_resolve_crm_person_id_accepts_employee_id(self, service, org_id, mock_db):
+        """author_person_id fallback should resolve employee_id -> person_id."""
+        person_id = uuid.uuid4()
+
+        mock_employee = MagicMock()
+        mock_employee.organization_id = org_id
+        mock_employee.person_id = person_id
+
+        # First db.get(Person, external_id) -> None; then db.get(Employee, external_id) -> employee
+        mock_db.get.side_effect = [None, mock_employee]
+
+        resolved = service._resolve_crm_person_id(org_id, str(uuid.uuid4()))
+
+        assert resolved == person_id
+
 
 class TestSyncWorkOrder:
     """Test work order (task) sync operations."""
@@ -964,6 +1146,84 @@ class TestListDepartments:
         assert result.offset == 2
 
 
+class TestListWorkforceEmployees:
+    """Test list_workforce_employees for CRM staff lookup."""
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_list_workforce_employees_returns_required_fields(
+        self, mock_select, service, org_id, mock_db
+    ):
+        """Should return employee_id and email with optional fields."""
+        from app.models.people.hr.employee import EmployeeStatus
+
+        person = MagicMock()
+        person.first_name = "Chiedozie"
+        person.last_name = "Obiechina"
+        person.email = "c.obiechina@dotmac.ng"
+
+        dept = MagicMock()
+        dept.department_name = "Support"
+        desg = MagicMock()
+        desg.designation_name = "Engineer"
+
+        emp = MagicMock()
+        emp.employee_id = uuid.uuid4()
+        emp.employee_code = "EMP-001"
+        emp.person = person
+        emp.department = dept
+        emp.designation = desg
+        emp.status = EmployeeStatus.ACTIVE
+
+        mock_db.scalars.return_value.all.return_value = [emp]
+
+        result = service.list_workforce_employees(org_id)
+
+        assert result.total == 1
+        assert len(result.employees) == 1
+        row = result.employees[0]
+        assert str(row.employee_id) == str(emp.employee_id)
+        assert row.email == "c.obiechina@dotmac.ng"
+        assert row.full_name == "Chiedozie Obiechina"
+        assert row.department == "Support"
+        assert row.designation == "Engineer"
+        assert row.is_active is True
+
+    @patch("app.services.sync.dotmac_crm_sync_service.select")
+    def test_list_workforce_employees_pagination_and_filter(
+        self, mock_select, service, org_id, mock_db
+    ):
+        """Should paginate and exclude employees without mappable email."""
+        from app.models.people.hr.employee import EmployeeStatus
+
+        def mk_emp(code: str, email: str | None):
+            person = MagicMock()
+            person.first_name = "A"
+            person.last_name = code
+            person.email = email
+            emp = MagicMock()
+            emp.employee_id = uuid.uuid4()
+            emp.employee_code = code
+            emp.person = person
+            emp.department = None
+            emp.designation = None
+            emp.status = EmployeeStatus.ACTIVE
+            return emp
+
+        e1 = mk_emp("E1", "e1@x.com")
+        e2 = mk_emp("E2", None)  # filtered out (no email)
+        e3 = mk_emp("E3", "e3@x.com")
+        mock_db.scalars.return_value.all.return_value = [e1, e2, e3]
+
+        result = service.list_workforce_employees(org_id, limit=1, offset=1)
+
+        assert result.total == 2
+        assert result.limit == 1
+        assert result.offset == 1
+        assert result.has_more is False
+        assert len(result.employees) == 1
+        assert result.employees[0].email == "e3@x.com"
+
+
 class TestListCompanies:
     """Test list_companies for CRM contacts sync."""
 
@@ -1406,6 +1666,39 @@ class TestEnhancedBulkPayloads:
             status="open",
         )
         assert payload.assigned_employee_emails == []
+        assert payload.description is None
+        assert payload.comments == []
+        assert payload.activity_log == []
+
+    def test_ticket_payload_accepts_comments_activity_log(self):
+        """CRMTicketPayload should accept new comments and activity_log fields."""
+        payload = CRMTicketPayload(
+            crm_id="test-456",
+            subject="Test Ticket",
+            status="open",
+            description="Ticket description",
+            comments=[{"id": "comment-1", "body": "Investigating"}],
+            activity_log=[{"id": "activity-1", "event": "created"}],
+        )
+        assert payload.description == "Ticket description"
+        assert payload.comments[0]["id"] == "comment-1"
+        assert payload.activity_log[0]["id"] == "activity-1"
+
+    def test_ticket_payload_accepts_alias_fields(self):
+        """CRMTicketPayload should accept alternate CRM key names."""
+        payload = CRMTicketPayload.model_validate(
+            {
+                "crm_id": "test-456",
+                "subject": "Test Ticket",
+                "status": "open",
+                "body": "Alt description",
+                "ticket_comments": [{"id": "comment-1"}],
+                "activityLog": [{"kind": "event", "id": "a-1"}],
+            }
+        )
+        assert payload.description == "Alt description"
+        assert payload.comments[0]["id"] == "comment-1"
+        assert payload.activity_log[0]["id"] == "a-1"
 
     def test_work_order_payload_assigned_emails(self):
         """CRMWorkOrderPayload should accept assigned_employee_emails."""

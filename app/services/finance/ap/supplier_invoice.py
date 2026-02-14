@@ -977,6 +977,7 @@ class SupplierInvoiceService(ListResponseMixin):
             True if GL entries were created, False if already posted or N/A
         """
         postable_statuses = {
+            SupplierInvoiceStatus.APPROVED,
             SupplierInvoiceStatus.POSTED,
             SupplierInvoiceStatus.PAID,
             SupplierInvoiceStatus.PARTIALLY_PAID,
@@ -985,6 +986,9 @@ class SupplierInvoiceService(ListResponseMixin):
             return False
         if invoice.journal_entry_id is not None:
             return False  # Already has GL entries
+        # Zero-amount invoices have nothing to post
+        if invoice.total_amount == Decimal("0"):
+            return False
 
         try:
             from app.services.finance.ap.ap_posting_adapter import APPostingAdapter

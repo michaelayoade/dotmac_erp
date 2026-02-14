@@ -9,9 +9,6 @@
 {% if brand.css %}
 <style>{{ brand.css | safe }}</style>
 {% endif %}
-{% if brand.favicon_url %}
-<link rel="icon" href="{{ brand.favicon_url }}" type="image/png">
-{% endif %}
 {% endblock %}
 
 {% block body %}
@@ -26,7 +23,7 @@
         <div class="text-center mb-8 stagger-in">
             <a href="/" class="inline-flex flex-col items-center gap-3">
                 {% if brand_logo_url %}
-                    <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo" class="h-16 w-16 rounded-2xl object-cover shadow-lg shadow-primary-500/20" />
+                    <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo" class="h-16 w-auto max-w-[240px] rounded-2xl object-contain shadow-lg shadow-primary-500/20" />
                 {% else %}
                     <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 via-primary-600 to-accent-500 text-xl font-semibold uppercase text-white shadow-xl shadow-primary-500/30 ring-4 ring-white/50 dark:ring-slate-800/50">
                         {{ brand_mark }}

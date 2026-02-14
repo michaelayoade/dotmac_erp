@@ -52,6 +52,7 @@
         </div>
         {% endcall %}
 
+    <div id="results-container">
     <!-- Fields grouped by entity type -->
     {% if grouped_fields %}
     {% for entity_type, entity_fields in grouped_fields.items() %}
@@ -143,5 +144,6 @@
         </div>
     </div>
     {% endif %}
+    </div>
 </div>
 {% endblock %}

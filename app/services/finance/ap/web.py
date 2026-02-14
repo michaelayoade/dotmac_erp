@@ -3244,7 +3244,7 @@ class APWebService:
         page: int,
         db: Session,
     ) -> HTMLResponse:
-        context = base_context(request, auth, "Purchase Orders", "ap")
+        context = base_context(request, auth, "Purchase Orders", "ap", db=db)
         context.update(
             self.list_purchase_orders_context(
                 db,

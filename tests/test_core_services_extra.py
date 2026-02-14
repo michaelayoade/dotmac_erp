@@ -7,6 +7,7 @@ from app.schemas.rbac import PermissionCreate, PersonRoleCreate, RoleCreate
 from app.services import audit as audit_service
 from app.services import rbac as rbac_service
 from app.services import scheduler as scheduler_service
+from app.services.admin.web import admin_web_service
 
 
 def test_rbac_role_permission_link(db_session, person):
@@ -56,3 +57,38 @@ def test_audit_log_request(db_session):
 def test_scheduler_refresh_response():
     result = scheduler_service.refresh_schedule()
     assert "detail" in result
+
+
+def test_admin_audit_logs_context_resolves_actor_name(db_session, person):
+    event = audit_service.AuditEvent(
+        actor_type=audit_service.AuditActorType.user,
+        organization_id=person.organization_id,
+        actor_person_id=person.id,
+        actor_id=str(person.id),
+        action="POST",
+        entity_type="/test",
+        entity_id=None,
+        status_code=200,
+        is_success=True,
+        is_active=True,
+        ip_address="127.0.0.1",
+        user_agent="pytest",
+        request_id="req-1",
+        metadata_={"path": "/test", "query": {}},
+    )
+    db_session.add(event)
+    db_session.commit()
+
+    context = admin_web_service.audit_logs_context(
+        db=db_session,
+        organization_id=person.organization_id,
+        search="",
+        actor_type="",
+        status="",
+        page=1,
+    )
+    matching = [
+        event for event in context["events"] if event.get("actor_id") == str(person.id)
+    ]
+    assert matching
+    assert matching[0]["actor_name"] == person.name

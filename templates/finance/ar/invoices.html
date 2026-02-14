@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import live_search, pagination, status_badge, empty_state, action_buttons, stats_card, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export %}
+{% from "components/macros.html" import compact_filters, pagination, status_badge, empty_state, action_buttons, stats_card, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, filter_select_field, filter_entity_select_field, list_header_actions %}
 
 {% block page_title %}AR Invoices{% endblock %}
 
@@ -14,65 +14,43 @@
 {% endblock %}
 
 {% block header_actions %}
-<div class="flex items-center gap-2">
-    <button onclick="exportAll('/finance/ar/invoices/export')" class="btn btn-secondary">
-        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-        </svg>
-        Export
-    </button>
-    <a href="/finance/ar/invoices/new" class="btn btn-primary">
-        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-        </svg>
-        New Invoice
-    </a>
-</div>
+{{ list_header_actions(
+    export_url="/finance/ar/invoices/export",
+    new_url="/finance/ar/invoices/new",
+    new_label="New Invoice"
+) }}
 {% endblock %}
 
 {% block content %}
 <div class="space-y-6 page-enter">
+    {% set zero_amount = ((presentation_currency_code or default_currency_code) ~ ' 0.00') if (presentation_currency_code or default_currency_code) else '0.00' %}
     {# Stats Summary #}
     <div class="grid gap-4 sm:grid-cols-4">
-        {{ stats_card("Total Outstanding", stats.total_outstanding | default("₦0.00"), icon="currency", color="slate") }}
-        {{ stats_card("Past Due", stats.past_due | default("₦0.00"), icon="warning", color="rose") }}
-        {{ stats_card("Due This Week", stats.due_this_week | default("₦0.00"), icon="clock", color="amber") }}
-        {{ stats_card("This Month", stats.this_month | default("₦0.00"), icon="chart", color="emerald") }}
+        {{ stats_card("Total Outstanding", stats.total_outstanding | default(zero_amount), icon="currency", color="slate") }}
+        {{ stats_card("Past Due", stats.past_due | default(zero_amount), icon="warning", color="rose") }}
+        {{ stats_card("Due This Week", stats.due_this_week | default(zero_amount), icon="clock", color="amber") }}
+        {{ stats_card("This Month", stats.this_month | default(zero_amount), icon="chart", color="emerald") }}
     </div>
 
     {# Search and Filters #}
-    {% call(search_attrs) live_search(
-        search=search,
-        filters=[
-            {
-                "name": "status",
-                "label": "All Status",
-                "value": status,
-                "options": [
-                    {"value": "DRAFT", "label": "Draft"},
-                    {"value": "POSTED", "label": "Posted"},
-                    {"value": "PARTIALLY_PAID", "label": "Partially Paid"},
-                    {"value": "PAID", "label": "Paid"},
-                    {"value": "OVERDUE", "label": "Overdue"}
-                ]
-            }
-        ],
+    {% call(filter_attrs) compact_filters(
         base_url="/finance/ar/invoices",
-        placeholder="Search invoices by number or reference..."
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search | default('', true),
+        search_placeholder="Search invoices by number or reference...",
+        date_range=true,
+        start_date=start_date | default('', true),
+        end_date=end_date | default('', true)
     ) %}
-        {# Customer Filter (dynamic from context) #}
-        <select name="customer_id" class="form-select" {{ search_attrs }}>
-            <option value="">All Customers</option>
-            {% for c in customers_list %}
-            <option value="{{ c.customer_id }}" {{ 'selected' if customer_id == c.customer_id|string else '' }}>{{ c.customer_name }}</option>
-            {% endfor %}
-        </select>
-
-        {# Date Range #}
-        <input type="date" name="start_date" value="{{ start_date if start_date else '' }}"
-               class="form-input" placeholder="Start Date" {{ search_attrs }}>
-        <input type="date" name="end_date" value="{{ end_date if end_date else '' }}"
-               class="form-input" placeholder="End Date" {{ search_attrs }}>
+        {{ filter_select_field("status", "Status", status, [
+            {"value": "DRAFT", "label": "Draft"},
+            {"value": "POSTED", "label": "Posted"},
+            {"value": "PARTIALLY_PAID", "label": "Partially Paid"},
+            {"value": "PAID", "label": "Paid"},
+            {"value": "OVERDUE", "label": "Overdue"}
+        ], filter_attrs) }}
+        {{ filter_entity_select_field("customer_id", "Customer", customer_id, customers_list, "customer_id", "customer_name", filter_attrs) }}
     {% endcall %}
 
     <div id="results-container">
@@ -84,20 +62,21 @@
                     <thead>
                         <tr>
                             {{ bulk_select_header() }}
+                            <th scope="col">Invoice Date</th>
                             <th scope="col">Invoice #</th>
-                        <th scope="col">Customer</th>
-                        <th class="hidden sm:table-cell" scope="col">Invoice Date</th>
-                        <th class="hidden sm:table-cell" scope="col">Due Date</th>
-                        <th scope="col" class="text-right">Amount</th>
-                        <th scope="col" class="text-right">Balance</th>
-                        <th scope="col" class="text-center">Status</th>
-                        <th scope="col" class="text-right">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
+                            <th scope="col">Customer</th>
+                            <th class="hidden sm:table-cell" scope="col">Due Date</th>
+                            <th scope="col" class="text-right">Amount</th>
+                            <th scope="col" class="text-right">Balance</th>
+                            <th scope="col" class="text-center">Status</th>
+                            <th scope="col" class="text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
                         {% for invoice in invoices %}
                         <tr class="group">
                             {{ bulk_select_cell(invoice.invoice_id) }}
+                            <td class="text-slate-600 dark:text-slate-400">{{ invoice.invoice_date }}</td>
                             <td>
                                 <a href="/finance/ar/invoices/{{ invoice.invoice_id }}" class="inline-flex items-center gap-2 font-mono text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 transition-colors">
                                     <span class="h-5 w-0.5 rounded-full bg-teal-400 dark:bg-teal-500 opacity-60"></span>
@@ -107,7 +86,6 @@
                         <td>
                             <p class="text-sm font-medium text-slate-900 dark:text-white">{{ invoice.customer_name }}</p>
                         </td>
-                        <td class="hidden sm:table-cell text-slate-600 dark:text-slate-400">{{ invoice.invoice_date }}</td>
                         <td class="hidden sm:table-cell">
                             {% if invoice.is_overdue %}
                             <span class="text-rose-600 dark:text-rose-400 font-medium">{{ invoice.due_date }}</span>
@@ -116,31 +94,24 @@
                             <span class="text-slate-600 dark:text-slate-400">{{ invoice.due_date }}</span>
                             {% endif %}
                         </td>
-                        <td class="text-right font-mono text-sm text-slate-500 dark:text-slate-400">{{ invoice.total_amount | default("₦0.00") }}</td>
-                        <td class="text-right font-mono font-semibold text-slate-900 dark:text-white">{{ invoice.balance | default("₦0.00") }}</td>
+                        <td class="text-right font-mono text-sm text-slate-500 dark:text-slate-400">{{ invoice.total_amount | default(zero_amount) }}</td>
+                        <td class="text-right font-mono font-semibold text-slate-900 dark:text-white">{{ invoice.balance | default(zero_amount) }}</td>
                         <td class="text-center">
                             {{ status_badge(invoice.status, 'sm') }}
                         </td>
                         <td>
-                            <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <a href="/finance/ar/invoices/{{ invoice.invoice_id }}"
-                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
-                                   title="View" aria-label="View">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                    </svg>
-                                </a>
-                                {% if invoice.status not in ['PAID', 'VOIDED', 'CANCELLED'] %}
-                                <a href="/finance/ar/receipts/new?invoice_id={{ invoice.invoice_id }}"
-                                   class="rounded-lg p-2 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400 transition-colors"
-                                   title="Record Payment">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
-                                    </svg>
-                                </a>
-                                {% endif %}
-                            </div>
+                            {{ action_buttons(
+                                view_href="/finance/ar/invoices/" ~ invoice.invoice_id,
+                                extra_actions=[
+                                    {
+                                        "href": "/finance/ar/receipts/new?invoice_id=" ~ invoice.invoice_id,
+                                        "title": "Record Payment",
+                                        "icon": "credit-card",
+                                        "aria_label": "Record Payment",
+                                        "class": "rounded-lg p-2 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400 transition-colors"
+                                    }
+                                ] if invoice.status not in ['PAID', 'VOIDED', 'CANCELLED'] else []
+                            ) }}
                         </td>
                     </tr>
                         {% else %}

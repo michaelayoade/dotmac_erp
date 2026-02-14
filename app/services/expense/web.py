@@ -307,6 +307,74 @@ class ExpenseClaimsWebService:
         return templates.TemplateResponse(request, "expense/claim_detail.html", context)
 
     @staticmethod
+    def claim_item_detail_response(
+        request: Request,
+        claim_id: str,
+        item_id: str,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> HTMLResponse | RedirectResponse:
+        org_id = coerce_uuid(auth.organization_id)
+        claim_uuid = coerce_uuid(claim_id)
+        item_uuid = coerce_uuid(item_id)
+
+        item = (
+            db.scalars(
+                select(ExpenseClaimItem)
+                .options(
+                    joinedload(ExpenseClaimItem.category),
+                    joinedload(ExpenseClaimItem.claim).joinedload(
+                        ExpenseClaim.employee
+                    ),
+                    joinedload(ExpenseClaimItem.claim).joinedload(
+                        ExpenseClaim.approver
+                    ),
+                    joinedload(ExpenseClaimItem.claim).joinedload(ExpenseClaim.project),
+                    joinedload(ExpenseClaimItem.claim).joinedload(ExpenseClaim.ticket),
+                    joinedload(ExpenseClaimItem.claim).joinedload(ExpenseClaim.task),
+                )
+                .join(ExpenseClaim, ExpenseClaim.claim_id == ExpenseClaimItem.claim_id)
+                .where(
+                    ExpenseClaim.organization_id == org_id,
+                    ExpenseClaim.claim_id == claim_uuid,
+                    ExpenseClaimItem.item_id == item_uuid,
+                )
+            )
+            .unique()
+            .first()
+        )
+        if not item:
+            return RedirectResponse(f"/expense/claims/{claim_id}", status_code=302)
+
+        requested_approver = None
+        claim = item.claim
+        if claim and claim.requested_approver_id:
+            requested_approver = db.scalars(
+                select(Employee).where(
+                    Employee.organization_id == org_id,
+                    Employee.employee_id == claim.requested_approver_id,
+                )
+            ).first()
+
+        context = base_context(
+            request,
+            auth,
+            f"Expense Item {item.sequence or 0}",
+            "claims",
+        )
+        context.update(
+            {
+                "claim": claim,
+                "item": item,
+                "requested_approver": requested_approver,
+                "error": request.query_params.get("error"),
+            }
+        )
+        return templates.TemplateResponse(
+            request, "expense/claim_item_detail.html", context
+        )
+
+    @staticmethod
     def claim_receipt_response(
         claim_id: str,
         item_id: str,

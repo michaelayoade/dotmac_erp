@@ -8,7 +8,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Query, Session
 
 from app.models.finance.ap.supplier import Supplier
-from app.models.finance.ap.supplier_payment import SupplierPayment
+from app.models.finance.ap.supplier_payment import APPaymentStatus, SupplierPayment
 from app.services.common import coerce_uuid
 from app.services.finance.ap.web.base import parse_payment_status
 from app.services.finance.common import parse_date
@@ -39,7 +39,11 @@ def build_payment_query(
 
     if supplier_id:
         query = query.filter(SupplierPayment.supplier_id == coerce_uuid(supplier_id))
-    if status_value:
+    if status == "POSTED":
+        query = query.filter(
+            SupplierPayment.status.in_([APPaymentStatus.SENT, APPaymentStatus.CLEARED])
+        )
+    elif status_value:
         query = query.filter(SupplierPayment.status == status_value)
     if from_date:
         query = query.filter(SupplierPayment.payment_date >= from_date)

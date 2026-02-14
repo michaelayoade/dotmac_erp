@@ -23,12 +23,21 @@
 {# Flash messages from query params #}
 {% set success_msg = request.query_params.get('success') %}
 {% set error_msg = request.query_params.get('error') %}
+{% set auto_matched = request.query_params.get('auto_matched') %}
 {% if success_msg %}
 <div class="mb-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 flex items-center gap-3">
     <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
     </svg>
     <span class="text-sm text-emerald-700 dark:text-emerald-300">{{ success_msg | replace('+', ' ') }}</span>
+</div>
+{% endif %}
+{% if auto_matched %}
+<div class="mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 flex items-center gap-3">
+    <svg class="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+    </svg>
+    <span class="text-sm text-blue-700 dark:text-blue-300">{{ auto_matched }} line{{ 's' if auto_matched != '1' else '' }} auto-matched to internal Paystack transfers.</span>
 </div>
 {% endif %}
 {% if error_msg %}
@@ -42,16 +51,89 @@
 
 <div x-data='{
         suggestions: {{ match_suggestions | default({}) | tojson }},
-        glCandidates: {{ gl_candidates | default([]) | tojson }},
-        glSourceTypes: {{ gl_source_types | default([]) | tojson }},
+        glCandidates: [],
+        glSourceTypes: [],
+        glLoading: false,
+        lineAmounts: {{ line_amounts | default({}) | tojson }},
+        lineDetails: {{ line_details | default({}) | tojson }},
+        currency: {{ (statement_currency or "") | tojson }},
         matchLoading: {},
+        matchedLines: { {% for line in lines %}{% if line.is_matched %}"{{ line.line_id }}": true, {% endif %}{% endfor %} },
+        matchSourceUrls: { {% for line in lines %}{% if line.matched_source_url %}"{{ line.line_id }}": "{{ line.matched_source_url }}", {% endif %}{% endfor %} },
+        matchDetails: {{ match_details | default({}) | tojson }},
         matchModal: false,
         matchLineId: null,
         matchSearch: "",
-        matchDateFrom: "",
-        matchDateTo: "",
+        matchDateFrom: "{{ statement.period_start_iso if statement.period_start_iso else "" }}",
+        matchDateTo: "{{ statement.period_end_iso if statement.period_end_iso else "" }}",
         matchSourceType: "",
         matchAmountDir: "",
+        matchSort: "relevance",
+        statMatchedLines: {{ statement.matched_lines }},
+        statUnmatchedLines: {{ statement.unmatched_lines }},
+        statTotalLines: {{ statement.total_lines }},
+        /* Multi-match state */
+        multiMatchMode: false,
+        selectedCandidates: [],
+        get selectedTotal() {
+            return this.selectedCandidates.reduce((s, c) => s + Math.abs(c.amount), 0);
+        },
+        get selectedTotalDisplay() {
+            return this.selectedCandidates.map(c => this.currency + " " + this._fmtAmt(Math.abs(c.amount))).join(" + ");
+        },
+        get multiMatchReady() {
+            if (this.selectedCandidates.length === 0 || !this.matchLineId) return false;
+            const bankAmt = Math.abs(this.lineAmounts[this.matchLineId] || 0);
+            const diff = Math.abs(this.selectedTotal - bankAmt);
+            return diff / Math.max(bankAmt, this.selectedTotal, 0.01) <= 0.01 || diff <= 0.01;
+        },
+        get multiMatchDiff() {
+            if (!this.matchLineId) return 0;
+            const bankAmt = Math.abs(this.lineAmounts[this.matchLineId] || 0);
+            return Math.abs(this.selectedTotal - bankAmt);
+        },
+        toggleCandidate(id, amount) {
+            const idx = this.selectedCandidates.findIndex(c => c.id === id);
+            if (idx >= 0) { this.selectedCandidates.splice(idx, 1); }
+            else { this.selectedCandidates.push({id, amount}); }
+        },
+        isCandidateSelected(id) {
+            return this.selectedCandidates.some(c => c.id === id);
+        },
+        doMultiMatch() {
+            if (!this.matchLineId || this.selectedCandidates.length === 0) return;
+            const ids = this.selectedCandidates.map(c => c.id);
+            this.matchLoading[this.matchLineId] = true;
+            this.matchModal = false;
+            fetch("/finance/banking/statements/{{ statement.statement_id }}/lines/" + this.matchLineId + "/multi-match", {
+                method: "POST",
+                headers: {"Content-Type": "application/json", "X-CSRF-Token": document.querySelector("[name=csrf_token]")?.value || ""},
+                body: JSON.stringify({journal_line_ids: ids, force_match: false})
+            }).then(r => r.json()).then(d => {
+                if (d.status === "ok") {
+                    this.matchedLines[this.matchLineId] = true;
+                    this.matchSourceUrls[this.matchLineId] = d.source_url || "";
+                    this.matchDetails[this.matchLineId] = d.match_detail || null;
+                    this.statMatchedLines = d.matched_lines;
+                    this.statUnmatchedLines = d.unmatched_lines;
+                    this.statTotalLines = d.total_lines;
+                    ids.forEach(id => { const c = this.glCandidates.find(x => x.journal_line_id === id); if (c) c.is_already_matched = true; });
+                    window.showToast("Matched to " + d.match_count + " GL entries", "success");
+                } else {
+                    window.showToast(d.detail || "Multi-match failed", "error");
+                }
+                this.matchLoading[this.matchLineId] = false;
+            }).catch(() => { window.showToast("Multi-match failed", "error"); this.matchLoading[this.matchLineId] = false; });
+        },
+        /* Mismatch confirmation modal state */
+        confirmModal: false,
+        confirmData: null,
+        /* Unmatch confirmation modal state */
+        unmatchModal: false,
+        unmatchLineId: null,
+        get matchPct() {
+            return this.statTotalLines ? Math.round(this.statMatchedLines / this.statTotalLines * 100) : 0;
+        },
         get filteredCandidates() {
             let results = this.glCandidates;
             const q = this.matchSearch.toLowerCase().trim();
@@ -78,7 +160,19 @@
             } else if (this.matchAmountDir === "credit") {
                 results = results.filter(c => c.amount < 0);
             }
+            /* Sort */
+            if (this.matchSort === "amount" && this.matchLineId) {
+                const bankAmt = Math.abs(this.lineAmounts[this.matchLineId] || 0);
+                results = [...results].sort((a, b) => Math.abs(Math.abs(a.amount) - bankAmt) - Math.abs(Math.abs(b.amount) - bankAmt));
+            } else if (this.matchSort === "date") {
+                results = [...results].sort((a, b) => (b.entry_date || "").localeCompare(a.entry_date || ""));
+            }
+            /* "relevance" uses server order (already sorted by score DESC) */
             return results;
+        },
+        get currentLineDetail() {
+            if (!this.matchLineId) return null;
+            return this.lineDetails[this.matchLineId] || null;
         },
         openMatchModal(lineId) {
             this.matchLineId = lineId;
@@ -87,7 +181,25 @@
             this.matchDateTo = "";
             this.matchSourceType = "";
             this.matchAmountDir = "";
+            this.matchSort = "relevance";
+            this.multiMatchMode = false;
+            this.selectedCandidates = [];
+            this.createJournalMode = false;
+            this.createJournalAccount = "";
+            this.createJournalDesc = "";
             this.matchModal = true;
+            /* Lazy-load scored candidates for this specific line */
+            this.glLoading = true;
+            this.glCandidates = [];
+            this.glSourceTypes = [];
+            fetch("/finance/banking/statements/{{ statement.statement_id }}/lines/" + lineId + "/candidates")
+                .then(r => r.json())
+                .then(data => {
+                    this.glCandidates = data.candidates || [];
+                    this.glSourceTypes = data.source_types || [];
+                    this.glLoading = false;
+                })
+                .catch(() => { this.glLoading = false; });
         },
         resetFilters() {
             this.matchSearch = "";
@@ -95,18 +207,201 @@
             this.matchDateTo = "";
             this.matchSourceType = "";
             this.matchAmountDir = "";
+            this.matchSort = "relevance";
         },
-        selectCandidate(journalLineId) {
-            this.matchModal = false;
-            this.matchLoading[this.matchLineId] = true;
-            fetch("/finance/banking/statements/{{ statement.statement_id }}/lines/" + this.matchLineId + "/match", {
+        _checkAmountMismatch(candidateAmount) {
+            const bankAmt = this.lineAmounts[this.matchLineId];
+            if (bankAmt === undefined || bankAmt === null) return { proceed: true, forceMatch: false };
+            const absBankAmt = Math.abs(bankAmt);
+            const absCandAmt = Math.abs(candidateAmount);
+            if (absBankAmt === 0 && absCandAmt === 0) return { proceed: true, forceMatch: false };
+            const maxAmt = Math.max(absBankAmt, absCandAmt);
+            const diff = Math.abs(absBankAmt - absCandAmt);
+            if (diff / maxAmt > 0.01) {
+                return { proceed: false, forceMatch: false, bankAmt: absBankAmt, candAmt: absCandAmt, diff };
+            }
+            return { proceed: true, forceMatch: false };
+        },
+        _fmtAmt(val) {
+            return val.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        },
+        _doMatch(lineId, journalLineId, forceMatch) {
+            this.matchLoading[lineId] = true;
+            fetch("/finance/banking/statements/{{ statement.statement_id }}/lines/" + lineId + "/match", {
                 method: "POST",
                 headers: {"Content-Type": "application/json", "X-CSRF-Token": document.querySelector("[name=csrf_token]")?.value || ""},
-                body: JSON.stringify({journal_line_id: journalLineId})
+                body: JSON.stringify({journal_line_id: journalLineId, force_match: forceMatch})
             }).then(r => r.json()).then(d => {
-                if (d.status === "ok") location.reload();
-                else { window.showToast(d.detail || "Match failed", "error"); this.matchLoading[this.matchLineId] = false; }
-            }).catch(() => { window.showToast("Match failed", "error"); this.matchLoading[this.matchLineId] = false; });
+                if (d.status === "ok") {
+                    this.matchedLines[lineId] = true;
+                    this.matchSourceUrls[lineId] = d.source_url || "";
+                    this.matchDetails[lineId] = d.match_detail || null;
+                    this.statMatchedLines = d.matched_lines;
+                    this.statUnmatchedLines = d.unmatched_lines;
+                    this.statTotalLines = d.total_lines;
+                    /* Mark GL candidate as matched so it greys out */
+                    const cand = this.glCandidates.find(c => c.journal_line_id === journalLineId);
+                    if (cand) cand.is_already_matched = true;
+                    window.showToast("Line matched successfully", "success");
+                } else {
+                    window.showToast(d.detail || "Match failed", "error");
+                }
+                this.matchLoading[lineId] = false;
+            }).catch(() => { window.showToast("Match failed", "error"); this.matchLoading[lineId] = false; });
+        },
+        selectCandidate(journalLineId, candidateAmount) {
+            const mismatch = this._checkAmountMismatch(candidateAmount);
+            if (!mismatch.proceed && mismatch.bankAmt !== undefined) {
+                /* Show styled mismatch confirmation modal */
+                this.confirmData = { journalLineId, bankAmt: mismatch.bankAmt, candAmt: mismatch.candAmt, diff: mismatch.diff };
+                this.confirmModal = true;
+                return;
+            }
+            this.matchModal = false;
+            this._doMatch(this.matchLineId, journalLineId, mismatch.forceMatch);
+        },
+        confirmMismatchMatch() {
+            if (!this.confirmData) return;
+            this.confirmModal = false;
+            this.matchModal = false;
+            this._doMatch(this.matchLineId, this.confirmData.journalLineId, true);
+            this.confirmData = null;
+        },
+        doUnmatch(lineId) {
+            this.matchLoading[lineId] = true;
+            fetch("/finance/banking/statements/{{ statement.statement_id }}/lines/" + lineId + "/unmatch", {
+                method: "POST",
+                headers: {"Content-Type": "application/json", "X-CSRF-Token": document.querySelector("[name=csrf_token]")?.value || ""},
+                body: "{}"
+            }).then(r => r.json()).then(d => {
+                if (d.status === "ok") {
+                    this.matchedLines[lineId] = false;
+                    this.matchSourceUrls[lineId] = "";
+                    this.matchDetails[lineId] = null;
+                    this.statMatchedLines = d.matched_lines;
+                    this.statUnmatchedLines = d.unmatched_lines;
+                    this.statTotalLines = d.total_lines;
+                    window.showToast("Match removed", "success");
+                } else {
+                    window.showToast(d.detail || "Unmatch failed", "error");
+                }
+                this.matchLoading[lineId] = false;
+            }).catch(() => { window.showToast("Unmatch failed", "error"); this.matchLoading[lineId] = false; });
+        },
+        confirmUnmatch() {
+            if (!this.unmatchLineId) return;
+            this.unmatchModal = false;
+            this.doUnmatch(this.unmatchLineId);
+            this.unmatchLineId = null;
+        },
+        batchMatchConfirmModal: false,
+        batchMatchPending: [],
+        showBatchMatchConfirm() {
+            const highConf = Object.entries(this.suggestions).filter(([lid, s]) => s.confidence >= 80 && s.amount_matched && !this.matchedLines[lid]);
+            if (highConf.length === 0) { window.showToast("No high-confidence suggestions to match", "warning"); return; }
+            this.batchMatchPending = highConf.map(([lid, s]) => {
+                const ld = this.lineDetails[lid] || {};
+                return {
+                    line_id: lid, journal_line_id: s.journal_line_id, force_match: false,
+                    confidence: s.confidence,
+                    gl_desc: s.counterparty_name || s.payment_number || "GL Transaction",
+                    stmt_desc: ld.description || "",
+                    amount: ld.raw_amount || ld.amount || 0,
+                    is_credit: ld.is_credit || false
+                };
+            });
+            this.batchMatchConfirmModal = true;
+        },
+        executeBatchMatch() {
+            this.batchMatchConfirmModal = false;
+            const matches = this.batchMatchPending.map(m => ({line_id: m.line_id, journal_line_id: m.journal_line_id, force_match: m.force_match}));
+            window.showToast(`Matching ${matches.length} suggestions...`, "info");
+            fetch("/finance/banking/statements/{{ statement.statement_id }}/batch-match", {
+                method: "POST",
+                headers: {"Content-Type": "application/json", "X-CSRF-Token": document.querySelector("[name=csrf_token]")?.value || ""},
+                body: JSON.stringify({matches})
+            }).then(r => r.json()).then(d => {
+                if (d.status === "ok") {
+                    for (const r of (d.results || [])) {
+                        if (r.status === "ok") { this.matchedLines[r.line_id] = true; this.matchSourceUrls[r.line_id] = r.source_url || ""; this.matchDetails[r.line_id] = r.match_detail || null; }
+                    }
+                    this.statMatchedLines = d.matched_lines;
+                    this.statUnmatchedLines = d.unmatched_lines;
+                    this.statTotalLines = d.total_lines;
+                    const msg = d.error_count > 0
+                        ? `Matched ${d.matched_count} lines (${d.error_count} failed)`
+                        : `Matched ${d.matched_count} lines successfully`;
+                    window.showToast(msg, d.error_count > 0 ? "warning" : "success");
+                } else { window.showToast(d.detail || "Batch match failed", "error"); }
+            }).catch(() => window.showToast("Batch match failed", "error"));
+            this.batchMatchPending = [];
+        },
+        get highConfSuggestionCount() {
+            return Object.entries(this.suggestions).filter(([lid, s]) => s.confidence >= 80 && s.amount_matched && !this.matchedLines[lid]).length;
+        },
+        /* Create Journal & Match state */
+        createJournalMode: false,
+        createJournalAccount: "",
+        createJournalDesc: "",
+        createJournalLoading: false,
+        glAccounts: {{ gl_accounts | default([]) | tojson }},
+        bankGlAccountId: {{ bank_gl_account_id | default("") | tojson }},
+        get filteredGlAccounts() {
+            /* Exclude the bank account own GL entry */
+            return this.glAccounts.filter(a => a.id !== this.bankGlAccountId);
+        },
+        autoSuggestAccount() {
+            /* Auto-select counterparty account based on line description */
+            if (!this.matchLineId) return;
+            const detail = this.lineDetails[this.matchLineId];
+            if (!detail) return;
+            const desc = (detail.description || "").toLowerCase();
+            /* Paystack pattern: suggest Paystack GL account */
+            if (desc.includes("paystack") || desc.includes("psstx") || desc.includes("pstk_stlmt")) {
+                const ps = this.glAccounts.find(a => a.name.toLowerCase().includes("paystack") && !a.name.toLowerCase().includes("opex"));
+                if (ps) { this.createJournalAccount = ps.id; return; }
+            }
+            /* Transfer patterns: suggest other bank GL */
+            if (desc.includes("trf from") || desc.includes("trf to") || desc.includes("transfer")) {
+                /* Try to identify the bank from description */
+                if (desc.includes("uba")) {
+                    const uba = this.glAccounts.find(a => a.name.toLowerCase() === "uba");
+                    if (uba && uba.id !== this.bankGlAccountId) { this.createJournalAccount = uba.id; return; }
+                }
+                if (desc.includes("zenith")) {
+                    const zen = this.glAccounts.find(a => a.name.toLowerCase().includes("zenith"));
+                    if (zen && zen.id !== this.bankGlAccountId) { this.createJournalAccount = zen.id; return; }
+                }
+            }
+            this.createJournalAccount = "";
+        },
+        doCreateJournalAndMatch() {
+            if (!this.matchLineId || !this.createJournalAccount) return;
+            this.createJournalLoading = true;
+            const lineId = this.matchLineId;
+            fetch("/finance/banking/statements/{{ statement.statement_id }}/lines/" + lineId + "/create-and-match", {
+                method: "POST",
+                headers: {"Content-Type": "application/json", "X-CSRF-Token": document.querySelector("[name=csrf_token]")?.value || ""},
+                body: JSON.stringify({
+                    counterparty_account_id: this.createJournalAccount,
+                    description: this.createJournalDesc || null
+                })
+            }).then(r => r.json()).then(d => {
+                if (d.status === "ok") {
+                    this.matchedLines[lineId] = true;
+                    this.matchSourceUrls[lineId] = d.source_url || "";
+                    this.matchDetails[lineId] = d.match_detail || null;
+                    this.statMatchedLines = d.matched_lines;
+                    this.statUnmatchedLines = d.unmatched_lines;
+                    this.statTotalLines = d.total_lines;
+                    this.matchModal = false;
+                    this.createJournalMode = false;
+                    window.showToast("Journal created and matched", "success");
+                } else {
+                    window.showToast(d.detail || "Failed to create journal", "error");
+                }
+                this.createJournalLoading = false;
+            }).catch(() => { window.showToast("Failed to create journal", "error"); this.createJournalLoading = false; });
         }
     }'
      class="space-y-6 stagger-in">
@@ -160,9 +455,9 @@
                 </div>
                 <div>
                     <div class="flex items-center gap-2">
-                        <p class="text-2xl font-bold text-slate-900 dark:text-white font-display tabular-nums">{{ ((statement.matched_lines / statement.total_lines * 100) | int if statement.total_lines else 0) }}%</p>
+                        <p class="text-2xl font-bold text-slate-900 dark:text-white font-display tabular-nums" x-text="matchPct + '%'">{{ ((statement.matched_lines / statement.total_lines * 100) | int if statement.total_lines else 0) }}%</p>
                     </div>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Match Rate ({{ statement.matched_lines }}/{{ statement.total_lines }})</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Match Rate (<span x-text="statMatchedLines">{{ statement.matched_lines }}</span>/<span x-text="statTotalLines">{{ statement.total_lines }}</span>)</p>
                 </div>
             </div>
         </div>
@@ -206,11 +501,11 @@
                     <div class="flex items-center justify-between mb-2">
                         <span class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Matching Progress</span>
                         <span class="text-sm font-medium text-slate-900 dark:text-white tabular-nums">
-                            {{ statement.matched_lines }} / {{ statement.total_lines }} matched
+                            <span x-text="statMatchedLines">{{ statement.matched_lines }}</span> / <span x-text="statTotalLines">{{ statement.total_lines }}</span> matched
                         </span>
                     </div>
                     <div class="h-2 rounded-full bg-slate-200 dark:bg-slate-700">
-                        <div class="h-2 rounded-full bg-emerald-500 transition-all duration-300" style="width: {{ (statement.matched_lines / statement.total_lines * 100) if statement.total_lines else 0 }}%"></div>
+                        <div class="h-2 rounded-full bg-emerald-500 transition-all duration-300" :style="'width: ' + matchPct + '%'"></div>
                     </div>
                 </div>
             </div>
@@ -220,9 +515,15 @@
                 <div class="border-b border-slate-200 px-6 py-4 dark:border-slate-700">
                     <div class="flex items-center justify-between">
                         <h3 class="font-medium text-slate-900 dark:text-white">Transaction Lines</h3>
-                        <div class="flex items-center gap-4 text-sm">
-                            <span class="text-emerald-600 dark:text-emerald-400 tabular-nums">{{ statement.matched_lines }} matched</span>
-                            <span class="text-amber-600 dark:text-amber-400 tabular-nums">{{ statement.unmatched_lines }} unmatched</span>
+                        <div class="flex items-center gap-3">
+                            <span class="text-sm text-emerald-600 dark:text-emerald-400 tabular-nums"><span x-text="statMatchedLines">{{ statement.matched_lines }}</span> matched</span>
+                            <span class="text-sm text-amber-600 dark:text-amber-400 tabular-nums"><span x-text="statUnmatchedLines">{{ statement.unmatched_lines }}</span> unmatched</span>
+                            <template x-if="highConfSuggestionCount > 0">
+                                <button @click="showBatchMatchConfirm()"
+                                    class="btn btn-sm text-xs bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400 dark:hover:bg-blue-900/50 transition-colors">
+                                    Match All (<span x-text="highConfSuggestionCount"></span>)
+                                </button>
+                            </template>
                         </div>
                     </div>
                 </div>
@@ -234,11 +535,10 @@
                                 <th scope="col" class="w-10 pr-2 text-center border-r border-slate-200 dark:border-slate-700">#</th>
                                 <th scope="col" class="pl-4">Date</th>
                                 <th scope="col">Description</th>
-                                <th scope="col">Reference</th>
                                 <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider">Amount</th>
-                                <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider">Balance</th>
+                                {% if has_balance_data %}<th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider">Balance</th>{% endif %}
                                 <th scope="col" class="text-center text-xs font-semibold uppercase tracking-wider">Status</th>
-                                <th scope="col">Category</th>
+                                {% if has_category_data %}<th scope="col">Category</th>{% endif %}
                                 <th scope="col" class="text-xs font-semibold uppercase tracking-wider">GL Match</th>
                             </tr>
                         </thead>
@@ -253,24 +553,22 @@
                                     <p class="text-xs text-slate-500 dark:text-slate-400">{{ line.payee_payer }}</p>
                                     {% endif %}
                                 </td>
-                                <td class="text-sm font-mono text-slate-600 dark:text-slate-400">{{ line.reference if line.reference else (line.bank_reference if line.bank_reference else "-") }}</td>
                                 <td class="text-right font-mono tabular-nums text-sm {{ 'text-emerald-600 dark:text-emerald-400' if line.transaction_type == 'credit' else 'text-rose-600 dark:text-rose-400' }}">
                                     {{ "+" if line.transaction_type == 'credit' else "-" }}{{ line.amount }}
                                 </td>
-                                <td class="text-right font-mono tabular-nums text-sm text-slate-600 dark:text-slate-400">{{ line.running_balance if line.running_balance else "-" }}</td>
+                                {% if has_balance_data %}<td class="text-right font-mono tabular-nums text-sm text-slate-600 dark:text-slate-400">{{ line.running_balance if line.running_balance else "-" }}</td>{% endif %}
                                 <td class="text-center">
-                                    {% if line.is_matched %}
-                                    <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                    <span x-show="matchedLines['{{ line.line_id }}']"
+                                          class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
                                         <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                                         </svg>
                                         Matched
                                     </span>
-                                    {% else %}
-                                    <span class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">Unmatched</span>
-                                    {% endif %}
+                                    <span x-show="!matchedLines['{{ line.line_id }}']"
+                                          class="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">Unmatched</span>
                                 </td>
-                                <td>
+                                {% if has_category_data %}<td>
                                     {% if line.categorization_status == 'SUGGESTED' or line.categorization_status == 'FLAGGED' %}
                                     {# Suggestion awaiting review #}
                                     <div class="space-y-1">
@@ -339,50 +637,73 @@
                                     {% else %}
                                     <span class="text-xs text-slate-300 dark:text-slate-600">&mdash;</span>
                                     {% endif %}
-                                </td>
+                                </td>{% endif %}
 
-                                {# GL Transaction Match column #}
+                                {# GL Transaction Match column — Alpine-reactive #}
                                 <td>
-                                    {% if line.is_matched %}
-                                    {# Already matched — show matched indicator with unmatch option #}
-                                    <div class="flex items-center gap-1.5">
-                                        <svg class="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                    {# ── Matched state ── #}
+                                    <div x-show="matchedLines['{{ line.line_id }}']" class="flex items-start gap-1.5">
+                                        <svg class="h-3.5 w-3.5 text-emerald-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
                                         </svg>
-                                        <span class="text-xs text-emerald-700 dark:text-emerald-400">Linked</span>
-                                        <button @click="
-                                            if (!confirm('Remove this match?')) return;
-                                            matchLoading['{{ line.line_id }}'] = true;
-                                            fetch('/finance/banking/statements/{{ statement.statement_id }}/lines/{{ line.line_id }}/unmatch', {
-                                                method: 'POST',
-                                                headers: {'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('[name=csrf_token]')?.value || ''},
-                                                body: '{}'
-                                            }).then(r => r.json()).then(d => {
-                                                if (d.status === 'ok') location.reload();
-                                                else { window.showToast(d.detail || 'Unmatch failed', 'error'); matchLoading['{{ line.line_id }}'] = false; }
-                                            }).catch(() => { window.showToast('Unmatch failed', 'error'); matchLoading['{{ line.line_id }}'] = false; })
-                                        "
-                                        class="inline-flex items-center rounded px-1 py-0.5 text-xs text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:text-rose-400 dark:hover:bg-rose-900/20 transition-colors"
-                                        aria-label="Remove match" title="Remove match"
-                                        :disabled="matchLoading['{{ line.line_id }}']">
+                                        {# Rich detail when metadata is available #}
+                                        <template x-if="matchDetails['{{ line.line_id }}']">
+                                            <div class="min-w-0 flex-1">
+                                                <template x-if="matchDetails['{{ line.line_id }}'].url">
+                                                    <a :href="matchDetails['{{ line.line_id }}'].url" target="_blank"
+                                                       class="text-xs font-medium text-emerald-700 dark:text-emerald-400 hover:underline truncate block max-w-[150px]"
+                                                       :title="matchDetails['{{ line.line_id }}'].label"
+                                                       x-text="matchDetails['{{ line.line_id }}'].label"></a>
+                                                </template>
+                                                <template x-if="!matchDetails['{{ line.line_id }}'].url">
+                                                    <span class="text-xs font-medium text-emerald-700 dark:text-emerald-400 truncate block max-w-[150px]"
+                                                          x-text="matchDetails['{{ line.line_id }}'].label"></span>
+                                                </template>
+                                                <p class="text-xs text-slate-400 dark:text-slate-500 truncate max-w-[150px]"
+                                                   x-show="matchDetails['{{ line.line_id }}'].sub || matchDetails['{{ line.line_id }}'].type">
+                                                    <span x-show="matchDetails['{{ line.line_id }}'].sub"
+                                                          class="font-mono"
+                                                          x-text="matchDetails['{{ line.line_id }}'].sub"></span>
+                                                    <span x-show="matchDetails['{{ line.line_id }}'].sub && matchDetails['{{ line.line_id }}'].type"> &middot; </span>
+                                                    <span x-text="matchDetails['{{ line.line_id }}'].type"></span>
+                                                </p>
+                                            </div>
+                                        </template>
+                                        {# Fallback: simple "Linked" when no metadata #}
+                                        <template x-if="!matchDetails['{{ line.line_id }}']">
+                                            <div class="min-w-0 flex-1">
+                                                <template x-if="matchSourceUrls['{{ line.line_id }}']">
+                                                    <a :href="matchSourceUrls['{{ line.line_id }}']" target="_blank"
+                                                       class="text-xs text-emerald-700 dark:text-emerald-400 hover:underline"
+                                                       title="View matched document">Linked</a>
+                                                </template>
+                                                <template x-if="!matchSourceUrls['{{ line.line_id }}']">
+                                                    <span class="text-xs text-emerald-700 dark:text-emerald-400">Linked</span>
+                                                </template>
+                                            </div>
+                                        </template>
+                                        <button @click="unmatchLineId = '{{ line.line_id }}'; unmatchModal = true"
+                                            class="inline-flex items-center rounded px-1 py-0.5 text-xs text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:text-rose-400 dark:hover:bg-rose-900/20 transition-colors flex-shrink-0"
+                                            aria-label="Remove match" title="Remove match"
+                                            :disabled="matchLoading['{{ line.line_id }}']">
                                             <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                                             </svg>
                                         </button>
                                     </div>
 
-                                    {% elif match_suggestions.get(line.line_id | string) %}
-                                    {# Has a GL match suggestion #}
+                                    {# ── Unmatched state ── #}
+                                    <div x-show="!matchedLines['{{ line.line_id }}']">
                                     {% set line_id_str = line.line_id | string %}
+                                    {% if match_suggestions.get(line_id_str) %}
+                                    {# Has a GL match suggestion #}
                                     <template x-if="suggestions['{{ line_id_str }}']">
                                         <div class="space-y-1">
                                             <div class="flex items-center gap-1.5">
-                                                {# Counterparty / payment info #}
                                                 <span class="text-xs text-blue-700 dark:text-blue-400 truncate max-w-[130px]"
                                                       :title="suggestions['{{ line_id_str }}'].counterparty_name || suggestions['{{ line_id_str }}'].payment_number || 'GL Transaction'"
                                                       x-text="suggestions['{{ line_id_str }}'].counterparty_name || suggestions['{{ line_id_str }}'].payment_number || 'GL Transaction'">
                                                 </span>
-                                                {# Confidence badge #}
                                                 <template x-if="suggestions['{{ line_id_str }}'].confidence >= 80">
                                                     <span class="inline-flex rounded-full bg-emerald-100 px-1.5 py-0.5 text-xs font-mono tabular-nums text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
                                                           x-text="Math.round(suggestions['{{ line_id_str }}'].confidence) + '%'"></span>
@@ -396,23 +717,16 @@
                                                           x-text="Math.round(suggestions['{{ line_id_str }}'].confidence) + '%'"></span>
                                                 </template>
                                             </div>
-                                            {# Payment number if available #}
                                             <template x-if="suggestions['{{ line_id_str }}'].counterparty_name && suggestions['{{ line_id_str }}'].payment_number">
                                                 <p class="text-xs text-slate-400 dark:text-slate-500 font-mono truncate max-w-[150px]"
                                                    x-text="suggestions['{{ line_id_str }}'].payment_number"></p>
                                             </template>
-                                            {# Accept match button #}
                                             <div class="flex items-center gap-1">
                                                 <button @click="
-                                                    matchLoading['{{ line_id_str }}'] = true;
-                                                    fetch('/finance/banking/statements/{{ statement.statement_id }}/lines/{{ line_id_str }}/match', {
-                                                        method: 'POST',
-                                                        headers: {'Content-Type': 'application/json', 'X-CSRF-Token': document.querySelector('[name=csrf_token]')?.value || ''},
-                                                        body: JSON.stringify({journal_line_id: suggestions['{{ line_id_str }}'].journal_line_id})
-                                                    }).then(r => r.json()).then(d => {
-                                                        if (d.status === 'ok') location.reload();
-                                                        else { window.showToast(d.detail || 'Match failed', 'error'); matchLoading['{{ line_id_str }}'] = false; }
-                                                    }).catch(() => { window.showToast('Match failed', 'error'); matchLoading['{{ line_id_str }}'] = false; })
+                                                    matchLineId = '{{ line_id_str }}';
+                                                    const s = suggestions['{{ line_id_str }}'];
+                                                    const cand = glCandidates.find(c => c.journal_line_id === s.journal_line_id);
+                                                    selectCandidate(s.journal_line_id, cand ? cand.amount : 0)
                                                 "
                                                 class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-900/30 transition-colors"
                                                 aria-label="Accept GL match" title="Accept match"
@@ -430,6 +744,15 @@
                                                     </template>
                                                     <span>Match</span>
                                                 </button>
+                                                <template x-if="suggestions['{{ line_id_str }}'].source_url">
+                                                    <a :href="suggestions['{{ line_id_str }}'].source_url" target="_blank"
+                                                       class="inline-flex items-center rounded px-1 py-0.5 text-xs text-slate-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:text-teal-400 dark:hover:bg-teal-900/20 transition-colors"
+                                                       aria-label="View source document" title="View document">
+                                                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+                                                        </svg>
+                                                    </a>
+                                                </template>
                                                 <button @click="openMatchModal('{{ line_id_str }}')"
                                                     class="inline-flex items-center rounded px-1 py-0.5 text-xs text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 transition-colors"
                                                     aria-label="Browse GL transactions" title="Browse all">
@@ -440,7 +763,6 @@
                                             </div>
                                         </div>
                                     </template>
-
                                     {% else %}
                                     {# No auto-suggestion — show Find Match button #}
                                     <button @click="openMatchModal('{{ line.line_id }}')"
@@ -452,11 +774,12 @@
                                         <span>Find</span>
                                     </button>
                                     {% endif %}
+                                    </div>
                                 </td>
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="9" class="py-12">
+                                <td colspan="{{ 6 + (1 if has_balance_data else 0) + (1 if has_category_data else 0) }}" class="py-12">
                                     {{ empty_state("No transaction lines", "This statement has no lines to show.") }}
                                 </td>
                             </tr>
@@ -529,6 +852,21 @@
                         </button>
                     </form>
 
+                    {# Auto-Match button — deterministic matching against Paystack + Splynx payments #}
+                    {% if statement.unmatched_lines > 0 %}
+                    <form method="POST" action="/finance/banking/statements/{{ statement.statement_id }}/auto-match"
+                          onsubmit="return confirm('Run auto-match on {{ statement.unmatched_lines }} unmatched lines?\n\nThis will attempt to match against Paystack and Splynx payments.');">
+                        {{ request.state.csrf_form | safe }}
+                        <button type="submit"
+                                class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 transition-colors">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            Auto-Match Payments
+                        </button>
+                    </form>
+                    {% endif %}
+
                     {% if statement.bank_account_id %}
                     <a href="/finance/banking/accounts/{{ statement.bank_account_id }}"
                        class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800/50 transition-colors">
@@ -568,7 +906,7 @@
                              role="dialog" aria-modal="true" aria-labelledby="delete-modal-title"
                              @keydown.escape.window="showDeleteModal = false"
                              class="fixed inset-0 z-50 flex items-center justify-center">
-                            <div class="fixed inset-0 bg-black/50" @click="showDeleteModal = false"
+                            <div class="fixed inset-0 bg-slate-900/50" @click="showDeleteModal = false"
                                  x-transition:enter="duration-200 ease-out" x-transition:enter-start="opacity-0"
                                  x-transition:leave="duration-150 ease-in" x-transition:leave-end="opacity-0"></div>
                             <div class="relative card max-w-md w-full mx-4 p-6"
@@ -663,7 +1001,7 @@
          @keydown.escape.window="matchModal = false"
          class="fixed inset-0 z-50 flex items-center justify-center">
         {# Backdrop #}
-        <div class="fixed inset-0 bg-black/50" @click="matchModal = false"
+        <div class="fixed inset-0 bg-slate-900/50" @click="matchModal = false"
              x-transition:enter="duration-200 ease-out" x-transition:enter-start="opacity-0"
              x-transition:leave="duration-150 ease-in" x-transition:leave-end="opacity-0"></div>
         {# Panel #}
@@ -672,16 +1010,51 @@
              x-transition:leave="duration-150 ease-in" x-transition:leave-end="opacity-0 scale-95">
             {# Header #}
             <div class="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
-                <div>
-                    <h3 id="match-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white">Find GL Transaction</h3>
-                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        Select a GL journal entry to match against this statement line
-                    </p>
+                <div class="flex items-center gap-3">
+                    <div>
+                        <h3 id="match-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white">Find GL Transaction</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            <span x-show="!multiMatchMode">Select a GL journal entry to match against this statement line</span>
+                            <span x-show="multiMatchMode" x-cloak>Select multiple GL entries whose amounts sum to the bank line</span>
+                        </p>
+                    </div>
+                    {# Multi-match toggle #}
+                    <button @click="multiMatchMode = !multiMatchMode; selectedCandidates = []"
+                            class="flex-shrink-0 btn btn-sm text-xs px-3 py-1.5 rounded-full border transition-colors"
+                            :class="multiMatchMode
+                                ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800'
+                                : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400'"
+                            :title="multiMatchMode ? 'Switch to single match' : 'Match multiple GL entries to this bank line'">
+                        <svg class="h-3.5 w-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                        </svg>
+                        <span x-text="multiMatchMode ? 'Multi ON' : 'Multi'" class="whitespace-nowrap"></span>
+                    </button>
                 </div>
                 <button @click="matchModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" aria-label="Close">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
+            {# Bank line context card #}
+            <template x-if="currentLineDetail">
+                <div class="mx-6 mt-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-4 py-3">
+                    <p class="text-xs font-medium text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-1.5">Matching Bank Line</p>
+                    <div class="flex items-center justify-between gap-4">
+                        <div class="min-w-0 flex-1">
+                            <p class="text-sm font-medium text-slate-900 dark:text-white truncate" x-text="currentLineDetail.description || '(no description)'"></p>
+                            <div class="flex items-center gap-3 mt-0.5">
+                                <span class="text-xs text-slate-500 dark:text-slate-400" x-text="currentLineDetail.date"></span>
+                                <template x-if="currentLineDetail.payee">
+                                    <span class="text-xs text-slate-500 dark:text-slate-400" x-text="currentLineDetail.payee"></span>
+                                </template>
+                            </div>
+                        </div>
+                        <span class="text-sm font-mono tabular-nums font-semibold whitespace-nowrap"
+                              :class="currentLineDetail.is_credit ? 'text-emerald-700 dark:text-emerald-400' : 'text-rose-700 dark:text-rose-400'"
+                              x-text="(currentLineDetail.is_credit ? '+' : '-') + currency + ' ' + _fmtAmt(currentLineDetail.raw_amount)"></span>
+                    </div>
+                </div>
+            </template>
             {# Filters #}
             <div class="px-6 py-3 border-b border-slate-200 dark:border-slate-700 space-y-3">
                 {# Text search row #}
@@ -719,7 +1092,28 @@
                             <option value="credit">Credits (Out)</option>
                         </select>
                     </div>
-                    <div class="flex-shrink-0">
+                    <div class="flex-shrink-0 flex items-end gap-1">
+                        <div class="flex rounded-lg border border-slate-200 dark:border-slate-700 mt-1 overflow-hidden">
+                            <button @click="matchSort = 'relevance'"
+                                class="px-2 py-1.5 text-xs font-medium transition-colors"
+                                :class="matchSort === 'relevance' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'"
+                                title="Sort by match score">
+                                <svg class="h-3.5 w-3.5 inline mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
+                                Score
+                            </button>
+                            <button @click="matchSort = 'amount'"
+                                class="px-2 py-1.5 text-xs font-medium transition-colors border-l border-slate-200 dark:border-slate-700"
+                                :class="matchSort === 'amount' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'"
+                                title="Sort by closest amount">
+                                Amount
+                            </button>
+                            <button @click="matchSort = 'date'"
+                                class="px-2 py-1.5 text-xs font-medium transition-colors border-l border-slate-200 dark:border-slate-700"
+                                :class="matchSort === 'date' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'"
+                                title="Sort by date (newest first)">
+                                Date
+                            </button>
+                        </div>
                         <button @click="resetFilters()" class="btn btn-ghost btn-sm text-xs mt-1" title="Clear all filters">
                             Clear
                         </button>
@@ -728,7 +1122,19 @@
             </div>
             {# Results #}
             <div class="overflow-y-auto flex-1 px-6 py-3">
-                <template x-if="glCandidates.length === 0">
+                {# Loading spinner #}
+                <template x-if="glLoading">
+                    <div class="py-12 text-center">
+                        <div class="inline-flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                            <svg class="animate-spin h-5 w-5 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Scoring candidates...
+                        </div>
+                    </div>
+                </template>
+                <template x-if="!glLoading && glCandidates.length === 0">
                     <div class="py-12 text-center">
                         <svg class="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -740,15 +1146,17 @@
                         </p>
                     </div>
                 </template>
-                <template x-if="glCandidates.length > 0 && filteredCandidates.length === 0">
+                <template x-if="!glLoading && glCandidates.length > 0 && filteredCandidates.length === 0">
                     <p class="text-sm text-slate-500 dark:text-slate-400 py-8 text-center">
                         No transactions match your filters. <button @click="resetFilters()" class="text-blue-600 dark:text-blue-400 hover:underline">Clear filters</button>
                     </p>
                 </template>
-                <template x-if="filteredCandidates.length > 0">
+                <template x-if="!glLoading && filteredCandidates.length > 0">
                     <table class="table w-full">
                         <thead>
                             <tr>
+                                <th x-show="multiMatchMode" scope="col" class="w-8"></th>
+                                <th scope="col" class="text-xs font-medium uppercase tracking-wider text-slate-500 w-14 text-center">Score</th>
                                 <th scope="col" class="text-xs font-medium uppercase tracking-wider text-slate-500">Date</th>
                                 <th scope="col" class="text-xs font-medium uppercase tracking-wider text-slate-500">Description</th>
                                 <th scope="col" class="text-xs font-medium uppercase tracking-wider text-slate-500">Type</th>
@@ -759,7 +1167,29 @@
                         </thead>
                         <tbody>
                             <template x-for="candidate in filteredCandidates" :key="candidate.journal_line_id">
-                                <tr class="group hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                <tr class="group hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                                    :class="isCandidateSelected(candidate.journal_line_id) ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''">
+                                    {# Checkbox column for multi-match #}
+                                    <td x-show="multiMatchMode" class="text-center">
+                                        <template x-if="!candidate.is_already_matched">
+                                            <input type="checkbox"
+                                                   :checked="isCandidateSelected(candidate.journal_line_id)"
+                                                   @change="toggleCandidate(candidate.journal_line_id, candidate.amount)"
+                                                   class="rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 h-4 w-4">
+                                        </template>
+                                    </td>
+                                    {# Score badge #}
+                                    <td class="text-center">
+                                        <template x-if="candidate.match_score != null">
+                                            <span class="inline-flex items-center justify-center rounded-full px-2 py-0.5 text-xs font-bold tabular-nums min-w-[2rem]"
+                                                  :class="candidate.match_score >= 80
+                                                      ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400'
+                                                      : candidate.match_score >= 50
+                                                          ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                                                          : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'"
+                                                  x-text="Math.round(candidate.match_score)"></span>
+                                        </template>
+                                    </td>
                                     <td class="text-sm text-slate-600 dark:text-slate-300 whitespace-nowrap" x-text="candidate.entry_date_display"></td>
                                     <td class="text-sm text-slate-900 dark:text-white max-w-[220px]">
                                         <p class="truncate" x-text="candidate.description" :title="candidate.description"></p>
@@ -779,13 +1209,38 @@
                                     </td>
                                     <td class="text-sm font-mono tabular-nums text-right whitespace-nowrap"
                                         :class="candidate.amount < 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'"
-                                        x-text="candidate.amount_display"></td>
+                                        x-text="(candidate.amount >= 0 ? '+' : '-') + currency + ' ' + _fmtAmt(Math.abs(candidate.amount))"></td>
                                     <td class="text-right">
-                                        <button @click="selectCandidate(candidate.journal_line_id)"
-                                                class="btn btn-sm text-xs px-2 py-1 text-blue-700 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-900/30 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                aria-label="Select this transaction">
-                                            Select
-                                        </button>
+                                        <div class="flex items-center justify-end gap-1">
+                                            <template x-if="candidate.is_already_matched">
+                                                <span class="inline-flex rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Already matched</span>
+                                            </template>
+                                            <template x-if="!candidate.is_already_matched && !multiMatchMode">
+                                                <div class="flex items-center gap-1">
+                                                    <template x-if="candidate.source_url">
+                                                        <a :href="candidate.source_url" target="_blank"
+                                                           class="btn btn-sm text-xs px-2 py-1 text-slate-500 hover:text-teal-700 hover:bg-teal-50 dark:text-slate-400 dark:hover:text-teal-400 dark:hover:bg-teal-900/30"
+                                                           aria-label="View source document">
+                                                            View
+                                                        </a>
+                                                    </template>
+                                                    <button @click="selectCandidate(candidate.journal_line_id, candidate.amount)"
+                                                            class="btn btn-sm text-xs px-2 py-1 text-blue-700 hover:bg-blue-100 dark:text-blue-400 dark:hover:bg-blue-900/30"
+                                                            aria-label="Select this transaction">
+                                                        Select
+                                                    </button>
+                                                </div>
+                                            </template>
+                                            <template x-if="!candidate.is_already_matched && multiMatchMode">
+                                                <template x-if="candidate.source_url">
+                                                    <a :href="candidate.source_url" target="_blank"
+                                                       class="btn btn-sm text-xs px-2 py-1 text-slate-500 hover:text-teal-700 hover:bg-teal-50 dark:text-slate-400 dark:hover:text-teal-400 dark:hover:bg-teal-900/30"
+                                                       aria-label="View source document">
+                                                        View
+                                                    </a>
+                                                </template>
+                                            </template>
+                                        </div>
                                     </td>
                                 </tr>
                             </template>
@@ -793,16 +1248,245 @@
                     </table>
                 </template>
             </div>
+            {# Multi-match running total bar #}
+            <template x-if="multiMatchMode && selectedCandidates.length > 0">
+                <div class="px-6 py-3 border-t border-slate-200 dark:border-slate-700"
+                     :class="multiMatchReady
+                         ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'
+                         : multiMatchDiff / Math.max(Math.abs(lineAmounts[matchLineId] || 0), 0.01) <= 0.10
+                             ? 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
+                             : 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800'">
+                    <div class="flex items-center justify-between gap-4">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-baseline gap-2 flex-wrap">
+                                <span class="text-xs font-medium uppercase tracking-wider"
+                                      :class="multiMatchReady ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-600 dark:text-slate-400'">
+                                    Selected (<span x-text="selectedCandidates.length"></span>):
+                                </span>
+                                <span class="text-sm font-mono tabular-nums font-medium text-slate-900 dark:text-white"
+                                      x-text="currency + ' ' + _fmtAmt(selectedTotal)"></span>
+                                <span class="text-xs text-slate-400 dark:text-slate-500">/</span>
+                                <span class="text-xs text-slate-500 dark:text-slate-400">Bank:
+                                    <span class="font-mono tabular-nums font-medium" x-text="currency + ' ' + _fmtAmt(Math.abs(lineAmounts[matchLineId] || 0))"></span>
+                                </span>
+                                <template x-if="!multiMatchReady && multiMatchDiff > 0.01">
+                                    <span class="text-xs font-mono tabular-nums"
+                                          :class="multiMatchReady ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'"
+                                          x-text="'(diff: ' + currency + ' ' + _fmtAmt(multiMatchDiff) + ')'"></span>
+                                </template>
+                                <template x-if="multiMatchReady">
+                                    <svg class="h-4 w-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                    </svg>
+                                </template>
+                            </div>
+                        </div>
+                        <button @click="doMultiMatch()"
+                                :disabled="!multiMatchReady"
+                                class="btn btn-sm text-xs px-4 whitespace-nowrap"
+                                :class="multiMatchReady
+                                    ? 'btn-success'
+                                    : 'opacity-50 cursor-not-allowed bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500'">
+                            Match Selected
+                        </button>
+                    </div>
+                </div>
+            </template>
+            {# Create Journal & Match panel (slides in from bottom) #}
+            <template x-if="createJournalMode">
+                <div class="px-6 py-4 border-t-2 border-teal-200 dark:border-teal-800 bg-teal-50/50 dark:bg-teal-900/10 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h4 class="text-sm font-semibold text-slate-900 dark:text-white">Create Journal & Match</h4>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Create a new GL journal entry and match it to this bank line</p>
+                        </div>
+                        <button @click="createJournalMode = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" aria-label="Close create journal panel">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <div>
+                            <label class="text-xs font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wider">Counterparty GL Account <span class="text-rose-500">*</span></label>
+                            <select x-model="createJournalAccount" class="form-select text-sm mt-1 w-full">
+                                <option value="">Select account...</option>
+                                <template x-for="acct in filteredGlAccounts" :key="acct.id">
+                                    <option :value="acct.id" x-text="acct.label"></option>
+                                </template>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wider">Description (optional)</label>
+                            <input x-model="createJournalDesc" type="text" class="form-input text-sm mt-1 w-full"
+                                   placeholder="Auto-generated if blank">
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between pt-1">
+                        <p class="text-xs text-slate-500 dark:text-slate-400">
+                            This will create a <span class="font-medium" x-text="currentLineDetail?.is_credit ? 'Dr Bank / Cr Counterparty' : 'Dr Counterparty / Cr Bank'"></span> journal for
+                            <span class="font-mono tabular-nums font-medium" x-text="currency + ' ' + _fmtAmt(currentLineDetail?.raw_amount || 0)"></span>
+                        </p>
+                        <button @click="doCreateJournalAndMatch()"
+                                :disabled="!createJournalAccount || createJournalLoading"
+                                class="btn btn-sm btn-success text-xs px-4"
+                                :class="(!createJournalAccount || createJournalLoading) && 'opacity-50 cursor-not-allowed'">
+                            <template x-if="createJournalLoading">
+                                <svg class="animate-spin h-3.5 w-3.5 mr-1" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </template>
+                            Create & Match
+                        </button>
+                    </div>
+                </div>
+            </template>
             {# Footer #}
             <div class="px-6 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
-                <span class="text-xs text-slate-500 dark:text-slate-400">
-                    Showing <span class="font-mono tabular-nums font-medium" x-text="filteredCandidates.length"></span>
-                    <template x-if="filteredCandidates.length !== glCandidates.length">
-                        <span> of <span class="font-mono tabular-nums" x-text="glCandidates.length"></span></span>
+                <div class="flex items-center gap-3">
+                    <span class="text-xs text-slate-500 dark:text-slate-400">
+                        Showing <span class="font-mono tabular-nums font-medium" x-text="filteredCandidates.length"></span>
+                        <template x-if="filteredCandidates.length !== glCandidates.length">
+                            <span> of <span class="font-mono tabular-nums" x-text="glCandidates.length"></span></span>
+                        </template>
+                        transactions
+                    </span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button @click="createJournalMode = !createJournalMode; if (createJournalMode) autoSuggestAccount()"
+                            x-show="!createJournalMode"
+                            class="btn btn-sm text-xs px-3 bg-teal-50 text-teal-700 hover:bg-teal-100 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50 border border-teal-200 dark:border-teal-800 transition-colors">
+                        <svg class="h-3.5 w-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
+                        </svg>
+                        Create Journal
+                    </button>
+                    <button @click="matchModal = false" class="btn btn-secondary btn-sm">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {# ── Amount Mismatch Confirmation Modal ──────────────────────── #}
+    <div x-show="confirmModal" x-cloak
+         role="dialog" aria-modal="true" aria-labelledby="mismatch-modal-title"
+         @keydown.escape.window="confirmModal = false"
+         class="fixed inset-0 z-[60] flex items-center justify-center">
+        <div class="fixed inset-0 bg-slate-900/50" @click="confirmModal = false"
+             x-transition:enter="duration-200 ease-out" x-transition:enter-start="opacity-0"
+             x-transition:leave="duration-150 ease-in" x-transition:leave-end="opacity-0"></div>
+        <div class="relative card max-w-md w-full mx-4 p-6"
+             x-transition:enter="duration-200 ease-out" x-transition:enter-start="opacity-0 scale-95"
+             x-transition:leave="duration-150 ease-in" x-transition:leave-end="opacity-0 scale-95">
+            <div class="flex items-start gap-3">
+                <div class="flex-shrink-0 rounded-full bg-amber-100 dark:bg-amber-900/30 p-2">
+                    <svg class="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+                <div>
+                    <h3 id="mismatch-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white">Amount Mismatch</h3>
+                    <template x-if="confirmData">
+                        <div class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                            <p>The bank line amount does not match the GL transaction:</p>
+                            <dl class="mt-3 space-y-1.5">
+                                <div class="flex justify-between">
+                                    <dt class="text-slate-500 dark:text-slate-400">Bank line</dt>
+                                    <dd class="font-mono tabular-nums font-medium text-slate-900 dark:text-white" x-text="currency + ' ' + _fmtAmt(confirmData.bankAmt)"></dd>
+                                </div>
+                                <div class="flex justify-between">
+                                    <dt class="text-slate-500 dark:text-slate-400">GL transaction</dt>
+                                    <dd class="font-mono tabular-nums font-medium text-slate-900 dark:text-white" x-text="currency + ' ' + _fmtAmt(confirmData.candAmt)"></dd>
+                                </div>
+                                <div class="flex justify-between border-t border-slate-200 dark:border-slate-700 pt-1.5">
+                                    <dt class="text-slate-500 dark:text-slate-400">Difference</dt>
+                                    <dd class="font-mono tabular-nums font-medium text-amber-600 dark:text-amber-400" x-text="currency + ' ' + _fmtAmt(confirmData.diff)"></dd>
+                                </div>
+                            </dl>
+                            <p class="mt-3 text-xs text-slate-500 dark:text-slate-400">Are you sure you want to match these transactions despite the amount difference?</p>
+                        </div>
                     </template>
-                    transactions
-                </span>
-                <button @click="matchModal = false" class="btn btn-secondary btn-sm">Cancel</button>
+                </div>
+            </div>
+            <div class="mt-6 flex gap-3 justify-end">
+                <button @click="confirmModal = false; confirmData = null" class="btn btn-secondary">Cancel</button>
+                <button @click="confirmMismatchMatch()" class="btn btn-primary bg-amber-600 hover:bg-amber-700">Match Anyway</button>
+            </div>
+        </div>
+    </div>
+
+    {# ── Batch Match Confirmation Modal ─────────────────────────── #}
+    <div x-show="batchMatchConfirmModal" x-cloak
+         role="dialog" aria-modal="true" aria-labelledby="batch-match-modal-title"
+         @keydown.escape.window="batchMatchConfirmModal = false"
+         class="fixed inset-0 z-[60] flex items-center justify-center">
+        <div class="fixed inset-0 bg-slate-900/50" @click="batchMatchConfirmModal = false"
+             x-transition:enter="duration-200 ease-out" x-transition:enter-start="opacity-0"
+             x-transition:leave="duration-150 ease-in" x-transition:leave-end="opacity-0"></div>
+        <div class="relative card max-w-2xl w-full mx-4 p-6"
+             x-transition:enter="duration-200 ease-out" x-transition:enter-start="opacity-0 scale-95"
+             x-transition:leave="duration-150 ease-in" x-transition:leave-end="opacity-0 scale-95">
+            <h3 id="batch-match-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white">
+                Confirm Batch Match
+            </h3>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                The following <span x-text="batchMatchPending.length" class="font-semibold"></span> high-confidence
+                suggestions will be matched. Please review before confirming.
+            </p>
+            <div class="mt-4 max-h-64 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-lg">
+                <table class="w-full text-sm">
+                    <thead class="bg-slate-50 dark:bg-slate-800 sticky top-0">
+                        <tr>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Bank Line</th>
+                            <th scope="col" class="px-3 py-2 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Amount</th>
+                            <th scope="col" class="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">GL Match</th>
+                            <th scope="col" class="px-3 py-2 text-center text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">Score</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+                        <template x-for="(m, idx) in batchMatchPending" :key="m.line_id">
+                            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                                <td class="px-3 py-2 text-slate-700 dark:text-slate-300 max-w-[220px] truncate" :title="m.stmt_desc" x-text="m.stmt_desc || '—'"></td>
+                                <td class="px-3 py-2 text-right font-mono tabular-nums whitespace-nowrap"
+                                    :class="m.is_credit ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'"
+                                    x-text="(m.is_credit ? '+' : '-') + Number(m.amount).toLocaleString('en-NG', {minimumFractionDigits: 2})"></td>
+                                <td class="px-3 py-2 text-slate-700 dark:text-slate-300 max-w-[220px] truncate" :title="m.gl_desc" x-text="m.gl_desc || '—'"></td>
+                                <td class="px-3 py-2 text-center">
+                                    <span class="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium"
+                                          :class="m.confidence >= 90 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400' : 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400'"
+                                          x-text="m.confidence + '%'"></span>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+            <div class="mt-6 flex gap-3 justify-end">
+                <button @click="batchMatchConfirmModal = false; batchMatchPending = []" class="btn btn-secondary">Cancel</button>
+                <button @click="executeBatchMatch()" class="btn btn-primary">
+                    Match <span x-text="batchMatchPending.length"></span> Lines
+                </button>
+            </div>
+        </div>
+    </div>
+
+    {# ── Unmatch Confirmation Modal ──────────────────────────────── #}
+    <div x-show="unmatchModal" x-cloak
+         role="dialog" aria-modal="true" aria-labelledby="unmatch-modal-title"
+         @keydown.escape.window="unmatchModal = false"
+         class="fixed inset-0 z-[60] flex items-center justify-center">
+        <div class="fixed inset-0 bg-slate-900/50" @click="unmatchModal = false"
+             x-transition:enter="duration-200 ease-out" x-transition:enter-start="opacity-0"
+             x-transition:leave="duration-150 ease-in" x-transition:leave-end="opacity-0"></div>
+        <div class="relative card max-w-sm w-full mx-4 p-6"
+             x-transition:enter="duration-200 ease-out" x-transition:enter-start="opacity-0 scale-95"
+             x-transition:leave="duration-150 ease-in" x-transition:leave-end="opacity-0 scale-95">
+            <h3 id="unmatch-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white">Remove Match</h3>
+            <p class="mt-2 text-sm text-slate-600 dark:text-slate-400">
+                This will unlink the GL transaction from this bank line. The line will return to unmatched status.
+            </p>
+            <div class="mt-6 flex gap-3 justify-end">
+                <button @click="unmatchModal = false; unmatchLineId = null" class="btn btn-secondary">Cancel</button>
+                <button @click="confirmUnmatch()" class="btn btn-danger-outline">Remove Match</button>
             </div>
         </div>
     </div>

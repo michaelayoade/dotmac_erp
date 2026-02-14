@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import live_search, pagination %}
+{% from "components/macros.html" import compact_filters, filter_select_field, pagination %}
 
 {% block page_title %}Job Descriptions{% endblock %}
 
@@ -46,8 +46,14 @@
     </div>
     {% endif %}
 
-    {% call(search_attrs) live_search(search=search, base_url="/people/hr/job-descriptions", placeholder="Search job descriptions...") %}
-    <select name="status" class="form-select" {{ search_attrs }}>
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/hr/job-descriptions",
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search job descriptions..."
+    ) %}
+    <select name="status" class="form-select" {{ filter_attrs }}>
         <option value="">All Statuses</option>
         {% for st in statuses %}
         <option value="{{ st.value }}" {{ 'selected' if selected_status == st.value }}>
@@ -55,7 +61,7 @@
         </option>
         {% endfor %}
     </select>
-    <select name="department_id" class="form-select" {{ search_attrs }}>
+    <select name="department_id" class="form-select" {{ filter_attrs }}>
         <option value="">All Departments</option>
         {% for dept in departments %}
         <option value="{{ dept.department_id }}" {{ 'selected' if selected_department_id == dept.department_id | string }}>

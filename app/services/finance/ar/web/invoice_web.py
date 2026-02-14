@@ -38,6 +38,7 @@ from app.services.finance.ar.web.base import (
     invoice_detail_view,
     invoice_line_view,
     invoice_status_label,
+    normalize_date_range_filters,
 )
 from app.services.finance.common.attachment import AttachmentInput, attachment_service
 from app.services.finance.platform.currency_context import get_currency_context
@@ -401,6 +402,11 @@ class InvoiceWebService:
         page: int,
     ) -> HTMLResponse:
         """Render invoice list page."""
+        start_date, end_date = normalize_date_range_filters(
+            start_date,
+            end_date,
+            request.query_params,
+        )
         context = base_context(request, auth, "AR Invoices", "ar")
         context.update(
             self.list_invoices_context(

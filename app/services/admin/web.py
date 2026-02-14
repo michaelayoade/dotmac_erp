@@ -35,7 +35,7 @@ from app.services.auth_flow import hash_password
 from app.services.common import coerce_uuid
 from app.services.formatters import format_datetime as _format_datetime
 from app.templates import templates
-from app.web.deps import WebAuthContext, brand_context
+from app.web.deps import WebAuthContext, resolve_brand_context
 
 logger = logging.getLogger(__name__)
 
@@ -236,8 +236,77 @@ def _parse_person_status(value: str | None) -> PersonStatus | None:
         return None
 
 
+def _resolve_person_name_map(
+    db: Session,
+    person_ids: list[str],
+    organization_id: UUID | None = None,
+) -> dict[str, str]:
+    """Resolve person UUID strings to display names."""
+    resolved_ids: list[UUID] = []
+    for person_id in person_ids:
+        try:
+            parsed_id = coerce_uuid(person_id, raise_http=False)
+        except (TypeError, ValueError):
+            continue
+        if parsed_id:
+            resolved_ids.append(parsed_id)
+
+    if not resolved_ids:
+        return {}
+
+    query = db.query(Person).filter(Person.id.in_(resolved_ids))
+    if organization_id:
+        query = query.filter(Person.organization_id == organization_id)
+
+    names: dict[str, str] = {}
+    for person in query.all():
+        display = (
+            _derive_display_name(
+                person.first_name,
+                person.last_name,
+                person.display_name,
+            )
+            or person.email
+        )
+        if display:
+            names[str(person.id)] = display
+
+    return names
+
+
 class AdminWebService:
     """View service for admin web routes."""
+
+    def _resolve_admin_brand_context(
+        self,
+        request: Request,
+        db: Session,
+        auth: WebAuthContext,
+    ) -> dict:
+        """Resolve admin brand context with settings-page parity and fallback."""
+        # Primary path: same as admin settings pages (auth.organization_id).
+        primary_org_id = auth.organization_id
+        if primary_org_id:
+            organization = db.get(Organization, primary_org_id)
+            brand = resolve_brand_context(db, organization, primary_org_id)
+        else:
+            brand = resolve_brand_context(db, None, None)
+
+        # Fallback path: request-scoped org id populated by auth dependency.
+        state_org_id_raw = getattr(request.state, "organization_id", None)
+        state_org_id = (
+            coerce_uuid(state_org_id_raw, raise_http=False)
+            if state_org_id_raw
+            else None
+        )
+        if state_org_id and state_org_id != primary_org_id:
+            organization = db.get(Organization, state_org_id)
+            fallback_brand = resolve_brand_context(db, organization, state_org_id)
+            # Prefer fallback only when primary lacks explicit brand assets.
+            if not brand.get("logo_url") or not brand.get("favicon_url"):
+                brand = fallback_brand
+
+        return brand
 
     @staticmethod
     def dashboard_context(db: Session) -> dict:
@@ -2317,6 +2386,7 @@ class AdminWebService:
     @staticmethod
     def audit_logs_context(
         db: Session,
+        organization_id: UUID | None,
         search: str | None,
         actor_type: str | None,
         status: str | None,
@@ -2326,6 +2396,8 @@ class AdminWebService:
         offset = (page - 1) * limit
 
         query = db.query(AuditEvent)
+        if organization_id:
+            query = query.filter(AuditEvent.organization_id == organization_id)
 
         search_value = search.strip() if search else ""
         if search_value:
@@ -2356,22 +2428,66 @@ class AdminWebService:
             .all()
         )
 
-        events_view = [
-            {
-                "event_id": event.id,
-                "occurred_at": _format_datetime(event.occurred_at),
-                "actor_type": event.actor_type.value,
-                "actor_id": event.actor_id,
-                "action": event.action,
-                "entity_type": event.entity_type,
-                "entity_id": event.entity_id,
-                "status_code": event.status_code,
-                "is_success": event.is_success,
-                "request_id": event.request_id,
-                "ip_address": event.ip_address,
-            }
+        actor_ids = [
+            str(event.actor_person_id)
             for event in events
+            if event.actor_person_id is not None
         ]
+        actor_ids.extend(
+            [
+                event.actor_id
+                for event in events
+                if event.actor_id and not event.actor_person_id
+            ]
+        )
+        actor_name_map = _resolve_person_name_map(
+            db=db,
+            person_ids=actor_ids,
+            organization_id=organization_id,
+        )
+
+        events_view = []
+        for event in events:
+            actor_lookup_key = (
+                str(event.actor_person_id)
+                if event.actor_person_id
+                else event.actor_id
+                if event.actor_id
+                else ""
+            )
+            actor_name = (
+                actor_name_map.get(actor_lookup_key) if actor_lookup_key else None
+            )
+            if not actor_name:
+                if (
+                    event.actor_id or event.actor_person_id
+                ) and event.actor_type == AuditActorType.user:
+                    actor_name = "Unknown User"
+                elif event.actor_type == AuditActorType.system:
+                    actor_name = "System"
+                elif event.actor_type == AuditActorType.service:
+                    actor_name = "Service"
+                elif event.actor_type == AuditActorType.api_key:
+                    actor_name = "API Key"
+                else:
+                    actor_name = "Unknown User"
+
+            events_view.append(
+                {
+                    "event_id": event.id,
+                    "occurred_at": _format_datetime(event.occurred_at),
+                    "actor_type": event.actor_type.value,
+                    "actor_id": event.actor_id,
+                    "actor_name": actor_name,
+                    "action": event.action,
+                    "entity_type": event.entity_type,
+                    "entity_id": event.entity_id,
+                    "status_code": event.status_code,
+                    "is_success": event.is_success,
+                    "request_id": event.request_id,
+                    "ip_address": event.ip_address,
+                }
+            )
 
         total_pages = max(1, (total_count + limit - 1) // limit)
         pagination = _build_pagination(page, total_pages, total_count, limit)
@@ -2677,6 +2793,7 @@ class AdminWebService:
     def _render_admin_template(
         self,
         request: Request,
+        db: Session,
         template_name: str,
         auth: WebAuthContext,
         title: str,
@@ -2698,7 +2815,7 @@ class AdminWebService:
         payload = {
             "title": title,
             "page_title": page_title,
-            "brand": brand_context(),
+            "brand": self._resolve_admin_brand_context(request, db, auth),
             "user": auth.user,
             "active_page": active_page,
             "csrf_token": csrf_token,
@@ -2723,6 +2840,7 @@ class AdminWebService:
         context = self.dashboard_context(db)
         return self._render_admin_template(
             request,
+            db,
             "admin/dashboard.html",
             auth_or_redirect,
             "Admin Dashboard",
@@ -2746,6 +2864,7 @@ class AdminWebService:
         context = self.users_context(db, search, status, page)
         return self._render_admin_template(
             request,
+            db,
             "admin/users.html",
             auth_or_redirect,
             "Users",
@@ -2767,6 +2886,7 @@ class AdminWebService:
         context.update({"error": None, "success": None})
         return self._render_admin_template(
             request,
+            db,
             "admin/user_form.html",
             auth_or_redirect,
             "Add New User",
@@ -2831,6 +2951,7 @@ class AdminWebService:
             context.update({"error": error, "success": None})
             return self._render_admin_template(
                 request,
+                db,
                 "admin/user_form.html",
                 auth_or_redirect,
                 "Add New User",
@@ -2866,6 +2987,7 @@ class AdminWebService:
         title = f"Edit User - {context['user_data']['first_name']} {context['user_data']['last_name']}"
         return self._render_admin_template(
             request,
+            db,
             "admin/user_form.html",
             auth_or_redirect,
             title,
@@ -2936,6 +3058,7 @@ class AdminWebService:
             context.update({"error": error, "success": None})
             return self._render_admin_template(
                 request,
+                db,
                 "admin/user_form.html",
                 auth_or_redirect,
                 f"Edit User - {first_name} {last_name}",
@@ -2948,6 +3071,7 @@ class AdminWebService:
         context.update({"error": None, "success": "User updated successfully"})
         return self._render_admin_template(
             request,
+            db,
             "admin/user_form.html",
             auth_or_redirect,
             f"Edit User - {first_name} {last_name}",
@@ -2989,6 +3113,7 @@ class AdminWebService:
         context = self.roles_context(db=db, search=search, status=status, page=page)
         return self._render_admin_template(
             request,
+            db,
             "admin/roles.html",
             auth_or_redirect,
             "Roles",
@@ -3010,6 +3135,7 @@ class AdminWebService:
         context.update({"error": None, "success": None})
         return self._render_admin_template(
             request,
+            db,
             "admin/role_form.html",
             auth_or_redirect,
             "Create Role",
@@ -3044,6 +3170,7 @@ class AdminWebService:
             context.update({"error": error, "success": None})
             return self._render_admin_template(
                 request,
+                db,
                 "admin/role_form.html",
                 auth_or_redirect,
                 "Create Role",
@@ -3071,6 +3198,7 @@ class AdminWebService:
         title = f"Role Profile - {context['role']['name']}"
         return self._render_admin_template(
             request,
+            db,
             "admin/role_profile.html",
             auth_or_redirect,
             title,
@@ -3096,6 +3224,7 @@ class AdminWebService:
         title = f"Edit Role - {context['role_data']['name']}"
         return self._render_admin_template(
             request,
+            db,
             "admin/role_form.html",
             auth_or_redirect,
             title,
@@ -3132,6 +3261,7 @@ class AdminWebService:
             context.update({"error": error, "success": None})
             return self._render_admin_template(
                 request,
+                db,
                 "admin/role_form.html",
                 auth_or_redirect,
                 f"Edit Role - {name}",
@@ -3144,6 +3274,7 @@ class AdminWebService:
         context.update({"error": None, "success": "Role updated successfully"})
         return self._render_admin_template(
             request,
+            db,
             "admin/role_form.html",
             auth_or_redirect,
             f"Edit Role - {name}",
@@ -3184,6 +3315,7 @@ class AdminWebService:
         )
         return self._render_admin_template(
             request,
+            db,
             "admin/permissions.html",
             auth_or_redirect,
             "Permissions",
@@ -3205,6 +3337,7 @@ class AdminWebService:
         context.update({"error": None, "success": None})
         return self._render_admin_template(
             request,
+            db,
             "admin/permission_form.html",
             auth_or_redirect,
             "Create Permission",
@@ -3240,6 +3373,7 @@ class AdminWebService:
             )
             return self._render_admin_template(
                 request,
+                db,
                 "admin/permission_form.html",
                 auth_or_redirect,
                 "Create Permission",
@@ -3260,6 +3394,7 @@ class AdminWebService:
             context.update({"error": error, "success": None})
             return self._render_admin_template(
                 request,
+                db,
                 "admin/permission_form.html",
                 auth_or_redirect,
                 "Create Permission",
@@ -3297,6 +3432,7 @@ class AdminWebService:
         title = f"Edit Permission - {context['permission_data']['key']}"
         return self._render_admin_template(
             request,
+            db,
             "admin/permission_form.html",
             auth_or_redirect,
             title,
@@ -3334,6 +3470,7 @@ class AdminWebService:
             )
             return self._render_admin_template(
                 request,
+                db,
                 "admin/permission_form.html",
                 auth_or_redirect,
                 "Edit Permission",
@@ -3355,6 +3492,7 @@ class AdminWebService:
             context.update({"error": error, "success": None})
             return self._render_admin_template(
                 request,
+                db,
                 "admin/permission_form.html",
                 auth_or_redirect,
                 f"Edit Permission - {key}",
@@ -3367,6 +3505,7 @@ class AdminWebService:
         context.update({"error": None, "success": "Permission updated successfully"})
         return self._render_admin_template(
             request,
+            db,
             "admin/permission_form.html",
             auth_or_redirect,
             f"Edit Permission - {key}",
@@ -3407,6 +3546,7 @@ class AdminWebService:
         )
         return self._render_admin_template(
             request,
+            db,
             "admin/organizations.html",
             auth_or_redirect,
             "Organizations",
@@ -3433,6 +3573,7 @@ class AdminWebService:
         context.update({"error": None, "success": None})
         return self._render_admin_template(
             request,
+            db,
             "admin/organization_form.html",
             auth_or_redirect,
             "Create Organization",
@@ -3496,6 +3637,7 @@ class AdminWebService:
             context.update({"error": error, "success": None})
             return self._render_admin_template(
                 request,
+                db,
                 "admin/organization_form.html",
                 auth_or_redirect,
                 "Create Organization",
@@ -3533,6 +3675,7 @@ class AdminWebService:
         title = f"Edit Organization - {context['organization_data']['legal_name']}"
         return self._render_admin_template(
             request,
+            db,
             "admin/organization_form.html",
             auth_or_redirect,
             title,
@@ -3597,6 +3740,7 @@ class AdminWebService:
             context.update({"error": error, "success": None})
             return self._render_admin_template(
                 request,
+                db,
                 "admin/organization_form.html",
                 auth_or_redirect,
                 f"Edit Organization - {legal_name}",
@@ -3609,6 +3753,7 @@ class AdminWebService:
         context.update({"error": None, "success": "Organization updated successfully"})
         return self._render_admin_template(
             request,
+            db,
             "admin/organization_form.html",
             auth_or_redirect,
             f"Edit Organization - {legal_name}",
@@ -3650,6 +3795,7 @@ class AdminWebService:
         )
         return self._render_admin_template(
             request,
+            db,
             "admin/settings.html",
             auth_or_redirect,
             "Settings",
@@ -3671,6 +3817,7 @@ class AdminWebService:
         context.update({"error": None, "success": None})
         return self._render_admin_template(
             request,
+            db,
             "admin/setting_form.html",
             auth_or_redirect,
             "Create Setting",
@@ -3710,6 +3857,7 @@ class AdminWebService:
             context.update({"error": error, "success": None})
             return self._render_admin_template(
                 request,
+                db,
                 "admin/setting_form.html",
                 auth_or_redirect,
                 "Create Setting",
@@ -3747,6 +3895,7 @@ class AdminWebService:
         title = f"Edit Setting - {context['setting_data']['key']}"
         return self._render_admin_template(
             request,
+            db,
             "admin/setting_form.html",
             auth_or_redirect,
             title,
@@ -3788,6 +3937,7 @@ class AdminWebService:
             context.update({"error": error, "success": None})
             return self._render_admin_template(
                 request,
+                db,
                 "admin/setting_form.html",
                 auth_or_redirect,
                 f"Edit Setting - {key}",
@@ -3800,6 +3950,7 @@ class AdminWebService:
         context.update({"error": None, "success": "Setting updated successfully"})
         return self._render_admin_template(
             request,
+            db,
             "admin/setting_form.html",
             auth_or_redirect,
             f"Edit Setting - {key}",
@@ -3838,6 +3989,9 @@ class AdminWebService:
             return auth_or_redirect
         context = self.audit_logs_context(
             db=db,
+            organization_id=auth_or_redirect.organization_id
+            if hasattr(auth_or_redirect, "organization_id")
+            else None,
             search=search,
             actor_type=actor_type,
             status=status,
@@ -3845,6 +3999,7 @@ class AdminWebService:
         )
         return self._render_admin_template(
             request,
+            db,
             "admin/audit_logs.html",
             auth_or_redirect,
             "Audit Logs",
@@ -3868,6 +4023,7 @@ class AdminWebService:
         context = self.tasks_context(db=db, search=search, status=status, page=page)
         return self._render_admin_template(
             request,
+            db,
             "admin/tasks.html",
             auth_or_redirect,
             "Scheduled Tasks",
@@ -3889,6 +4045,7 @@ class AdminWebService:
         context.update({"error": None, "success": None})
         return self._render_admin_template(
             request,
+            db,
             "admin/task_form.html",
             auth_or_redirect,
             "Create Task",
@@ -3929,6 +4086,7 @@ class AdminWebService:
             context.update({"error": error, "success": None})
             return self._render_admin_template(
                 request,
+                db,
                 "admin/task_form.html",
                 auth_or_redirect,
                 "Create Task",
@@ -3966,6 +4124,7 @@ class AdminWebService:
         title = f"Edit Task - {context['task_data']['name']}"
         return self._render_admin_template(
             request,
+            db,
             "admin/task_form.html",
             auth_or_redirect,
             title,
@@ -4008,6 +4167,7 @@ class AdminWebService:
             context.update({"error": error, "success": None})
             return self._render_admin_template(
                 request,
+                db,
                 "admin/task_form.html",
                 auth_or_redirect,
                 f"Edit Task - {name}",
@@ -4020,6 +4180,7 @@ class AdminWebService:
         context.update({"error": None, "success": "Task updated successfully"})
         return self._render_admin_template(
             request,
+            db,
             "admin/task_form.html",
             auth_or_redirect,
             f"Edit Task - {name}",
@@ -4097,9 +4258,17 @@ class AdminWebService:
             .all()
         )
 
+        user_ids = [str(log.user_id) for log in logs if log.user_id]
+        user_name_map = _resolve_person_name_map(
+            db=db,
+            person_ids=user_ids,
+            organization_id=organization_id,
+        )
+
         logs_view = []
         for log in logs:
             changed = log.changed_fields or []
+            user_id_value = str(log.user_id) if log.user_id else None
             logs_view.append(
                 {
                     "audit_id": str(log.audit_id),
@@ -4111,7 +4280,10 @@ class AdminWebService:
                     "changed_fields": changed,
                     "old_values": log.old_values or {},
                     "new_values": log.new_values or {},
-                    "user_id": str(log.user_id) if log.user_id else None,
+                    "user_id": user_id_value,
+                    "user_name": (
+                        user_name_map.get(user_id_value) if user_id_value else "System"
+                    ),
                     "ip_address": log.ip_address,
                     "reason": log.reason,
                     "correlation_id": log.correlation_id,
@@ -4173,6 +4345,7 @@ class AdminWebService:
         )
         return self._render_admin_template(
             request,
+            db,
             "admin/data_changes.html",
             auth_or_redirect,
             "Data Changes",

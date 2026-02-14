@@ -514,179 +514,199 @@ def base_context(
     Returns:
         Dict with common template context values, including request for TemplateResponse.
     """
-    # Load organization object for template conditionals (e.g. IPSAS sidebar toggle)
-    organization = None
-    if db and auth.organization_id:
-        from app.models.finance.core_org.organization import Organization
+    effective_db = db
+    owns_db = False
+    if effective_db is None and auth.organization_id:
+        effective_db = SessionLocal()
+        owns_db = True
 
-        organization = db.get(Organization, auth.organization_id)
+    try:
+        # Load organization object for template conditionals (e.g. IPSAS sidebar toggle)
+        organization = None
+        if effective_db and auth.organization_id:
+            from app.models.finance.core_org.organization import Organization
 
-    # Set per-request formatting preferences from organisation settings
-    if organization is not None:
-        from app.services.formatting_context import (
-            resolve_from_org,
-            set_formatting_prefs,
-        )
+            organization = effective_db.get(Organization, auth.organization_id)
 
-        set_formatting_prefs(resolve_from_org(organization))
-
-    # Get org-specific branding if db session available
-    org_branding = None
-    if db and auth.organization_id:
-        org_branding = org_brand_context(db, auth.organization_id)
-        try:
-            from app.services.finance.platform.currency_context import (
-                get_currency_context,
+        # Set per-request formatting preferences from organisation settings
+        if organization is not None:
+            from app.services.formatting_context import (
+                resolve_from_org,
+                set_formatting_prefs,
             )
-        except Exception:
+
+            set_formatting_prefs(resolve_from_org(organization))
+
+        # Get org-specific branding if db session available
+        org_branding = None
+        if effective_db and auth.organization_id:
+            org_branding = org_brand_context(effective_db, auth.organization_id)
+            try:
+                from app.services.finance.platform.currency_context import (
+                    get_currency_context,
+                )
+            except Exception:
+                get_currency_context = None  # type: ignore[assignment]
+        else:
             get_currency_context = None  # type: ignore[assignment]
-    else:
-        get_currency_context = None  # type: ignore[assignment]
 
-    # Auto-fetch notifications if db session available and user is authenticated
-    if notifications is None and db and auth.is_authenticated and auth.person_id:
-        try:
-            # Import here to avoid circular import
-            from datetime import datetime, timedelta
+        # Auto-fetch notifications if db session available and user is authenticated
+        if notifications is None and db and auth.is_authenticated and auth.person_id:
+            try:
+                # Import here to avoid circular import
+                from datetime import datetime, timedelta
 
-            from app.services.notification import notification_service
+                from app.services.notification import notification_service
 
-            def _format_relative_time(dt: datetime) -> str:
-                now = datetime.utcnow()
-                diff = now - dt
-                if diff < timedelta(minutes=1):
-                    return "Just now"
-                elif diff < timedelta(hours=1):
-                    return f"{int(diff.total_seconds() / 60)} min ago"
-                elif diff < timedelta(days=1):
-                    return f"{int(diff.total_seconds() / 3600)}h ago"
-                elif diff < timedelta(days=7):
-                    return f"{diff.days}d ago"
-                else:
-                    return dt.strftime("%b %d")
+                def _format_relative_time(dt: datetime) -> str:
+                    now = datetime.utcnow()
+                    diff = now - dt
+                    if diff < timedelta(minutes=1):
+                        return "Just now"
+                    elif diff < timedelta(hours=1):
+                        return f"{int(diff.total_seconds() / 60)} min ago"
+                    elif diff < timedelta(days=1):
+                        return f"{int(diff.total_seconds() / 3600)}h ago"
+                    elif diff < timedelta(days=7):
+                        return f"{diff.days}d ago"
+                    else:
+                        return dt.strftime("%b %d")
 
-            def _notification_type_to_display(entity_type, notification_type) -> str:
-                from app.models.notification import NotificationType
+                def _notification_type_to_display(
+                    entity_type, notification_type
+                ) -> str:
+                    from app.models.notification import NotificationType
 
-                if notification_type in (
-                    NotificationType.MENTION,
-                    NotificationType.COMMENT,
-                    NotificationType.REPLY,
-                ):
-                    return "mention"
-                elif notification_type in (
-                    NotificationType.APPROVED,
-                    NotificationType.COMPLETED,
-                    NotificationType.RESOLVED,
-                ):
-                    return "payment"
-                elif notification_type in (
-                    NotificationType.REJECTED,
-                    NotificationType.OVERDUE,
-                    NotificationType.ALERT,
-                ):
-                    return "alert"
-                else:
-                    return "info"
+                    if notification_type in (
+                        NotificationType.MENTION,
+                        NotificationType.COMMENT,
+                        NotificationType.REPLY,
+                    ):
+                        return "mention"
+                    elif notification_type in (
+                        NotificationType.APPROVED,
+                        NotificationType.COMPLETED,
+                        NotificationType.RESOLVED,
+                    ):
+                        return "payment"
+                    elif notification_type in (
+                        NotificationType.REJECTED,
+                        NotificationType.OVERDUE,
+                        NotificationType.ALERT,
+                    ):
+                        return "alert"
+                    else:
+                        return "info"
 
-            raw_notifications = notification_service.list_notifications(
-                db,
-                recipient_id=auth.person_id,
-                organization_id=auth.organization_id,
-                limit=5,
-            )
-            notifications = [
-                {
-                    "id": str(n.notification_id),
-                    "type": _notification_type_to_display(
-                        n.entity_type, n.notification_type
-                    ),
-                    "title": n.title,
-                    "message": n.message,
-                    "url": n.action_url or "#",
-                    "time": _format_relative_time(n.created_at),
-                    "read": n.is_read,
-                }
-                for n in raw_notifications
+                raw_notifications = notification_service.list_notifications(
+                    db,
+                    recipient_id=auth.person_id,
+                    organization_id=auth.organization_id,
+                    limit=5,
+                )
+                notifications = [
+                    {
+                        "id": str(n.notification_id),
+                        "type": _notification_type_to_display(
+                            n.entity_type, n.notification_type
+                        ),
+                        "title": n.title,
+                        "message": n.message,
+                        "url": n.action_url or "#",
+                        "time": _format_relative_time(n.created_at),
+                        "read": n.is_read,
+                    }
+                    for n in raw_notifications
+                ]
+            except Exception:
+                # Don't fail page load if notifications fail
+                notifications = []
+
+        can_team_leave = "admin" in auth.roles or auth.has_any_permission(
+            [
+                "leave:applications:approve:tier1",
+                "leave:applications:approve:tier2",
+                "leave:applications:approve:tier3",
             ]
-        except Exception:
-            # Don't fail page load if notifications fail
-            notifications = []
-
-    can_team_leave = "admin" in auth.roles or auth.has_any_permission(
-        [
-            "leave:applications:approve:tier1",
-            "leave:applications:approve:tier2",
-            "leave:applications:approve:tier3",
-        ]
-    )
-    can_team_expenses = "admin" in auth.roles or auth.has_any_permission(
-        [
-            "expense:claims:approve:tier1",
-            "expense:claims:approve:tier2",
-            "expense:claims:approve:tier3",
-        ]
-    )
-
-    settings_url = "/settings"
-    if request.url.path.startswith("/people"):
-        settings_url = "/people/settings"
-    elif active_module in {"support", "inventory", "projects", "fleet", "procurement"}:
-        settings_url = f"/settings/{active_module}"
-
-    brand = resolve_brand_context(db, organization, auth.organization_id)
-
-    # Ensure csrf_form contains an HTML hidden input for template rendering.
-    # On POST requests, the CSRF middleware caches the parsed FormData object
-    # in request.state.csrf_form for handler consumption.  By this point all
-    # handlers have already read the form data, so it is safe to replace it
-    # with the HTML string that templates expect via {{ request.state.csrf_form | safe }}.
-    csrf_token = getattr(request.state, "csrf_token", "")
-    csrf_form_val = getattr(request.state, "csrf_form", None)
-    if not isinstance(csrf_form_val, str):
-        request.state.csrf_form = (
-            f'<input type="hidden" name="csrf_token" value="{csrf_token}">'
-            if csrf_token
-            else ""
+        )
+        can_team_expenses = "admin" in auth.roles or auth.has_any_permission(
+            [
+                "expense:claims:approve:tier1",
+                "expense:claims:approve:tier2",
+                "expense:claims:approve:tier3",
+            ]
         )
 
-    # Extract feedback param from query string for success banner
-    _saved = bool(request.query_params.get("saved"))
+        settings_url = "/settings"
+        if request.url.path.startswith("/people"):
+            settings_url = "/people/settings"
+        elif active_module in {
+            "support",
+            "inventory",
+            "projects",
+            "fleet",
+            "procurement",
+        }:
+            settings_url = f"/settings/{active_module}"
 
-    context = {
-        "request": request,
-        "title": page_title,
-        "page_title": page_title,
-        "brand": brand,
-        "org_branding": org_branding,
-        "active_module": active_module,
-        "settings_url": settings_url,
-        "auth": auth,
-        "user": auth.user,
-        "organization": organization,
-        "accessible_modules": auth.accessible_modules,
-        "can_team_leave": can_team_leave,
-        "can_team_expenses": can_team_expenses,
-        "csrf_token": csrf_token,
-        "notifications": notifications or [],
-        "saved": _saved,
-        # Org formatting settings for JS / template use
-        "org_date_format": getattr(organization, "date_format", None)
-        if organization
-        else None,
-        "org_number_format": getattr(organization, "number_format", None)
-        if organization
-        else None,
-        "org_timezone": getattr(organization, "timezone", None)
-        if organization
-        else None,
-    }
-    if db and auth.organization_id and get_currency_context is not None:
-        try:
-            context.update(get_currency_context(db, str(auth.organization_id)))
-        except Exception:
-            logger.exception("Ignored exception")
-    return context
+        brand = resolve_brand_context(effective_db, organization, auth.organization_id)
+
+        # Ensure csrf_form contains an HTML hidden input for template rendering.
+        # On POST requests, the CSRF middleware caches the parsed FormData object
+        # in request.state.csrf_form for handler consumption.  By this point all
+        # handlers have already read the form data, so it is safe to replace it
+        # with the HTML string that templates expect via {{ request.state.csrf_form | safe }}.
+        csrf_token = getattr(request.state, "csrf_token", "")
+        csrf_form_val = getattr(request.state, "csrf_form", None)
+        if not isinstance(csrf_form_val, str):
+            request.state.csrf_form = (
+                f'<input type="hidden" name="csrf_token" value="{csrf_token}">'
+                if csrf_token
+                else ""
+            )
+
+        # Extract feedback param from query string for success banner
+        _saved = bool(request.query_params.get("saved"))
+
+        context = {
+            "request": request,
+            "title": page_title,
+            "page_title": page_title,
+            "brand": brand,
+            "org_branding": org_branding,
+            "active_module": active_module,
+            "settings_url": settings_url,
+            "auth": auth,
+            "user": auth.user,
+            "organization": organization,
+            "accessible_modules": auth.accessible_modules,
+            "can_team_leave": can_team_leave,
+            "can_team_expenses": can_team_expenses,
+            "csrf_token": csrf_token,
+            "notifications": notifications or [],
+            "saved": _saved,
+            # Org formatting settings for JS / template use
+            "org_date_format": getattr(organization, "date_format", None)
+            if organization
+            else None,
+            "org_number_format": getattr(organization, "number_format", None)
+            if organization
+            else None,
+            "org_timezone": getattr(organization, "timezone", None)
+            if organization
+            else None,
+        }
+        if effective_db and auth.organization_id and get_currency_context is not None:
+            try:
+                context.update(
+                    get_currency_context(effective_db, str(auth.organization_id))
+                )
+            except Exception:
+                logger.exception("Ignored exception")
+        return context
+    finally:
+        if owns_db and effective_db:
+            effective_db.close()
 
 
 @dataclass(frozen=True)
@@ -1457,7 +1477,10 @@ def require_self_service_leave_approver(
     auth: WebAuthContext = Depends(require_self_service_access),
 ) -> WebAuthContext:
     """Require self-service access plus leave approval permission."""
-    if "admin" in auth.roles:
+    normalized_roles = {
+        str(role).strip().lower().replace(" ", "_") for role in (auth.roles or [])
+    }
+    if "admin" in normalized_roles or "leave_approver" in normalized_roles:
         return auth
     permissions = [
         "leave:applications:approve:tier1",
@@ -1476,7 +1499,10 @@ def require_self_service_expense_approver(
     auth: WebAuthContext = Depends(require_self_service_access),
 ) -> WebAuthContext:
     """Require self-service access plus expense approval permission."""
-    if "admin" in auth.roles:
+    normalized_roles = {
+        str(role).strip().lower().replace(" ", "_") for role in (auth.roles or [])
+    }
+    if "admin" in normalized_roles or "expense_approver" in normalized_roles:
         return auth
     permissions = [
         "expense:claims:approve:tier1",

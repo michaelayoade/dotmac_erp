@@ -37,6 +37,11 @@ class PostingEntry:
     """A single entry to be posted."""
 
     account_id: UUID
+
+    # When posting from a JournalEntryLine, this should be set to that line's
+    # `gl.journal_entry_line.line_id` for traceability. For non-journal sources,
+    # it may be omitted and a UUID will be generated at posting time.
+    journal_line_id: UUID | None = None
     debit_amount: Decimal = Decimal("0")
     credit_amount: Decimal = Decimal("0")
     description: str | None = None
@@ -152,6 +157,7 @@ class LedgerPostingService(ListResponseMixin):
             .first()
         )
 
+        batch: PostingBatch | None = None
         if existing_batch:
             if existing_batch.status == BatchStatus.POSTED:
                 # Already posted - return success (idempotent)
@@ -163,8 +169,24 @@ class LedgerPostingService(ListResponseMixin):
                     correlation_id=existing_batch.correlation_id,
                 )
             elif existing_batch.status == BatchStatus.FAILED:
-                # Failed previously - allow retry
-                pass
+                # Failed previously - retry in the same batch record (idempotency_key is unique)
+                if (existing_batch.posted_entries or 0) > 0:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Cannot retry a failed batch that has posted entries",
+                    )
+                existing_batch.status = BatchStatus.PROCESSING
+                existing_batch.error_message = None
+                existing_batch.failed_entries = 0
+                existing_batch.total_entries = 0
+                existing_batch.posted_entries = 0
+                existing_batch.processing_started_at = datetime.now(UTC)
+                # If caller didn't provide posted_by_user_id, keep the existing attribution.
+                if request.posted_by_user_id:
+                    existing_batch.submitted_by_user_id = coerce_uuid(
+                        request.posted_by_user_id
+                    )
+                batch = existing_batch
             else:
                 raise HTTPException(
                     status_code=409,
@@ -182,7 +204,7 @@ class LedgerPostingService(ListResponseMixin):
         if journal.status == JournalStatus.POSTED:
             raise HTTPException(status_code=400, detail="Journal already posted")
 
-        if journal.status not in {JournalStatus.APPROVED, JournalStatus.DRAFT}:
+        if journal.status != JournalStatus.APPROVED:
             raise HTTPException(
                 status_code=400,
                 detail=f"Cannot post journal with status '{journal.status.value}'",
@@ -208,22 +230,32 @@ class LedgerPostingService(ListResponseMixin):
         # 7. Validate functional amounts
         LedgerPostingService._validate_functional_amounts(entries)
 
-        # 8. Create posting batch
-        batch = PostingBatch(
-            organization_id=org_id,
-            fiscal_period_id=fiscal_period_id,
-            idempotency_key=request.idempotency_key,
-            source_module=request.source_module,
-            batch_description=f"Journal {journal.journal_number}",
-            total_entries=len(entries),
-            status=BatchStatus.PROCESSING,
-            submitted_by_user_id=coerce_uuid(request.posted_by_user_id)
-            if request.posted_by_user_id
-            else journal.created_by_user_id,
-            correlation_id=request.correlation_id,
-        )
-        db.add(batch)
-        db.flush()  # Get batch_id
+        # 8. Create (or reuse) posting batch
+        if batch is None:
+            batch = PostingBatch(
+                organization_id=org_id,
+                fiscal_period_id=fiscal_period_id,
+                idempotency_key=request.idempotency_key,
+                source_module=request.source_module,
+                batch_description=f"Journal {journal.journal_number}",
+                total_entries=len(entries),
+                status=BatchStatus.PROCESSING,
+                submitted_by_user_id=coerce_uuid(request.posted_by_user_id)
+                if request.posted_by_user_id
+                else journal.created_by_user_id,
+                correlation_id=request.correlation_id,
+                processing_started_at=datetime.now(UTC),
+            )
+            db.add(batch)
+            db.flush()  # Get batch_id
+        else:
+            batch.organization_id = org_id
+            batch.fiscal_period_id = fiscal_period_id
+            batch.source_module = request.source_module
+            batch.batch_description = f"Journal {journal.journal_number}"
+            batch.total_entries = len(entries)
+            batch.correlation_id = request.correlation_id
+            db.flush()
 
         # 9. Get period for year
         db.get(FiscalPeriod, fiscal_period_id)
@@ -244,7 +276,10 @@ class LedgerPostingService(ListResponseMixin):
                 posting_year=posting_year,
                 organization_id=org_id,
                 journal_entry_id=journal_id,
-                journal_line_id=uuid_lib.uuid4(),  # Generate new ID for ledger line
+                # Trace to the originating journal line where possible.
+                journal_line_id=coerce_uuid(entry.journal_line_id)
+                if entry.journal_line_id
+                else uuid_lib.uuid4(),
                 posting_batch_id=batch.batch_id,
                 fiscal_period_id=fiscal_period_id,
                 account_id=coerce_uuid(entry.account_id),
@@ -296,11 +331,7 @@ class LedgerPostingService(ListResponseMixin):
             else journal.created_by_user_id
         )
 
-        # 13. Commit the transaction
-        db.commit()
-        db.refresh(batch)
-
-        # 14. Publish event via outbox
+        # 13. Publish event via outbox (must be in the same transaction)
         LedgerPostingService._publish_posting_event(
             db,
             org_id,
@@ -312,6 +343,10 @@ class LedgerPostingService(ListResponseMixin):
             total_credit,
             request.correlation_id,
         )
+
+        # 14. Commit the transaction (journal + ledger lines + outbox event)
+        db.commit()
+        db.refresh(batch)
 
         return PostingResult(
             success=True,
@@ -339,6 +374,7 @@ class LedgerPostingService(ListResponseMixin):
         entries = []
         for line in lines:
             entry = PostingEntry(
+                journal_line_id=line.line_id,
                 account_id=line.account_id,
                 debit_amount=line.debit_amount,
                 credit_amount=line.credit_amount,
@@ -374,15 +410,46 @@ class LedgerPostingService(ListResponseMixin):
 
     @staticmethod
     def _validate_functional_amounts(entries: list[PostingEntry]) -> None:
-        """Validate that functional currency amounts are provided."""
+        """
+        Validate that functional currency amounts are provided and sane.
+
+        Rules:
+        - Functional amounts must not both be zero.
+        - Exactly one of debit/credit must be non-zero.
+        - No negative values (either functional or original currency).
+        """
         for i, entry in enumerate(entries):
-            if (
-                entry.debit_amount_functional == 0
-                and entry.credit_amount_functional == 0
-            ):
+            debit_f = entry.debit_amount_functional
+            credit_f = entry.credit_amount_functional
+
+            if debit_f < 0 or credit_f < 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Line {i + 1}: functional currency amounts cannot be negative",
+                )
+
+            if debit_f == 0 and credit_f == 0:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Line {i + 1}: functional currency amounts cannot both be zero",
+                )
+
+            if debit_f != 0 and credit_f != 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Line {i + 1}: cannot have both debit and credit functional amounts",
+                )
+
+            # Original currency sanity checks (do not require amounts to be present)
+            if entry.debit_amount < 0 or entry.credit_amount < 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Line {i + 1}: original currency amounts cannot be negative",
+                )
+            if entry.debit_amount != 0 and entry.credit_amount != 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Line {i + 1}: cannot have both debit and credit original amounts",
                 )
 
     @staticmethod

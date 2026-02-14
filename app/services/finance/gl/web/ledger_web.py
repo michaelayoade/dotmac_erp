@@ -18,6 +18,7 @@ from app.models.finance.gl.account import Account, NormalBalance
 from app.models.finance.gl.journal_entry import JournalEntry
 from app.models.finance.gl.posted_ledger_line import PostedLedgerLine
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.finance.gl.web.base import format_currency, format_date, parse_date
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
@@ -98,6 +99,10 @@ class LedgerWebService:
             query.with_entities(func.count(PostedLedgerLine.ledger_line_id)).scalar()
             or 0
         )
+        total_debit, total_credit = query.with_entities(
+            func.coalesce(func.sum(PostedLedgerLine.debit_amount), 0),
+            func.coalesce(func.sum(PostedLedgerLine.credit_amount), 0),
+        ).first() or (Decimal("0"), Decimal("0"))
 
         # Fetch lines ordered by posting date and posted_at
         lines = (
@@ -242,6 +247,25 @@ class LedgerWebService:
             for a in accounts
         ]
 
+        account_label_options = {
+            str(a.account_id): f"{a.account_code} - {a.account_name}" for a in accounts
+        }
+        active_filters = build_active_filters(
+            params={
+                "account_id": account_id,
+                "start_date": start_date,
+                "end_date": end_date,
+                "search": search,
+            },
+            labels={
+                "account_id": "Account",
+                "start_date": "From",
+                "end_date": "To",
+                "search": "Search",
+            },
+            options={"account_id": account_label_options},
+        )
+
         logger.debug("list_ledger_context: found %d entries", total_count)
 
         return {
@@ -257,6 +281,7 @@ class LedgerWebService:
             else None,
             "show_balance_column": selected_account is not None,
             "search": search or "",
+            "active_filters": active_filters,
             "start_date": start_date or "",
             "end_date": end_date or "",
             "page": page,
@@ -264,6 +289,9 @@ class LedgerWebService:
             "offset": offset,
             "total_count": total_count,
             "total_pages": total_pages,
+            "total_debit": format_currency(total_debit),
+            "total_credit": format_currency(total_credit),
+            "net_movement": format_currency(total_debit - total_credit),
         }
 
     # =========================================================================

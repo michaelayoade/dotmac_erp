@@ -20,7 +20,7 @@
 {% block content %}
 <div class="max-w-4xl mx-auto space-y-6">
     {{ settings_ui.settings_header("Inventory Settings", "Configure stock thresholds and warehouse defaults for the inventory module.") }}
-    {{ settings_ui.settings_messages(request, error, "Inventory settings updated successfully.") }}
+    {{ settings_ui.settings_messages(settings_saved|default(false), error, "Inventory settings updated successfully.") }}
 
     <form method="POST" action="/settings/inventory" class="space-y-6">
         {{ request.state.csrf_form | safe }}

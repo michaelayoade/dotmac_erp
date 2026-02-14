@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import live_search, empty_state, pagination %}
+{% from "components/macros.html" import compact_filters, filter_select_field, empty_state, pagination %}
 
 {% block page_title %}Applicants{% endblock %}
 
@@ -28,18 +28,20 @@
         </a>
     </div>
 
-    {% call(search_attrs) live_search(
-        search=search,
+    {% call(filter_attrs) compact_filters(
         base_url="/people/recruit/applicants",
-        placeholder="Search applicants..."
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search applicants..."
     ) %}
-        <select name="status" class="form-select" {{ search_attrs }}>
+        <select name="status" class="form-select" {{ filter_attrs }}>
             <option value="">All Statuses</option>
             {% for s in statuses %}
             <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
             {% endfor %}
         </select>
-        <select name="job_opening_id" class="form-select" {{ search_attrs }}>
+        <select name="job_opening_id" class="form-select" {{ filter_attrs }}>
             <option value="">All Job Openings</option>
             {% for opening in job_openings %}
             <option value="{{ opening.job_opening_id }}" {{ 'selected' if job_opening_id == opening.job_opening_id|string else '' }}>
@@ -48,7 +50,7 @@
             {% endfor %}
         </select>
         <input type="text" name="source" value="{{ source | default('', true) }}"
-            placeholder="e.g. LinkedIn" class="form-input w-40" {{ search_attrs }}>
+            placeholder="e.g. LinkedIn" class="form-input w-40" {{ filter_attrs }}>
     {% endcall %}
 
     <div id="results-container">

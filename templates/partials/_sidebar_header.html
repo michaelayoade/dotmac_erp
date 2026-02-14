@@ -5,14 +5,32 @@
         {% if brand_logo_url %}
             {% if brand_logo_dark_url %}
             {# Light/dark logo pair #}
-            <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo" class="h-9 w-auto max-w-[140px] flex-shrink-0 object-contain shadow-sm dark:hidden" />
-            <img src="{{ brand_logo_dark_url }}" alt="{{ brand_name }} logo" class="h-9 w-auto max-w-[140px] flex-shrink-0 object-contain shadow-sm hidden dark:block" />
+            <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo"
+                 class="h-10 w-10 flex-shrink-0 rounded-xl object-contain bg-slate-100 p-1 dark:bg-slate-800/80 dark:hidden"
+                 loading="lazy"
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            <div class="hidden h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br {{ module_logo_bg }} text-xs font-semibold uppercase text-white shadow-lg {{ module_logo_shadow }} dark:hidden">
+                {{ brand_mark }}
+            </div>
+            <img src="{{ brand_logo_dark_url }}" alt="{{ brand_name }} logo dark"
+                 class="hidden h-10 w-10 flex-shrink-0 rounded-xl object-contain bg-slate-100 p-1 dark:bg-slate-800/80 dark:block"
+                 loading="lazy"
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            <div class="hidden h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br {{ module_logo_bg }} text-xs font-semibold uppercase text-white shadow-lg {{ module_logo_shadow }} dark:flex">
+                {{ brand_mark }}
+            </div>
             {% else %}
             {# Single logo for both modes #}
-            <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo" class="h-9 w-auto max-w-[140px] flex-shrink-0 object-contain shadow-sm" />
+            <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo"
+                 class="h-10 w-10 flex-shrink-0 rounded-xl object-contain bg-slate-100 p-1 dark:bg-slate-800/80"
+                 loading="lazy"
+                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+            <div class="hidden h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br {{ module_logo_bg }} text-xs font-semibold uppercase text-white shadow-lg {{ module_logo_shadow }}">
+                {{ brand_mark }}
+            </div>
             {% endif %}
         {% else %}
-        <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br {{ module_logo_bg }} text-xs font-semibold uppercase text-white shadow-lg {{ module_logo_shadow }}">
+        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br {{ module_logo_bg }} text-xs font-semibold uppercase text-white shadow-lg {{ module_logo_shadow }}">
             {{ brand_mark }}
         </div>
         {% endif %}
@@ -29,10 +47,14 @@
         </svg>
     </button>
     <button @click="sidebarCollapsed = false; sidebarCollapsedStored = false; localStorage.setItem('appSidebarCollapsed', false)" x-show="isDesktop && sidebarCollapsed" x-cloak
-            class="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br {{ module_logo_bg }} text-xs font-semibold uppercase text-white shadow-lg {{ module_logo_shadow }} hover:opacity-90 transition-opacity"
+            class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br {{ module_logo_bg }} text-xs font-semibold uppercase text-white shadow-lg {{ module_logo_shadow }} hover:opacity-90 transition-opacity"
             aria-label="Expand sidebar" title="Expand sidebar">
         {% if brand_logo_url %}
-        <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo" class="h-9 w-9 rounded-lg object-contain bg-white/80 p-1 shadow-sm dark:bg-slate-900/60" />
+        <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo"
+             class="h-10 w-10 rounded-xl object-contain bg-slate-100 p-1 dark:bg-slate-800/80"
+             loading="lazy"
+             onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
+        <span class="hidden">{{ brand_mark }}</span>
         {% else %}
         {{ brand_mark }}
         {% endif %}

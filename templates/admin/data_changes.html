@@ -103,6 +103,7 @@
                                 <span class="text-xs text-slate-500 dark:text-slate-400 truncate max-w-[120px]" title="{{ log.reason }}">{{ log.reason }}</span>
                                 {% endif %}
                                 {% if log.user_id %}
+                                <span class="text-xs text-slate-500 dark:text-slate-400">{{ log.user_name }}</span>
                                 <span class="text-xs text-slate-400 font-mono" title="User ID">{{ log.user_id[:8] }}...</span>
                                 {% endif %}
                                 <svg class="h-4 w-4 text-slate-400 ml-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -155,7 +156,7 @@
                                 <span>Request: <span class="font-mono">{{ log.correlation_id[:12] }}...</span></span>
                                 {% endif %}
                                 {% if log.user_id %}
-                                <span>User: <span class="font-mono">{{ log.user_id }}</span></span>
+                                <span>User: {{ log.user_name }} <span class="font-mono">({{ log.user_id }})</span></span>
                                 {% endif %}
                             </div>
                         </td>

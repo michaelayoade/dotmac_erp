@@ -6,9 +6,10 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, computed_field
 
 # ============ Inbound Sync Payloads (CRM → ERP) ============
 
@@ -42,12 +43,82 @@ class CRMTicketPayload(BaseModel):
     ticket_type: str | None = Field(None, max_length=80)
     status: str = Field("active", description="active, completed, cancelled")
     priority: str | None = Field(None, max_length=40)
+    description: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("description", "body", "ticket_description"),
+    )
+    comments: list[dict[str, Any]] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("comments", "ticket_comments"),
+    )
+    activity_log: list[dict[str, Any]] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("activity_log", "activityLog", "activities"),
+    )
     customer_name: str | None = Field(None, max_length=200)
     customer_crm_id: str | None = Field(None, max_length=36)
     metadata: dict | None = None
     # Service team integration (optional, backward-compatible)
     service_team_name: str | None = Field(None, max_length=200)
     assigned_employee_emails: list[str] = Field(default_factory=list)
+
+
+class CRMTicketCommentItem(BaseModel):
+    """CRM ticket comment item."""
+
+    id: str = Field(..., min_length=1, max_length=255)
+    timestamp: datetime | None = Field(
+        default=None,
+        validation_alias=AliasChoices("timestamp", "created_at", "createdAt"),
+    )
+    author_person_id: str | None = Field(
+        None,
+        max_length=255,
+        validation_alias=AliasChoices("author_person_id", "authorPersonId"),
+    )
+    is_internal: bool = Field(
+        False,
+        validation_alias=AliasChoices("is_internal", "isInternal"),
+    )
+    body: str | None = None
+    attachments_count: int = Field(
+        0,
+        ge=0,
+        validation_alias=AliasChoices("attachments_count", "attachmentsCount"),
+    )
+
+
+class CRMTicketActivityEntry(BaseModel):
+    """CRM ticket activity item (comment-style or event-style)."""
+
+    kind: Literal["comment", "event"]
+    id: str = Field(..., min_length=1, max_length=255)
+    timestamp: datetime | None = Field(
+        default=None,
+        validation_alias=AliasChoices("timestamp", "created_at", "createdAt"),
+    )
+    author_person_id: str | None = Field(
+        None,
+        max_length=255,
+        validation_alias=AliasChoices("author_person_id", "authorPersonId"),
+    )
+    is_internal: bool = Field(
+        False,
+        validation_alias=AliasChoices("is_internal", "isInternal"),
+    )
+    body: str | None = None
+    attachments_count: int = Field(
+        0,
+        ge=0,
+        validation_alias=AliasChoices("attachments_count", "attachmentsCount"),
+    )
+    event_type: str | None = Field(
+        None,
+        max_length=100,
+        validation_alias=AliasChoices("event_type", "eventType"),
+    )
+    status: str | None = Field(None, max_length=80)
+    details: dict[str, Any] | None = None
 
 
 class CRMWorkOrderPayload(BaseModel):
@@ -293,6 +364,27 @@ class DepartmentListResponse(BaseModel):
     offset: int = 0
 
 
+class WorkforceEmployeeRead(BaseModel):
+    """Employee row for CRM workforce lookup."""
+
+    employee_id: UUID
+    email: str
+    is_active: bool = True
+    full_name: str | None = None
+    department: str | None = None
+    designation: str | None = None
+
+
+class WorkforceEmployeeListResponse(BaseModel):
+    """Paginated workforce employee response."""
+
+    employees: list[WorkforceEmployeeRead] = Field(default_factory=list)
+    total: int = 0
+    limit: int = 100
+    offset: int = 0
+    has_more: bool = False
+
+
 # ============ Contact Sync (ERP → CRM) ============
 
 
@@ -395,3 +487,52 @@ class CRMMaterialRequestStatusRead(BaseModel):
     request_type: str
     items: list[CRMMaterialRequestItemRead] = Field(default_factory=list)
     created_at: datetime
+
+
+# ============ Purchase Order Sync (CRM → ERP) ============
+
+
+class CRMPurchaseOrderItemPayload(BaseModel):
+    """Single line item in a CRM purchase order."""
+
+    item_type: str = Field(..., max_length=50)
+    description: str = Field(..., max_length=500)
+    quantity: Decimal = Field(..., gt=0)
+    unit_price: Decimal = Field(..., ge=0)
+    amount: Decimal = Field(..., ge=0)
+    cable_type: str | None = Field(None, max_length=100)
+    fiber_count: int | None = None
+    splice_count: int | None = None
+    notes: str | None = None
+
+
+class CRMPurchaseOrderPayload(BaseModel):
+    """Purchase order from DotMac CRM (triggered on vendor quote approval)."""
+
+    omni_work_order_id: str = Field(
+        ..., max_length=36, description="CRM work order ID for idempotency"
+    )
+    omni_quote_id: str | None = Field(None, max_length=36)
+    omni_project_id: str | None = Field(None, max_length=36)
+    project_code: str | None = Field(None, max_length=80)
+    project_name: str | None = Field(None, max_length=200)
+    vendor_erp_id: str | None = Field(None, max_length=255)
+    vendor_name: str | None = Field(None, max_length=255)
+    vendor_code: str | None = Field(None, max_length=30)
+    title: str = Field(..., max_length=500)
+    currency: str = Field("NGN", max_length=3)
+    subtotal: Decimal
+    tax_total: Decimal = Decimal("0")
+    total: Decimal
+    approved_at: datetime | None = None
+    approved_by_email: str | None = Field(None, max_length=255)
+    items: list[CRMPurchaseOrderItemPayload] = Field(..., min_length=1)
+
+
+class CRMPurchaseOrderResponse(BaseModel):
+    """Response after creating a purchase order from CRM."""
+
+    purchase_order_id: str
+    po_id: UUID
+    status: str
+    omni_work_order_id: str

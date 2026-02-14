@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import live_search, pagination %}
+{% from "components/macros.html" import compact_filters, filter_select_field, pagination %}
 
 {% block page_title %}Shift Patterns{% endblock %}
 
@@ -49,15 +49,15 @@
         </div>
     </div>
 
-    {{ live_search(
-        search=search,
-        filters=[
-            {"name": "is_active", "label": "All", "value": is_active,
-             "options": [{"value": "true", "label": "Active"}, {"value": "false", "label": "Inactive"}]}
-        ],
+    {% call(filter_attrs) compact_filters(
         base_url="/people/scheduling/patterns",
-        placeholder="Search patterns..."
-    ) }}
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search patterns..."
+    ) %}
+        {{ filter_select_field("is_active", "Status", is_active, [{"value": "true", "label": "Active"}, {"value": "false", "label": "Inactive"}], filter_attrs) }}
+    {% endcall %}
 
     <div id="results-container">
     {% if patterns %}

@@ -45,8 +45,11 @@
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
                         <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ event.occurred_at }}</td>
                         <td class="px-6 py-4">
-                            <p class="text-sm font-medium text-slate-900 dark:text-white">{{ event.actor_type | upper }}</p>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 font-mono">{{ event.actor_id | default('-') }}</p>
+                            <p class="text-sm font-medium text-slate-900 dark:text-white">{{ event.actor_name }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ event.actor_type | upper }}</p>
+                            {% if event.actor_id %}
+                            <p class="text-xs text-slate-500 dark:text-slate-400 font-mono">{{ event.actor_id }}</p>
+                            {% endif %}
                         </td>
                         <td class="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">{{ event.action }}</td>
                         <td class="px-6 py-4">

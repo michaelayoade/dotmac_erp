@@ -166,15 +166,37 @@ class HRWebService:
                 }
             )
 
+        # Build option lookups for active filter chips
+        dept_options = {str(d.department_id): d.department_name for d in departments}
+        desig_options = {
+            str(d.designation_id): d.designation_name for d in designations
+        }
         active_filters = build_active_filters(
             params={
                 "status": status,
                 "department_id": department_id,
                 "designation_id": designation_id,
-            }
+                "date_of_joining_from": date_of_joining_from,
+                "date_of_joining_to": date_of_joining_to,
+                "date_of_leaving_from": date_of_leaving_from,
+                "date_of_leaving_to": date_of_leaving_to,
+            },
+            labels={
+                "status": "Status",
+                "department_id": "Department",
+                "designation_id": "Designation",
+                "date_of_joining_from": "Joined From",
+                "date_of_joining_to": "Joined To",
+                "date_of_leaving_from": "Exit From",
+                "date_of_leaving_to": "Exit To",
+            },
+            options={
+                "department_id": dept_options,
+                "designation_id": desig_options,
+            },
         )
         context = {
-            **base_context(request, auth, "Employees", "employees"),
+            **base_context(request, auth, "Employees", "employees", db=db),
             "employees": employees_view,
             "stats": stats,
             "departments": departments,

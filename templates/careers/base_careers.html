@@ -12,11 +12,20 @@
 
     <!-- Self-hosted Typography -->
     <link href="/static/css/fonts.css" rel="stylesheet">
-    {% if brand.favicon_url %}
-    <link rel="icon" href="{{ brand.favicon_url }}" type="image/png">
-    {% else %}
-    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
-    {% endif %}
+    {% set favicon_url = (brand.favicon_url if brand and brand.favicon_url else "/static/favicon.svg") %}
+    {% set favicon_path = (favicon_url.split("?")[0] if favicon_url else "") %}
+    {% set favicon_ext = (favicon_path.split(".")[-1].lower() if favicon_path else "svg") %}
+    {% set favicon_type = (
+        "image/svg+xml" if favicon_ext == "svg"
+        else "image/png" if favicon_ext == "png"
+        else "image/x-icon" if favicon_ext == "ico"
+        else "image/jpeg" if favicon_ext in ["jpg", "jpeg"]
+        else "image/webp" if favicon_ext == "webp"
+        else "image/gif" if favicon_ext == "gif"
+        else "image/png"
+    ) %}
+    <link rel="icon" href="{{ favicon_url }}" type="{{ favicon_type }}">
+    <link rel="alternate icon" href="{{ favicon_url }}" type="{{ favicon_type }}">
 
     {% if brand.fonts_url %}
     <link href="{{ brand.fonts_url }}" rel="stylesheet">

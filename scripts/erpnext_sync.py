@@ -211,6 +211,27 @@ def run_sync(entity_types=None, organization_id=None, user_id=None, incremental=
 
     db = SessionLocal()
     try:
+        # Resolve AR/AP control accounts for the organization
+        from sqlalchemy import select as sa_select
+
+        from app.models.finance.gl.account import Account
+
+        ar_account = db.scalar(
+            sa_select(Account.account_id).where(
+                Account.organization_id == organization_id,
+                Account.account_code == "1400",
+            )
+        )
+        ap_account = db.scalar(
+            sa_select(Account.account_id).where(
+                Account.organization_id == organization_id,
+                Account.account_code == "2000",
+            )
+        )
+        print(f"DEBUG org_id={organization_id} type={type(organization_id)}")
+        print(f"AR Control Account: {ar_account}")
+        print(f"AP Control Account: {ap_account}")
+
         # Create MigrationConfig for the orchestrator
         config = MigrationConfig(
             erpnext_url=ERPNEXT_URL,
@@ -219,6 +240,8 @@ def run_sync(entity_types=None, organization_id=None, user_id=None, incremental=
             erpnext_company=ERPNEXT_COMPANY,
             sync_type=SyncType.INCREMENTAL if incremental else SyncType.FULL,
             entity_types=entity_types,
+            ar_control_account_id=ar_account,
+            ap_control_account_id=ap_account,
         )
 
         orchestrator = ERPNextSyncOrchestrator(

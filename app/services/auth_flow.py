@@ -42,6 +42,7 @@ PASSWORD_CONTEXT = CryptContext(
     default="pbkdf2_sha256",
     deprecated="auto",
 )
+_REFRESH_REUSE_GRACE_SECONDS = 30
 
 
 def _env_value(name: str) -> str | None:
@@ -951,7 +952,13 @@ class AuthFlow(ListResponseMixin):
         )
 
     @staticmethod
-    def refresh(db: Session, refresh_token: str, request: Request) -> dict[str, str]:
+    def refresh(
+        db: Session,
+        refresh_token: str,
+        request: Request,
+        *,
+        allow_reuse_grace: bool = False,
+    ) -> dict[str, str]:
         token_hash = _hash_token(refresh_token)
         session = (
             db.query(AuthSession)
@@ -970,17 +977,28 @@ class AuthFlow(ListResponseMixin):
                 .first()
             )
             if reused:
-                # Any reuse of a rotated refresh token is treated as theft/replay:
-                # revoke the session immediately.
-                logger.warning("Refresh token reuse detected: session=%s", reused.id)
-                reused.status = SessionStatus.revoked
-                reused.revoked_at = _now()
-                db.commit()
-                raise HTTPException(
-                    status_code=401,
-                    detail="Refresh token reuse detected",
-                )
-            raise HTTPException(status_code=401, detail="Invalid refresh token")
+                rotated_at = _as_utc(reused.token_rotated_at)
+                now = _now()
+                if (
+                    allow_reuse_grace
+                    and (
+                    rotated_at is not None
+                    and now - rotated_at <= timedelta(seconds=_REFRESH_REUSE_GRACE_SECONDS)
+                    )
+                ):
+                    # Grace window for concurrent refresh requests.
+                    session = reused
+                else:
+                    logger.warning("Refresh token reuse detected: session=%s", reused.id)
+                    reused.status = SessionStatus.revoked
+                    reused.revoked_at = _now()
+                    db.commit()
+                    raise HTTPException(
+                        status_code=401,
+                        detail="Refresh token reuse detected",
+                    )
+            else:
+                raise HTTPException(status_code=401, detail="Invalid refresh token")
         expires_at = _as_utc(session.expires_at)
         if expires_at and expires_at <= _now():
             session.status = SessionStatus.expired
@@ -1010,7 +1028,7 @@ class AuthFlow(ListResponseMixin):
         resolved = AuthFlow.resolve_refresh_token(request, refresh_token, db)
         if not resolved:
             raise HTTPException(status_code=401, detail="Missing refresh token")
-        result = AuthFlow.refresh(db, resolved, request)
+        result = AuthFlow.refresh(db, resolved, request, allow_reuse_grace=True)
         return AuthFlow._response_with_refresh_cookie(
             db, result, TokenResponse, status.HTTP_200_OK
         )

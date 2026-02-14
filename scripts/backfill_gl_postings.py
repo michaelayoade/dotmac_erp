@@ -29,9 +29,12 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import calendar
 import logging
 import sys
 import time
+import uuid as uuid_lib
+from datetime import date
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -58,6 +61,11 @@ from app.models.finance.ar.customer_payment import (  # noqa: E402
     PaymentStatus,
 )
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus  # noqa: E402
+from app.models.finance.gl.fiscal_period import (  # noqa: E402
+    FiscalPeriod,
+    PeriodStatus,
+)
+from app.models.finance.gl.fiscal_year import FiscalYear  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -65,6 +73,199 @@ logging.basicConfig(
     datefmt="%H:%M:%S",
 )
 logger = logging.getLogger("backfill_gl")
+
+
+# ---------------------------------------------------------------------------
+# Fiscal Period Preparation
+# ---------------------------------------------------------------------------
+
+
+# Records with dates before this are treated as corrupt data and skipped.
+MIN_VALID_DATE = date(2017, 1, 1)
+
+
+def _get_date_range(
+    db: Session, org_id: UUID | None
+) -> tuple[date | None, date | None]:
+    """Get the min/max dates across all entity types needing GL posting."""
+    queries = []
+
+    # AR Invoices
+    q = select(func.min(Invoice.invoice_date), func.max(Invoice.invoice_date)).where(
+        Invoice.status.in_(
+            [
+                InvoiceStatus.APPROVED,
+                InvoiceStatus.POSTED,
+                InvoiceStatus.PAID,
+                InvoiceStatus.PARTIALLY_PAID,
+                InvoiceStatus.OVERDUE,
+            ]
+        ),
+        Invoice.journal_entry_id.is_(None),
+    )
+    if org_id:
+        q = q.where(Invoice.organization_id == org_id)
+    queries.append(q)
+
+    # AR Payments
+    q = select(
+        func.min(CustomerPayment.payment_date), func.max(CustomerPayment.payment_date)
+    ).where(
+        CustomerPayment.status == PaymentStatus.CLEARED,
+        CustomerPayment.journal_entry_id.is_(None),
+    )
+    if org_id:
+        q = q.where(CustomerPayment.organization_id == org_id)
+    queries.append(q)
+
+    # Expense Claims
+    q = select(
+        func.min(ExpenseClaim.claim_date), func.max(ExpenseClaim.claim_date)
+    ).where(
+        ExpenseClaim.status.in_([ExpenseClaimStatus.APPROVED, ExpenseClaimStatus.PAID]),
+        ExpenseClaim.journal_entry_id.is_(None),
+    )
+    if org_id:
+        q = q.where(ExpenseClaim.organization_id == org_id)
+    queries.append(q)
+
+    overall_min: date | None = None
+    overall_max: date | None = None
+
+    for q in queries:
+        row = db.execute(q).one()
+        if row[0]:
+            d_min = max(row[0], MIN_VALID_DATE)
+            d_max = row[1]
+            if overall_min is None or d_min < overall_min:
+                overall_min = d_min
+            if overall_max is None or d_max > overall_max:
+                overall_max = d_max
+
+    return overall_min, overall_max
+
+
+def prepare_fiscal_periods(db: Session, org_id: UUID | None) -> list[UUID]:
+    """
+    Ensure fiscal periods exist for all dates needing GL posting.
+
+    Creates missing fiscal years and monthly periods (OPEN status).
+    Temporarily sets HARD_CLOSED periods to OPEN for backfill.
+
+    Returns:
+        List of fiscal_period_ids that were changed from HARD_CLOSED to OPEN
+        (so they can be restored after backfill).
+    """
+    min_date, max_date = _get_date_range(db, org_id)
+    if not min_date or not max_date:
+        return []
+
+    logger.info("Preparing fiscal periods for date range %s to %s", min_date, max_date)
+
+    # Get all organizations that need periods
+    if org_id:
+        org_ids = [org_id]
+    else:
+        from app.models.finance.core_org.organization import Organization
+
+        org_ids = list(db.scalars(select(Organization.organization_id)).all())
+
+    reopened_period_ids: list[UUID] = []
+
+    for oid in org_ids:
+        # Iterate month by month from min_date to max_date
+        y, m = min_date.year, min_date.month
+        end_y, end_m = max_date.year, max_date.month
+
+        while (y, m) <= (end_y, end_m):
+            month_start = date(y, m, 1)
+            _, last_day = calendar.monthrange(y, m)
+            month_end = date(y, m, last_day)
+
+            # Check if period exists
+            existing = db.scalar(
+                select(FiscalPeriod).where(
+                    FiscalPeriod.organization_id == oid,
+                    FiscalPeriod.start_date <= month_start,
+                    FiscalPeriod.end_date >= month_start,
+                )
+            )
+
+            if existing:
+                # If HARD_CLOSED, temporarily open it
+                if (
+                    existing.status == PeriodStatus.HARD_CLOSED
+                    or existing.status == PeriodStatus.SOFT_CLOSED
+                ):
+                    existing.status = PeriodStatus.OPEN
+                    reopened_period_ids.append(existing.fiscal_period_id)
+            else:
+                # Create fiscal year if missing
+                year_code = str(y)
+                fiscal_year = db.scalar(
+                    select(FiscalYear).where(
+                        FiscalYear.organization_id == oid,
+                        FiscalYear.year_code == year_code,
+                    )
+                )
+                if not fiscal_year:
+                    fiscal_year = FiscalYear(
+                        fiscal_year_id=uuid_lib.uuid4(),
+                        organization_id=oid,
+                        year_code=year_code,
+                        year_name=f"Fiscal Year {y}",
+                        start_date=date(y, 1, 1),
+                        end_date=date(y, 12, 31),
+                    )
+                    db.add(fiscal_year)
+                    db.flush()
+                    logger.info("  Created fiscal year %s", year_code)
+
+                # Create the monthly period
+                month_name = calendar.month_name[m]
+                period = FiscalPeriod(
+                    fiscal_period_id=uuid_lib.uuid4(),
+                    organization_id=oid,
+                    fiscal_year_id=fiscal_year.fiscal_year_id,
+                    period_number=m,
+                    period_name=f"{month_name} {y}",
+                    start_date=month_start,
+                    end_date=month_end,
+                    status=PeriodStatus.OPEN,
+                )
+                db.add(period)
+                logger.info("  Created fiscal period %s %s", month_name, y)
+
+            # Next month
+            m += 1
+            if m > 12:
+                m = 1
+                y += 1
+
+    db.flush()
+    db.commit()
+
+    if reopened_period_ids:
+        logger.info(
+            "  Temporarily opened %d HARD/SOFT_CLOSED periods for backfill",
+            len(reopened_period_ids),
+        )
+
+    return reopened_period_ids
+
+
+def restore_fiscal_periods(db: Session, period_ids: list[UUID]) -> None:
+    """Restore temporarily opened periods back to HARD_CLOSED."""
+    if not period_ids:
+        return
+
+    for pid in period_ids:
+        period = db.get(FiscalPeriod, pid)
+        if period and period.status == PeriodStatus.OPEN:
+            period.status = PeriodStatus.HARD_CLOSED
+
+    db.commit()
+    logger.info("Restored %d periods back to HARD_CLOSED", len(period_ids))
 
 
 # ---------------------------------------------------------------------------
@@ -78,7 +279,7 @@ def count_missing_gl(
     """Count records with posted status but no GL entries."""
     results: dict[str, dict[str, int]] = {}
 
-    # AR Invoices
+    # AR Invoices (exclude zero-amount)
     ar_inv_q = (
         select(func.count())
         .select_from(Invoice)
@@ -92,6 +293,7 @@ def count_missing_gl(
                 ]
             ),
             Invoice.journal_entry_id.is_(None),
+            Invoice.total_amount != 0,
         )
     )
     ar_inv_total = (
@@ -116,13 +318,14 @@ def count_missing_gl(
         "total_posted": db.scalar(ar_inv_total) or 0,
     }
 
-    # AR Payments
+    # AR Payments (exclude zero-amount)
     ar_pmt_q = (
         select(func.count())
         .select_from(CustomerPayment)
         .where(
             CustomerPayment.status == PaymentStatus.CLEARED,
             CustomerPayment.journal_entry_id.is_(None),
+            CustomerPayment.amount != 0,
         )
     )
     ar_pmt_total = (
@@ -140,7 +343,7 @@ def count_missing_gl(
         "total_posted": db.scalar(ar_pmt_total) or 0,
     }
 
-    # Expense Claims
+    # Expense Claims (exclude zero-amount)
     exp_q = (
         select(func.count())
         .select_from(ExpenseClaim)
@@ -152,6 +355,11 @@ def count_missing_gl(
                 ]
             ),
             ExpenseClaim.journal_entry_id.is_(None),
+            func.coalesce(
+                ExpenseClaim.total_approved_amount,
+                ExpenseClaim.total_claimed_amount,
+            )
+            != 0,
         )
     )
     exp_total = (
@@ -174,19 +382,21 @@ def count_missing_gl(
         "total_posted": db.scalar(exp_total) or 0,
     }
 
-    # AP Invoices
+    # AP Invoices (exclude zero-amount)
     ap_inv_q = (
         select(func.count())
         .select_from(SupplierInvoice)
         .where(
             SupplierInvoice.status.in_(
                 [
+                    SupplierInvoiceStatus.APPROVED,
                     SupplierInvoiceStatus.POSTED,
                     SupplierInvoiceStatus.PAID,
                     SupplierInvoiceStatus.PARTIALLY_PAID,
                 ]
             ),
             SupplierInvoice.journal_entry_id.is_(None),
+            SupplierInvoice.total_amount != 0,
         )
     )
     ap_inv_total = (
@@ -195,6 +405,7 @@ def count_missing_gl(
         .where(
             SupplierInvoice.status.in_(
                 [
+                    SupplierInvoiceStatus.APPROVED,
                     SupplierInvoiceStatus.POSTED,
                     SupplierInvoiceStatus.PAID,
                     SupplierInvoiceStatus.PARTIALLY_PAID,
@@ -210,20 +421,21 @@ def count_missing_gl(
         "total_posted": db.scalar(ap_inv_total) or 0,
     }
 
-    # AP Payments
+    # AP Payments (exclude zero-amount)
     ap_pmt_q = (
         select(func.count())
         .select_from(SupplierPayment)
         .where(
-            SupplierPayment.status == APPaymentStatus.SENT,
+            SupplierPayment.status.in_([APPaymentStatus.SENT, APPaymentStatus.CLEARED]),
             SupplierPayment.journal_entry_id.is_(None),
+            SupplierPayment.amount != 0,
         )
     )
     ap_pmt_total = (
         select(func.count())
         .select_from(SupplierPayment)
         .where(
-            SupplierPayment.status == APPaymentStatus.SENT,
+            SupplierPayment.status.in_([APPaymentStatus.SENT, APPaymentStatus.CLEARED]),
         )
     )
     if org_id:
@@ -240,6 +452,61 @@ def count_missing_gl(
 # ---------------------------------------------------------------------------
 # Processors
 # ---------------------------------------------------------------------------
+
+
+def _process_batch(
+    db: Session,
+    entity_name: str,
+    items: list,
+    id_attr: str,
+    post_fn,
+) -> dict[str, int]:
+    """
+    Process a batch of records through their ensure_gl_posted function.
+
+    Commits every 50 records and rolls back + skips on any per-record error,
+    so one failure never cascades to the rest of the batch.
+    """
+    posted = 0
+    failed = 0
+
+    for i, item in enumerate(items):
+        try:
+            if post_fn(db, item):
+                posted += 1
+        except Exception as exc:
+            failed += 1
+            db.rollback()
+            logger.error(
+                "  FAILED %s %s: %s",
+                entity_name,
+                getattr(item, id_attr, "?"),
+                exc,
+            )
+
+        # Commit in batches of 50
+        if (i + 1) % 50 == 0:
+            try:
+                db.commit()
+            except Exception as exc:
+                db.rollback()
+                logger.error("  Commit failed at %d: %s", i + 1, exc)
+            logger.info(
+                "  %s: %d/%d processed (%d posted, %d failed)",
+                entity_name,
+                i + 1,
+                len(items),
+                posted,
+                failed,
+            )
+
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.error("  Final commit failed: %s", exc)
+
+    return {"total": len(items), "posted": posted, "failed": failed}
 
 
 def backfill_ar_invoices(
@@ -260,6 +527,7 @@ def backfill_ar_invoices(
                 ]
             ),
             Invoice.journal_entry_id.is_(None),
+            Invoice.total_amount != 0,
         )
         .order_by(Invoice.invoice_date)
         .limit(batch_size)
@@ -268,28 +536,9 @@ def backfill_ar_invoices(
         stmt = stmt.where(Invoice.organization_id == org_id)
 
     invoices = list(db.scalars(stmt).all())
-    posted = 0
-    failed = 0
-
-    for i, invoice in enumerate(invoices):
-        if ARInvoiceService.ensure_gl_posted(db, invoice):
-            posted += 1
-        else:
-            failed += 1
-
-        # Commit in batches of 100
-        if (i + 1) % 100 == 0:
-            db.commit()
-            logger.info(
-                "  AR invoices: %d/%d processed (%d posted, %d failed)",
-                i + 1,
-                len(invoices),
-                posted,
-                failed,
-            )
-
-    db.commit()
-    return {"total": len(invoices), "posted": posted, "failed": failed}
+    return _process_batch(
+        db, "AR invoices", invoices, "invoice_id", ARInvoiceService.ensure_gl_posted
+    )
 
 
 def backfill_ar_payments(
@@ -303,6 +552,7 @@ def backfill_ar_payments(
         .where(
             CustomerPayment.status == PaymentStatus.CLEARED,
             CustomerPayment.journal_entry_id.is_(None),
+            CustomerPayment.amount != 0,
         )
         .order_by(CustomerPayment.payment_date)
         .limit(batch_size)
@@ -311,27 +561,13 @@ def backfill_ar_payments(
         stmt = stmt.where(CustomerPayment.organization_id == org_id)
 
     payments = list(db.scalars(stmt).all())
-    posted = 0
-    failed = 0
-
-    for i, payment in enumerate(payments):
-        if CustomerPaymentService.ensure_gl_posted(db, payment):
-            posted += 1
-        else:
-            failed += 1
-
-        if (i + 1) % 100 == 0:
-            db.commit()
-            logger.info(
-                "  AR payments: %d/%d processed (%d posted, %d failed)",
-                i + 1,
-                len(payments),
-                posted,
-                failed,
-            )
-
-    db.commit()
-    return {"total": len(payments), "posted": posted, "failed": failed}
+    return _process_batch(
+        db,
+        "AR payments",
+        payments,
+        "payment_id",
+        CustomerPaymentService.ensure_gl_posted,
+    )
 
 
 def backfill_expenses(
@@ -350,6 +586,11 @@ def backfill_expenses(
                 ]
             ),
             ExpenseClaim.journal_entry_id.is_(None),
+            func.coalesce(
+                ExpenseClaim.total_approved_amount,
+                ExpenseClaim.total_claimed_amount,
+            )
+            != 0,
         )
         .order_by(ExpenseClaim.claim_date)
         .limit(batch_size)
@@ -358,27 +599,9 @@ def backfill_expenses(
         stmt = stmt.where(ExpenseClaim.organization_id == org_id)
 
     claims = list(db.scalars(stmt).all())
-    posted = 0
-    failed = 0
-
-    for i, claim in enumerate(claims):
-        if ExpenseService.ensure_gl_posted(db, claim):
-            posted += 1
-        else:
-            failed += 1
-
-        if (i + 1) % 100 == 0:
-            db.commit()
-            logger.info(
-                "  Expenses: %d/%d processed (%d posted, %d failed)",
-                i + 1,
-                len(claims),
-                posted,
-                failed,
-            )
-
-    db.commit()
-    return {"total": len(claims), "posted": posted, "failed": failed}
+    return _process_batch(
+        db, "Expenses", claims, "claim_id", ExpenseService.ensure_gl_posted
+    )
 
 
 def backfill_ap_invoices(
@@ -392,12 +615,14 @@ def backfill_ap_invoices(
         .where(
             SupplierInvoice.status.in_(
                 [
+                    SupplierInvoiceStatus.APPROVED,
                     SupplierInvoiceStatus.POSTED,
                     SupplierInvoiceStatus.PAID,
                     SupplierInvoiceStatus.PARTIALLY_PAID,
                 ]
             ),
             SupplierInvoice.journal_entry_id.is_(None),
+            SupplierInvoice.total_amount != 0,
         )
         .order_by(SupplierInvoice.invoice_date)
         .limit(batch_size)
@@ -406,27 +631,13 @@ def backfill_ap_invoices(
         stmt = stmt.where(SupplierInvoice.organization_id == org_id)
 
     invoices = list(db.scalars(stmt).all())
-    posted = 0
-    failed = 0
-
-    for i, invoice in enumerate(invoices):
-        if SupplierInvoiceService.ensure_gl_posted(db, invoice):
-            posted += 1
-        else:
-            failed += 1
-
-        if (i + 1) % 100 == 0:
-            db.commit()
-            logger.info(
-                "  AP invoices: %d/%d processed (%d posted, %d failed)",
-                i + 1,
-                len(invoices),
-                posted,
-                failed,
-            )
-
-    db.commit()
-    return {"total": len(invoices), "posted": posted, "failed": failed}
+    return _process_batch(
+        db,
+        "AP invoices",
+        invoices,
+        "invoice_id",
+        SupplierInvoiceService.ensure_gl_posted,
+    )
 
 
 def backfill_ap_payments(
@@ -438,8 +649,9 @@ def backfill_ap_payments(
     stmt = (
         select(SupplierPayment)
         .where(
-            SupplierPayment.status == APPaymentStatus.SENT,
+            SupplierPayment.status.in_([APPaymentStatus.SENT, APPaymentStatus.CLEARED]),
             SupplierPayment.journal_entry_id.is_(None),
+            SupplierPayment.amount != 0,
         )
         .order_by(SupplierPayment.payment_date)
         .limit(batch_size)
@@ -448,27 +660,13 @@ def backfill_ap_payments(
         stmt = stmt.where(SupplierPayment.organization_id == org_id)
 
     payments = list(db.scalars(stmt).all())
-    posted = 0
-    failed = 0
-
-    for i, payment in enumerate(payments):
-        if SupplierPaymentService.ensure_gl_posted(db, payment):
-            posted += 1
-        else:
-            failed += 1
-
-        if (i + 1) % 100 == 0:
-            db.commit()
-            logger.info(
-                "  AP payments: %d/%d processed (%d posted, %d failed)",
-                i + 1,
-                len(payments),
-                posted,
-                failed,
-            )
-
-    db.commit()
-    return {"total": len(payments), "posted": posted, "failed": failed}
+    return _process_batch(
+        db,
+        "AP payments",
+        payments,
+        "payment_id",
+        SupplierPaymentService.ensure_gl_posted,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -558,6 +756,11 @@ def main() -> None:
             logger.info("Nothing to do — all records have GL entries.")
             return
 
+        # Step 1: Prepare fiscal periods (create missing, open closed)
+        logger.info("")
+        logger.info("Step 1: Preparing fiscal periods...")
+        reopened_ids = prepare_fiscal_periods(db, org_id)
+
         # Execute backfill
         types_to_process = (
             {args.entity_type: ENTITY_TYPES[args.entity_type]}
@@ -566,39 +769,106 @@ def main() -> None:
         )
 
         logger.info("")
-        logger.info("Starting GL backfill (batch_size=%d)...", args.batch_size)
+        logger.info("Step 2: Starting GL backfill (chunk_size=%d)...", args.batch_size)
         logger.info("")
 
         grand_total = {"total": 0, "posted": 0, "failed": 0}
-        for entity_type, processor in types_to_process.items():
-            if counts[entity_type]["missing_gl"] == 0:
-                logger.info("[%s] No records to process — skipping.", entity_type)
-                continue
+        overall_start = time.time()
 
-            logger.info(
-                "[%s] Processing up to %d records...", entity_type, args.batch_size
-            )
-            start = time.time()
+        try:
+            for entity_type, processor in types_to_process.items():
+                entity_missing = counts[entity_type]["missing_gl"]
+                if entity_missing == 0:
+                    logger.info("[%s] No records to process — skipping.", entity_type)
+                    continue
 
-            result = processor(db, args.batch_size, org_id)
+                logger.info(
+                    "[%s] Starting: %d records to process in chunks of %d...",
+                    entity_type,
+                    entity_missing,
+                    args.batch_size,
+                )
+                entity_start = time.time()
+                entity_total = {"total": 0, "posted": 0, "failed": 0}
+                chunk_num = 0
 
-            elapsed = time.time() - start
-            logger.info(
-                "[%s] Done in %.1fs — %d processed, %d posted, %d failed",
-                entity_type,
-                elapsed,
-                result["total"],
-                result["posted"],
-                result["failed"],
-            )
-            grand_total["total"] += result["total"]
-            grand_total["posted"] += result["posted"]
-            grand_total["failed"] += result["failed"]
+                while True:
+                    chunk_num += 1
+                    chunk_start = time.time()
 
+                    result = processor(db, args.batch_size, org_id)
+
+                    if result["total"] == 0:
+                        break  # No more records
+
+                    entity_total["total"] += result["total"]
+                    entity_total["posted"] += result["posted"]
+                    entity_total["failed"] += result["failed"]
+
+                    chunk_elapsed = time.time() - chunk_start
+                    rate = result["total"] / chunk_elapsed if chunk_elapsed > 0 else 0
+                    pct = (
+                        entity_total["total"] / entity_missing * 100
+                        if entity_missing > 0
+                        else 100
+                    )
+                    remaining_est = (
+                        (entity_missing - entity_total["total"]) / rate
+                        if rate > 0
+                        else 0
+                    )
+
+                    logger.info(
+                        "[%s] Chunk %d: %d processed (%.1f/s) — "
+                        "cumulative: %d/%d (%.1f%%) posted=%d failed=%d "
+                        "— ETA: %.0fm",
+                        entity_type,
+                        chunk_num,
+                        result["total"],
+                        rate,
+                        entity_total["total"],
+                        entity_missing,
+                        pct,
+                        entity_total["posted"],
+                        entity_total["failed"],
+                        remaining_est / 60,
+                    )
+
+                    # If all records in this chunk failed, stop to avoid infinite loop
+                    if result["posted"] == 0 and result["failed"] == result["total"]:
+                        logger.error(
+                            "[%s] All records in chunk failed — stopping to avoid loop.",
+                            entity_type,
+                        )
+                        break
+
+                    if result["total"] < args.batch_size:
+                        break  # Last chunk was partial, we're done
+
+                entity_elapsed = time.time() - entity_start
+                logger.info(
+                    "[%s] DONE in %.1fs — %d processed, %d posted, %d failed",
+                    entity_type,
+                    entity_elapsed,
+                    entity_total["total"],
+                    entity_total["posted"],
+                    entity_total["failed"],
+                )
+                grand_total["total"] += entity_total["total"]
+                grand_total["posted"] += entity_total["posted"]
+                grand_total["failed"] += entity_total["failed"]
+        finally:
+            # Step 3: Restore period statuses even if backfill fails
+            logger.info("")
+            logger.info("Step 3: Restoring fiscal period statuses...")
+            restore_fiscal_periods(db, reopened_ids)
+
+        overall_elapsed = time.time() - overall_start
         logger.info("")
         logger.info("=" * 60)
         logger.info(
-            "BACKFILL COMPLETE: %d processed, %d posted, %d failed",
+            "BACKFILL COMPLETE in %.1fs: %d processed, %d posted, %d failed",
+            overall_elapsed,
             grand_total["total"],
             grand_total["posted"],
             grand_total["failed"],
@@ -610,7 +880,6 @@ def main() -> None:
         remaining_total = sum(v["missing_gl"] for v in remaining.values())
         if remaining_total > 0:
             logger.info("Remaining records needing GL posting: %d", remaining_total)
-            logger.info("Run again to process the next batch.")
 
 
 if __name__ == "__main__":

@@ -70,6 +70,7 @@ class StatementImportResult:
     lines_imported: int
     lines_skipped: int
     duplicates_found: int = 0
+    auto_matched: int = 0
     errors: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     duplicate_lines: list[DuplicateLineInfo] = field(default_factory=list)
@@ -128,7 +129,7 @@ class BankStatementService:
         )
 
     @staticmethod
-    def _parse_decimal(value: str | None, field: str, row: int) -> Decimal | None:
+    def _parse_decimal(value: object | None, field: str, row: int) -> Decimal | None:
         if value is None:
             return None
         if isinstance(value, (int, float, Decimal)):
@@ -148,7 +149,7 @@ class BankStatementService:
 
     @staticmethod
     def _parse_date(
-        value: str | None,
+        value: object | None,
         field: str,
         row: int,
         date_format: str | None = None,
@@ -173,6 +174,16 @@ class BankStatementService:
             pass
         fmt_hint = f" (expected format: {date_format})" if date_format else ""
         raise ValueError(f"Row {row}: invalid {field} '{text}'{fmt_hint}")
+
+    @staticmethod
+    def _normalize_optional_text(value: object | None) -> str | None:
+        """Normalize optional text fields from mixed import inputs."""
+        if value is None:
+            return None
+        if isinstance(value, str):
+            text = value.strip()
+            return text or None
+        return str(value) if value else None
 
     # Bank-specific field types used to build the alias map from the shared
     # ``COLUMN_ALIASES`` registry in ``base.py``.
@@ -499,6 +510,154 @@ class BankStatementService:
         finally:
             workbook.close()
 
+    def parse_xls_rows(
+        self,
+        content: bytes,
+        csv_format: str | None = None,
+        date_format: str | None = None,
+    ) -> tuple[list[dict], list[str]]:
+        errors: list[str] = []
+        if csv_format is not None and csv_format not in ("type", "debit_credit"):
+            return [], [f"Unsupported CSV format '{csv_format}'."]
+
+        try:
+            import xlrd
+        except ImportError:
+            return [], ["XLS import requires xlrd. Please install xlrd and retry."]
+
+        try:
+            workbook = xlrd.open_workbook(file_contents=content)
+        except Exception:
+            return [], ["Could not parse XLS file. Please upload a valid .xls file."]
+        if workbook.nsheets == 0:
+            return [], ["XLS file must include a header row."]
+
+        sheet = workbook.sheet_by_index(0)
+        if sheet.nrows < 1:
+            return [], ["XLS file must include a header row."]
+
+        headers = sheet.row_values(0)
+        if not headers:
+            return [], ["XLS file must include a header row."]
+
+        header_map = [
+            self._remap_header(self._normalize_header(str(h))) if h is not None else ""
+            for h in headers
+        ]
+        fields = {name for name in header_map if name}
+
+        # Auto-detect format from column headers when not specified.
+        if csv_format is None:
+            try:
+                csv_format = self.auto_detect_csv_format(fields)
+            except ValueError as exc:
+                return [], [str(exc)]
+
+        required = (
+            {"transaction_date", "debit", "credit"}
+            if csv_format == "debit_credit"
+            else {"transaction_date", "transaction_type", "amount"}
+        )
+        missing = [name for name in required if name not in fields]
+        if missing:
+            return [], [f"Missing required column(s): {', '.join(sorted(missing))}"]
+
+        rows: list[dict] = []
+        for row_index in range(1, sheet.nrows):
+            row_cells = sheet.row(row_index)
+            if not row_cells:
+                continue
+            if not any(
+                cell.value is not None and str(cell.value).strip() for cell in row_cells
+            ):
+                continue
+
+            row: dict[str, object] = {}
+            for i in range(len(header_map)):
+                key = header_map[i]
+                if not key:
+                    continue
+                if i >= len(row_cells):
+                    row[key] = None
+                    continue
+                cell = row_cells[i]
+                value: object = cell.value
+                if cell.ctype == xlrd.XL_CELL_DATE:
+                    value = xlrd.xldate_as_datetime(
+                        cell.value, workbook.datemode
+                    ).date()
+                row[key] = value
+
+            try:
+                line_data: dict = {
+                    "line_number": row_index,
+                    "transaction_date": self._parse_date(
+                        row.get("transaction_date"),
+                        "transaction_date",
+                        row_index + 1,
+                        date_format=date_format,
+                    ),
+                    "description": self._normalize_optional_text(
+                        row.get("description")
+                    ),
+                    "reference": self._normalize_optional_text(row.get("reference")),
+                    "payee_payer": self._normalize_optional_text(
+                        row.get("payee_payer")
+                    ),
+                    "bank_reference": self._normalize_optional_text(
+                        row.get("bank_reference")
+                    ),
+                    "check_number": self._normalize_optional_text(
+                        row.get("check_number")
+                    ),
+                    "bank_category": self._normalize_optional_text(
+                        row.get("bank_category")
+                    ),
+                    "bank_code": self._normalize_optional_text(row.get("bank_code")),
+                    "transaction_id": self._normalize_optional_text(
+                        row.get("transaction_id")
+                    ),
+                }
+                value_date = row.get("value_date")
+                if value_date:
+                    line_data["value_date"] = self._parse_date(
+                        value_date, "value_date", row_index + 1, date_format=date_format
+                    )
+                running_balance = self._parse_decimal(
+                    row.get("running_balance"), "running_balance", row_index + 1
+                )
+                if running_balance is not None:
+                    line_data["running_balance"] = running_balance
+
+                if csv_format == "debit_credit":
+                    line_data["debit"] = self._parse_decimal(
+                        row.get("debit"), "debit", row_index + 1
+                    )
+                    line_data["credit"] = self._parse_decimal(
+                        row.get("credit"), "credit", row_index + 1
+                    )
+                else:
+                    transaction_type = (
+                        str(row.get("transaction_type")).strip().lower()
+                        if row.get("transaction_type") is not None
+                        else ""
+                    )
+                    if transaction_type not in ("debit", "credit"):
+                        raise ValueError(
+                            f"Row {row_index + 1}: transaction_type must be 'debit' or 'credit'"
+                        )
+                    line_data["transaction_type"] = transaction_type
+                    line_data["amount"] = self._parse_decimal(
+                        row.get("amount"), "amount", row_index + 1
+                    )
+            except ValueError as exc:
+                errors.append(str(exc))
+                continue
+
+            rows.append(line_data)
+
+        return rows, errors
+
     def build_line_inputs(
         self, lines: list
     ) -> tuple[list[StatementLineInput], list[str]]:
@@ -812,6 +971,32 @@ class BankStatementService:
                 )
 
         db.commit()
+
+        # Auto-match internal transfers (fire-and-forget — errors don't fail the import)
+        try:
+            from app.services.finance.banking.auto_reconciliation import (
+                AutoReconciliationService,
+            )
+
+            auto_svc = AutoReconciliationService()
+            match_result = auto_svc.auto_match_statement(
+                db, organization_id, statement.statement_id
+            )
+            if match_result.matched > 0:
+                db.commit()
+                result.auto_matched = match_result.matched
+                logger.info(
+                    "Auto-matched %d/%d lines for statement %s",
+                    match_result.matched,
+                    result.lines_imported,
+                    statement.statement_number,
+                )
+        except Exception:
+            logger.exception(
+                "Auto-reconciliation failed for statement %s",
+                statement.statement_id,
+            )
+
         return result
 
     def get(
@@ -993,9 +1178,26 @@ class BankStatementService:
         db.flush()
         return statement
 
-    def delete(self, db: Session, organization_id: UUID, statement_id: UUID) -> bool:
-        """Delete a statement and its lines (CASCADE) within an organization."""
-        statement = self.get(db, organization_id, statement_id)
+    def delete(
+        self,
+        db: Session,
+        organization_id: UUID | None,
+        statement_id: UUID | None = None,
+    ) -> bool:
+        """Delete a statement and its lines (CASCADE).
+
+        Supports both signatures for backward compatibility:
+        - ``delete(db, organization_id, statement_id)`` (tenant-scoped)
+        - ``delete(db, statement_id)`` (legacy, unscoped)
+        """
+        if statement_id is None:
+            # Legacy call style: delete(db, statement_id)
+            statement = db.get(BankStatement, organization_id)
+        else:
+            # Tenant-scoped call style: delete(db, organization_id, statement_id)
+            if organization_id is None:
+                return False
+            statement = self.get(db, organization_id, statement_id)
         if not statement:
             return False
 

@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import live_search, empty_state, pagination %}
+{% from "components/macros.html" import compact_filters, filter_select_field, empty_state, pagination %}
 
 {% block page_title %}Salary Slips{% endblock %}
 
@@ -98,12 +98,14 @@
         </div>
     </div>
 
-    {% call(search_attrs) live_search(
-        search=search,
+    {% call(filter_attrs) compact_filters(
         base_url="/people/payroll/slips",
-        placeholder="Search by slip number or employee..."
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search by slip number or employee..."
     ) %}
-        <select name="status" class="form-select" {{ search_attrs }}>
+        <select name="status" class="form-select" {{ filter_attrs }}>
             <option value="">All Statuses</option>
             {% for s in statuses %}
             <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | title }}</option>

@@ -177,6 +177,24 @@ def expense_claim_detail(
     )
 
 
+@router.get("/claims/{claim_id}/items/{item_id}", response_class=HTMLResponse)
+def expense_claim_item_detail(
+    request: Request,
+    claim_id: str,
+    item_id: str,
+    auth: WebAuthContext = Depends(require_expense_access),
+    db: Session = Depends(get_db),
+):
+    """Expense claim item detail page."""
+    return expense_claims_web_service.claim_item_detail_response(
+        request=request,
+        claim_id=claim_id,
+        item_id=item_id,
+        auth=auth,
+        db=db,
+    )
+
+
 @router.get("/claims/{claim_id}/items/{item_id}/receipt")
 def expense_claim_item_receipt(
     claim_id: str,

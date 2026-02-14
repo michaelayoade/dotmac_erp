@@ -14,6 +14,7 @@ Supports multiple CSV formats:
 - Generic CSV
 """
 
+import builtins
 import csv
 import logging
 import re
@@ -1662,6 +1663,148 @@ class BaseImporter(ABC, Generic[T]):
         columns = list(rows[0].keys())
         return self._build_preview_result(columns, rows, max_rows, "xlsx")
 
+    @staticmethod
+    def parse_xls_file(file_path: Union[str, Path]) -> list[dict[str, str]]:
+        """Parse an XLS file into a list of dicts (all values as strings)."""
+        try:
+            import xlrd
+        except builtins.ImportError as exc:
+            raise ValueError(
+                "XLS import requires xlrd. Please install xlrd and retry."
+            ) from exc
+
+        workbook = xlrd.open_workbook(filename=str(file_path))
+        if workbook.nsheets == 0:
+            return []
+
+        sheet = workbook.sheet_by_index(0)
+        if sheet.nrows < 1:
+            return []
+
+        raw_headers = sheet.row_values(0)
+        headers = [
+            str(h).strip() if h is not None and str(h).strip() else f"Column_{i}"
+            for i, h in enumerate(raw_headers)
+        ]
+
+        rows: list[dict[str, str]] = []
+        for row_index in range(1, sheet.nrows):
+            row_cells = sheet.row(row_index)
+            if not row_cells or not any(
+                cell.value is not None and str(cell.value).strip() for cell in row_cells
+            ):
+                continue
+
+            row: dict[str, str] = {}
+            for i, header in enumerate(headers):
+                if i >= len(row_cells):
+                    row[header] = ""
+                    continue
+
+                cell = row_cells[i]
+                value: Any = cell.value
+                if cell.ctype == xlrd.XL_CELL_DATE:
+                    value = xlrd.xldate_as_datetime(value, workbook.datemode).date()
+                if value is None:
+                    row[header] = ""
+                elif isinstance(value, datetime):
+                    row[header] = value.date().isoformat()
+                elif isinstance(value, date):
+                    row[header] = value.isoformat()
+                else:
+                    row[header] = str(value)
+            rows.append(row)
+
+        return rows
+
+    def import_xls_file(self, file_path: Union[str, Path]) -> ImportResult:
+        """Import data from an XLS file."""
+        import time
+
+        start_time = time.time()
+        file_path = Path(file_path)
+
+        if not file_path.exists():
+            self.result.status = ImportStatus.FAILED
+            self.result.add_error(0, f"File not found: {file_path}", None)
+            return self.result
+
+        self.result.status = ImportStatus.IN_PROGRESS
+
+        try:
+            rows = self.parse_xls_file(file_path)
+            self.result.total_rows = len(rows)
+            self._import_rows(rows)
+        except Exception as e:
+            self.result.status = ImportStatus.FAILED
+            self.result.add_error(0, f"XLS parsing error: {str(e)}", None)
+
+        self.result.duration_seconds = time.time() - start_time
+
+        if self.result.status == ImportStatus.IN_PROGRESS:
+            if self.result.error_count > 0:
+                self.result.status = ImportStatus.COMPLETED_WITH_ERRORS
+            else:
+                self.result.status = ImportStatus.COMPLETED
+
+        return self.result
+
+    def preview_xls_file(
+        self, file_path: Union[str, Path], max_rows: int = 10
+    ) -> PreviewResult:
+        """Preview an XLS file — same output as ``preview_file``."""
+        file_path = Path(file_path)
+
+        if not file_path.exists():
+            return PreviewResult(
+                entity_type=self.entity_name,
+                total_rows=0,
+                detected_columns=[],
+                required_columns=self.get_required_fields(),
+                optional_columns=self.get_optional_fields(),
+                missing_required=self.get_required_fields(),
+                column_mappings=[],
+                sample_data=[],
+                validation_errors=[f"File not found: {file_path}"],
+                detected_format="unknown",
+                is_valid=False,
+            )
+
+        try:
+            rows = self.parse_xls_file(file_path)
+        except Exception as e:
+            return PreviewResult(
+                entity_type=self.entity_name,
+                total_rows=0,
+                detected_columns=[],
+                required_columns=self.get_required_fields(),
+                optional_columns=self.get_optional_fields(),
+                missing_required=self.get_required_fields(),
+                column_mappings=[],
+                sample_data=[],
+                validation_errors=[f"Failed to read XLS: {str(e)}"],
+                detected_format="unknown",
+                is_valid=False,
+            )
+
+        if not rows:
+            return PreviewResult(
+                entity_type=self.entity_name,
+                total_rows=0,
+                detected_columns=[],
+                required_columns=self.get_required_fields(),
+                optional_columns=self.get_optional_fields(),
+                missing_required=self.get_required_fields(),
+                column_mappings=[],
+                sample_data=[],
+                validation_errors=["File is empty or has no data rows"],
+                detected_format="unknown",
+                is_valid=False,
+            )
+
+        columns = list(rows[0].keys())
+        return self._build_preview_result(columns, rows, max_rows, "xls")
+
     # ── Dispatcher methods ──────────────────────────────────────────────
 
     def preview_any_file(
@@ -1669,6 +1812,8 @@ class BaseImporter(ABC, Generic[T]):
     ) -> PreviewResult:
         """Preview a CSV or XLSX file based on extension."""
         ext = Path(file_path).suffix.lower()
+        if ext == ".xls":
+            return self.preview_xls_file(file_path, max_rows)
         if ext in (".xlsx", ".xlsm"):
             return self.preview_xlsx_file(file_path, max_rows)
         return self.preview_file(file_path, max_rows)
@@ -1676,6 +1821,8 @@ class BaseImporter(ABC, Generic[T]):
     def import_any_file(self, file_path: Union[str, Path]) -> ImportResult:
         """Import a CSV or XLSX file based on extension."""
         ext = Path(file_path).suffix.lower()
+        if ext == ".xls":
+            return self.import_xls_file(file_path)
         if ext in (".xlsx", ".xlsm"):
             return self.import_xlsx_file(file_path)
         return self.import_file(file_path)

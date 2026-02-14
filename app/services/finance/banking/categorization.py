@@ -15,6 +15,7 @@ from uuid import UUID
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.models.finance.banking.bank_account import BankAccount, BankAccountStatus
 from app.models.finance.banking.bank_statement import (
     BankStatement,
     BankStatementLine,
@@ -85,6 +86,33 @@ class BatchCategorizationResult:
 
 class TransactionCategorizationService:
     """Service for auto-categorizing bank transactions."""
+
+    @staticmethod
+    def _next_copy_rule_name(
+        db: Session,
+        organization_id: UUID,
+        base_name: str,
+    ) -> str:
+        """Generate a unique rule name under uq_rule_name constraints."""
+        seed = (base_name or "Rule").strip() or "Rule"
+        max_len = 100
+
+        for idx in range(1, 1000):
+            suffix = " (Copy)" if idx == 1 else f" (Copy {idx})"
+            candidate = f"{seed[: max_len - len(suffix)]}{suffix}"
+            exists = db.scalar(
+                select(func.count())
+                .select_from(TransactionRule)
+                .where(
+                    TransactionRule.organization_id == organization_id,
+                    TransactionRule.rule_name == candidate,
+                )
+            )
+            if not exists:
+                return candidate
+
+        # Fallback safety valve
+        return f"{seed[:80]} (Copy {datetime.utcnow().strftime('%H%M%S')})"
 
     def categorize_line(
         self,
@@ -470,7 +498,14 @@ class TransactionCategorizationService:
                 return None
 
         if min_amount <= line.amount <= max_amount:
-            return (70, f"Amount in range: {min_amount} - {max_amount}")
+            # Exact amount match gets higher confidence than a range
+            if min_amount == max_amount:
+                confidence = 85
+                reason = f"Exact amount match: {min_amount}"
+            else:
+                confidence = 70
+                reason = f"Amount in range: {min_amount} - {max_amount}"
+            return (confidence, reason)
 
         return None
 
@@ -1021,6 +1056,121 @@ class TransactionCategorizationService:
 
         db.flush()
         return rule
+
+    def duplicate_rule_to_accounts(
+        self,
+        db: Session,
+        organization_id: UUID,
+        source_rule_id: UUID,
+        bank_account_ids: list[UUID],
+        *,
+        include_global: bool = False,
+        created_by: UUID | None = None,
+    ) -> list[TransactionRule]:
+        """Duplicate one rule to multiple bank accounts (and optional global)."""
+        org_id = coerce_uuid(organization_id)
+        source_rule = (
+            db.execute(
+                select(TransactionRule).where(
+                    TransactionRule.rule_id == coerce_uuid(source_rule_id),
+                    TransactionRule.organization_id == org_id,
+                )
+            )
+            .scalars()
+            .first()
+        )
+        if not source_rule:
+            raise ValueError("Rule not found")
+
+        unique_bank_ids = list(dict.fromkeys(coerce_uuid(v) for v in bank_account_ids))
+        # Skip the source rule's own bank account — it already has this rule
+        if source_rule.bank_account_id:
+            unique_bank_ids = [
+                bid for bid in unique_bank_ids if bid != source_rule.bank_account_id
+            ]
+        if not unique_bank_ids and not include_global:
+            raise ValueError(
+                "Select at least one target account or include global copy"
+            )
+
+        bank_accounts: list[BankAccount] = []
+        if unique_bank_ids:
+            bank_accounts = list(
+                db.execute(
+                    select(BankAccount).where(
+                        BankAccount.organization_id == org_id,
+                        BankAccount.bank_account_id.in_(unique_bank_ids),
+                        BankAccount.status == BankAccountStatus.active,
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            found_ids = {a.bank_account_id for a in bank_accounts}
+            missing = [bid for bid in unique_bank_ids if bid not in found_ids]
+            if missing:
+                raise ValueError("One or more selected bank accounts are invalid")
+            bank_accounts.sort(
+                key=lambda acct: unique_bank_ids.index(acct.bank_account_id)
+            )
+
+        created: list[TransactionRule] = []
+        for account in bank_accounts:
+            clone = self.create_rule(
+                db=db,
+                organization_id=org_id,
+                rule_name=self._next_copy_rule_name(
+                    db,
+                    org_id,
+                    f"{source_rule.rule_name} - {account.account_name}",
+                ),
+                rule_type=source_rule.rule_type,
+                conditions=source_rule.conditions,
+                action=source_rule.action,
+                target_account_id=source_rule.target_account_id,
+                tax_code_id=source_rule.tax_code_id,
+                bank_account_id=account.bank_account_id,
+                payee_id=source_rule.payee_id,
+                auto_apply=source_rule.auto_apply,
+                min_confidence=source_rule.min_confidence,
+                applies_to_credits=source_rule.applies_to_credits,
+                applies_to_debits=source_rule.applies_to_debits,
+                split_config=source_rule.split_config,
+                description=source_rule.description,
+                created_by=created_by,
+            )
+            clone.is_active = source_rule.is_active
+            created.append(clone)
+
+        if include_global:
+            clone = self.create_rule(
+                db=db,
+                organization_id=org_id,
+                rule_name=self._next_copy_rule_name(
+                    db,
+                    org_id,
+                    f"{source_rule.rule_name} - All Accounts",
+                ),
+                rule_type=source_rule.rule_type,
+                conditions=source_rule.conditions,
+                action=source_rule.action,
+                target_account_id=source_rule.target_account_id,
+                tax_code_id=source_rule.tax_code_id,
+                bank_account_id=None,
+                payee_id=source_rule.payee_id,
+                auto_apply=source_rule.auto_apply,
+                min_confidence=source_rule.min_confidence,
+                applies_to_credits=source_rule.applies_to_credits,
+                applies_to_debits=source_rule.applies_to_debits,
+                split_config=source_rule.split_config,
+                description=source_rule.description,
+                created_by=created_by,
+            )
+            clone.is_active = source_rule.is_active
+            created.append(clone)
+
+        db.flush()
+        return created
 
     def list_rules(
         self,

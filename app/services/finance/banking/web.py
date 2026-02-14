@@ -6,18 +6,22 @@ Provides view-focused data for banking web routes.
 
 from __future__ import annotations
 
+import builtins
+import csv
 import json
 import logging
 import re
 from datetime import date
+from datetime import datetime as _datetime
 from decimal import Decimal
+from io import BytesIO, StringIO
 from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import ValidationError
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
 from starlette.responses import Response
@@ -38,20 +42,88 @@ from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
 from app.schemas.finance.banking import BankStatementImport
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.finance.banking import (
     bank_statement_service,
 )
 from app.services.finance.banking.payment_metadata import (
     PaymentMetadata,
+    resolve_payment_metadata,
+    resolve_payment_metadata_batch,
 )
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.formatters import format_currency as _base_format_currency
 from app.services.formatters import format_date as _format_date
 from app.services.formatters import parse_date as _parse_date
+from app.services.formatters import parse_decimal as _parse_decimal
+from app.services.imports.formats import (
+    SPREADSHEET_EXTENSIONS,
+    spreadsheet_formats_label,
+)
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
+
+# Human-friendly labels for source_document_type values
+_SOURCE_TYPE_LABELS: dict[str, str] = {
+    "CUSTOMER_PAYMENT": "Receipt",
+    "SUPPLIER_PAYMENT": "Payment",
+    "AR_INVOICE": "Invoice",
+    "CUSTOMER_INVOICE": "Invoice",
+    "INVOICE": "Invoice",
+    "SUPPLIER_INVOICE": "Bill",
+    "AP_INVOICE": "Bill",
+    "EXPENSE": "Expense",
+    "EXPENSE_CLAIM": "Expense",
+    "JOURNAL_ENTRY": "Journal",
+}
+
+
+def _build_match_detail(
+    db: Session,
+    entry: JournalEntry,
+    source_url: str,
+    *,
+    metadata: PaymentMetadata | None = None,
+) -> dict[str, str]:
+    """Build a match detail dict for a journal entry.
+
+    If *metadata* is not provided, resolves it from the entry's source document.
+    Falls back to the journal description when no payment metadata is available.
+    """
+    if metadata is None:
+        try:
+            metadata = resolve_payment_metadata(
+                db,
+                getattr(entry, "source_document_type", None),
+                getattr(entry, "source_document_id", None),
+            )
+        except Exception:
+            logger.debug(
+                "Could not resolve payment metadata for entry %s",
+                getattr(entry, "entry_id", None),
+            )
+
+    src_type = getattr(entry, "source_document_type", None) or ""
+    type_label = _SOURCE_TYPE_LABELS.get(src_type, "GL Entry")
+
+    if metadata:
+        return {
+            "label": metadata.counterparty_name or type_label,
+            "sub": metadata.payment_number or "",
+            "type": type_label,
+            "url": source_url,
+        }
+
+    # Fallback: use journal description
+    desc = getattr(entry, "description", "") or ""
+    return {
+        "label": desc[:60] if desc else type_label,
+        "sub": "",
+        "type": type_label,
+        "url": source_url,
+    }
 
 
 def _format_currency(
@@ -121,7 +193,7 @@ def _parse_reconciliation_status(
 
 
 def _account_view(account: BankAccount) -> dict:
-    currency = account.currency_code or "NGN"
+    currency = account.currency_code
     return {
         "bank_account_id": account.bank_account_id,
         "bank_name": account.bank_name,
@@ -163,6 +235,12 @@ def _statement_view(statement: BankStatement) -> dict:
         "statement_date": _format_date(statement.statement_date),
         "period_start": _format_date(statement.period_start),
         "period_end": _format_date(statement.period_end),
+        "period_start_iso": statement.period_start.isoformat()
+        if statement.period_start
+        else "",
+        "period_end_iso": statement.period_end.isoformat()
+        if statement.period_end
+        else "",
         "opening_balance": _format_currency(statement.opening_balance, currency),
         "closing_balance": _format_currency(statement.closing_balance, currency),
         "opening_balance_raw": statement.opening_balance,
@@ -190,12 +268,16 @@ def _statement_line_view(line: BankStatementLine, currency: str = "") -> dict:
         if line.transaction_type
         else "",
         "amount": _format_currency(line.amount, currency),
+        "raw_amount": float(line.amount) if line.amount is not None else 0.0,
         "description": line.description,
         "reference": line.reference,
         "payee_payer": line.payee_payer,
         "bank_reference": line.bank_reference,
         "running_balance": _format_currency(line.running_balance, currency),
         "is_matched": line.is_matched,
+        "matched_journal_line_id": str(line.matched_journal_line_id)
+        if line.matched_journal_line_id
+        else None,
         # Categorization fields
         "categorization_status": line.categorization_status.value
         if line.categorization_status
@@ -261,6 +343,9 @@ def _gl_line_view(
         "reference": entry.reference,
         "debit_amount": line.debit_amount,
         "credit_amount": line.credit_amount,
+        "signed_amount": float(
+            (line.debit_amount or Decimal("0")) - (line.credit_amount or Decimal("0"))
+        ),
         # Payment metadata (None if not from a payment)
         "source_type": None,
         "source_module": getattr(entry, "source_module", None),
@@ -671,11 +756,135 @@ class BankingWebService:
                 "confidence": suggestion.confidence,
                 "counterparty_name": suggestion.counterparty_name,
                 "payment_number": suggestion.payment_number,
+                "source_url": suggestion.source_url,
+                "amount_matched": suggestion.amount_matched,
             }
 
-        # All GL candidates for manual match modal
-        gl_result = recon_svc.get_gl_candidates_for_statement(
-            db, org_id, statement.statement_id
+        # GL candidates are now lazy-loaded per line via the scored
+        # candidates API endpoint — no longer sent at page load.
+
+        # Resolve source URLs for matched lines and build line_amounts map
+        from app.services.finance.banking.bank_reconciliation import (
+            _build_source_url,
+        )
+
+        matched_jl_ids = [
+            line.matched_journal_line_id
+            for line in statement.lines
+            if line.is_matched and line.matched_journal_line_id
+        ]
+        matched_source_urls: dict[str, str] = {}
+        # Map journal_line_id → JournalEntry for metadata resolution
+        jl_entry_map: dict[str, JournalEntry] = {}
+        if matched_jl_ids:
+            jl_rows = (
+                db.execute(
+                    select(JournalEntryLine)
+                    .join(JournalEntry)
+                    .where(JournalEntryLine.line_id.in_(matched_jl_ids))
+                )
+                .scalars()
+                .all()
+            )
+            for jl in jl_rows:
+                entry = getattr(jl, "journal_entry", None) or getattr(jl, "entry", None)
+                if entry:
+                    url = _build_source_url(
+                        getattr(entry, "source_document_type", None),
+                        getattr(entry, "source_document_id", None),
+                        getattr(entry, "entry_id", None),
+                    )
+                    matched_source_urls[str(jl.line_id)] = url
+                    jl_entry_map[str(jl.line_id)] = entry
+
+        # Batch-resolve payment metadata for matched lines
+        metadata_pairs: list[tuple[str | None, UUID | None]] = [
+            (
+                getattr(e, "source_document_type", None),
+                getattr(e, "source_document_id", None),
+            )
+            for e in jl_entry_map.values()
+        ]
+        metadata_by_doc_id = resolve_payment_metadata_batch(db, metadata_pairs)
+
+        # Build match_details keyed by statement line_id
+        # Map statement line → matched journal line id for lookup
+        stmt_line_to_jl: dict[str, str] = {}
+        for line in statement.lines:
+            if line.is_matched and line.matched_journal_line_id:
+                stmt_line_to_jl[str(line.line_id)] = str(line.matched_journal_line_id)
+
+        match_details: dict[str, dict[str, str]] = {}
+        for stmt_lid, jl_id in stmt_line_to_jl.items():
+            entry = jl_entry_map.get(jl_id)
+            if not entry:
+                continue
+            src_doc_id = getattr(entry, "source_document_id", None)
+            meta = metadata_by_doc_id.get(src_doc_id) if src_doc_id else None
+            url = matched_source_urls.get(jl_id, "")
+            match_details[stmt_lid] = _build_match_detail(db, entry, url, metadata=meta)
+
+        # Merge matched_source_url into line views
+        line_amounts: dict[str, float] = {}
+        for lv in lines:
+            lid = str(lv["line_id"])
+            line_amounts[lid] = lv["raw_amount"]
+            jl_id = lv.get("matched_journal_line_id")
+            if lv["is_matched"] and jl_id:
+                lv["matched_source_url"] = matched_source_urls.get(jl_id, "")
+            else:
+                lv["matched_source_url"] = ""
+
+        # Build line_details for modal context card (issue #4)
+        # Keyed by string line_id with essential info for visual comparison
+        line_details: dict[str, dict] = {}
+        for lv in lines:
+            lid = str(lv["line_id"])
+            line_details[lid] = {
+                "date": lv["transaction_date"],
+                "description": lv["description"] or "",
+                "payee": lv["payee_payer"] or "",
+                "amount": lv["amount"],
+                "raw_amount": lv["raw_amount"],
+                "is_credit": lv["transaction_type"] == "credit",
+            }
+
+        # Check if any lines have balance/category data (issue #16/#17)
+        has_balance_data = any(
+            line.running_balance is not None for line in statement.lines
+        )
+        has_category_data = any(
+            line.categorization_status is not None for line in statement.lines
+        )
+
+        # GL accounts for "Create Journal & Match" feature
+        from app.models.finance.gl.account import Account as GLAccount
+
+        gl_accounts_raw = list(
+            db.scalars(
+                select(GLAccount)
+                .where(
+                    GLAccount.organization_id == org_id,
+                    GLAccount.is_active == True,  # noqa: E712
+                )
+                .order_by(GLAccount.account_code)
+            ).all()
+        )
+        gl_accounts = [
+            {
+                "id": str(a.account_id),
+                "code": a.account_code,
+                "name": a.account_name,
+                "label": f"{a.account_code} - {a.account_name}",
+            }
+            for a in gl_accounts_raw
+        ]
+        # Bank account's GL account id for filtering
+        bank_gl_account_id = (
+            str(statement.bank_account.gl_account_id)
+            if statement.bank_account
+            and getattr(statement.bank_account, "gl_account_id", None)
+            else ""
         )
 
         return {
@@ -684,8 +893,14 @@ class BankingWebService:
             "account_map": account_map,
             "categorization_summary": cat_summary,
             "match_suggestions": match_suggestions,
-            "gl_candidates": gl_result.get("candidates", []),
-            "gl_source_types": gl_result.get("source_types", []),
+            "match_details": match_details,
+            "line_amounts": line_amounts,
+            "line_details": line_details,
+            "statement_currency": currency,
+            "has_balance_data": has_balance_data,
+            "has_category_data": has_category_data,
+            "gl_accounts": gl_accounts,
+            "bank_gl_account_id": bank_gl_account_id,
         }
 
     @staticmethod
@@ -818,9 +1033,6 @@ class BankingWebService:
         from app.services.finance.banking.bank_reconciliation import (
             bank_reconciliation_service as recon_svc,
         )
-        from app.services.finance.banking.payment_metadata import (
-            resolve_payment_metadata_batch,
-        )
 
         org_id = coerce_uuid(organization_id)
         reconciliation = db.get(BankReconciliation, coerce_uuid(reconciliation_id))
@@ -883,11 +1095,19 @@ class BankingWebService:
         unmatched_statement_lines = [
             _statement_line_view(line) for line in statement_lines
         ]
+        statement_line_amounts = {
+            str(line.line_id): float(line.signed_amount) for line in statement_lines
+        }
         unmatched_gl_lines = []
+        gl_line_amounts: dict[str, float] = {}
         for line, entry in gl_lines:
             doc_id = getattr(entry, "source_document_id", None)
             meta = metadata_map.get(doc_id) if doc_id else None
-            unmatched_gl_lines.append(_gl_line_view(line, entry, metadata=meta))
+            line_view = _gl_line_view(line, entry, metadata=meta)
+            unmatched_gl_lines.append(line_view)
+            gl_line_amounts[str(line.line_id)] = float(
+                line_view.get("signed_amount", 0)
+            )
 
         # Generate match suggestions for draft/pending reconciliations
         match_suggestions: dict[str, dict] = {}
@@ -905,6 +1125,8 @@ class BankingWebService:
                         "confidence": round(sug.confidence, 1),
                         "counterparty_name": sug.counterparty_name or "",
                         "payment_number": sug.payment_number or "",
+                        "source_url": sug.source_url or "",
+                        "amount_matched": sug.amount_matched,
                     }
             except Exception:
                 logger.exception("Failed to generate match suggestions")
@@ -915,6 +1137,8 @@ class BankingWebService:
             "unmatched_statement_lines": unmatched_statement_lines,
             "unmatched_gl_lines": unmatched_gl_lines,
             "match_suggestions": match_suggestions,
+            "statement_line_amounts": statement_line_amounts,
+            "gl_line_amounts": gl_line_amounts,
         }
 
     @staticmethod
@@ -1091,6 +1315,15 @@ class BankingWebService:
             )
 
         total_pages = (total + per_page - 1) // per_page
+        active_filters = build_active_filters(
+            params={"search": search, "payee_type": payee_type},
+            labels={"search": "Search", "payee_type": "Type"},
+            options={
+                "payee_type": {
+                    t.value: t.value.replace("_", " ").title() for t in PayeeType
+                }
+            },
+        )
         return {
             "payees": payee_list,
             "payee_types": [
@@ -1098,7 +1331,9 @@ class BankingWebService:
                 for t in PayeeType
             ],
             "search": search or "",
+            "payee_type": payee_type or "",
             "selected_type": payee_type or "",
+            "active_filters": active_filters,
             "total_count": total,
             "total_pages": total_pages,
             "pagination": {
@@ -1241,14 +1476,44 @@ class BankingWebService:
                 }
             )
 
+        # Aggregate stats across ALL rules for the org (not just current page)
+        all_rules_query = db.query(TransactionRule).filter(
+            TransactionRule.organization_id == org_id,
+        )
+        active_count = all_rules_query.filter(
+            TransactionRule.is_active.is_(True),
+        ).count()
+        auto_apply_count = all_rules_query.filter(
+            TransactionRule.auto_apply.is_(True),
+        ).count()
+        total_matches = (
+            db.query(func.coalesce(func.sum(TransactionRule.match_count), 0))
+            .filter(TransactionRule.organization_id == org_id)
+            .scalar()
+        ) or 0
+
         total_pages = (total + per_page - 1) // per_page
+        active_filters = build_active_filters(
+            params={"rule_type": rule_type},
+            labels={"rule_type": "Type"},
+            options={
+                "rule_type": {
+                    t.value: t.value.replace("_", " ").title() for t in RuleType
+                }
+            },
+        )
         return {
             "rules": rule_list,
             "rule_types": [
                 {"value": t.value, "label": t.value.replace("_", " ").title()}
                 for t in RuleType
             ],
+            "rule_type": rule_type or "",
             "selected_type": rule_type or "",
+            "active_filters": active_filters,
+            "active_count": active_count,
+            "auto_apply_count": auto_apply_count,
+            "total_matches": total_matches,
             "total_count": total,
             "total_pages": total_pages,
             "pagination": {
@@ -1412,6 +1677,117 @@ class BankingWebService:
             "bank_accounts": bank_account_options,
             "payees": payee_options,
             "tax_codes": tax_code_options,
+        }
+
+    @staticmethod
+    def rule_duplicate_form_context(
+        db: Session,
+        organization_id: str,
+        rule_id: str,
+    ) -> dict:
+        """Context for duplicate-rule form."""
+        from app.models.finance.banking.transaction_rule import TransactionRule
+
+        org_id = coerce_uuid(organization_id)
+        source_rule = db.get(TransactionRule, coerce_uuid(rule_id))
+        if not source_rule or source_rule.organization_id != org_id:
+            raise HTTPException(status_code=404, detail="Rule not found")
+
+        bank_accounts = (
+            db.query(BankAccount)
+            .filter(
+                BankAccount.organization_id == org_id,
+                BankAccount.status == BankAccountStatus.active,
+            )
+            .order_by(BankAccount.account_name)
+            .all()
+        )
+
+        # Exclude the source rule's bank account — it's already covered
+        source_ba_id = source_rule.bank_account_id
+        return {
+            "source_rule": {
+                "rule_id": str(source_rule.rule_id),
+                "rule_name": source_rule.rule_name,
+                "rule_type": source_rule.rule_type.value
+                if source_rule.rule_type
+                else "",
+                "action": source_rule.action.value if source_rule.action else "",
+                "bank_account_id": str(source_ba_id) if source_ba_id else "",
+                "bank_account_label": next(
+                    (
+                        f"{ba.bank_name} - {ba.account_name}"
+                        for ba in bank_accounts
+                        if ba.bank_account_id == source_ba_id
+                    ),
+                    "All Accounts",
+                ),
+            },
+            "bank_accounts": [
+                {
+                    "bank_account_id": str(ba.bank_account_id),
+                    "label": f"{ba.bank_name} - {ba.account_name}",
+                    "is_default": False,
+                }
+                for ba in bank_accounts
+                if ba.bank_account_id != source_ba_id
+            ],
+        }
+
+    @staticmethod
+    def bulk_rule_duplicate_form_context(
+        db: Session,
+        organization_id: str,
+        rule_ids: list[str],
+    ) -> dict:
+        """Context for bulk duplicate-rule form."""
+        from app.models.finance.banking.transaction_rule import TransactionRule
+
+        org_id = coerce_uuid(organization_id)
+        parsed_ids = [coerce_uuid(rid) for rid in rule_ids if rid]
+        unique_ids = list(dict.fromkeys(parsed_ids))
+        if not unique_ids:
+            raise ValueError("Select at least one rule")
+
+        rules = list(
+            db.query(TransactionRule)
+            .filter(
+                TransactionRule.organization_id == org_id,
+                TransactionRule.rule_id.in_(unique_ids),
+            )
+            .order_by(TransactionRule.rule_name.asc())
+            .all()
+        )
+        if not rules:
+            raise ValueError("No valid rules selected")
+
+        bank_accounts = (
+            db.query(BankAccount)
+            .filter(
+                BankAccount.organization_id == org_id,
+                BankAccount.status == BankAccountStatus.active,
+            )
+            .order_by(BankAccount.account_name)
+            .all()
+        )
+
+        return {
+            "source_rules": [
+                {
+                    "rule_id": str(rule.rule_id),
+                    "rule_name": rule.rule_name,
+                    "rule_type": rule.rule_type.value if rule.rule_type else "",
+                    "action": rule.action.value if rule.action else "",
+                }
+                for rule in rules
+            ],
+            "bank_accounts": [
+                {
+                    "bank_account_id": str(ba.bank_account_id),
+                    "label": f"{ba.bank_name} - {ba.account_name}",
+                }
+                for ba in bank_accounts
+            ],
         }
 
     @staticmethod
@@ -1702,8 +2078,10 @@ class BankingWebService:
         context = base_context(request, auth, "Import Bank Statement", "banking", db=db)
         context.update(self.statement_import_context(db, str(auth.organization_id)))
         form_payload = form_data or {}
-        if not form_payload and request.query_params.get("account_id"):
-            form_payload["bank_account_id"] = request.query_params.get("account_id")
+        if not form_payload:
+            if request.query_params.get("account_id"):
+                form_payload["bank_account_id"] = request.query_params.get("account_id")
+            form_payload.setdefault("statement_date", date.today().isoformat())
         context["form_data"] = form_payload
         context["form_errors"] = errors or []
         return templates.TemplateResponse(
@@ -1722,11 +2100,20 @@ class BankingWebService:
         form_data = dict(form)
         csv_format = form_data.get("csv_format") or None
         errors: list[str] = []
+        org_date_fmt = self._resolve_org_date_format(db, auth.organization_id)
 
         # Parse lines from file or manual entry.
         lines_data: list[dict] = []
         upload = form.get("statement_file")
         upload_file = upload if isinstance(upload, UploadFile) else None
+        upload_ext = ""
+        column_map = self._parse_column_map(form)
+        mapped_lines_data, manual_errors = self._parse_manual_lines(form)
+        if mapped_lines_data:
+            lines_data = self._normalize_mapped_lines(
+                mapped_lines_data, org_date_fmt=org_date_fmt
+            )
+            errors.extend(manual_errors)
         if upload_file and upload_file.filename:
             # CSRF middleware parses form data first, which can advance the file pointer.
             try:
@@ -1738,13 +2125,22 @@ class BankingWebService:
                     logger.exception("Ignored exception")
             filename = upload_file.filename or ""
             lowered = filename.lower()
-            if not (
-                lowered.endswith(".csv")
-                or lowered.endswith(".xlsx")
-                or lowered.endswith(".xlsm")
-            ):
-                errors.append("Supported statement files: CSV, XLSX, XLSM.")
-            else:
+            upload_ext = (
+                ".csv"
+                if lowered.endswith(".csv")
+                else ".xls"
+                if lowered.endswith(".xls")
+                else ".xlsx"
+                if lowered.endswith(".xlsx")
+                else ".xlsm"
+                if lowered.endswith(".xlsm")
+                else ""
+            )
+            if not lowered.endswith(SPREADSHEET_EXTENSIONS):
+                errors.append(
+                    f"Supported statement files: {spreadsheet_formats_label()}."
+                )
+            elif not lines_data:
                 # Limit upload size to avoid memory blowups.
                 max_bytes = 10 * 1024 * 1024  # 10 MiB
                 content = await upload_file.read(max_bytes + 1)
@@ -1784,42 +2180,56 @@ class BankingWebService:
                         "Uploaded file appears empty. Please re-select the file and try again."
                     )
                 else:
-                    # Resolve the org's configured date strftime so the
-                    # parser can accept dates like DD/MM/YYYY, not just ISO.
-                    # NOTE: We read from the DB directly because base_context()
-                    # (which sets the formatting ContextVar) hasn't run yet.
-                    from app.models.finance.core_org.organization import (
-                        Organization,
-                    )
-                    from app.services.formatting_context import DATE_FORMAT_MAP
-
-                    org_date_fmt: str | None = None
-                    if auth.organization_id:
-                        org = db.get(Organization, auth.organization_id)
-                        if org and org.date_format:
-                            org_date_fmt = DATE_FORMAT_MAP.get(org.date_format)
-                    if lowered.endswith(".csv"):
+                    if column_map:
+                        try:
+                            _, source_rows, _total_rows = self._preview_upload_content(
+                                content, lowered, sample_limit=None
+                            )
+                        except ValueError as exc:
+                            errors.append(str(exc))
+                            source_rows = []
+                        mapped_rows = self._map_rows_with_column_map(
+                            source_rows, column_map
+                        )
+                        lines_data = self._normalize_mapped_lines(
+                            mapped_rows, org_date_fmt=org_date_fmt
+                        )
+                        if not lines_data:
+                            errors.append(
+                                "No rows found after applying column mapping. Please review your selected columns."
+                            )
+                    elif lowered.endswith(".csv"):
                         rows, parse_errors = bank_statement_service.parse_csv_rows(
                             content, csv_format, date_format=org_date_fmt
                         )
+                        lines_data = rows
+                        errors.extend(parse_errors)
+                    elif lowered.endswith(".xls"):
+                        rows, parse_errors = bank_statement_service.parse_xls_rows(
+                            content, csv_format, date_format=org_date_fmt
+                        )
+                        lines_data = rows
+                        errors.extend(parse_errors)
                     else:
                         rows, parse_errors = bank_statement_service.parse_xlsx_rows(
                             content, csv_format, date_format=org_date_fmt
                         )
-                    lines_data = rows
-                    errors.extend(parse_errors)
-                    if not rows and not parse_errors:
+                        lines_data = rows
+                        errors.extend(parse_errors)
+                    if not lines_data and not errors:
                         logger.warning(
                             "Statement import parsed zero rows: filename=%s csv_format=%s",
                             upload_file.filename,
                             csv_format,
                         )
-        else:
-            lines_data, manual_errors = self._parse_manual_lines(form)
+        elif not lines_data:
+            lines_data = mapped_lines_data
             errors.extend(manual_errors)
 
         if not lines_data and not errors:
-            errors.append("Please upload a CSV file or add at least one transaction.")
+            errors.append(
+                "Please upload a CSV/Excel file or add at least one transaction."
+            )
 
         payload_data = {
             "bank_account_id": form_data.get("bank_account_id"),
@@ -1829,9 +2239,13 @@ class BankingWebService:
             "period_end": form_data.get("period_end"),
             "opening_balance": form_data.get("opening_balance") or None,
             "closing_balance": form_data.get("closing_balance") or None,
-            "import_source": "csv"
-            if upload_file and upload_file.filename
-            else "manual",
+            "import_source": (
+                "csv"
+                if upload_ext == ".csv"
+                else "excel"
+                if upload_ext in {".xls", ".xlsx", ".xlsm"}
+                else "manual"
+            ),
             "import_filename": upload_file.filename if upload_file else None,
             "lines": lines_data,
         }
@@ -1896,14 +2310,274 @@ class BankingWebService:
             imported_by=auth.user_id,
         )
         db.commit()
-        return RedirectResponse(
-            url=f"/finance/banking/statements/{result.statement.statement_id}?saved=1",
-            status_code=303,
+        redirect_url = (
+            f"/finance/banking/statements/{result.statement.statement_id}"
+            f"?success=Statement+imported+successfully"
+            f"+({result.lines_imported}+lines)"
+        )
+        if result.auto_matched > 0:
+            redirect_url += f"&auto_matched={result.auto_matched}"
+        return RedirectResponse(url=redirect_url, status_code=303)
+
+    async def statement_import_preview_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+    ) -> JSONResponse:
+        form = getattr(request.state, "csrf_form", None)
+        if form is None:
+            form = await request.form()
+
+        upload = form.get("statement_file")
+        upload_file = upload if isinstance(upload, UploadFile) else None
+        if not upload_file or not upload_file.filename:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "Please choose a file to preview."},
+            )
+
+        filename = upload_file.filename or ""
+        lowered = filename.lower()
+        if not lowered.endswith(SPREADSHEET_EXTENSIONS):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "detail": (
+                        f"Supported statement files: {spreadsheet_formats_label()}."
+                    )
+                },
+            )
+
+        try:
+            await upload_file.seek(0)
+        except Exception:
+            try:
+                upload_file.file.seek(0)
+            except Exception:
+                logger.exception("Ignored exception")
+
+        max_bytes = 10 * 1024 * 1024  # 10 MiB
+        content = await upload_file.read(max_bytes + 1)
+        if len(content) > max_bytes:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "detail": "Uploaded file is too large (max 10 MB). Please upload a smaller file."
+                },
+            )
+        if not content:
+            try:
+                upload_file.file.seek(0)
+                content = upload_file.file.read(max_bytes + 1)
+            except Exception:
+                content = b""
+        if not content:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "Uploaded file appears empty."},
+            )
+
+        try:
+            headers, sample_rows, total_rows = self._preview_upload_content(
+                content, lowered
+            )
+        except ValueError as exc:
+            return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+        return JSONResponse(
+            {
+                "detected_columns": headers,
+                "sample_data": sample_rows,
+                "total_rows": total_rows,
+            }
         )
 
     @staticmethod
+    def _preview_upload_content(
+        content: bytes,
+        lowered_filename: str,
+        sample_limit: int | None = 5,
+    ) -> tuple[list[str], list[dict[str, str]], int]:
+        if lowered_filename.endswith(".csv"):
+            try:
+                text = content.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                text = content.decode("utf-8", errors="replace")
+
+            delimiter = ","
+            try:
+                header_line = next(
+                    (line for line in text.splitlines() if line.strip()), ""
+                )
+                candidates = [",", "\t", ";", "|"]
+                counts = {d: header_line.count(d) for d in candidates}
+                best = max(counts, key=counts.__getitem__)
+                if counts.get(best, 0) > 0:
+                    delimiter = best
+                else:
+                    sniff = csv.Sniffer().sniff(text[:2048])
+                    if sniff and getattr(sniff, "delimiter", None):
+                        delimiter = sniff.delimiter
+            except Exception:
+                delimiter = ","
+
+            reader = csv.DictReader(StringIO(text), delimiter=delimiter)
+            if not reader.fieldnames:
+                raise ValueError("CSV file must include a header row.")
+            headers = [str(h).strip() for h in reader.fieldnames if h is not None]
+            # Keep DictReader row keys aligned with the trimmed headers shown in UI.
+            reader.fieldnames = headers
+            rows: list[dict[str, str]] = []
+            total_rows = 0
+            for row in reader:
+                if not any(str(v).strip() for v in row.values() if v is not None):
+                    continue
+                total_rows += 1
+                sample = {
+                    h: ("" if row.get(h) is None else str(row.get(h))) for h in headers
+                }
+                if sample_limit is None or len(rows) < sample_limit:
+                    rows.append(sample)
+            return headers, rows, total_rows
+
+        if lowered_filename.endswith(".xlsx") or lowered_filename.endswith(".xlsm"):
+            from openpyxl import load_workbook
+
+            workbook = load_workbook(
+                filename=BytesIO(content), read_only=True, data_only=True
+            )
+            try:
+                sheet = workbook.active
+                rows_iter = sheet.iter_rows(values_only=True)
+                try:
+                    header_values = next(rows_iter)
+                except StopIteration:
+                    raise ValueError("Excel file must include a header row.") from None
+                if not header_values:
+                    raise ValueError("Excel file must include a header row.")
+                headers = [
+                    str(h).strip() if h is not None else "" for h in header_values
+                ]
+                headers = [h for h in headers if h]
+                if not headers:
+                    raise ValueError("Excel file must include a header row.")
+                xlsx_rows: list[dict[str, str]] = []
+                total_rows = 0
+                for values in rows_iter:
+                    if not values or not any(
+                        value is not None and str(value).strip() for value in values
+                    ):
+                        continue
+                    total_rows += 1
+                    xlsx_row: dict[str, str] = {}
+                    for i, header in enumerate(headers):
+                        value = values[i] if i < len(values) else ""
+                        if isinstance(value, _datetime):
+                            xlsx_row[header] = value.strftime("%Y-%m-%d")
+                        elif isinstance(value, date):
+                            xlsx_row[header] = value.isoformat()
+                        elif value is None:
+                            xlsx_row[header] = ""
+                        else:
+                            xlsx_row[header] = str(value)
+                    if sample_limit is None or len(xlsx_rows) < sample_limit:
+                        xlsx_rows.append(xlsx_row)
+                return headers, xlsx_rows, total_rows
+            finally:
+                workbook.close()
+
+        if lowered_filename.endswith(".xls"):
+            try:
+                import xlrd
+            except builtins.ImportError as exc:
+                raise ValueError(
+                    "XLS preview requires xlrd. Please install xlrd and retry."
+                ) from exc
+
+            try:
+                workbook = xlrd.open_workbook(file_contents=content)
+            except Exception as exc:
+                raise ValueError(
+                    "Could not parse XLS file. Please upload a valid .xls file."
+                ) from exc
+
+            if workbook.nsheets == 0:
+                raise ValueError("Excel file must include a header row.")
+            sheet = workbook.sheet_by_index(0)
+            if sheet.nrows < 1:
+                raise ValueError("Excel file must include a header row.")
+            header_values = sheet.row_values(0)
+            headers = [str(h).strip() if h is not None else "" for h in header_values]
+            headers = [h for h in headers if h]
+            if not headers:
+                raise ValueError("Excel file must include a header row.")
+            xls_rows: list[dict[str, str]] = []
+            total_rows = 0
+            for row_index in range(1, sheet.nrows):
+                row_cells = sheet.row(row_index)
+                if not any(
+                    cell.value is not None and str(cell.value).strip()
+                    for cell in row_cells
+                ):
+                    continue
+                total_rows += 1
+                xls_row: dict[str, str] = {}
+                for i, header in enumerate(headers):
+                    cell = row_cells[i] if i < len(row_cells) else None
+                    if cell is None or cell.value is None:
+                        xls_row[header] = ""
+                    elif cell.ctype == xlrd.XL_CELL_DATE:
+                        try:
+                            dt = xlrd.xldate_as_datetime(cell.value, workbook.datemode)
+                            xls_row[header] = dt.strftime("%Y-%m-%d")
+                        except Exception:
+                            xls_row[header] = str(cell.value)
+                    else:
+                        xls_row[header] = str(cell.value)
+                if sample_limit is None or len(xls_rows) < sample_limit:
+                    xls_rows.append(xls_row)
+            return headers, xls_rows, total_rows
+
+        raise ValueError(f"Supported statement files: {spreadsheet_formats_label()}.")
+
+    @staticmethod
+    def _parse_column_map(form) -> dict[str, str]:
+        pattern = re.compile(r"^column_map\[(.+)\]$")
+        mapping: dict[str, str] = {}
+        for key, value in form.items():
+            match = pattern.match(key)
+            if not match:
+                continue
+            source_col = match.group(1)
+            target = str(value).strip() if value is not None else ""
+            if not target:
+                continue
+            mapping[source_col] = target
+        return mapping
+
+    @staticmethod
+    def _map_rows_with_column_map(
+        source_rows: list[dict[str, str]],
+        column_map: dict[str, str],
+    ) -> list[dict]:
+        mapped_rows: list[dict] = []
+        for idx, source in enumerate(source_rows, start=1):
+            row: dict[str, Any] = {"line_number": idx}
+            for source_col, target_field in column_map.items():
+                value = source.get(source_col, "")
+                row[target_field] = "" if value is None else str(value)
+            if any(
+                str(v).strip()
+                for k, v in row.items()
+                if k != "line_number" and v is not None
+            ):
+                mapped_rows.append(row)
+        return mapped_rows
+
+    @staticmethod
     def _parse_manual_lines(form) -> tuple[list[dict], list[str]]:
-        pattern = re.compile(r"^lines\\[(\\d+)\\]\\[(.+)\\]$")
+        pattern = re.compile(r"^lines\[(\d+)\]\[(.+)\]$")
         lines: dict[int, dict] = {}
         errors: list[str] = []
 
@@ -1949,6 +2623,64 @@ class BankingWebService:
         if not results:
             errors.append("Please add at least one transaction line.")
         return results, errors
+
+    @staticmethod
+    def _normalize_mapped_lines(
+        lines: list[dict],
+        *,
+        org_date_fmt: str | None = None,
+    ) -> list[dict]:
+        normalized: list[dict] = []
+        date_fields = ("transaction_date", "value_date")
+        decimal_fields = ("amount", "debit", "credit", "running_balance")
+        for line in lines:
+            row = dict(line)
+            tx_type = row.get("transaction_type")
+            if tx_type is not None:
+                cleaned = str(tx_type).strip().lower()
+                row["transaction_type"] = cleaned or None
+
+            for field in date_fields:
+                raw = row.get(field)
+                if raw is None:
+                    continue
+                cleaned = str(raw).strip()
+                if not cleaned:
+                    row[field] = None
+                    continue
+                parsed_date = _parse_date(cleaned, format=org_date_fmt)
+                row[field] = parsed_date if parsed_date is not None else cleaned
+
+            for field in decimal_fields:
+                raw = row.get(field)
+                if raw is None:
+                    continue
+                cleaned = str(raw).strip()
+                if not cleaned:
+                    row[field] = None
+                    continue
+                parsed_decimal = _parse_decimal(cleaned)
+                row[field] = parsed_decimal if parsed_decimal is not None else cleaned
+
+            normalized.append(row)
+        return normalized
+
+    @staticmethod
+    def _resolve_org_date_format(
+        db: Session, organization_id: UUID | None
+    ) -> str | None:
+        if not organization_id:
+            return None
+        from app.models.finance.core_org.organization import Organization
+        from app.services.formatting_context import DATE_FORMAT_MAP
+
+        org = db.get(Organization, organization_id)
+        if not org or not getattr(org, "date_format", None):
+            return None
+        date_format_key = org.date_format
+        if not isinstance(date_format_key, str):
+            return None
+        return DATE_FORMAT_MAP.get(date_format_key)
 
     @staticmethod
     def _format_validation_errors(exc: ValidationError) -> list[str]:
@@ -2111,6 +2843,50 @@ class BankingWebService:
             status_code=303,
         )
 
+    def statement_auto_match_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        statement_id: str,
+    ) -> RedirectResponse:
+        """Run auto-match on a specific statement's unmatched lines.
+
+        Delegates to ``AutoReconciliationService.auto_match_statement()``
+        for deterministic PaymentIntent + Splynx payment matching.
+        """
+        from app.services.finance.banking.auto_reconciliation import (
+            AutoReconciliationService,
+        )
+
+        org_id = coerce_uuid(auth.organization_id)
+        stmt_id = coerce_uuid(statement_id)
+
+        auto_svc = AutoReconciliationService()
+        result = auto_svc.auto_match_statement(db, org_id, stmt_id)
+
+        if result.matched > 0:
+            db.commit()
+            msg = f"Auto-matched+{result.matched}+lines"
+            if result.skipped > 0:
+                msg += f"+({result.skipped}+skipped)"
+            return RedirectResponse(
+                url=f"/finance/banking/statements/{statement_id}?success={msg}",
+                status_code=303,
+            )
+
+        if result.errors:
+            error_msg = "Auto-match+errors:+" + ",+".join(result.errors[:3])
+            return RedirectResponse(
+                url=f"/finance/banking/statements/{statement_id}?error={error_msg}",
+                status_code=303,
+            )
+
+        return RedirectResponse(
+            url=f"/finance/banking/statements/{statement_id}?info=No+new+matches+found",
+            status_code=303,
+        )
+
     async def match_statement_line_response(
         self,
         request: Request,
@@ -2130,6 +2906,7 @@ class BankingWebService:
 
         body = await request.json()
         journal_line_id = body.get("journal_line_id")
+        force_match = bool(body.get("force_match", False))
         if not journal_line_id:
             return JSONResponse(
                 content={"detail": "journal_line_id is required"}, status_code=400
@@ -2139,12 +2916,13 @@ class BankingWebService:
         user_id = getattr(auth, "user_id", None) or getattr(auth, "person_id", None)
 
         try:
-            svc.match_statement_line(
+            stmt_line = svc.match_statement_line(
                 db=db,
                 organization_id=org_id,
                 statement_line_id=UUID(line_id),
                 journal_line_id=UUID(str(journal_line_id)),
                 matched_by=user_id,
+                force_match=force_match,
             )
             db.commit()
         except HTTPException:
@@ -2153,7 +2931,160 @@ class BankingWebService:
             logger.warning("Statement line match failed: %s", e)
             return JSONResponse(content={"detail": str(e)}, status_code=400)
 
-        return JSONResponse(content={"status": "ok"}, status_code=200)
+        # Return updated counters so frontend can update stats without reload
+        statement = stmt_line.statement
+        matched = statement.matched_lines or 0
+        total = statement.total_lines or (
+            (statement.matched_lines or 0) + (statement.unmatched_lines or 0)
+        )
+        match_pct = round(matched / total * 100) if total else 0
+
+        # Resolve source URL + match detail for the matched GL line
+        from app.services.finance.banking.bank_reconciliation import (
+            _build_source_url,
+        )
+
+        source_url = ""
+        match_detail: dict[str, str] | None = None
+        gl_line = db.get(JournalEntryLine, UUID(str(journal_line_id)))
+        if gl_line:
+            entry = getattr(gl_line, "journal_entry", None) or getattr(
+                gl_line, "entry", None
+            )
+            if entry:
+                source_url = _build_source_url(
+                    getattr(entry, "source_document_type", None),
+                    getattr(entry, "source_document_id", None),
+                    getattr(entry, "entry_id", None),
+                )
+                match_detail = _build_match_detail(db, entry, source_url)
+
+        return JSONResponse(
+            content={
+                "status": "ok",
+                "matched_lines": matched,
+                "unmatched_lines": statement.unmatched_lines or 0,
+                "match_pct": match_pct,
+                "total_lines": total,
+                "source_url": source_url,
+                "match_detail": match_detail,
+            },
+            status_code=200,
+        )
+
+    async def batch_match_statement_lines_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        statement_id: str,
+    ) -> Response:
+        """Match multiple statement lines to GL entries in a single request."""
+        from app.services.finance.banking.bank_reconciliation import (
+            BankReconciliationService,
+            _build_source_url,
+        )
+
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        body = await request.json()
+        matches: list[dict[str, str]] = body.get("matches", [])
+        if not matches:
+            return JSONResponse(
+                content={"detail": "matches array is required"}, status_code=400
+            )
+
+        svc = BankReconciliationService()
+        user_id = getattr(auth, "user_id", None) or getattr(auth, "person_id", None)
+
+        results: list[dict[str, object]] = []
+        matched_count = 0
+        error_count = 0
+
+        for match in matches:
+            line_id = match.get("line_id", "")
+            journal_line_id = match.get("journal_line_id", "")
+            force = bool(match.get("force_match", False))
+
+            if not line_id or not journal_line_id:
+                results.append(
+                    {"line_id": line_id, "status": "error", "detail": "missing IDs"}
+                )
+                error_count += 1
+                continue
+
+            try:
+                svc.match_statement_line(
+                    db=db,
+                    organization_id=org_id,
+                    statement_line_id=UUID(line_id),
+                    journal_line_id=UUID(str(journal_line_id)),
+                    matched_by=user_id,
+                    force_match=force,
+                )
+
+                # Resolve source URL + match detail
+                source_url = ""
+                batch_match_detail: dict[str, str] | None = None
+                gl_line = db.get(JournalEntryLine, UUID(str(journal_line_id)))
+                if gl_line:
+                    entry = getattr(gl_line, "journal_entry", None) or getattr(
+                        gl_line, "entry", None
+                    )
+                    if entry:
+                        source_url = _build_source_url(
+                            getattr(entry, "source_document_type", None),
+                            getattr(entry, "source_document_id", None),
+                            getattr(entry, "entry_id", None),
+                        )
+                        batch_match_detail = _build_match_detail(db, entry, source_url)
+
+                results.append(
+                    {
+                        "line_id": line_id,
+                        "status": "ok",
+                        "source_url": source_url,
+                        "match_detail": batch_match_detail,
+                    }
+                )
+                matched_count += 1
+            except HTTPException as e:
+                results.append(
+                    {"line_id": line_id, "status": "error", "detail": e.detail}
+                )
+                error_count += 1
+            except (ValueError, RuntimeError) as e:
+                logger.warning("Batch match failed for line %s: %s", line_id, e)
+                results.append(
+                    {"line_id": line_id, "status": "error", "detail": str(e)}
+                )
+                error_count += 1
+
+        # Commit all successful matches in one transaction
+        if matched_count > 0:
+            db.commit()
+
+        # Get final statement counters
+        statement = db.get(BankStatement, UUID(statement_id))
+        matched = (statement.matched_lines or 0) if statement else 0
+        total = (statement.total_lines or 0) if statement else 0
+        match_pct = round(matched / total * 100) if total else 0
+
+        return JSONResponse(
+            content={
+                "status": "ok",
+                "matched_count": matched_count,
+                "error_count": error_count,
+                "results": results,
+                "matched_lines": matched,
+                "unmatched_lines": (statement.unmatched_lines or 0) if statement else 0,
+                "match_pct": match_pct,
+                "total_lines": total,
+            },
+            status_code=200,
+        )
 
     async def unmatch_statement_line_response(
         self,
@@ -2175,7 +3106,7 @@ class BankingWebService:
         svc = BankReconciliationService()
 
         try:
-            svc.unmatch_statement_line(
+            stmt_line = svc.unmatch_statement_line(
                 db=db,
                 organization_id=org_id,
                 statement_line_id=UUID(line_id),
@@ -2187,7 +3118,225 @@ class BankingWebService:
             logger.warning("Statement line unmatch failed: %s", e)
             return JSONResponse(content={"detail": str(e)}, status_code=400)
 
-        return JSONResponse(content={"status": "ok"}, status_code=200)
+        # Return updated counters
+        statement = stmt_line.statement
+        matched = statement.matched_lines or 0
+        total = statement.total_lines or (
+            (statement.matched_lines or 0) + (statement.unmatched_lines or 0)
+        )
+        match_pct = round(matched / total * 100) if total else 0
+
+        return JSONResponse(
+            content={
+                "status": "ok",
+                "matched_lines": matched,
+                "unmatched_lines": statement.unmatched_lines or 0,
+                "match_pct": match_pct,
+                "total_lines": total,
+            },
+            status_code=200,
+        )
+
+    async def create_journal_and_match_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        statement_id: str,
+        line_id: str,
+    ) -> Response:
+        """Create a GL journal and match it to a bank line (JSON from Alpine.js).
+
+        Accepts: {counterparty_account_id: str, description?: str}
+        """
+        from app.services.finance.banking.bank_reconciliation import (
+            BankReconciliationService,
+            _build_source_url,
+        )
+
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        body = await request.json()
+        counterparty_account_id = body.get("counterparty_account_id")
+        description = body.get("description") or None
+        if not counterparty_account_id:
+            return JSONResponse(
+                content={"detail": "counterparty_account_id is required"},
+                status_code=400,
+            )
+
+        svc = BankReconciliationService()
+        user_id = getattr(auth, "user_id", None) or getattr(auth, "person_id", None)
+
+        try:
+            stmt_line = svc.create_journal_and_match(
+                db=db,
+                organization_id=org_id,
+                statement_line_id=UUID(line_id),
+                counterparty_account_id=UUID(str(counterparty_account_id)),
+                description=description,
+                matched_by=user_id,
+            )
+            db.commit()
+        except HTTPException:
+            raise
+        except (ValueError, RuntimeError) as e:
+            logger.warning("Create journal & match failed: %s", e)
+            return JSONResponse(content={"detail": str(e)}, status_code=400)
+
+        # Return updated counters
+        statement = stmt_line.statement
+        matched = statement.matched_lines or 0
+        total = statement.total_lines or (
+            (statement.matched_lines or 0) + (statement.unmatched_lines or 0)
+        )
+        match_pct = round(matched / total * 100) if total else 0
+
+        # Resolve source URL for the newly matched GL line
+        source_url = ""
+        match_detail: dict[str, str] | None = None
+        gl_line = db.get(JournalEntryLine, stmt_line.matched_journal_line_id)
+        if gl_line:
+            entry = getattr(gl_line, "journal_entry", None) or getattr(
+                gl_line, "entry", None
+            )
+            if entry:
+                source_url = _build_source_url(
+                    getattr(entry, "source_document_type", None),
+                    getattr(entry, "source_document_id", None),
+                    getattr(entry, "entry_id", None),
+                )
+                match_detail = _build_match_detail(db, entry, source_url)
+
+        return JSONResponse(
+            content={
+                "status": "ok",
+                "matched_lines": matched,
+                "unmatched_lines": statement.unmatched_lines or 0,
+                "match_pct": match_pct,
+                "total_lines": total,
+                "source_url": source_url,
+                "match_detail": match_detail,
+            },
+            status_code=200,
+        )
+
+    def scored_candidates_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        statement_id: str,
+        line_id: str,
+    ) -> Response:
+        """Return scored GL candidates for a specific statement line (JSON)."""
+        from app.services.finance.banking.bank_reconciliation import (
+            BankReconciliationService,
+        )
+
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        svc = BankReconciliationService()
+        result = svc.get_scored_candidates_for_line(
+            db=db,
+            organization_id=org_id,
+            statement_id=UUID(statement_id),
+            statement_line_id=UUID(line_id),
+        )
+
+        return JSONResponse(content=result, status_code=200)
+
+    async def multi_match_statement_line_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        statement_id: str,
+        line_id: str,
+    ) -> Response:
+        """Match one bank line to multiple GL entries (JSON from Alpine.js)."""
+        from app.services.finance.banking.bank_reconciliation import (
+            BankReconciliationService,
+            _build_source_url,
+        )
+
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        body = await request.json()
+        journal_line_ids_raw = body.get("journal_line_ids", [])
+        force_match = bool(body.get("force_match", False))
+
+        if not journal_line_ids_raw:
+            return JSONResponse(
+                content={"detail": "journal_line_ids is required"},
+                status_code=400,
+            )
+
+        journal_line_ids = [UUID(str(jl_id)) for jl_id in journal_line_ids_raw]
+
+        svc = BankReconciliationService()
+        user_id = getattr(auth, "user_id", None) or getattr(auth, "person_id", None)
+
+        try:
+            stmt_line = svc.multi_match_statement_line(
+                db=db,
+                organization_id=org_id,
+                statement_line_id=UUID(line_id),
+                journal_line_ids=journal_line_ids,
+                matched_by=user_id,
+                force_match=force_match,
+            )
+            db.commit()
+        except HTTPException:
+            raise
+        except (ValueError, RuntimeError) as e:
+            logger.warning("Multi-match failed: %s", e)
+            return JSONResponse(content={"detail": str(e)}, status_code=400)
+
+        # Return updated counters + source URLs for all matched GL lines
+        statement = stmt_line.statement
+        matched = statement.matched_lines or 0
+        total = statement.total_lines or (
+            (statement.matched_lines or 0) + (statement.unmatched_lines or 0)
+        )
+        match_pct = round(matched / total * 100) if total else 0
+
+        # Resolve source URL + match detail for the primary (first) GL line
+        source_url = ""
+        multi_match_detail: dict[str, str] | None = None
+        if journal_line_ids:
+            gl_line = db.get(JournalEntryLine, journal_line_ids[0])
+            if gl_line:
+                entry = getattr(gl_line, "journal_entry", None) or getattr(
+                    gl_line, "entry", None
+                )
+                if entry:
+                    source_url = _build_source_url(
+                        getattr(entry, "source_document_type", None),
+                        getattr(entry, "source_document_id", None),
+                        getattr(entry, "entry_id", None),
+                    )
+                    multi_match_detail = _build_match_detail(db, entry, source_url)
+
+        return JSONResponse(
+            content={
+                "status": "ok",
+                "matched_lines": matched,
+                "unmatched_lines": statement.unmatched_lines or 0,
+                "match_pct": match_pct,
+                "total_lines": total,
+                "source_url": source_url,
+                "match_detail": multi_match_detail,
+                "match_count": len(journal_line_ids),
+            },
+            status_code=200,
+        )
 
     async def bulk_delete_statements_response(
         self,
@@ -2422,6 +3571,168 @@ class BankingWebService:
             request, "finance/banking/rule_form.html", context
         )
 
+    def rule_duplicate_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        rule_id: str,
+    ) -> HTMLResponse:
+        """Render duplicate-rule form."""
+        context = base_context(request, auth, "Duplicate Rule", "banking", db=db)
+        context.update(
+            self.rule_duplicate_form_context(
+                db,
+                str(auth.organization_id),
+                rule_id=rule_id,
+            )
+        )
+        return templates.TemplateResponse(
+            request, "finance/banking/rule_duplicate.html", context
+        )
+
+    def duplicate_rule_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        rule_id: str,
+        bank_account_ids: list[str],
+        include_global: bool,
+    ) -> HTMLResponse | RedirectResponse:
+        """Handle POST duplicate-rule action."""
+        from app.services.finance.banking.categorization import (
+            TransactionCategorizationService,
+        )
+
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        target_ids = [bid for bid in bank_account_ids if bid]
+        try:
+            service = TransactionCategorizationService()
+            copies = service.duplicate_rule_to_accounts(
+                db=db,
+                organization_id=org_id,
+                source_rule_id=UUID(rule_id),
+                bank_account_ids=[UUID(v) for v in target_ids],
+                include_global=include_global,
+                created_by=auth.person_id,
+            )
+            db.commit()
+        except (ValueError, TypeError) as exc:
+            context = base_context(request, auth, "Duplicate Rule", "banking", db=db)
+            context.update(
+                self.rule_duplicate_form_context(
+                    db,
+                    str(auth.organization_id),
+                    rule_id=rule_id,
+                )
+            )
+            context["error"] = str(exc)
+            context["selected_bank_account_ids"] = target_ids
+            context["include_global"] = include_global
+            return templates.TemplateResponse(
+                request, "finance/banking/rule_duplicate.html", context
+            )
+
+        return RedirectResponse(
+            url=f"/finance/banking/rules?success=Rule+duplicated+({len(copies)}+copy)",
+            status_code=303,
+        )
+
+    def bulk_rule_duplicate_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        rule_ids: list[str],
+    ) -> HTMLResponse:
+        """Render bulk duplicate-rule form."""
+        context = base_context(request, auth, "Bulk Duplicate Rules", "banking", db=db)
+        try:
+            context.update(
+                self.bulk_rule_duplicate_form_context(
+                    db,
+                    str(auth.organization_id),
+                    rule_ids=rule_ids,
+                )
+            )
+        except ValueError as exc:
+            return RedirectResponse(
+                url=f"/finance/banking/rules?error={str(exc).replace(' ', '+')}",
+                status_code=303,
+            )
+        return templates.TemplateResponse(
+            request, "finance/banking/rule_duplicate_bulk.html", context
+        )
+
+    def bulk_duplicate_rules_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        rule_ids: list[str],
+        bank_account_ids: list[str],
+        include_global: bool,
+    ) -> HTMLResponse | RedirectResponse:
+        """Handle bulk duplicate-rules action."""
+        from app.services.finance.banking.categorization import (
+            TransactionCategorizationService,
+        )
+
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        unique_rule_ids = list(dict.fromkeys(rid for rid in rule_ids if rid))
+        unique_bank_ids = list(dict.fromkeys(bid for bid in bank_account_ids if bid))
+        service = TransactionCategorizationService()
+
+        try:
+            total_copies = 0
+            for rid in unique_rule_ids:
+                copies = service.duplicate_rule_to_accounts(
+                    db=db,
+                    organization_id=org_id,
+                    source_rule_id=UUID(rid),
+                    bank_account_ids=[UUID(v) for v in unique_bank_ids],
+                    include_global=include_global,
+                    created_by=auth.person_id,
+                )
+                total_copies += len(copies)
+            db.commit()
+        except (ValueError, TypeError) as exc:
+            context = base_context(
+                request,
+                auth,
+                "Bulk Duplicate Rules",
+                "banking",
+                db=db,
+            )
+            context.update(
+                self.bulk_rule_duplicate_form_context(
+                    db,
+                    str(auth.organization_id),
+                    rule_ids=unique_rule_ids,
+                )
+            )
+            context["error"] = str(exc)
+            context["selected_bank_account_ids"] = unique_bank_ids
+            context["include_global"] = include_global
+            return templates.TemplateResponse(
+                request, "finance/banking/rule_duplicate_bulk.html", context
+            )
+
+        return RedirectResponse(
+            url=(
+                "/finance/banking/rules?"
+                f"success=Rules+duplicated+({total_copies}+copies)"
+            ),
+            status_code=303,
+        )
+
     def reorder_rules_response(
         self,
         request: Request,
@@ -2636,6 +3947,7 @@ class BankingWebService:
         body = await request.json()
         svc = BankReconciliationService()
         user_id = getattr(auth, "user_id", None) or getattr(auth, "person_id", None)
+        force_match = bool(body.get("force_match", False))
 
         try:
             from app.models.finance.banking.bank_reconciliation import (
@@ -2662,6 +3974,7 @@ class BankingWebService:
                 reconciliation_id=UUID(reconciliation_id),
                 input=match_input,
                 created_by=user_id,
+                force_match=force_match,
             )
             db.commit()
         except HTTPException:

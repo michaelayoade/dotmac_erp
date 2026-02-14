@@ -20,7 +20,7 @@
 {% block content %}
 <div class="max-w-4xl mx-auto space-y-6">
     {{ settings_ui.settings_header("Projects Settings", "Configure project workflow defaults and task settings.") }}
-    {{ settings_ui.settings_messages(request, error, "Projects settings updated successfully.") }}
+    {{ settings_ui.settings_messages(settings_saved|default(false), error, "Projects settings updated successfully.") }}
 
     <form method="POST" action="/settings/projects" class="space-y-6">
         {{ request.state.csrf_form | safe }}

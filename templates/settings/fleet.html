@@ -20,7 +20,7 @@
 {% block content %}
 <div class="max-w-4xl mx-auto space-y-6">
     {{ settings_ui.settings_header("Fleet Settings", "Configure reservation rules and fleet defaults.") }}
-    {{ settings_ui.settings_messages(request, error, "Fleet settings updated successfully.") }}
+    {{ settings_ui.settings_messages(settings_saved|default(false), error, "Fleet settings updated successfully.") }}
 
     <form method="POST" action="/settings/fleet" class="space-y-6">
         {{ request.state.csrf_form | safe }}

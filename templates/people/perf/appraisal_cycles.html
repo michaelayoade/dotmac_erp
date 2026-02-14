@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import live_search, empty_state, pagination %}
+{% from "components/macros.html" import compact_filters, filter_select_field, empty_state, pagination %}
 
 {% block page_title %}Appraisal Cycles{% endblock %}
 
@@ -37,19 +37,21 @@
     </div>
     {% endif %}
 
-    {% call(search_attrs) live_search(
-        search=search,
+    {% call(filter_attrs) compact_filters(
         base_url="/people/perf/appraisal-cycles",
-        placeholder="Search appraisal cycles..."
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search appraisal cycles..."
     ) %}
-        <select name="status" class="form-select" {{ search_attrs }}>
+        <select name="status" class="form-select" {{ filter_attrs }}>
             <option value="">All Status</option>
             {% for s in statuses %}
             <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
             {% endfor %}
         </select>
         <input type="number" name="year" value="{{ year if year else '' }}"
-               class="form-input w-32" placeholder="Year" min="2000" max="2100" {{ search_attrs }}>
+               class="form-input w-32" placeholder="Year" min="2000" max="2100" {{ filter_attrs }}>
     {% endcall %}
 
     <div id="results-container">

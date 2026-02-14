@@ -6,6 +6,21 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+        (function () {
+            const saved = localStorage.getItem("darkMode");
+            const isDark =
+                saved === "true" ||
+                (saved === null &&
+                    window.matchMedia &&
+                    window.matchMedia("(prefers-color-scheme: dark)").matches);
+            if (isDark) {
+                document.documentElement.classList.add("dark");
+            } else {
+                document.documentElement.classList.remove("dark");
+            }
+        })();
+    </script>
     <meta name="htmx-config" content='{"defaultSwapStyle":"innerHTML","globalViewTransitions":true}' />
     {% set brand_data = brand if brand is defined else {} %}
     {% set brand_name = brand_data.name | default(title | default("", true), true) %}
@@ -71,7 +86,13 @@
             <div class="mx-auto flex max-w-5xl flex-col gap-4 px-6 py-6 md:flex-row md:items-center md:justify-between">
                 <a href="/" class="flex items-center gap-3">
                     {% if brand_logo_url %}
-                        <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo" class="h-11 w-11 rounded-xl object-cover shadow-lg shadow-primary-500/20" />
+                        <img src="{{ brand_logo_url }}" alt="{{ brand_name }} logo"
+                             class="h-11 w-auto max-w-[180px] rounded-xl object-contain shadow-lg shadow-primary-500/20"
+                             loading="lazy"
+                             onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <div class="hidden h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 via-primary-600 to-accent-500 text-sm font-semibold uppercase text-white shadow-lg shadow-primary-500/30">
+                            {{ brand_mark }}
+                        </div>
                     {% else %}
                         <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 via-primary-600 to-accent-500 text-sm font-semibold uppercase text-white shadow-lg shadow-primary-500/30">
                             {{ brand_mark }}
@@ -372,6 +393,13 @@
                 } catch (e) {}
             }
         });
+
+        // Global showToast convenience function
+        window.showToast = function(message, type) {
+            window.dispatchEvent(new CustomEvent("show-toast", {
+                detail: { message: message, type: type || "info" }
+            }));
+        };
 
         // Dark mode system preference detection
         if (localStorage.getItem('darkMode') === null) {

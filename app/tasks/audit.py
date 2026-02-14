@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 @shared_task
 def log_audit_event(
     actor_type: str,
+    organization_id: str | None,
+    actor_person_id: str | None,
     actor_id: str | None,
     action: str,
     entity_type: str,
@@ -36,6 +38,8 @@ def log_audit_event(
 
     Args:
         actor_type: Type of actor (user, system, api_key)
+        organization_id: Tenant organization ID (if available)
+        actor_person_id: Person UUID for actor (if resolvable)
         actor_id: ID of the actor
         action: HTTP method (GET, POST, etc.)
         entity_type: Request path
@@ -52,6 +56,7 @@ def log_audit_event(
     """
     from app.models.audit import AuditActorType, AuditEvent
     from app.schemas.audit import AuditEventCreate
+    from app.services.common import coerce_uuid
 
     logger.debug("Logging audit event: %s %s", action, entity_type)
 
@@ -69,8 +74,12 @@ def log_audit_event(
             resolved_actor_type = AuditActorType.system
 
         with SessionLocal() as db:
+            org_uuid = coerce_uuid(organization_id, raise_http=False)
+            actor_person_uuid = coerce_uuid(actor_person_id, raise_http=False)
             payload = AuditEventCreate(
                 actor_type=resolved_actor_type,
+                organization_id=org_uuid,
+                actor_person_id=actor_person_uuid,
                 actor_id=actor_id,
                 action=action,
                 entity_type=entity_type,

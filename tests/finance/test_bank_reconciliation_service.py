@@ -15,6 +15,7 @@ from app.models.finance.banking.bank_reconciliation import (
     ReconciliationMatchType,
     ReconciliationStatus,
 )
+from app.models.finance.banking.bank_statement import BankStatementLineMatch
 from app.services.finance.banking.bank_reconciliation import (
     BankReconciliationService,
     ReconciliationInput,
@@ -207,6 +208,81 @@ def test_add_match_invalid_status():
             ),
         )
     assert excinfo.value.status_code == 400
+
+
+def test_add_match_amount_mismatch_requires_force():
+    svc = BankReconciliationService()
+    db = MagicMock()
+    recon = _make_reconciliation(status=ReconciliationStatus.draft)
+    stmt_line = SimpleNamespace(
+        line_id=uuid4(),
+        signed_amount=Decimal("15000.00"),
+        transaction_date=date(2024, 1, 10),
+        description="Receipt",
+        reference="RCPT-1",
+        is_matched=False,
+    )
+    stmt_line.statement = SimpleNamespace(organization_id=recon.organization_id)
+    gl_line = SimpleNamespace(
+        line_id=uuid4(),
+        debit_amount=Decimal("50000.00"),
+        credit_amount=Decimal("0"),
+    )
+    gl_line.journal_entry = SimpleNamespace(organization_id=recon.organization_id)
+    db.get.side_effect = [recon, stmt_line, gl_line]
+
+    with pytest.raises(HTTPException) as excinfo:
+        svc.add_match(
+            db,
+            recon.organization_id,
+            recon.reconciliation_id,
+            ReconciliationMatchInput(
+                statement_line_id=stmt_line.line_id,
+                journal_line_id=gl_line.line_id,
+            ),
+        )
+
+    assert excinfo.value.status_code == 400
+    assert "Amount mismatch requires review" in excinfo.value.detail
+
+
+def test_add_match_amount_mismatch_with_force():
+    svc = BankReconciliationService()
+    db = MagicMock()
+    recon = _make_reconciliation(status=ReconciliationStatus.draft)
+    stmt_line = SimpleNamespace(
+        line_id=uuid4(),
+        signed_amount=Decimal("15000.00"),
+        transaction_date=date(2024, 1, 10),
+        description="Receipt",
+        reference="RCPT-1",
+        is_matched=False,
+        matched_at=None,
+        matched_by=None,
+        matched_journal_line_id=None,
+    )
+    stmt_line.statement = SimpleNamespace(organization_id=recon.organization_id)
+    gl_line = SimpleNamespace(
+        line_id=uuid4(),
+        debit_amount=Decimal("50000.00"),
+        credit_amount=Decimal("0"),
+    )
+    gl_line.journal_entry = SimpleNamespace(organization_id=recon.organization_id)
+    db.get.side_effect = [recon, stmt_line, gl_line]
+
+    recon_line = svc.add_match(
+        db,
+        recon.organization_id,
+        recon.reconciliation_id,
+        ReconciliationMatchInput(
+            statement_line_id=stmt_line.line_id,
+            journal_line_id=gl_line.line_id,
+        ),
+        force_match=True,
+    )
+
+    assert isinstance(recon_line, BankReconciliationLine)
+    assert stmt_line.is_matched is True
 
 
 def test_add_adjustment_and_outstanding_items():
@@ -1039,6 +1115,80 @@ def test_add_multi_match_statement_not_found() -> None:
     assert excinfo.value.status_code == 404
 
 
+def test_match_statement_line_amount_mismatch_requires_force() -> None:
+    svc = BankReconciliationService()
+    db = MagicMock()
+    org_id = uuid4()
+    stmt_line = SimpleNamespace(
+        line_id=uuid4(),
+        signed_amount=Decimal("15000.00"),
+        is_matched=False,
+        matched_at=None,
+        matched_by=None,
+        matched_journal_line_id=None,
+    )
+    stmt_line.statement = SimpleNamespace(
+        organization_id=org_id,
+        matched_lines=0,
+        unmatched_lines=1,
+    )
+    gl_line = SimpleNamespace(
+        line_id=uuid4(),
+        debit_amount=Decimal("50000.00"),
+        credit_amount=Decimal("0"),
+    )
+    gl_line.journal_entry = SimpleNamespace(organization_id=org_id)
+    db.get.side_effect = [stmt_line, gl_line]
+
+    with pytest.raises(HTTPException) as excinfo:
+        svc.match_statement_line(
+            db,
+            organization_id=org_id,
+            statement_line_id=stmt_line.line_id,
+            journal_line_id=gl_line.line_id,
+        )
+
+    assert excinfo.value.status_code == 400
+    assert "Amount mismatch requires review" in excinfo.value.detail
+
+
+def test_match_statement_line_amount_mismatch_with_force() -> None:
+    svc = BankReconciliationService()
+    db = MagicMock()
+    org_id = uuid4()
+    stmt_line = SimpleNamespace(
+        line_id=uuid4(),
+        signed_amount=Decimal("15000.00"),
+        is_matched=False,
+        matched_at=None,
+        matched_by=None,
+        matched_journal_line_id=None,
+    )
+    stmt_line.statement = SimpleNamespace(
+        organization_id=org_id,
+        matched_lines=0,
+        unmatched_lines=1,
+    )
+    gl_line = SimpleNamespace(
+        line_id=uuid4(),
+        debit_amount=Decimal("50000.00"),
+        credit_amount=Decimal("0"),
+    )
+    gl_line.journal_entry = SimpleNamespace(organization_id=org_id)
+    db.get.side_effect = [stmt_line, gl_line]
+
+    matched = svc.match_statement_line(
+        db,
+        organization_id=org_id,
+        statement_line_id=stmt_line.line_id,
+        journal_line_id=gl_line.line_id,
+        force_match=True,
+    )
+
+    assert matched is stmt_line
+    assert stmt_line.is_matched is True
+
+
 # =============================================================================
 # _check_rule_payee_link helper
 # =============================================================================
@@ -1113,3 +1263,506 @@ def test_check_rule_payee_link_no_payee_id() -> None:
     db.get.return_value = rule
 
     assert _check_rule_payee_link(db, uuid4(), uuid4()) == 0.0
+
+
+# =============================================================================
+# Scored candidates for line (lazy-load)
+# =============================================================================
+
+
+def test_get_scored_candidates_line_not_found() -> None:
+    """Returns empty when statement line does not exist."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+    db.get.return_value = None
+
+    result = svc.get_scored_candidates_for_line(db, uuid4(), uuid4(), uuid4())
+    assert result == {"candidates": [], "source_types": []}
+
+
+def test_get_scored_candidates_statement_not_found() -> None:
+    """Returns empty when statement does not belong to org."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+    org_id = uuid4()
+
+    stmt_line = SimpleNamespace(line_id=uuid4())
+    statement = SimpleNamespace(
+        organization_id=uuid4(),  # different org
+    )
+    db.get.side_effect = [stmt_line, statement]
+
+    result = svc.get_scored_candidates_for_line(db, org_id, uuid4(), stmt_line.line_id)
+    assert result == {"candidates": [], "source_types": []}
+
+
+def test_get_scored_candidates_no_gl_account() -> None:
+    """Returns empty when bank account has no GL account."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+    org_id = uuid4()
+
+    stmt_line = SimpleNamespace(line_id=uuid4())
+    statement = SimpleNamespace(
+        organization_id=org_id,
+        bank_account=SimpleNamespace(gl_account_id=None),
+        period_start=date(2024, 1, 1),
+        period_end=date(2024, 1, 31),
+    )
+    db.get.side_effect = [stmt_line, statement]
+
+    result = svc.get_scored_candidates_for_line(
+        db, org_id, statement.organization_id, stmt_line.line_id
+    )
+    assert result == {"candidates": [], "source_types": []}
+
+
+def test_get_scored_candidates_returns_sorted_by_score() -> None:
+    """Candidates are returned sorted by match_score descending."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+    org_id = uuid4()
+    statement_id = uuid4()
+    gl_account_id = uuid4()
+
+    stmt_line = SimpleNamespace(
+        line_id=uuid4(),
+        signed_amount=Decimal("100.00"),
+        transaction_date=date(2024, 1, 10),
+        reference="REF-A",
+        description="Payment A",
+        payee_payer=None,
+        suggested_account_id=None,
+        suggested_rule_id=None,
+    )
+    statement = SimpleNamespace(
+        organization_id=org_id,
+        statement_id=statement_id,
+        bank_account=SimpleNamespace(
+            gl_account_id=gl_account_id,
+            bank_name=None,
+            organization_id=org_id,
+        ),
+        period_start=date(2024, 1, 1),
+        period_end=date(2024, 1, 31),
+    )
+
+    # Two GL lines: one matches well, one doesn't
+    gl_good = SimpleNamespace(
+        line_id=uuid4(),
+        debit_amount=Decimal("100.00"),
+        credit_amount=Decimal("0"),
+        description="Payment REF-A",
+        account_id=gl_account_id,
+        journal_entry=SimpleNamespace(
+            entry_date=date(2024, 1, 10),
+            entry_id=uuid4(),
+            source_document_type="customer_payment",
+            source_document_id=uuid4(),
+            source_module=None,
+            organization_id=org_id,
+            description="Payment REF-A",
+            reference="REF-A",
+        ),
+    )
+    gl_bad = SimpleNamespace(
+        line_id=uuid4(),
+        debit_amount=Decimal("999.00"),
+        credit_amount=Decimal("0"),
+        description="Unrelated",
+        account_id=gl_account_id,
+        journal_entry=SimpleNamespace(
+            entry_date=date(2024, 1, 25),
+            entry_id=uuid4(),
+            source_document_type=None,
+            source_document_id=None,
+            source_module=None,
+            organization_id=org_id,
+            description="Unrelated",
+            reference=None,
+        ),
+    )
+
+    db.get.side_effect = [stmt_line, statement]
+
+    call_count = 0
+
+    def _execute_side(*args, **kwargs):
+        nonlocal call_count
+        result = MagicMock()
+        if call_count == 0:
+            # Junction table query (matched GL IDs)
+            result.scalars.return_value.all.return_value = []
+        elif call_count == 1:
+            # Legacy FK matched IDs
+            result.scalars.return_value.all.return_value = []
+        elif call_count == 2:
+            # GL lines query
+            result.scalars.return_value.all.return_value = [gl_good, gl_bad]
+        else:
+            result.scalars.return_value.all.return_value = []
+        call_count += 1
+        return result
+
+    db.execute.side_effect = _execute_side
+
+    # Mock _resolve_gl_metadata to return empty dict
+    svc._resolve_gl_metadata = MagicMock(return_value={})
+
+    result = svc.get_scored_candidates_for_line(
+        db, org_id, statement_id, stmt_line.line_id
+    )
+
+    assert len(result["candidates"]) == 2
+    # First candidate (highest score) should be the good match
+    top = result["candidates"][0]
+    assert top["journal_line_id"] == str(gl_good.line_id)
+    assert top["match_score"] >= 50  # Good amount + date match
+    assert "match_score" in top
+    assert top["is_already_matched"] is False
+
+    # Second should have lower score
+    low = result["candidates"][1]
+    assert low["match_score"] < top["match_score"]
+
+
+# =============================================================================
+# Multi-match statement line (junction table)
+# =============================================================================
+
+
+def test_multi_match_statement_line_happy_path() -> None:
+    """Successfully multi-matches one bank line to two GL lines."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+    org_id = uuid4()
+    user_id = uuid4()
+
+    stmt_line = SimpleNamespace(
+        line_id=uuid4(),
+        signed_amount=Decimal("100.00"),
+        is_matched=False,
+        matched_at=None,
+        matched_by=None,
+        matched_journal_line_id=None,
+        statement=SimpleNamespace(
+            organization_id=org_id,
+            matched_lines=5,
+            unmatched_lines=10,
+        ),
+    )
+    gl1 = SimpleNamespace(
+        line_id=uuid4(),
+        debit_amount=Decimal("60.00"),
+        credit_amount=Decimal("0"),
+        journal_entry=SimpleNamespace(organization_id=org_id),
+    )
+    gl2 = SimpleNamespace(
+        line_id=uuid4(),
+        debit_amount=Decimal("40.00"),
+        credit_amount=Decimal("0"),
+        journal_entry=SimpleNamespace(organization_id=org_id),
+    )
+
+    db.get.side_effect = [stmt_line, gl1, gl2]
+
+    result = svc.multi_match_statement_line(
+        db,
+        org_id,
+        stmt_line.line_id,
+        journal_line_ids=[gl1.line_id, gl2.line_id],
+        matched_by=user_id,
+    )
+
+    assert result.is_matched is True
+    assert result.matched_journal_line_id == gl1.line_id  # primary = first
+    assert result.statement.matched_lines == 6
+    assert result.statement.unmatched_lines == 9
+    # Two junction table rows added
+    assert db.add.call_count == 2
+    db.flush.assert_called_once()
+
+
+def test_multi_match_statement_line_not_found() -> None:
+    """Raises 404 when statement line does not exist."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+    db.get.return_value = None
+
+    with pytest.raises(HTTPException) as excinfo:
+        svc.multi_match_statement_line(db, uuid4(), uuid4(), journal_line_ids=[uuid4()])
+    assert excinfo.value.status_code == 404
+
+
+def test_multi_match_statement_line_already_matched() -> None:
+    """Raises 400 when statement line is already matched."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+    org_id = uuid4()
+
+    stmt_line = SimpleNamespace(
+        line_id=uuid4(),
+        is_matched=True,
+        statement=SimpleNamespace(organization_id=org_id),
+    )
+    db.get.return_value = stmt_line
+
+    with pytest.raises(HTTPException) as excinfo:
+        svc.multi_match_statement_line(
+            db, org_id, stmt_line.line_id, journal_line_ids=[uuid4()]
+        )
+    assert excinfo.value.status_code == 400
+
+
+def test_multi_match_statement_line_no_gl_ids() -> None:
+    """Raises 400 when journal_line_ids is empty."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+    org_id = uuid4()
+
+    stmt_line = SimpleNamespace(
+        line_id=uuid4(),
+        is_matched=False,
+        statement=SimpleNamespace(organization_id=org_id),
+    )
+    db.get.return_value = stmt_line
+
+    with pytest.raises(HTTPException) as excinfo:
+        svc.multi_match_statement_line(
+            db, org_id, stmt_line.line_id, journal_line_ids=[]
+        )
+    assert excinfo.value.status_code == 400
+
+
+def test_multi_match_statement_line_amount_mismatch() -> None:
+    """Raises 400 when GL total doesn't match bank amount."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+    org_id = uuid4()
+
+    stmt_line = SimpleNamespace(
+        line_id=uuid4(),
+        signed_amount=Decimal("100.00"),
+        is_matched=False,
+        statement=SimpleNamespace(organization_id=org_id),
+    )
+    gl = SimpleNamespace(
+        line_id=uuid4(),
+        debit_amount=Decimal("50.00"),
+        credit_amount=Decimal("0"),
+        journal_entry=SimpleNamespace(organization_id=org_id),
+    )
+
+    db.get.side_effect = [stmt_line, gl]
+
+    with pytest.raises(HTTPException) as excinfo:
+        svc.multi_match_statement_line(
+            db,
+            org_id,
+            stmt_line.line_id,
+            journal_line_ids=[gl.line_id],
+        )
+    assert excinfo.value.status_code == 400
+
+
+def test_multi_match_statement_line_wrong_org() -> None:
+    """Raises 404 when statement belongs to different org."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+
+    stmt_line = SimpleNamespace(
+        line_id=uuid4(),
+        is_matched=False,
+        statement=SimpleNamespace(organization_id=uuid4()),
+    )
+    db.get.return_value = stmt_line
+
+    with pytest.raises(HTTPException) as excinfo:
+        svc.multi_match_statement_line(
+            db, uuid4(), stmt_line.line_id, journal_line_ids=[uuid4()]
+        )
+    assert excinfo.value.status_code == 404
+
+
+# =============================================================================
+# Unmatch with junction table cleanup
+# =============================================================================
+
+
+def test_unmatch_statement_line_clears_junction_table() -> None:
+    """Unmatching deletes junction table rows and resets counters."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+    org_id = uuid4()
+
+    stmt_line = SimpleNamespace(
+        line_id=uuid4(),
+        is_matched=True,
+        matched_at="2024-01-10T00:00:00",
+        matched_by=uuid4(),
+        matched_journal_line_id=uuid4(),
+        statement=SimpleNamespace(
+            organization_id=org_id,
+            matched_lines=5,
+            unmatched_lines=10,
+        ),
+    )
+    db.get.return_value = stmt_line
+
+    result = svc.unmatch_statement_line(db, org_id, stmt_line.line_id)
+
+    assert result.is_matched is False
+    assert result.matched_journal_line_id is None
+    assert result.matched_at is None
+    assert result.matched_by is None
+    assert result.statement.matched_lines == 4
+    assert result.statement.unmatched_lines == 11
+    # db.execute called for DELETE on junction table
+    db.execute.assert_called_once()
+    db.flush.assert_called_once()
+
+
+def test_unmatch_statement_line_not_matched() -> None:
+    """Raises 400 when trying to unmatch a line that isn't matched."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+    org_id = uuid4()
+
+    stmt_line = SimpleNamespace(
+        line_id=uuid4(),
+        is_matched=False,
+        statement=SimpleNamespace(organization_id=org_id),
+    )
+    db.get.return_value = stmt_line
+
+    with pytest.raises(HTTPException) as excinfo:
+        svc.unmatch_statement_line(db, org_id, stmt_line.line_id)
+    assert excinfo.value.status_code == 400
+
+
+# =============================================================================
+# match_statement_line creates junction table row
+# =============================================================================
+
+
+def test_match_statement_line_creates_junction_row() -> None:
+    """Single match also creates a junction table row for consistency."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+    org_id = uuid4()
+
+    stmt_line = SimpleNamespace(
+        line_id=uuid4(),
+        signed_amount=Decimal("100.00"),
+        is_matched=False,
+        matched_at=None,
+        matched_by=None,
+        matched_journal_line_id=None,
+        statement=SimpleNamespace(
+            organization_id=org_id,
+            matched_lines=3,
+            unmatched_lines=7,
+        ),
+    )
+    gl_line = SimpleNamespace(
+        line_id=uuid4(),
+        debit_amount=Decimal("100.00"),
+        credit_amount=Decimal("0"),
+        journal_entry=SimpleNamespace(organization_id=org_id),
+    )
+
+    db.get.side_effect = [stmt_line, gl_line]
+
+    result = svc.match_statement_line(
+        db, org_id, stmt_line.line_id, gl_line.line_id, matched_by=uuid4()
+    )
+
+    assert result.is_matched is True
+    assert result.matched_journal_line_id == gl_line.line_id
+    # db.add called once for the junction table row
+    db.add.assert_called_once()
+    db.flush.assert_called_once()
+
+
+def test_match_statement_line_is_idempotent_for_existing_pair() -> None:
+    """Exact same statement/journal pair should return as a no-op."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+    org_id = uuid4()
+    journal_line_id = uuid4()
+
+    stmt_line = SimpleNamespace(
+        line_id=uuid4(),
+        is_matched=True,
+        matched_journal_line_id=journal_line_id,
+        statement=SimpleNamespace(
+            organization_id=org_id,
+            matched_lines=3,
+            unmatched_lines=7,
+        ),
+    )
+    existing_match = BankStatementLineMatch(
+        statement_line_id=stmt_line.line_id,
+        journal_line_id=journal_line_id,
+        matched_by=uuid4(),
+    )
+
+    db.get.return_value = stmt_line
+    db.execute.return_value.scalar_one_or_none.return_value = existing_match
+
+    result = svc.match_statement_line(
+        db,
+        org_id,
+        stmt_line.line_id,
+        journal_line_id,
+    )
+
+    assert result is stmt_line
+    db.add.assert_not_called()
+    db.flush.assert_not_called()
+
+
+def test_match_statement_line_heals_stale_state_from_existing_pair() -> None:
+    """If pair row exists but line is not marked matched, service repairs it."""
+    svc = BankReconciliationService()
+    db = MagicMock()
+    org_id = uuid4()
+    journal_line_id = uuid4()
+    matched_by = uuid4()
+
+    stmt_line = SimpleNamespace(
+        line_id=uuid4(),
+        is_matched=False,
+        matched_at=None,
+        matched_by=None,
+        matched_journal_line_id=None,
+        statement=SimpleNamespace(
+            organization_id=org_id,
+            matched_lines=2,
+            unmatched_lines=4,
+        ),
+    )
+    existing_match = BankStatementLineMatch(
+        statement_line_id=stmt_line.line_id,
+        journal_line_id=journal_line_id,
+        matched_by=matched_by,
+    )
+
+    db.get.return_value = stmt_line
+    db.execute.return_value.scalar_one_or_none.return_value = existing_match
+
+    result = svc.match_statement_line(
+        db,
+        org_id,
+        stmt_line.line_id,
+        journal_line_id,
+    )
+
+    assert result is stmt_line
+    assert stmt_line.is_matched is True
+    assert stmt_line.matched_by == matched_by
+    assert stmt_line.matched_journal_line_id == journal_line_id
+    assert stmt_line.statement.matched_lines == 3
+    assert stmt_line.statement.unmatched_lines == 3
+    db.add.assert_not_called()
+    db.flush.assert_called_once()

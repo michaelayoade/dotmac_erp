@@ -16,6 +16,10 @@ from sqlalchemy.orm import Session
 
 from app.models.finance.banking.bank_account import BankAccount
 from app.models.finance.gl.account import Account
+from app.services.imports.formats import (
+    SPREADSHEET_EXTENSIONS,
+    spreadsheet_formats_label,
+)
 from app.services.upload_utils import get_env_max_bytes, write_upload_to_temp
 
 from . import (
@@ -193,9 +197,10 @@ class ImportWebService:
         if entity_type not in ImportWebService.SUPPORTED_ENTITY_TYPES:
             raise ValueError(f"Unsupported entity type: {entity_type}")
 
-        _ALLOWED_EXTENSIONS = (".csv", ".xlsx", ".xlsm")
-        if not file.filename or not file.filename.lower().endswith(_ALLOWED_EXTENSIONS):
-            raise ValueError("Only CSV, XLSX, or XLSM files are supported")
+        if not file.filename or not file.filename.lower().endswith(
+            SPREADSHEET_EXTENSIONS
+        ):
+            raise ValueError(f"Only {spreadsheet_formats_label()} files are supported")
 
         ext = Path(file.filename).suffix.lower()
         max_bytes = get_env_max_bytes("MAX_IMPORT_FILE_SIZE", 50 * 1024 * 1024)
@@ -272,9 +277,10 @@ class ImportWebService:
         if entity_type not in ImportWebService.SUPPORTED_ENTITY_TYPES:
             raise ValueError(f"Unsupported entity type: {entity_type}")
 
-        _ALLOWED_EXTENSIONS = (".csv", ".xlsx", ".xlsm")
-        if not file.filename or not file.filename.lower().endswith(_ALLOWED_EXTENSIONS):
-            raise ValueError("Only CSV, XLSX, or XLSM files are supported")
+        if not file.filename or not file.filename.lower().endswith(
+            SPREADSHEET_EXTENSIONS
+        ):
+            raise ValueError(f"Only {spreadsheet_formats_label()} files are supported")
 
         ext = Path(file.filename).suffix.lower()
         max_bytes = get_env_max_bytes("MAX_IMPORT_FILE_SIZE", 50 * 1024 * 1024)

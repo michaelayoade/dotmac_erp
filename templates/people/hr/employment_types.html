@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import live_search, pagination %}
+{% from "components/macros.html" import compact_filters, filter_select_field, pagination %}
 
 {% block page_title %}Employment Types{% endblock %}
 
@@ -24,7 +24,14 @@
 
 {% block content %}
 <div class="space-y-6">
-    {{ live_search(search=search, base_url="/people/hr/employment-types", placeholder="Search employment types...") }}
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/hr/employment-types",
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search employment types..."
+    ) %}
+    {% endcall %}
 
     <div id="results-container">
     {# Employment Types Table #}

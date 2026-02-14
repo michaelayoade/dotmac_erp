@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import live_search, empty_state, pagination, status_badge %}
+{% from "components/macros.html" import compact_filters, empty_state, pagination, status_badge, filter_select_field, filter_entity_select_field %}
 
 {% block page_title %}Goods Receipts{% endblock %}
 
@@ -41,26 +41,18 @@
     </div>
 
     {# Search and Filters #}
-    {% call(search_attrs) live_search(
-        search=search,
+    {% call(filter_attrs) compact_filters(
         base_url="/finance/ap/goods-receipts",
-        placeholder="Search receipt number or PO...",
-        entity_type="goods_receipts"
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search | default('', true),
+        search_placeholder="Search receipt number or PO...",
+        date_range=true,
+        start_date=start_date | default('', true),
+        end_date=end_date | default('', true)
     ) %}
-        <select name="supplier_id" class="form-select">
-            <option value="">All Suppliers</option>
-            {% for s in suppliers_list %}
-            <option value="{{ s.supplier_id }}" {{ 'selected' if supplier_id == s.supplier_id|string else '' }}>{{ s.supplier_name }}</option>
-            {% endfor %}
-        </select>
-        <select name="status" class="form-select">
-            <option value="">All Status</option>
-            {% for s in gr_statuses %}
-            <option value="{{ s }}" {{ 'selected' if status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
-            {% endfor %}
-        </select>
-        <input type="date" name="start_date" value="{{ start_date | default('', true) }}" class="form-input" placeholder="Start date">
-        <input type="date" name="end_date" value="{{ end_date | default('', true) }}" class="form-input" placeholder="End date">
+        {{ filter_entity_select_field("supplier_id", "Supplier", supplier_id, suppliers_list, "supplier_id", "supplier_name", filter_attrs) }}
+        {{ filter_select_field("status", "Status", status, gr_statuses, filter_attrs, "All Status", true) }}
     {% endcall %}
 
     <div id="results-container">
@@ -70,10 +62,10 @@
             <table class="table">
                 <thead>
                     <tr>
+                        <th scope="col">Receipt Date</th>
                         <th scope="col">Receipt #</th>
                         <th scope="col">Supplier</th>
                         <th scope="col">PO Number</th>
-                        <th scope="col">Receipt Date</th>
                         <th scope="col" class="text-center">Lines</th>
                         <th scope="col">Status</th>
                         <th scope="col" class="text-right">Actions</th>
@@ -82,6 +74,7 @@
                 <tbody>
                     {% for receipt in receipts %}
                     <tr class="group cursor-pointer" onclick="window.location='/finance/ap/goods-receipts/{{ receipt.receipt_id }}'">
+                        <td class="whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">{{ receipt.receipt_date }}</td>
                         <td class="whitespace-nowrap">
                             <a href="/finance/ap/goods-receipts/{{ receipt.receipt_id }}" class="font-mono text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400">
                                 {{ receipt.receipt_number }}
@@ -95,7 +88,6 @@
                                 {{ receipt.po_number }}
                             </a>
                         </td>
-                        <td class="whitespace-nowrap text-sm text-slate-600 dark:text-slate-400">{{ receipt.receipt_date }}</td>
                         <td class="whitespace-nowrap text-center text-sm text-slate-600 dark:text-slate-400">{{ receipt.line_count }}</td>
                         <td class="whitespace-nowrap">
                             {{ status_badge(receipt.status | default('received'), 'sm') }}

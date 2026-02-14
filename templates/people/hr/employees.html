@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import live_search, pagination %}
+{% from "components/macros.html" import compact_filters, filter_select_field, filter_entity_select_field, filter_date_field, pagination %}
 
 {% block page_title %}Employees{% endblock %}
 
@@ -116,47 +116,28 @@
         </div>
     </div>
 
-    {# Search and Filters #}
-    {% call(search_attrs) live_search(
-        search=search,
-        filters=[
-            {
-                "name": "status",
-                "label": "All Status",
-                "value": status,
-                "options": [
-                    {"value": "active", "label": "Active"},
-                    {"value": "draft", "label": "Draft"},
-                    {"value": "on_leave", "label": "On Leave"},
-                    {"value": "suspended", "label": "Suspended"},
-                    {"value": "resigned", "label": "Resigned"},
-                    {"value": "terminated", "label": "Terminated"}
-                ]
-            }
-        ],
+    {# Compact Filters #}
+    {% call(filter_attrs) compact_filters(
         base_url="/people/hr/employees",
-        placeholder="Search by name, email, or employee code..."
+        active_filters=active_filters,
+        show_search=true,
+        search=search,
+        search_placeholder="Search by name, email, or employee code..."
     ) %}
-        <select name="department_id" class="form-select" {{ search_attrs }}>
-            <option value="">All Departments</option>
-            {% for dept in departments %}
-            <option value="{{ dept.department_id }}" {{ 'selected' if department_id == dept.department_id|string else '' }}>{{ dept.department_name }}</option>
-            {% endfor %}
-        </select>
-        <select name="designation_id" class="form-select" {{ search_attrs }}>
-            <option value="">All Designations</option>
-            {% for desig in designations %}
-            <option value="{{ desig.designation_id }}" {{ 'selected' if designation_id == desig.designation_id|string else '' }}>{{ desig.designation_name }}</option>
-            {% endfor %}
-        </select>
-        <input type="date" name="date_of_joining_from" value="{{ date_of_joining_from if date_of_joining_from else '' }}"
-               class="form-input" title="Joining from" {{ search_attrs }}>
-        <input type="date" name="date_of_joining_to" value="{{ date_of_joining_to if date_of_joining_to else '' }}"
-               class="form-input" title="Joining to" {{ search_attrs }}>
-        <input type="date" name="date_of_leaving_from" value="{{ date_of_leaving_from if date_of_leaving_from else '' }}"
-               class="form-input" title="Exit from" {{ search_attrs }}>
-        <input type="date" name="date_of_leaving_to" value="{{ date_of_leaving_to if date_of_leaving_to else '' }}"
-               class="form-input" title="Exit to" {{ search_attrs }}>
+        {{ filter_select_field("status", "Status", status, [
+            {"value": "active", "label": "Active"},
+            {"value": "draft", "label": "Draft"},
+            {"value": "on_leave", "label": "On Leave"},
+            {"value": "suspended", "label": "Suspended"},
+            {"value": "resigned", "label": "Resigned"},
+            {"value": "terminated", "label": "Terminated"}
+        ], filter_attrs) }}
+        {{ filter_entity_select_field("department_id", "Department", department_id, departments, value_key="department_id", label_key="department_name", attrs=filter_attrs) }}
+        {{ filter_entity_select_field("designation_id", "Designation", designation_id, designations, value_key="designation_id", label_key="designation_name", attrs=filter_attrs) }}
+        {{ filter_date_field("date_of_joining_from", "Joined From", date_of_joining_from, filter_attrs) }}
+        {{ filter_date_field("date_of_joining_to", "Joined To", date_of_joining_to, filter_attrs) }}
+        {{ filter_date_field("date_of_leaving_from", "Exit From", date_of_leaving_from, filter_attrs) }}
+        {{ filter_date_field("date_of_leaving_to", "Exit To", date_of_leaving_to, filter_attrs) }}
     {% endcall %}
 
     <div id="results-container">

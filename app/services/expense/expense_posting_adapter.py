@@ -112,10 +112,12 @@ class ExpensePostingAdapter:
             .on_conflict_do_nothing(
                 index_elements=["organization_id", "claim_id", "action_type"],
             )
+            .returning(ExpenseClaimAction.action_id)
         )
         result = db.execute(stmt)
+        inserted_action_id = result.scalar_one_or_none()
         db.flush()
-        if (result.rowcount or 0) > 0:
+        if inserted_action_id is not None:
             return True
 
         existing = (
@@ -216,6 +218,13 @@ class ExpensePostingAdapter:
                 message=f"Expense claim must be APPROVED or PAID to post (current: {claim.status.value})",
             )
 
+        # Skip zero-amount claims — nothing meaningful to post to GL
+        if claim.total_approved_amount == Decimal("0"):
+            return ExpensePostingResult(
+                success=True,
+                message="Zero amount expense — no GL posting needed",
+            )
+
         # Check if already posted
         if claim.journal_entry_id:
             return ExpensePostingResult(
@@ -240,6 +249,13 @@ class ExpensePostingAdapter:
         # Load items
         items = list(claim.items)
         if not items:
+            ExpensePostingAdapter._set_action_status(
+                db,
+                org_id,
+                c_id,
+                ExpenseClaimActionType.POST_GL,
+                ExpenseClaimActionStatus.FAILED,
+            )
             return ExpensePostingResult(
                 success=False, message="Expense claim has no items"
             )
@@ -252,6 +268,13 @@ class ExpensePostingAdapter:
             )
 
         if not payable_account_id:
+            ExpensePostingAdapter._set_action_status(
+                db,
+                org_id,
+                c_id,
+                ExpenseClaimActionType.POST_GL,
+                ExpenseClaimActionStatus.FAILED,
+            )
             return ExpensePostingResult(
                 success=False,
                 message="No employee payable account configured for organization",
@@ -267,6 +290,13 @@ class ExpensePostingAdapter:
                 db, org_id, item
             )
             if not account_id:
+                ExpensePostingAdapter._set_action_status(
+                    db,
+                    org_id,
+                    c_id,
+                    ExpenseClaimActionType.POST_GL,
+                    ExpenseClaimActionStatus.FAILED,
+                )
                 return ExpensePostingResult(
                     success=False,
                     message=f"No expense account for item: {item.description[:50]}",

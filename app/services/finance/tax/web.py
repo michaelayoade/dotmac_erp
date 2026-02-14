@@ -541,6 +541,21 @@ class TaxWebService:
         )
 
         context = base_context(request, auth, "Tax Codes", "tax")
+        active_filters = build_active_filters(
+            params={
+                "tax_type": tax_type,
+                "is_active": "true"
+                if is_active is True
+                else ("false" if is_active is False else ""),
+            },
+            labels={"tax_type": "Type", "is_active": "Status"},
+            options={
+                "tax_type": {
+                    t.value: t.value.replace("_", " ").title() for t in TaxType
+                },
+                "is_active": {"true": "Active", "false": "Inactive"},
+            },
+        )
         context.update(
             {
                 "codes": formatted_codes,
@@ -556,6 +571,7 @@ class TaxWebService:
                     for t in TaxType
                 ],
                 "jurisdictions": jurisdictions,
+                "active_filters": active_filters,
             }
         )
 

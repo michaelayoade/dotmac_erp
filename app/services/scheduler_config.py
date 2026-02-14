@@ -142,7 +142,27 @@ def _builtin_beat_schedule() -> dict[str, dict]:
         },
         "daily-leave-attendance-sync": {
             "task": "app.tasks.hr.sync_leave_attendance",
-            "schedule": crontab(hour=0, minute=30),  # 12:30 AM daily
+            "schedule": crontab(minute=0),  # Hourly at minute 0
+        },
+        "fleet-document-expiry-reminders": {
+            "task": "app.tasks.fleet.process_document_expiry_notifications",
+            "schedule": crontab(hour=7, minute=0),  # 7 AM daily
+        },
+        "banking-auto-match-statements": {
+            "task": "app.tasks.banking.auto_match_unreconciled_statements",
+            "schedule": crontab(hour="*/6", minute=15),  # Every 6 hours at :15
+        },
+        "splynx-incremental-sync": {
+            "task": "app.tasks.splynx.run_splynx_incremental_sync",
+            "schedule": crontab(minute="*/30"),  # Every 30 minutes
+        },
+        "splynx-daily-reconciliation": {
+            "task": "app.tasks.splynx.run_splynx_daily_reconciliation",
+            "schedule": crontab(hour=1, minute=0),  # 1 AM daily
+        },
+        "splynx-full-reconciliation": {
+            "task": "app.tasks.splynx.run_splynx_full_reconciliation",
+            "schedule": crontab(hour=2, minute=0, day_of_week=0),  # Sunday 2 AM
         },
     }
 

@@ -181,10 +181,40 @@ def _sanitize_query_params(params: dict) -> dict:
 def _extract_audit_data(request: Request, response: Response) -> dict:
     """Extract audit data from request/response for async logging."""
     from app.models.audit import AuditActorType
+    from app.services.common import coerce_uuid
 
-    actor_type = request.headers.get("x-actor-type", AuditActorType.system.value)
-    actor_id = request.headers.get("x-actor-id")
-    request_id = request.headers.get("x-request-id")
+    request_state = getattr(request, "state", None)
+    state_actor_id = getattr(request_state, "actor_id", None) if request_state else None
+    state_actor_type = (
+        getattr(request_state, "actor_type", None) if request_state else None
+    )
+    state_request_id = (
+        getattr(request_state, "request_id", None) if request_state else None
+    )
+    state_organization_id = (
+        getattr(request_state, "organization_id", None) if request_state else None
+    )
+
+    actor_id = request.headers.get("x-actor-id") or state_actor_id
+    if actor_id is not None:
+        actor_id = str(actor_id)
+    actor_person_id = None
+    if actor_id:
+        try:
+            actor_person_id = coerce_uuid(actor_id, raise_http=False)
+        except (TypeError, ValueError):
+            actor_person_id = None
+
+    actor_type = request.headers.get("x-actor-type")
+    if not actor_type and state_actor_type:
+        actor_type = str(state_actor_type)
+    if not actor_type:
+        actor_type = (
+            AuditActorType.user.value if actor_id else AuditActorType.system.value
+        )
+
+    request_id = request.headers.get("x-request-id") or state_request_id
+    organization_id = state_organization_id
     entity_id = request.headers.get("x-entity-id")
     ip_address = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
@@ -196,6 +226,8 @@ def _extract_audit_data(request: Request, response: Response) -> dict:
 
     return {
         "actor_type": actor_type,
+        "organization_id": organization_id,
+        "actor_person_id": str(actor_person_id) if actor_person_id else None,
         "actor_id": actor_id,
         "action": request.method,
         "entity_type": request.url.path,
@@ -466,7 +498,14 @@ app.include_router(
 _include_api_router(ipsas_router, dependencies=[Depends(require_tenant_auth)])
 
 static_dir = Path(__file__).resolve().parent.parent / "static"
+uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
+uploads_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+app.mount(
+    "/uploads",
+    StaticFiles(directory=str(uploads_dir), check_dir=False),
+    name="uploads",
+)
 
 
 @app.get("/favicon.ico", include_in_schema=False)

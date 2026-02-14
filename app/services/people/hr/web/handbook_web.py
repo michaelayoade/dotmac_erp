@@ -19,7 +19,7 @@ from app.services.people.hr.handbook_service import (
 )
 from app.services.upload_utils import get_env_max_bytes, read_upload_bytes
 from app.templates import templates
-from app.web.deps import WebAuthContext
+from app.web.deps import WebAuthContext, base_context
 
 logger = logging.getLogger(__name__)
 
@@ -88,11 +88,9 @@ class HRHandbookWebService:
             else {}
         )
 
-        return templates.TemplateResponse(
-            "people/hr/handbook/documents.html",
+        context = base_context(request, auth, "Handbook & Policies", "handbook", db=db)
+        context.update(
             {
-                "request": request,
-                "user": auth.user,
                 "documents": documents,
                 "stats_map": stats_map,
                 "total": total,
@@ -102,8 +100,9 @@ class HRHandbookWebService:
                 "status_filter": status,
                 "search": search,
                 "csrf_token": getattr(request.state, "csrf_token", ""),
-            },
+            }
         )
+        return templates.TemplateResponse("people/hr/handbook/documents.html", context)
 
     def document_form_response(
         self,
@@ -121,16 +120,17 @@ class HRHandbookWebService:
         if document_id:
             document = service.get_document(org_id, document_id)
 
-        return templates.TemplateResponse(
-            "people/hr/handbook/document_form.html",
+        context = base_context(request, auth, "Handbook Document", "handbook", db=db)
+        context.update(
             {
-                "request": request,
-                "user": auth.user,
                 "document": document,
                 "categories": list(DocumentCategory),
                 "statuses": list(DocumentStatus),
                 "csrf_token": getattr(request.state, "csrf_token", ""),
-            },
+            }
+        )
+        return templates.TemplateResponse(
+            "people/hr/handbook/document_form.html", context
         )
 
     async def save_document_response(
@@ -238,17 +238,21 @@ class HRHandbookWebService:
             document_opt = (
                 service.get_document(org_id, document_id) if document_id else None
             )
-            return templates.TemplateResponse(
-                "people/hr/handbook/document_form.html",
+            context = base_context(
+                request, auth, "Handbook Document", "handbook", db=db
+            )
+            context.update(
                 {
-                    "request": request,
-                    "user": auth.user,
                     "document": document_opt,
                     "categories": list(DocumentCategory),
                     "statuses": list(DocumentStatus),
                     "error": str(e),
                     "csrf_token": getattr(request.state, "csrf_token", ""),
-                },
+                }
+            )
+            return templates.TemplateResponse(
+                "people/hr/handbook/document_form.html",
+                context,
                 status_code=400,
             )
 
@@ -272,17 +276,18 @@ class HRHandbookWebService:
             :20
         ]  # Limit to first 20
 
-        return templates.TemplateResponse(
-            "people/hr/handbook/document_detail.html",
+        context = base_context(request, auth, "Handbook Document", "handbook", db=db)
+        context.update(
             {
-                "request": request,
-                "user": auth.user,
                 "document": document,
                 "stats": stats,
                 "acknowledgments": acknowledgments,
                 "pending_employees": pending_employees,
                 "csrf_token": getattr(request.state, "csrf_token", ""),
-            },
+            }
+        )
+        return templates.TemplateResponse(
+            "people/hr/handbook/document_detail.html", context
         )
 
     async def activate_document_response(

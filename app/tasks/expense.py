@@ -24,6 +24,7 @@ from app.models.expense import (
 )
 from app.models.finance.core_org.organization import Organization
 from app.models.people.hr.employee import Employee, EmployeeStatus
+from app.services.notification import NotificationService
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +148,11 @@ def process_expense_approval_reminders() -> dict:
     Returns:
         Dict with reminder statistics
     """
+    from app.models.notification import (
+        EntityType,
+        NotificationChannel,
+        NotificationType,
+    )
     from app.services.expense.expense_notifications import ExpenseNotificationService
 
     FIRST_REMINDER_DAYS = 3
@@ -198,24 +204,15 @@ def process_expense_approval_reminders() -> dict:
                 else:
                     continue  # Too early for reminder
 
-                # Dedup: skip if a reminder was already sent today for this claim
-                from sqlalchemy import func as sa_func
-
-                from app.models.notification import (
-                    EntityType,
-                    Notification,
-                    NotificationType,
-                )
-
-                already_sent = db.scalar(
-                    select(sa_func.count(Notification.notification_id)).where(
-                        Notification.entity_type == EntityType.EXPENSE,
-                        Notification.entity_id == claim.claim_id,
-                        Notification.notification_type == NotificationType.REMINDER,
-                        Notification.created_at >= today_start,
-                    )
-                )
-                if already_sent and already_sent > 0:
+                # Dedup: skip if reminder already sent today for this claim.
+                if NotificationService().was_sent_since(
+                    db,
+                    organization_id=claim.organization_id,
+                    entity_type=EntityType.EXPENSE,
+                    entity_id=claim.claim_id,
+                    notification_type=NotificationType.REMINDER,
+                    since=today_start,
+                ):
                     continue
 
                 # Get approver
@@ -241,12 +238,8 @@ def process_expense_approval_reminders() -> dict:
                 )
 
                 if success:
-                    # Record Notification for dedup on subsequent runs
-                    from app.models.notification import NotificationChannel
-                    from app.services.notification import NotificationService
-
-                    nsvc = NotificationService()
-                    nsvc.create(
+                    # Record notification for dedup on subsequent runs.
+                    NotificationService().create_if_not_sent_since(
                         db,
                         organization_id=claim.organization_id,
                         recipient_id=approver.person_id,
@@ -256,6 +249,8 @@ def process_expense_approval_reminders() -> dict:
                         title=f"Expense Approval Reminder: {claim.claim_number}",
                         message="Claim "
                         f"{claim.claim_number} pending {days_pending} days",
+                        since=today_start,
+                        dedup_by_recipient=False,
                         channel=NotificationChannel.EMAIL,
                     )
                     if reminder_type == "first":

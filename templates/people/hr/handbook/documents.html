@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import live_search %}
+{% from "components/macros.html" import compact_filters, filter_select_field %}
 
 {% block page_title %}HR Documents{% endblock %}
 
@@ -27,8 +27,14 @@
 {% block content %}
 <div class="space-y-6">
 
-    {% call(search_attrs) live_search(search=search, base_url="/people/hr/handbook", placeholder="Search documents...") %}
-    <select name="category" class="form-select" {{ search_attrs }}>
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/hr/handbook",
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search documents..."
+    ) %}
+    <select name="category" class="form-select" {{ filter_attrs }}>
         <option value="">All Categories</option>
         {% for cat in categories %}
         <option value="{{ cat.value }}" {% if category_filter == cat.value %}selected{% endif %}>
@@ -36,7 +42,7 @@
         </option>
         {% endfor %}
     </select>
-    <select name="status" class="form-select" {{ search_attrs }}>
+    <select name="status" class="form-select" {{ filter_attrs }}>
         <option value="">All Statuses</option>
         {% for st in statuses %}
         <option value="{{ st.value }}" {% if status_filter == st.value %}selected{% endif %}>

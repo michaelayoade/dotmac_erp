@@ -2,10 +2,12 @@
 Tests for BankStatementService.
 """
 
+from __future__ import annotations
+
 from datetime import date
 from decimal import Decimal
 from io import BytesIO
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -20,6 +22,9 @@ from tests.ifrs.banking.conftest import (
     MockBankStatement,
     MockBankStatementLine,
 )
+
+xlrd = pytest.importorskip("xlrd", reason="xlrd required for .xls parser tests")
+xlwt = pytest.importorskip("xlwt", reason="xlwt required to build .xls fixtures")
 
 
 @pytest.fixture
@@ -680,3 +685,297 @@ class TestGetStatementSummary:
 
         assert result["total_statements"] == 0
         assert result["match_rate"] == 0
+
+
+# ---------------------------------------------------------------------------
+# .xls (BIFF) parser tests — guarded by xlrd availability
+# ---------------------------------------------------------------------------
+
+
+def _build_xls_bytes(
+    headers: list[str],
+    rows: list[list],
+    *,
+    date_cols: set[int] | None = None,
+) -> bytes:
+    """Build a legacy .xls file using xlwt and return raw bytes.
+
+    Args:
+        headers: Column header strings.
+        rows: Data rows (list of lists).
+        date_cols: Column indices that should be formatted as Excel dates.
+    """
+    wb = xlwt.Workbook()
+    ws = wb.add_sheet("Sheet1")
+    date_fmt = xlwt.XFStyle()
+    date_fmt.num_format_str = "YYYY-MM-DD"
+
+    for col, header in enumerate(headers):
+        ws.write(0, col, header)
+
+    for row_idx, row in enumerate(rows, start=1):
+        for col_idx, value in enumerate(row):
+            if date_cols and col_idx in date_cols and isinstance(value, date):
+                ws.write(row_idx, col_idx, value, date_fmt)
+            else:
+                ws.write(row_idx, col_idx, value)
+
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+class TestParseXlsRows:
+    """Tests for the legacy .xls parser (parse_xls_rows)."""
+
+    # -- happy-path: type format -----------------------------------------
+
+    def test_type_format_basic(self, service: BankStatementService) -> None:
+        """Parse a .xls with transaction_type + amount columns."""
+        content = _build_xls_bytes(
+            headers=["transaction_date", "transaction_type", "amount", "description"],
+            rows=[
+                ["2026-01-15", "credit", 50000.0, "Salary deposit"],
+                ["2026-01-16", "debit", 2500.0, "Office rent"],
+            ],
+        )
+
+        rows, errors = service.parse_xls_rows(content, csv_format="type")
+
+        assert errors == []
+        assert len(rows) == 2
+        assert rows[0]["transaction_type"] == "credit"
+        assert rows[0]["amount"] == Decimal("50000.0")
+        assert rows[0]["description"] == "Salary deposit"
+        assert rows[1]["transaction_type"] == "debit"
+        assert rows[1]["amount"] == Decimal("2500.0")
+
+    # -- happy-path: debit/credit format ---------------------------------
+
+    def test_debit_credit_format(self, service: BankStatementService) -> None:
+        """Parse a .xls with separate debit/credit columns."""
+        content = _build_xls_bytes(
+            headers=["Transaction Date", "Debit", "Credit", "Description"],
+            rows=[
+                ["2026-01-17", 150.75, "", "ATM withdrawal"],
+                ["2026-01-18", "", 12000.0, "Customer payment"],
+            ],
+        )
+
+        rows, errors = service.parse_xls_rows(content, csv_format="debit_credit")
+
+        assert errors == []
+        assert len(rows) == 2
+        assert rows[0]["debit"] == Decimal("150.75")
+        assert rows[0]["credit"] is None  # empty string → None
+        assert rows[1]["credit"] == Decimal("12000.0")
+
+    # -- auto-detect format from headers ---------------------------------
+
+    def test_auto_detect_debit_credit(self, service: BankStatementService) -> None:
+        """csv_format=None should auto-detect debit/credit columns."""
+        content = _build_xls_bytes(
+            headers=["transaction_date", "debit", "credit"],
+            rows=[["2026-02-01", 100.0, ""]],
+        )
+
+        rows, errors = service.parse_xls_rows(content, csv_format=None)
+
+        assert errors == []
+        assert len(rows) == 1
+        assert rows[0]["debit"] == Decimal("100.0")
+
+    def test_auto_detect_type_format(self, service: BankStatementService) -> None:
+        """csv_format=None should auto-detect type+amount columns."""
+        content = _build_xls_bytes(
+            headers=["transaction_date", "transaction_type", "amount"],
+            rows=[["2026-02-01", "credit", 999.0]],
+        )
+
+        rows, errors = service.parse_xls_rows(content, csv_format=None)
+
+        assert errors == []
+        assert len(rows) == 1
+        assert rows[0]["transaction_type"] == "credit"
+
+    # -- date parsing with org format ------------------------------------
+
+    def test_date_format_dd_mm_yyyy(self, service: BankStatementService) -> None:
+        """String dates in DD/MM/YYYY are parsed with date_format."""
+        content = _build_xls_bytes(
+            headers=["transaction_date", "transaction_type", "amount"],
+            rows=[["15/01/2026", "credit", 1000.0]],
+        )
+
+        rows, errors = service.parse_xls_rows(
+            content, csv_format="type", date_format="%d/%m/%Y"
+        )
+
+        assert errors == []
+        assert rows[0]["transaction_date"] == date(2026, 1, 15)
+
+    def test_native_excel_date_cells(self, service: BankStatementService) -> None:
+        """xlrd XL_CELL_DATE values are converted via xldate_as_datetime."""
+        content = _build_xls_bytes(
+            headers=["transaction_date", "transaction_type", "amount"],
+            rows=[[date(2026, 3, 10), "debit", 500.0]],
+            date_cols={0},
+        )
+
+        rows, errors = service.parse_xls_rows(content, csv_format="type")
+
+        assert errors == []
+        assert rows[0]["transaction_date"] == date(2026, 3, 10)
+
+    # -- optional fields -------------------------------------------------
+
+    def test_optional_fields_parsed(self, service: BankStatementService) -> None:
+        """reference, payee_payer, check_number, running_balance, value_date."""
+        content = _build_xls_bytes(
+            headers=[
+                "transaction_date",
+                "transaction_type",
+                "amount",
+                "reference",
+                "payee_payer",
+                "check_number",
+                "running_balance",
+                "value_date",
+            ],
+            rows=[
+                [
+                    "2026-01-20",
+                    "debit",
+                    8500.0,
+                    "TRF-003",
+                    "Office Supplies Ltd",
+                    "4521",
+                    50849.25,
+                    "2026-01-20",
+                ],
+            ],
+        )
+
+        rows, errors = service.parse_xls_rows(content, csv_format="type")
+
+        assert errors == []
+        row = rows[0]
+        assert row["reference"] == "TRF-003"
+        assert row["payee_payer"] == "Office Supplies Ltd"
+        assert row["check_number"] == "4521"
+        assert row["running_balance"] == Decimal("50849.25")
+        assert row["value_date"] == date(2026, 1, 20)
+
+    # -- header alias remapping ------------------------------------------
+
+    def test_header_aliases_remapped(self, service: BankStatementService) -> None:
+        """Column aliases (e.g. 'Dr', 'Cr') should be remapped."""
+        content = _build_xls_bytes(
+            headers=["Transaction Date", "Dr", "Cr"],
+            rows=[["2026-05-01", 200.0, ""]],
+        )
+
+        rows, errors = service.parse_xls_rows(content, csv_format="debit_credit")
+
+        assert errors == []
+        assert rows[0]["debit"] == Decimal("200.0")
+
+    # -- error paths -----------------------------------------------------
+
+    def test_missing_required_columns(self, service: BankStatementService) -> None:
+        """Missing required columns returns an error."""
+        content = _build_xls_bytes(
+            headers=["transaction_date", "description"],
+            rows=[["2026-01-15", "Some desc"]],
+        )
+
+        rows, errors = service.parse_xls_rows(content, csv_format="type")
+
+        assert len(rows) == 0
+        assert len(errors) == 1
+        assert "Missing required column" in errors[0]
+
+    def test_invalid_transaction_type_reported(
+        self, service: BankStatementService
+    ) -> None:
+        """Invalid transaction_type produces a per-row error."""
+        content = _build_xls_bytes(
+            headers=["transaction_date", "transaction_type", "amount"],
+            rows=[["2026-01-15", "refund", 100.0]],
+        )
+
+        rows, errors = service.parse_xls_rows(content, csv_format="type")
+
+        assert len(rows) == 0
+        assert any("transaction_type must be" in e for e in errors)
+
+    def test_unsupported_csv_format(self, service: BankStatementService) -> None:
+        """An unrecognised csv_format returns an error immediately."""
+        content = _build_xls_bytes(
+            headers=["transaction_date", "amount"],
+            rows=[["2026-01-01", 1.0]],
+        )
+
+        rows, errors = service.parse_xls_rows(content, csv_format="unknown_format")
+
+        assert rows == []
+        assert any("Unsupported CSV format" in e for e in errors)
+
+    def test_empty_xls_returns_header_error(
+        self, service: BankStatementService
+    ) -> None:
+        """An .xls with no data rows still has headers — returns empty rows."""
+        content = _build_xls_bytes(
+            headers=["transaction_date", "transaction_type", "amount"],
+            rows=[],
+        )
+
+        rows, errors = service.parse_xls_rows(content, csv_format="type")
+
+        assert rows == []
+        assert errors == []
+
+    def test_corrupt_file_returns_error(self, service: BankStatementService) -> None:
+        """Random bytes should return a parse error, not crash."""
+        rows, errors = service.parse_xls_rows(b"not a real xls file")
+
+        assert rows == []
+        assert any("Could not parse XLS" in e for e in errors)
+
+    def test_blank_rows_skipped(self, service: BankStatementService) -> None:
+        """Rows with only empty/blank cells should be skipped."""
+        content = _build_xls_bytes(
+            headers=["transaction_date", "transaction_type", "amount"],
+            rows=[
+                ["2026-01-15", "credit", 100.0],
+                ["", "", ""],  # blank row
+                ["2026-01-16", "debit", 50.0],
+            ],
+        )
+
+        rows, errors = service.parse_xls_rows(content, csv_format="type")
+
+        assert errors == []
+        assert len(rows) == 2
+
+    # -- graceful fallback when xlrd is missing --------------------------
+
+    def test_missing_xlrd_returns_install_message(
+        self, service: BankStatementService
+    ) -> None:
+        """When xlrd is not importable, return a helpful error message."""
+        import builtins
+        from typing import Any
+
+        real_import = builtins.__import__
+
+        def _block_xlrd(name: str, *args: Any, **kwargs: Any) -> Any:
+            if name == "xlrd":
+                raise ImportError("No module named 'xlrd'")
+            return real_import(name, *args, **kwargs)
+
+        with patch.object(builtins, "__import__", side_effect=_block_xlrd):
+            rows, errors = service.parse_xls_rows(b"irrelevant")
+
+        assert rows == []
+        assert any("xlrd" in e.lower() for e in errors)

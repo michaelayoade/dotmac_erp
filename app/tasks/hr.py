@@ -555,7 +555,7 @@ def process_certification_expiry_notifications() -> dict:
     Returns:
         Dict with notification statistics
     """
-    from app.models.people.hr.employee_ext import EmployeeCertification
+    from app.models.people.hr.employee_extended import EmployeeCertification
     from app.services.hr_notifications import HRNotificationService
 
     FIRST_NOTICE_DAYS = 60
@@ -575,9 +575,9 @@ def process_certification_expiry_notifications() -> dict:
         # Find certifications with expiry dates
         expiring_certs = db.scalars(
             select(EmployeeCertification).where(
-                EmployeeCertification.valid_until.isnot(None),
-                EmployeeCertification.valid_until >= today,
-                EmployeeCertification.valid_until
+                EmployeeCertification.expiry_date.isnot(None),
+                EmployeeCertification.expiry_date >= today,
+                EmployeeCertification.expiry_date
                 <= today + timedelta(days=FIRST_NOTICE_DAYS),
             )
         ).all()
@@ -586,10 +586,10 @@ def process_certification_expiry_notifications() -> dict:
 
         for cert in expiring_certs:
             try:
-                valid_until = cert.valid_until
-                if valid_until is None:
+                expiry = cert.expiry_date
+                if expiry is None:
                     continue
-                days_remaining = (valid_until - today).days
+                days_remaining = (expiry - today).days
 
                 # Only send on specific days
                 if days_remaining not in [
@@ -994,29 +994,34 @@ def sync_leave_attendance() -> dict:
         LeaveApplicationStatus,
     )
 
-    logger.info("Starting daily leave → attendance sync")
+    logger.info("Starting daily leave → attendance/status sync")
 
     results: dict[str, Any] = {
         "synced": 0,
         "already_marked": 0,
+        "status_set_on_leave": 0,
+        "status_set_active": 0,
         "errors": [],
     }
 
     with SessionLocal() as db:
-        today = date.today()
-
         # Get all orgs
         organizations = db.scalars(select(Organization)).all()
 
         for org in organizations:
             try:
+                from app.services.people.leave import LeaveService
+
+                leave_service = LeaveService(db)
+                org_today = leave_service.get_org_today(org.organization_id)
+
                 # Find approved leave applications covering today
                 approved_leaves = db.scalars(
                     select(LeaveApplication).where(
                         LeaveApplication.organization_id == org.organization_id,
                         LeaveApplication.status == LeaveApplicationStatus.APPROVED,
-                        LeaveApplication.from_date <= today,
-                        LeaveApplication.to_date >= today,
+                        LeaveApplication.from_date <= org_today,
+                        LeaveApplication.to_date >= org_today,
                     )
                 ).all()
 
@@ -1026,7 +1031,7 @@ def sync_leave_attendance() -> dict:
                         existing = db.scalar(
                             select(Attendance).where(
                                 Attendance.employee_id == leave.employee_id,
-                                Attendance.attendance_date == today,
+                                Attendance.attendance_date == org_today,
                             )
                         )
 
@@ -1038,7 +1043,7 @@ def sync_leave_attendance() -> dict:
                         attendance = Attendance(
                             organization_id=org.organization_id,
                             employee_id=leave.employee_id,
-                            attendance_date=today,
+                            attendance_date=org_today,
                             status=AttendanceStatus.ON_LEAVE,
                             leave_application_id=leave.application_id,
                             marked_by="SYSTEM",
@@ -1062,6 +1067,13 @@ def sync_leave_attendance() -> dict:
                             }
                         )
 
+                status_result = leave_service.sync_employee_statuses_for_date(
+                    org.organization_id,
+                    as_of_date=org_today,
+                )
+                results["status_set_on_leave"] += status_result["set_on_leave"]
+                results["status_set_active"] += status_result["set_active"]
+
             except Exception as e:
                 logger.exception(
                     "Failed to process leave sync for org %s: %s",
@@ -1078,9 +1090,12 @@ def sync_leave_attendance() -> dict:
         db.commit()
 
     logger.info(
-        "Leave → attendance sync complete: %d synced, %d already marked, %d errors",
+        "Leave → attendance/status sync complete: %d attendance synced, %d already marked, "
+        "%d status->ON_LEAVE, %d status->ACTIVE, %d errors",
         results["synced"],
         results["already_marked"],
+        results["status_set_on_leave"],
+        results["status_set_active"],
         len(results["errors"]),
     )
 

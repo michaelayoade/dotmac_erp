@@ -330,6 +330,12 @@ class BankStatementLine(Base):
         "BankStatement",
         back_populates="lines",
     )
+    matched_gl_lines: Mapped[list["BankStatementLineMatch"]] = relationship(
+        "BankStatementLineMatch",
+        back_populates="statement_line",
+        cascade="all, delete-orphan",
+        order_by="BankStatementLineMatch.is_primary.desc()",
+    )
 
     def __repr__(self) -> str:
         return f"<BankStatementLine {self.line_number}: {self.transaction_type.value} {self.amount}>"
@@ -340,3 +346,85 @@ class BankStatementLine(Base):
         if self.transaction_type == StatementLineType.credit:
             return self.amount
         return -self.amount
+
+
+class BankStatementLineMatch(Base):
+    """Junction table for multi-matching a bank statement line to GL entries.
+
+    Supports 1:N matching where one bank line maps to multiple GL journal
+    entry lines (e.g. one bank payment covering multiple invoices).
+    """
+
+    __tablename__ = "bank_statement_line_matches"
+    __table_args__ = (
+        UniqueConstraint(
+            "statement_line_id",
+            "journal_line_id",
+            name="uq_statement_line_journal_line",
+        ),
+        UniqueConstraint(
+            "idempotency_key",
+            name="uq_stmt_line_match_idempotency_key",
+        ),
+        Index(
+            "ix_stmt_line_match_line_id",
+            "statement_line_id",
+        ),
+        {"schema": "banking"},
+    )
+
+    match_id: Mapped[UUID] = mapped_column(
+        SAUUID(as_uuid=True),
+        primary_key=True,
+        default=uuid4,
+    )
+    statement_line_id: Mapped[UUID] = mapped_column(
+        SAUUID(as_uuid=True),
+        ForeignKey("banking.bank_statement_lines.line_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    journal_line_id: Mapped[UUID] = mapped_column(
+        SAUUID(as_uuid=True),
+        nullable=False,
+    )
+    match_score: Mapped[Decimal | None] = mapped_column(
+        Numeric(5, 1),
+        nullable=True,
+    )
+    matched_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.utcnow,
+    )
+    matched_by: Mapped[UUID | None] = mapped_column(
+        SAUUID(as_uuid=True),
+        nullable=True,
+    )
+    is_primary: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False,
+    )
+    match_type: Mapped[str | None] = mapped_column(
+        String(30),
+        nullable=True,
+        comment="MANUAL, AUTO, CONTRA_TRANSFER, SETTLEMENT, etc.",
+    )
+    match_group_id: Mapped[UUID | None] = mapped_column(
+        SAUUID(as_uuid=True),
+        nullable=True,
+    )
+    match_reason: Mapped[dict | None] = mapped_column(
+        JSONB,
+        nullable=True,
+    )
+    idempotency_key: Mapped[str | None] = mapped_column(
+        String(200),
+        nullable=True,
+    )
+
+    # Relationships
+    statement_line: Mapped["BankStatementLine"] = relationship(
+        "BankStatementLine",
+        back_populates="matched_gl_lines",
+    )

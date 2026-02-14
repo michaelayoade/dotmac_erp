@@ -3,7 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% set favicon_url = (
+        brand.favicon_url if brand is defined and brand and brand.favicon_url
+        else "/static/favicon.svg"
+    ) %}
+    {% set favicon_path = (favicon_url.split("?")[0] if favicon_url else "") %}
+    {% set favicon_ext = (favicon_path.split(".")[-1].lower() if favicon_path else "svg") %}
+    {% set favicon_type = (
+        "image/svg+xml" if favicon_ext == "svg"
+        else "image/png" if favicon_ext == "png"
+        else "image/x-icon" if favicon_ext == "ico"
+        else "image/jpeg" if favicon_ext in ["jpg", "jpeg"]
+        else "image/webp" if favicon_ext == "webp"
+        else "image/gif" if favicon_ext == "gif"
+        else "image/svg+xml"
+    ) %}
     <title>{{ title }} - Payment</title>
+    <link rel="icon" href="{{ favicon_url }}" type="{{ favicon_type }}">
+    <link rel="alternate icon" href="{{ favicon_url }}" type="{{ favicon_type }}">
     <link href="/static/css/app.css" rel="stylesheet">
     <style>
         @keyframes spin {

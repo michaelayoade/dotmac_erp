@@ -6,6 +6,7 @@ Provides view-focused data and operations for AP payment and aging web routes.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, Request, UploadFile
@@ -415,7 +416,97 @@ class PaymentWebService:
 
         logger.debug("aging_context: found %d aging records", len(aging_data))
 
+        supplier_aging: list[dict] = []
+        total_current = Decimal("0")
+        total_31_60 = Decimal("0")
+        total_61_90 = Decimal("0")
+        total_over_90 = Decimal("0")
+        total_outstanding = Decimal("0")
+        total_invoices = 0
+
+        for row in aging_data:
+            row_total = row.total_outstanding or Decimal("0")
+            row_current = row.current or Decimal("0")
+            row_31_60 = row.days_31_60 or Decimal("0")
+            row_61_90 = row.days_61_90 or Decimal("0")
+            row_over_90 = row.over_90 or Decimal("0")
+
+            total_current += row_current
+            total_31_60 += row_31_60
+            total_61_90 += row_61_90
+            total_over_90 += row_over_90
+            total_outstanding += row_total
+            total_invoices += row.invoice_count or 0
+
+            if row_total > 0:
+                current_pct = float((row_current / row_total) * 100)
+                days_30_pct = float((row_31_60 / row_total) * 100)
+                days_60_pct = float((row_61_90 / row_total) * 100)
+                days_90_pct = float((row_over_90 / row_total) * 100)
+            else:
+                current_pct = days_30_pct = days_60_pct = days_90_pct = 0.0
+
+            supplier_aging.append(
+                {
+                    "supplier_id": row.supplier_id,
+                    "supplier_code": row.supplier_code,
+                    "supplier_name": row.supplier_name,
+                    "current": format_currency(row_current, row.currency_code),
+                    "days_30": format_currency(row_31_60, row.currency_code),
+                    "days_60": format_currency(row_61_90, row.currency_code),
+                    "days_90": format_currency(row_over_90, row.currency_code),
+                    "total": format_currency(row_total, row.currency_code),
+                    "current_raw": row_current,
+                    "days_30_raw": row_31_60,
+                    "days_60_raw": row_61_90,
+                    "days_90_raw": row_over_90,
+                    "current_pct": round(current_pct, 2),
+                    "days_30_pct": round(days_30_pct, 2),
+                    "days_60_pct": round(days_60_pct, 2),
+                    "days_90_pct": round(days_90_pct, 2),
+                }
+            )
+
+        if total_outstanding > 0:
+            total_current_pct = float((total_current / total_outstanding) * 100)
+            total_30_pct = float((total_31_60 / total_outstanding) * 100)
+            total_60_pct = float((total_61_90 / total_outstanding) * 100)
+            total_90_pct = float((total_over_90 / total_outstanding) * 100)
+        else:
+            total_current_pct = total_30_pct = total_60_pct = total_90_pct = 0.0
+
+        currency_code = aging_data[0].currency_code if aging_data else None
+        aging_summary = {
+            "total": format_currency(total_outstanding, currency_code),
+            "current": format_currency(total_current, currency_code),
+            "days_30": format_currency(total_31_60, currency_code),
+            "days_60": format_currency(total_61_90, currency_code),
+            "days_90": format_currency(total_over_90, currency_code),
+            "current_raw": total_current,
+            "days_30_raw": total_31_60,
+            "days_60_raw": total_61_90,
+            "days_90_raw": total_over_90,
+            "current_pct": round(total_current_pct, 2),
+            "days_30_pct": round(total_30_pct, 2),
+            "days_60_pct": round(total_60_pct, 2),
+            "days_90_pct": round(total_90_pct, 2),
+            "invoice_count": total_invoices,
+            "dpo": 0,
+        }
+
+        suppliers = [
+            {
+                "supplier_id": option["supplier_id"],
+                "legal_name": option["supplier_name"],
+            }
+            for option in suppliers_list
+        ]
+
         return {
+            "aging_summary": aging_summary,
+            "supplier_aging": supplier_aging,
+            "suppliers": suppliers,
+            "selected_supplier_id": supplier_id,
             "aging_data": aging_data,
             "suppliers_list": suppliers_list,
             "as_of_date": as_of_date,

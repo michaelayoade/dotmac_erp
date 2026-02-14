@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import live_search, pagination %}
+{% from "components/macros.html" import compact_filters, filter_select_field, pagination %}
 
 {% block page_title %}Loan Types{% endblock %}
 
@@ -26,7 +26,14 @@
 
 {% block content %}
 <div class="space-y-6">
-    {{ live_search(search=search, base_url="/people/payroll/loan-types", placeholder="Search loan types...") }}
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/payroll/loan-types",
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search loan types..."
+    ) %}
+    {% endcall %}
 
     <div id="results-container">
     {# Loan Types Grid #}

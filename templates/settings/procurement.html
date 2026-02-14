@@ -20,7 +20,7 @@
 {% block content %}
 <div class="max-w-4xl mx-auto space-y-6">
     {{ settings_ui.settings_header("Procurement Settings", "Configure procurement defaults and approval requirements.") }}
-    {{ settings_ui.settings_messages(request, error, "Procurement settings updated successfully.") }}
+    {{ settings_ui.settings_messages(settings_saved|default(false), error, "Procurement settings updated successfully.") }}
 
     <form method="POST" action="/settings/procurement" class="space-y-6">
         {{ request.state.csrf_form | safe }}

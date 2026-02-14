@@ -15,7 +15,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, load_only
 
 from app.config import settings
@@ -1063,11 +1063,58 @@ class ARWebService:
             for att in attachments
         ]
 
+        # Get payment history via allocations
+        payments_view: list[dict] = []
+        try:
+            allocations = list(
+                db.scalars(
+                    select(PaymentAllocation).where(
+                        PaymentAllocation.invoice_id == invoice.invoice_id,
+                    )
+                ).all()
+            )
+            if allocations:
+                payment_ids = [a.payment_id for a in allocations]
+                payments_by_id: dict[UUID, CustomerPayment] = {
+                    p.payment_id: p
+                    for p in db.scalars(
+                        select(CustomerPayment).where(
+                            CustomerPayment.payment_id.in_(payment_ids),
+                        )
+                    ).all()
+                }
+                for alloc in allocations:
+                    pmt = payments_by_id.get(alloc.payment_id)
+                    if pmt:
+                        payments_view.append(
+                            {
+                                "receipt_id": str(pmt.payment_id),
+                                "receipt_number": pmt.payment_number,
+                                "payment_date": _format_date(pmt.payment_date),
+                                "payment_method": (
+                                    pmt.payment_method.value
+                                    if pmt.payment_method
+                                    else None
+                                ),
+                                "amount": _format_currency(
+                                    alloc.allocated_amount,
+                                    invoice.currency_code,
+                                ),
+                                "status": pmt.status.value if pmt.status else None,
+                            }
+                        )
+        except Exception:
+            logger.exception(
+                "Failed to load payment history for invoice %s",
+                invoice.invoice_id,
+            )
+
         return {
             "invoice": _invoice_detail_view(invoice, customer),
             "customer": _customer_form_view(customer) if customer else None,
             "lines": lines_view,
             "attachments": attachments_view,
+            "payments": payments_view,
         }
 
     @staticmethod
@@ -1826,6 +1873,27 @@ class ARWebService:
         ]
 
         total_pages = max(1, (total_count + limit - 1) // limit)
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "customer_id": customer_id,
+                "start_date": start_date,
+                "end_date": end_date,
+                "search": search,
+            },
+            labels={
+                "status": "Status",
+                "customer_id": "Customer",
+                "start_date": "From",
+                "end_date": "To",
+                "search": "Search",
+            },
+            options={
+                "customer_id": {
+                    str(c["customer_id"]): c["customer_name"] for c in customers_list
+                }
+            },
+        )
 
         return {
             "credit_notes": credit_notes_view,
@@ -1841,6 +1909,7 @@ class ARWebService:
             "status": status,
             "start_date": start_date,
             "end_date": end_date,
+            "active_filters": active_filters,
             "page": page,
             "limit": limit,
             "offset": offset,

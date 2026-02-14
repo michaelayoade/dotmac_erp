@@ -71,8 +71,8 @@
             <table class="table">
                 <thead>
                     <tr>
-                        <th scope="col">Number</th>
                         <th scope="col">Date</th>
+                        <th scope="col">Number</th>
                         <th scope="col">Description</th>
                         <th class="hidden sm:table-cell" scope="col">Payee</th>
                         <th class="hidden sm:table-cell" scope="col">Account</th>
@@ -85,12 +85,12 @@
                 <tbody>
                     {% for exp in expenses %}
                     <tr>
+                        <td class="text-slate-500">{{ exp.expense_date }}</td>
                         <td>
                             <a href="/expense/{{ exp.expense_id }}" class="font-mono text-amber-600 hover:text-amber-700 dark:text-amber-400">
                                 {{ exp.expense_number }}
                             </a>
                         </td>
-                        <td class="text-slate-500">{{ exp.expense_date }}</td>
                         <td class="text-slate-900 dark:text-white max-w-[200px] truncate">{{ exp.description }}</td>
                         <td class="hidden sm:table-cell text-slate-500">{{ exp.payee }}</td>
                         <td class="hidden sm:table-cell text-slate-500 text-sm">{{ exp.expense_account }}</td>

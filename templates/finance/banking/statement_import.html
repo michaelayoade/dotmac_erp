@@ -27,6 +27,18 @@
     </div>
     {% endif %}
 
+    <div x-show="submitting" x-cloak class="mb-6 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700 dark:border-blue-800/60 dark:bg-blue-900/30 dark:text-blue-200">
+        <div class="flex items-center gap-2">
+            <svg class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+            </svg>
+            <span>Uploading and importing statement. Please wait...</span>
+        </div>
+    </div>
+
+    <div x-show="parseError" x-cloak class="mb-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-800/60 dark:bg-rose-900/30 dark:text-rose-200" x-text="parseError"></div>
+
     <!-- Step Indicator -->
     <div class="mb-6 flex items-center justify-center gap-2 text-sm" aria-label="Import progress">
         <template x-for="(label, i) in stepLabels" :key="i">
@@ -52,6 +64,7 @@
     <form method="post"
           action="/finance/banking/statements/import"
           enctype="multipart/form-data"
+          novalidate
           @submit="onSubmit($event)"
           x-ref="importForm">
         {{ request.state.csrf_form | safe }}
@@ -152,8 +165,8 @@
                                 <svg class="h-6 w-6 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                             </div>
                             <p class="text-sm font-medium text-slate-900 dark:text-white" x-text="fileName"></p>
-                            <p class="text-xs text-slate-500" x-text="`${csvRows.length} rows detected`" x-show="csvRows.length > 0"></p>
-                            <p class="text-xs text-amber-600 dark:text-amber-400" x-show="isXlsx">XLSX files are auto-detected on the server</p>
+                            <p class="text-xs text-slate-500" x-text="`${importRowCount} rows detected`" x-show="importRowCount > 0"></p>
+                            <p class="text-xs text-amber-600 dark:text-amber-400" x-show="isExcel">Excel files are auto-detected on the server</p>
                             <button type="button" @click="clearFile()" class="text-xs font-medium text-rose-500 hover:text-rose-600 mt-1">Remove file</button>
                         </div>
 
@@ -168,16 +181,15 @@
                                 </label>
                                 <span class="text-sm text-slate-500"> or drag and drop</span>
                             </div>
-                            <p class="text-xs text-slate-400">CSV, XLSX, XLSM (max 10 MB)</p>
+                            <p class="text-xs text-slate-400">CSV, XLS, XLSX, XLSM (max 10 MB)</p>
                         </div>
                     </div>
                     <input id="statement_file" name="statement_file" type="file"
-                           accept=".csv,.xlsx,.xlsm"
+                           accept=".csv,.xls,.xlsx,.xlsm"
                            @change="handleFileSelect($event)"
                            class="sr-only">
                 </div>
 
-                <div x-show="parseError" class="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-800/60 dark:bg-rose-900/30 dark:text-rose-200" x-text="parseError"></div>
             </div>
 
             <!-- Manual Entry Option -->
@@ -230,12 +242,13 @@
             <!-- Step 1 Actions -->
             <div class="flex items-center justify-end gap-3 pt-2">
                 <a href="/finance/banking/statements" class="btn btn-secondary">Cancel</a>
-                <!-- CSV file → go to mapping step; XLSX or manual → direct submit -->
-                <button type="button" @click="goToStep2()" x-show="csvRows.length > 0"
+                <!-- File upload → go to mapping step; manual-only → direct submit -->
+                <button type="button" @click="goToStep2()" x-show="fileName"
+                        :disabled="previewing"
                         class="btn btn-primary">
                     Continue to Column Mapping
                 </button>
-                <button type="submit" x-show="csvRows.length === 0"
+                <button type="submit" x-show="!fileName"
                         :disabled="submitting"
                         class="btn btn-primary">
                     <span x-show="!submitting">Import Statement</span>
@@ -259,7 +272,7 @@
                         <svg class="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     </div>
                     <div>
-                        <p class="text-sm font-medium text-slate-900 dark:text-white" x-text="`${fileName} \u2014 ${csvRows.length} rows detected`"></p>
+                        <p class="text-sm font-medium text-slate-900 dark:text-white" x-text="`${fileName} \u2014 ${importRowCount} rows detected`"></p>
                         <p class="text-xs text-slate-500 dark:text-slate-400">Map your CSV columns to the fields below. We've auto-matched what we could.</p>
                     </div>
                 </div>
@@ -353,7 +366,7 @@
                         <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     </div>
                     <div>
-                        <p class="text-sm font-medium text-slate-900 dark:text-white" x-text="`${mappedRows.length} transactions ready to import`"></p>
+                        <p class="text-sm font-medium text-slate-900 dark:text-white" x-text="`${mappedTotalRows} transactions ready to import`"></p>
                         <p class="text-xs text-slate-500 dark:text-slate-400" x-show="mappingWarnings.length > 0" x-text="`${mappingWarnings.length} warning(s)`"></p>
                     </div>
                 </div>
@@ -372,7 +385,7 @@
             <!-- Mapped preview table -->
             <div class="card mb-6">
                 <div class="card-header">
-                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white">Transformed Preview (first 5 rows)</h3>
+                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white" x-text="`Transformed Preview (showing ${mappedPreviewRows.length} of ${mappedTotalRows} rows)`"></h3>
                 </div>
                 <div class="table-container">
                     <table class="table text-xs">
@@ -423,6 +436,88 @@
 /* Alias map generated server-side from unified COLUMN_ALIASES registry */
 const ALIAS_MAP = {{ alias_map | tojson }};
 
+function localParseCSVText(text) {
+    const firstLine = text.split('\n').find((line) => line.trim()) || '';
+    const delimiters = [',', '\t', ';', '|'];
+    let delim = ',';
+    let maxCount = 0;
+    for (const d of delimiters) {
+        const pattern = d === '|' ? '\\|' : d === '\t' ? '\t' : d;
+        const count = (firstLine.match(new RegExp(pattern, 'g')) || []).length;
+        if (count > maxCount) {
+            maxCount = count;
+            delim = d;
+        }
+    }
+
+    const rows = [];
+    let headers = null;
+    let i = 0;
+    const len = text.length;
+    while (i < len) {
+        const row = [];
+        while (i < len) {
+            let value = '';
+            if (text[i] === '"') {
+                i++;
+                while (i < len) {
+                    if (text[i] === '"') {
+                        if (i + 1 < len && text[i + 1] === '"') {
+                            value += '"';
+                            i += 2;
+                        } else {
+                            i++;
+                            break;
+                        }
+                    } else {
+                        value += text[i];
+                        i++;
+                    }
+                }
+                while (i < len && text[i] !== delim && text[i] !== '\n' && text[i] !== '\r') i++;
+            } else {
+                while (i < len && text[i] !== delim && text[i] !== '\n' && text[i] !== '\r') {
+                    value += text[i];
+                    i++;
+                }
+            }
+            row.push(value.trim());
+            if (i < len && text[i] === delim) {
+                i++;
+                continue;
+            }
+            break;
+        }
+        if (i < len && text[i] === '\r') i++;
+        if (i < len && text[i] === '\n') i++;
+        if (row.length === 1 && row[0] === '') continue;
+        if (!headers) {
+            headers = row;
+        } else {
+            const item = {};
+            for (let c = 0; c < headers.length; c++) item[headers[c]] = row[c] || '';
+            rows.push(item);
+        }
+    }
+    return { headers: headers || [], rows };
+}
+
+function localAutoMatchHeaders(headers, aliasMap) {
+    const mapping = {};
+    const used = new Set();
+    for (const h of headers) {
+        const normalized = h.trim().toLowerCase().replace(/\s+/g, '_');
+        const target = aliasMap[normalized];
+        if (target && !used.has(target)) {
+            mapping[h] = target;
+            used.add(target);
+        } else {
+            mapping[h] = '';
+        }
+    }
+    return mapping;
+}
+
 /* ================================================================
    Alpine.js Component
    ================================================================ */
@@ -443,14 +538,16 @@ function importWizard(accounts, serverFormData) {
 
         // File state
         fileName: '',
-        isXlsx: false,
+        isExcel: false,
         parsing: false,
+        previewing: false,
         parseError: '',
         dragOver: false,
 
         // CSV parsed data
         csvHeaders: [],
         csvRows: [],
+        previewTotalRows: 0,
 
         // Column mapping
         mapping: {},
@@ -459,6 +556,7 @@ function importWizard(accounts, serverFormData) {
 
         // Mapped output
         mappedRows: [],
+        mappedTotalRows: 0,
         mappedPreviewCols: [],
         mappedPreviewRows: [],
 
@@ -470,7 +568,12 @@ function importWizard(accounts, serverFormData) {
         submitting: false,
 
         get previewRows() {
-            return this.csvRows.slice(0, 3);
+            return this.csvRows.slice(0, 5);
+        },
+
+        get importRowCount() {
+            if (this.isExcel && this.previewTotalRows > 0) return this.previewTotalRows;
+            return this.csvRows.length;
         },
 
         isMappedElsewhere(targetValue, currentHeader) {
@@ -499,20 +602,28 @@ function importWizard(accounts, serverFormData) {
 
         processFile(file) {
             this.parseError = '';
+            this.step = 1;
+            this.mappingErrors = [];
+            this.mappingWarnings = [];
+            this.mappedRows = [];
+            this.mappedTotalRows = 0;
+            this.mappedPreviewCols = [];
+            this.mappedPreviewRows = [];
             this.fileName = file.name;
             const lower = file.name.toLowerCase();
-            this.isXlsx = lower.endsWith('.xlsx') || lower.endsWith('.xlsm');
+            this.isExcel = lower.endsWith('.xls') || lower.endsWith('.xlsx') || lower.endsWith('.xlsm');
 
-            if (!(lower.endsWith('.csv') || lower.endsWith('.xlsx') || lower.endsWith('.xlsm'))) {
-                this.parseError = 'Supported formats: CSV, XLSX, XLSM';
+            if (!(lower.endsWith('.csv') || lower.endsWith('.xls') || lower.endsWith('.xlsx') || lower.endsWith('.xlsm'))) {
+                this.parseError = 'Supported formats: CSV, XLS, XLSX, XLSM';
                 this.fileName = '';
                 return;
             }
 
-            if (this.isXlsx) {
-                // XLSX can't be parsed client-side — will be auto-detected server-side
+            if (this.isExcel) {
+                // Excel can't be parsed client-side — will be auto-detected server-side
                 this.csvHeaders = [];
                 this.csvRows = [];
+                this.previewTotalRows = 0;
                 return;
             }
 
@@ -522,7 +633,9 @@ function importWizard(accounts, serverFormData) {
             reader.onload = (e) => {
                 try {
                     const text = e.target.result;
-                    const { headers, rows } = parseCSVText(text);
+                    const parser = window.parseCSVText || localParseCSVText;
+                    const matcher = window.autoMatchHeaders || localAutoMatchHeaders;
+                    const { headers, rows } = parser(text);
                     if (headers.length === 0) {
                         this.parseError = 'Could not detect any column headers in the file.';
                         this.csvHeaders = [];
@@ -534,12 +647,14 @@ function importWizard(accounts, serverFormData) {
                     } else {
                         this.csvHeaders = headers;
                         this.csvRows = rows;
-                        this.mapping = autoMatchHeaders(headers, ALIAS_MAP);
+                        this.previewTotalRows = rows.length;
+                        this.mapping = matcher(headers, ALIAS_MAP);
                     }
                 } catch (err) {
                     this.parseError = 'Failed to parse CSV: ' + err.message;
                     this.csvHeaders = [];
                     this.csvRows = [];
+                    this.previewTotalRows = 0;
                 }
                 this.parsing = false;
             };
@@ -552,9 +667,10 @@ function importWizard(accounts, serverFormData) {
 
         clearFile() {
             this.fileName = '';
-            this.isXlsx = false;
+            this.isExcel = false;
             this.csvHeaders = [];
             this.csvRows = [];
+            this.previewTotalRows = 0;
             this.mapping = {};
             this.parseError = '';
             const fileInput = this.$refs.importForm.querySelector('#statement_file');
@@ -572,8 +688,56 @@ function importWizard(accounts, serverFormData) {
         },
 
         goToStep2() {
-            if (this.csvRows.length === 0) return;
-            this.step = 2;
+            if (!this.fileName) return;
+            this.parseError = '';
+            this.mappingErrors = [];
+            this.mappingWarnings = [];
+
+            if (!this.isExcel) {
+                if (this.csvRows.length === 0) {
+                    this.parseError = 'CSV file contains no data rows.';
+                    return;
+                }
+                this.step = 2;
+                return;
+            }
+
+            this.previewing = true;
+            const formData = new FormData();
+            const fileInput = this.$refs.importForm.querySelector('#statement_file');
+            if (!fileInput || !fileInput.files || !fileInput.files[0]) {
+                this.previewing = false;
+                this.parseError = 'Please choose a file to preview.';
+                return;
+            }
+            formData.append('statement_file', fileInput.files[0]);
+            fetch('/finance/banking/statements/import/preview', {
+                method: 'POST',
+                body: formData,
+            })
+                .then(async (resp) => {
+                    const data = await resp.json();
+                    if (!resp.ok) {
+                        this.parseError = data.detail || 'Failed to preview file.';
+                        return;
+                    }
+                    this.csvHeaders = data.detected_columns || [];
+                    this.csvRows = data.sample_data || [];
+                    this.previewTotalRows = data.total_rows || this.csvRows.length;
+                    if (this.csvHeaders.length === 0) {
+                        this.parseError = 'Could not detect any column headers in the file.';
+                        return;
+                    }
+                    const matcher = window.autoMatchHeaders || localAutoMatchHeaders;
+                    this.mapping = matcher(this.csvHeaders, ALIAS_MAP);
+                    this.step = 2;
+                })
+                .catch((err) => {
+                    this.parseError = 'Failed to preview file: ' + err.message;
+                })
+                .finally(() => {
+                    this.previewing = false;
+                });
         },
 
         goToStep3() {
@@ -627,32 +791,92 @@ function importWizard(accounts, serverFormData) {
                 if (mapped.includes(f)) cols.push(f);
             }
             this.mappedPreviewCols = cols;
-            this.mappedPreviewRows = this.mappedRows.slice(0, 5);
+            this.mappedPreviewRows = this.mappedRows.slice(0, 10);
+            this.mappedTotalRows = this.fileName
+                ? (this.previewTotalRows || this.csvRows.length || this.mappedRows.length)
+                : this.mappedRows.length;
 
             this.step = 3;
         },
 
         onSubmit(event) {
+            this.parseError = '';
             if (this.submitting) {
                 event.preventDefault();
                 return;
             }
+
+            const currentFormData = new FormData(this.$refs.importForm);
+            const bankAccountId = String(currentFormData.get('bank_account_id') || '').trim();
+            const periodStart = String(currentFormData.get('period_start') || '').trim();
+            const periodEnd = String(currentFormData.get('period_end') || '').trim();
+            if (!bankAccountId || !periodStart || !periodEnd) {
+                event.preventDefault();
+                this.step = 1;
+                this.parseError = 'Bank account, period start, and period end are required.';
+                return;
+            }
+
+            if (this.step === 3) {
+                const totalToImport = this.fileName
+                    ? this.mappedTotalRows
+                    : this.mappedRows.length;
+                if (totalToImport === 0) {
+                    event.preventDefault();
+                    this.parseError = 'No mapped rows available to import.';
+                    return;
+                }
+                const confirmMessage = this.fileName
+                    ? `Import mapped transactions now? (${totalToImport} rows detected)`
+                    : `Import ${totalToImport} mapped transaction${totalToImport === 1 ? '' : 's'} now?`;
+                const proceed = window.confirm(confirmMessage);
+                if (!proceed) {
+                    event.preventDefault();
+                    return;
+                }
+            }
+
             this.submitting = true;
 
-            // If we're on step 3 with CSV data, inject hidden line inputs
-            if (this.step === 3 && this.mappedRows.length > 0) {
+            // If we're on step 3 with uploaded file data, submit column mapping.
+            if (this.step === 3 && this.fileName) {
                 const container = this.$refs.hiddenLines;
-                container.innerHTML = '';
-                for (let i = 0; i < this.mappedRows.length; i++) {
-                    const row = this.mappedRows[i];
-                    for (const [field, value] of Object.entries(row)) {
-                        if (!value && field !== 'line_number') continue;
+                try {
+                    container.innerHTML = '';
+                    for (const [source, target] of Object.entries(this.mapping)) {
+                        if (!target) continue;
                         const input = document.createElement('input');
                         input.type = 'hidden';
-                        input.name = `lines[${i}][${field}]`;
-                        input.value = value;
+                        input.name = `column_map[${source}]`;
+                        input.value = target;
                         container.appendChild(input);
                     }
+                } catch (err) {
+                    event.preventDefault();
+                    this.submitting = false;
+                    this.parseError = 'Failed to prepare column mapping for upload: ' + err.message;
+                    return;
+                }
+            } else if (this.step === 3 && this.mappedRows.length > 0) {
+                const container = this.$refs.hiddenLines;
+                try {
+                    container.innerHTML = '';
+                    for (let i = 0; i < this.mappedRows.length; i++) {
+                        const row = this.mappedRows[i];
+                        for (const [field, value] of Object.entries(row)) {
+                            if (!value && field !== 'line_number') continue;
+                            const input = document.createElement('input');
+                            input.type = 'hidden';
+                            input.name = `lines[${i}][${field}]`;
+                            input.value = value;
+                            container.appendChild(input);
+                        }
+                    }
+                } catch (err) {
+                    event.preventDefault();
+                    this.submitting = false;
+                    this.parseError = 'Failed to prepare mapped rows for upload: ' + err.message;
+                    return;
                 }
             }
 

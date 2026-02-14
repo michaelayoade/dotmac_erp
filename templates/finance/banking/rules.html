@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import live_search, empty_state, status_badge, pagination %}
+{% from "components/macros.html" import compact_filters, empty_state, status_badge, pagination, filter_select_field %}
 
 {% block page_title %}Transaction Rules{% endblock %}
 
@@ -18,6 +18,9 @@
 {% endblock %}
 
 {% block header_actions %}
+<button id="rules-bulk-duplicate-btn" type="button" class="btn btn-secondary">
+    Bulk Duplicate
+</button>
 <a href="/finance/banking/rules/new" data-testid="rules-new" class="btn btn-primary">
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
@@ -62,21 +65,72 @@
     </div>
 
     {# Search and Filters #}
-    {% call(search_attrs) live_search(
-        search=search,
+    {% call(filter_attrs) compact_filters(
         base_url="/finance/banking/rules",
-        placeholder="Search rules..."
+        active_filters=active_filters | default([]),
+        show_search=false
     ) %}
-        <select name="rule_type" data-testid="rules-type" class="form-select" {{ search_attrs }}>
-            <option value="">All Types</option>
-            {% for t in rule_types %}
-            <option value="{{ t }}" {{ 'selected' if rule_type == t else '' }}>{{ t | replace('_', ' ') | title }}</option>
-            {% endfor %}
-        </select>
+        {{ filter_select_field("rule_type", "Type", rule_type, rule_types, "data-testid='rules-type' " ~ filter_attrs, "All Types", true) }}
     {% endcall %}
 
     <div id="results-container">
     {% include "finance/banking/_rules_table.html" %}
     </div>{# /results-container #}
 </div>
+<script>
+(function () {
+    function selectedRuleIds() {
+        return Array.from(document.querySelectorAll('.rule-select:checked'))
+            .map(function (el) { return el.value; })
+            .filter(Boolean);
+    }
+
+    function syncBulkButtonState() {
+        var btn = document.getElementById('rules-bulk-duplicate-btn');
+        if (!btn) return;
+        btn.disabled = selectedRuleIds().length === 0;
+    }
+
+    function bindSelectionHandlers() {
+        var selectAll = document.getElementById('rule-select-all');
+        if (selectAll) {
+            selectAll.addEventListener('change', function () {
+                document.querySelectorAll('.rule-select').forEach(function (cb) {
+                    cb.checked = selectAll.checked;
+                });
+                syncBulkButtonState();
+            });
+        }
+        document.querySelectorAll('.rule-select').forEach(function (cb) {
+            cb.addEventListener('change', function () {
+                var all = Array.from(document.querySelectorAll('.rule-select'));
+                var checked = selectedRuleIds().length;
+                if (selectAll) selectAll.checked = all.length > 0 && checked === all.length;
+                syncBulkButtonState();
+            });
+        });
+        syncBulkButtonState();
+    }
+
+    function bindBulkAction() {
+        var btn = document.getElementById('rules-bulk-duplicate-btn');
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+            var ids = selectedRuleIds();
+            if (!ids.length) return;
+            var url = new URL('/finance/banking/rules/duplicate/bulk', window.location.origin);
+            ids.forEach(function (id) { url.searchParams.append('rule_ids', id); });
+            window.location.href = url.toString();
+        });
+    }
+
+    bindSelectionHandlers();
+    bindBulkAction();
+    document.body.addEventListener('htmx:afterSwap', function (evt) {
+        if (evt && evt.target && evt.target.id === 'results-container') {
+            bindSelectionHandlers();
+        }
+    });
+})();
+</script>
 {% endblock %}

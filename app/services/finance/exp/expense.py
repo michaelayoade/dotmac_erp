@@ -17,8 +17,6 @@ from app.models.finance.exp.expense_entry import (
     ExpenseStatus,
     PaymentMethod,
 )
-from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
-from app.models.finance.gl.journal_entry_line import JournalEntryLine
 from app.services.common import coerce_uuid
 
 logger = logging.getLogger(__name__)
@@ -206,12 +204,17 @@ class ExpenseService:
         posted_by: str,
         fiscal_period_id: str,
     ) -> ExpenseEntry:
-        """Post expense to general ledger.
+        """
+        Post expense to general ledger.
 
-        Uses a savepoint to ensure transactional consistency - if any step
-        fails, all changes are rolled back.
+        This creates an APPROVED journal entry, posts it through LedgerPostingService
+        (writing immutable `gl.posted_ledger_line`), and updates the expense record.
         """
         from app.models.finance.gl.fiscal_period import FiscalPeriod
+        from app.models.finance.gl.journal_entry import JournalType
+        from app.services.finance.gl.journal import JournalInput, JournalLineInput
+        from app.services.finance.gl.period_guard import PeriodGuardService
+        from app.services.finance.posting.base import BasePostingAdapter
 
         org_id = coerce_uuid(organization_id)
         expense = (
@@ -241,108 +244,125 @@ class ExpenseService:
                 "Fiscal period not found or does not belong to organization"
             )
 
-        # Use savepoint for transactional consistency
-        savepoint = db.begin_nested()
-        try:
-            # Generate journal number
-            today = date.today()
-            prefix = f"JE-EXP-{today.strftime('%Y%m')}-"
-            last_je = (
-                db.query(JournalEntry)
-                .filter(
-                    JournalEntry.organization_id == expense.organization_id,
-                    JournalEntry.journal_number.like(f"{prefix}%"),
-                )
-                .order_by(JournalEntry.journal_number.desc())
-                .first()
-            )
-            if last_je:
-                try:
-                    seq = int(last_je.journal_number.split("-")[-1]) + 1
-                except ValueError:
-                    seq = 1
-            else:
-                seq = 1
-            journal_number = f"{prefix}{seq:04d}"
+        # Ensure posting date belongs to the selected fiscal period and is open
+        posting_date = expense.expense_date
+        period_for_date = PeriodGuardService.get_period_for_date(
+            db, org_id, posting_date
+        )
+        if not period_for_date:
+            raise ValueError(f"No fiscal period found for posting date {posting_date}")
+        if period_for_date.fiscal_period_id != period_id:
+            raise ValueError("Expense date does not match selected fiscal period")
 
-            # Create journal entry
-            journal = JournalEntry(
-                organization_id=expense.organization_id,
-                journal_number=journal_number,
-                journal_type=JournalType.STANDARD,
-                fiscal_period_id=period_id,
-                entry_date=expense.expense_date,
-                posting_date=expense.expense_date,
-                description=f"Expense: {expense.description}",
-                reference=expense.expense_number,
-                currency_code=expense.currency_code,
-                source_module="EXP",
-                source_document_id=expense.expense_id,
-                status=JournalStatus.POSTED,
-                created_by_user_id=user_id,
-                posted_by_user_id=user_id,
-                posted_at=datetime.utcnow(),
-            )
-            db.add(journal)
-            db.flush()
+        PeriodGuardService.require_open_period(
+            db,
+            org_id,
+            posting_date,
+            allow_adjustment=False,
+            reopen_session_id=None,
+        )
 
-            total_amount = expense.amount + expense.tax_amount
+        total_amount = (expense.amount or Decimal("0")) + (
+            expense.tax_amount or Decimal("0")
+        )
 
-            # Debit expense account
-            debit_line = JournalEntryLine(
-                journal_entry_id=journal.journal_entry_id,
-                line_number=1,
+        journal_lines: list[JournalLineInput] = [
+            # Debit expense
+            JournalLineInput(
                 account_id=expense.expense_account_id,
-                description=expense.description,
                 debit_amount=expense.amount,
                 credit_amount=Decimal("0"),
-                currency_code=expense.currency_code,
-            )
-            db.add(debit_line)
+                description=expense.description,
+                business_unit_id=expense.business_unit_id,
+                cost_center_id=expense.cost_center_id,
+                project_id=expense.project_id,
+            ),
+        ]
 
-            # Debit tax if applicable
-            line_num = 2
-            if expense.tax_amount > 0 and expense.tax_code_id:
-                from app.models.finance.tax.tax_code import TaxCode
+        # Debit tax if applicable
+        if (expense.tax_amount or Decimal("0")) > 0 and expense.tax_code_id:
+            from app.models.finance.tax.tax_code import TaxCode
 
-                tax_code = db.get(TaxCode, expense.tax_code_id)
-                if tax_code and tax_code.tax_paid_account_id:
-                    tax_line = JournalEntryLine(
-                        journal_entry_id=journal.journal_entry_id,
-                        line_number=line_num,
+            tax_code = db.get(TaxCode, expense.tax_code_id)
+            if tax_code and tax_code.tax_paid_account_id:
+                journal_lines.append(
+                    JournalLineInput(
                         account_id=tax_code.tax_paid_account_id,
-                        description=f"Input tax - {expense.description}",
                         debit_amount=expense.tax_amount,
                         credit_amount=Decimal("0"),
-                        currency_code=expense.currency_code,
+                        description=f"Input tax - {expense.description}",
+                        business_unit_id=expense.business_unit_id,
+                        cost_center_id=expense.cost_center_id,
+                        project_id=expense.project_id,
                     )
-                    db.add(tax_line)
-                    line_num += 1
+                )
 
-            # Credit payment account
-            credit_line = JournalEntryLine(
-                journal_entry_id=journal.journal_entry_id,
-                line_number=line_num,
+        # Credit payment account (cash/bank/etc)
+        journal_lines.append(
+            JournalLineInput(
                 account_id=expense.payment_account_id,
-                description=f"Payment for: {expense.description}",
                 debit_amount=Decimal("0"),
                 credit_amount=total_amount,
-                currency_code=expense.currency_code,
+                description=f"Payment for: {expense.description}",
+                business_unit_id=expense.business_unit_id,
+                cost_center_id=expense.cost_center_id,
+                project_id=expense.project_id,
             )
-            db.add(credit_line)
+        )
 
-            # Update expense
-            expense.status = ExpenseStatus.POSTED
-            expense.journal_entry_id = journal.journal_entry_id
-            expense.posted_by = user_id
-            expense.posted_at = datetime.utcnow()
+        journal_input = JournalInput(
+            journal_type=JournalType.STANDARD,
+            entry_date=posting_date,
+            posting_date=posting_date,
+            description=f"Expense: {expense.description}",
+            reference=expense.expense_number,
+            currency_code=expense.currency_code,
+            lines=journal_lines,
+            source_module="EXP",
+            source_document_type="EXPENSE",
+            source_document_id=expense.expense_id,
+            correlation_id=getattr(expense, "correlation_id", None),
+        )
 
-            db.flush()
-            savepoint.commit()
+        journal, error = BasePostingAdapter.create_and_approve_journal(
+            db=db,
+            organization_id=org_id,
+            journal_input=journal_input,
+            posted_by_user_id=user_id,
+            error_prefix="Expense journal creation failed",
+        )
+        if error:
+            raise ValueError(error.message)
 
-        except Exception:
-            savepoint.rollback()
-            raise
+        idempotency_key = BasePostingAdapter.make_idempotency_key(
+            organization_id=org_id,
+            source_module="EXP",
+            source_document_id=coerce_uuid(expense.expense_id),
+            action="post",
+            version="v1",
+        )
+
+        posting_result = BasePostingAdapter.post_to_ledger(
+            db=db,
+            organization_id=org_id,
+            journal_entry_id=journal.journal_entry_id,
+            posting_date=posting_date,
+            idempotency_key=idempotency_key,
+            source_module="EXP",
+            correlation_id=getattr(expense, "correlation_id", None),
+            posted_by_user_id=user_id,
+            success_message="Expense posted successfully",
+            error_prefix="Expense ledger posting failed",
+        )
+        if not posting_result.success:
+            raise ValueError(posting_result.message)
+
+        # Update expense
+        expense.status = ExpenseStatus.POSTED
+        expense.journal_entry_id = journal.journal_entry_id
+        expense.posted_by = user_id
+        expense.posted_at = datetime.utcnow()
+        db.flush()
 
         return expense
 

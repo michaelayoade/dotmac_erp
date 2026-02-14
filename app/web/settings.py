@@ -51,6 +51,23 @@ MODULE_SETTINGS_HANDLERS = {
 }
 
 
+def _consume_settings_success(request: Request, module_key: str) -> bool:
+    """Consume one-time success flag for a specific settings module."""
+    try:
+        success_module = request.session.pop("settings_success_module", None)
+    except AssertionError:
+        return False
+    return bool(success_module == module_key)
+
+
+def _mark_settings_success(request: Request, module_key: str) -> None:
+    """Mark a settings save success for next GET request."""
+    try:
+        request.session["settings_success_module"] = module_key
+    except AssertionError:
+        return
+
+
 def _normalize_form(form) -> dict[str, str]:
     """Normalize form data to dict of strings."""
     if form is None:
@@ -91,6 +108,7 @@ def module_settings(
     config, handler = _get_module_config(module_key)
     context = base_context(request, auth, config.page_title, "settings", db=db)
     context.update(handler.get_context(db, auth.organization_id))
+    context["settings_saved"] = _consume_settings_success(request, module_key)
     return templates.TemplateResponse(request, config.template, context)
 
 
@@ -116,4 +134,5 @@ async def update_module_settings(
         context["error"] = error
         return templates.TemplateResponse(request, config.template, context)
 
-    return RedirectResponse(url=f"/settings/{module_key}?success=1", status_code=303)
+    _mark_settings_success(request, module_key)
+    return RedirectResponse(url=f"/settings/{module_key}", status_code=303)

@@ -51,6 +51,7 @@
     </div>
     {% endcall %}
 
+    <div id="results-container">
     {% if department_id and schedule_status %}
     <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
@@ -145,5 +146,6 @@
         <p class="text-slate-500 dark:text-slate-400">Select a department and month to view schedules.</p>
     </div>
     {% endif %}
+    </div>
 </div>
 {% endblock %}

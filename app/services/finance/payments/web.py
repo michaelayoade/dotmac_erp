@@ -11,6 +11,7 @@ import logging
 from sqlalchemy.orm import Session
 
 from app.models.domain_settings import SettingDomain
+from app.services.common_filters import build_active_filters
 from app.services.settings_spec import resolve_value
 
 logger = logging.getLogger(__name__)
@@ -283,6 +284,12 @@ class PaymentWebService:
 
         from app.services.formatters import format_currency
 
+        active_filters = build_active_filters(
+            params={"status": status, "search": search},
+            labels={"status": "Status", "search": "Search"},
+            options={"status": {s.value: s.value.title() for s in PaymentIntentStatus}},
+        )
+
         return {
             "intents": intents,
             "search": search or "",
@@ -291,6 +298,7 @@ class PaymentWebService:
             "total_count": filtered_total,
             "status_filter": status,
             "statuses": [s.value for s in PaymentIntentStatus],
+            "active_filters": active_filters,
             # Stat card data
             "stat_total_count": total_count,
             "stat_total_amount": format_currency(total_amount, "NGN"),

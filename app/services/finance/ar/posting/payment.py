@@ -13,6 +13,8 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
+from app.models.finance.banking.bank_account import BankAccount
+from app.models.finance.gl.account import Account
 from app.models.finance.gl.journal_entry import JournalType
 from app.services.common import coerce_uuid
 from app.services.finance.ar.posting.result import ARPostingResult
@@ -21,6 +23,35 @@ from app.services.finance.gl.journal import (
     JournalLineInput,
 )
 from app.services.finance.posting.base import BasePostingAdapter
+
+
+def _resolve_bank_gl_account_id(
+    db: Session,
+    organization_id: UUID,
+    bank_account_id: UUID,
+) -> UUID | None:
+    """
+    Resolve payment bank account to a GL account ID.
+
+    Supports both legacy storage patterns:
+    - direct `gl.account.account_id`
+    - `banking.bank_accounts.bank_account_id` (mapped via `gl_account_id`)
+    """
+    gl_account = db.get(Account, bank_account_id)
+    if gl_account and gl_account.organization_id == organization_id:
+        return bank_account_id
+
+    bank_account = db.get(BankAccount, bank_account_id)
+    if (
+        bank_account
+        and bank_account.organization_id == organization_id
+        and bank_account.gl_account_id
+    ):
+        mapped_gl = db.get(Account, bank_account.gl_account_id)
+        if mapped_gl and mapped_gl.organization_id == organization_id:
+            return bank_account.gl_account_id
+
+    return None
 
 
 def post_payment(
@@ -72,6 +103,13 @@ def post_payment(
             message=f"Payment must be APPROVED or CLEARED to post (current: {payment.status.value})",
         )
 
+    # Skip zero-amount payments — nothing meaningful to post to GL
+    if payment.amount == Decimal("0"):
+        return ARPostingResult(
+            success=True,
+            message="Zero amount payment — no GL posting needed",
+        )
+
     # Load customer
     customer = db.get(Customer, payment.customer_id)
     if not customer:
@@ -85,11 +123,22 @@ def post_payment(
             success=False, message="Payment has no bank account linked"
         )
 
+    bank_gl_account_id = _resolve_bank_gl_account_id(
+        db,
+        org_id,
+        payment.bank_account_id,
+    )
+    if not bank_gl_account_id:
+        return ARPostingResult(
+            success=False,
+            message="Payment bank account is not mapped to a valid GL account",
+        )
+
     # Build journal lines
     journal_lines = [
         # Debit Bank/Cash
         JournalLineInput(
-            account_id=payment.bank_account_id,
+            account_id=bank_gl_account_id,
             debit_amount=payment.amount,
             credit_amount=Decimal("0"),
             debit_amount_functional=functional_amount,

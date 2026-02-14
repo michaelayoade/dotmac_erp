@@ -14,11 +14,12 @@ Covers invoice, payment, and credit note sync logic including:
 import uuid
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from app.models.finance.ar.customer_payment import PaymentMethod
+from app.models.finance.ar.customer_payment import CustomerPayment, PaymentMethod
 from app.models.finance.ar.external_sync import EntityType
-from app.models.finance.ar.invoice import InvoiceStatus
+from app.models.finance.ar.invoice import InvoiceStatus, InvoiceType
 from app.services.splynx.client import (
     SplynxConfig,
     SplynxCreditNote,
@@ -47,6 +48,11 @@ def _make_config() -> SplynxConfig:
     )
 
 
+_invoice_counter = 0
+_payment_counter = 0
+_cn_counter = 0
+
+
 def _make_service(db: MagicMock) -> SplynxSyncService:
     """Create a SplynxSyncService with a mock DB and stubbed client."""
     svc = SplynxSyncService(
@@ -58,6 +64,31 @@ def _make_service(db: MagicMock) -> SplynxSyncService:
     )
     # Stub out the HTTP client so no real requests are made
     svc._client = MagicMock()
+
+    # Mock numbering service methods to avoid SELECT FOR UPDATE on MagicMock DB
+    global _invoice_counter, _payment_counter, _cn_counter
+    _invoice_counter = 0
+    _payment_counter = 0
+    _cn_counter = 0
+
+    def _fake_invoice_number(reference_date: object = None) -> str:
+        global _invoice_counter
+        _invoice_counter += 1
+        return f"INV-{_invoice_counter:05d}"
+
+    def _fake_payment_number(reference_date: object = None) -> str:
+        global _payment_counter
+        _payment_counter += 1
+        return f"PMT-{_payment_counter:05d}"
+
+    def _fake_cn_number(reference_date: object = None) -> str:
+        global _cn_counter
+        _cn_counter += 1
+        return f"CN-{_cn_counter:05d}"
+
+    svc._generate_invoice_number = _fake_invoice_number  # type: ignore[assignment]
+    svc._generate_payment_number = _fake_payment_number  # type: ignore[assignment]
+    svc._generate_credit_note_number = _fake_cn_number  # type: ignore[assignment]
     return svc
 
 
@@ -156,6 +187,10 @@ class FakeInvoice:
         self.posting_batch_id = None
         self.posting_status = None
         self.created_by_user_id = None
+        self.splynx_id = None
+        self.splynx_number = None
+        self.last_synced_at = None
+        self.invoice_type = None
         for k, v in kwargs.items():
             setattr(self, k, v)
 
@@ -188,6 +223,16 @@ class TestSyncSingleInvoice:
         # Invoice + InvoiceLine added
         assert db.add.call_count >= 2
         db.flush.assert_called()
+        from app.models.finance.ar.invoice import Invoice as InvoiceModel
+
+        created_invoice = None
+        for call in db.add.call_args_list:
+            obj = call[0][0]
+            if isinstance(obj, InvoiceModel):
+                created_invoice = obj
+                break
+        assert created_invoice is not None
+        assert created_invoice.splynx_number == inv.number
 
     def test_skip_unchanged_invoice(self) -> None:
         """Invoice with same hash should be skipped."""
@@ -270,6 +315,8 @@ class TestSyncSingleInvoice:
 
     def test_created_by_user_id_uses_system_user_when_none(self) -> None:
         """When no user ID is provided, SYSTEM_USER_ID should be used."""
+        from app.models.finance.ar.invoice import Invoice as InvoiceModel
+
         db = MagicMock()
         db.scalar.return_value = None
         svc = _make_service(db)
@@ -281,9 +328,15 @@ class TestSyncSingleInvoice:
         svc._sync_single_invoice(inv, None, result)  # No user ID
 
         assert result.created == 1
-        # Verify the Invoice constructor received SYSTEM_USER_ID
-        added_obj = db.add.call_args_list[0][0][0]
-        assert added_obj.created_by_user_id == SYSTEM_USER_ID
+        # Find the Invoice object among all added objects
+        invoice_obj = None
+        for call in db.add.call_args_list:
+            obj = call[0][0]
+            if isinstance(obj, InvoiceModel):
+                invoice_obj = obj
+                break
+        assert invoice_obj is not None
+        assert invoice_obj.created_by_user_id == SYSTEM_USER_ID
 
 
 # ---------------------------------------------------------------------------
@@ -355,6 +408,8 @@ class TestSyncSinglePayment:
         # Invoice should be marked PAID
         assert invoice.amount_paid == Decimal("50000.00")
         assert invoice.status == InvoiceStatus.PAID
+        added_payment = db.add.call_args_list[0][0][0]
+        assert added_payment.splynx_receipt_number == pmt.receipt_number
 
     def test_partial_payment_updates_status(self) -> None:
         """Partial payment sets invoice to PARTIALLY_PAID."""
@@ -397,22 +452,43 @@ class TestSyncSinglePayment:
         assert result.skipped == 1
         assert result.created == 0
 
-    def test_skip_payment_no_invoice_id(self) -> None:
-        """Payment without invoice_id is skipped with error."""
+    def test_unapplied_payment_no_invoice_id(self) -> None:
+        """Payment without invoice_id is created as unapplied prepayment."""
         db = MagicMock()
-        db.scalar.side_effect = [None, None]  # _has_changed, _get_synced_entity
+        fake_customer_id = uuid.uuid4()
+        fake_customer = MagicMock()
+        fake_customer.currency_code = "NGN"
+        db.scalar.side_effect = [
+            None,  # _has_changed: no existing hash
+            None,  # _get_synced_entity: not yet synced
+            None,  # _record_sync: _get_synced_entity check
+        ]
+        db.get.return_value = fake_customer  # db.get(Customer, customer_id)
         svc = _make_service(db)
         svc._payment_method_cache = {
             1: SplynxPaymentMethod(id=1, name="Paystack", is_active=True)
         }
+        svc._bank_account_mapping = {1: uuid.uuid4()}
+        # Pre-populate customer cache so _get_or_create_customer_id returns immediately
+        svc._customer_cache = {500: fake_customer_id}
 
         pmt = _make_splynx_payment(invoice_id=None)
 
         result = SyncResult(success=True, entity_type="payments")
         svc._sync_single_payment(pmt, result, USER_ID)
 
-        assert result.skipped == 1
-        assert any("No invoice_id" in e for e in result.errors)
+        assert result.created == 1
+        assert len(result.errors) == 0
+        # Payment was added (but no allocation since no invoice)
+        added_objs = [call[0][0] for call in db.add.call_args_list]
+        payment_added = [o for o in added_objs if isinstance(o, CustomerPayment)]
+        assert len(payment_added) == 1
+        assert payment_added[0].customer_id == fake_customer_id
+        # No PaymentAllocation should have been added
+        from app.services.splynx.sync import PaymentAllocation  # noqa: E501
+
+        alloc_added = [o for o in added_objs if isinstance(o, PaymentAllocation)]
+        assert len(alloc_added) == 0
 
     def test_skip_payment_invoice_not_found(self) -> None:
         """Payment referencing un-synced invoice is skipped with error."""
@@ -476,7 +552,8 @@ class TestSyncSingleCreditNote:
 
         db.scalar.side_effect = [
             None,  # _get_synced_entity (CREDIT_NOTE lookup)
-            None,  # _get_existing_invoice (by invoice_number)
+            None,  # splynx_id lookup (new)
+            None,  # _get_existing_invoice (legacy SPL-CN-{id} number)
             None,  # _record_sync: _get_synced_entity check
         ]
 
@@ -625,6 +702,294 @@ class TestMapPaymentMethod:
         svc = _make_service(MagicMock())
         svc._payment_method_cache = {}
         assert svc._map_payment_method(999) == PaymentMethod.BANK_TRANSFER
+
+    def test_fluterwave_typo_maps_to_card(self) -> None:
+        svc = _make_service(MagicMock())
+        svc._payment_method_cache = {
+            21: SplynxPaymentMethod(id=21, name="Fluterwave Gateway", is_active=True)
+        }
+        assert svc._map_payment_method(21) == PaymentMethod.CARD
+
+
+class TestBankAccountMethodMapping:
+    """Tests for _build_bank_account_mapping robustness."""
+
+    def test_payment_method_matches_bank_name_and_account_suffix(self) -> None:
+        db = MagicMock()
+        svc = _make_service(db)
+        svc._payment_method_cache = {
+            1: SplynxPaymentMethod(id=1, name="Zenith 461 Bank", is_active=True),
+            2: SplynxPaymentMethod(id=2, name="Fluterwave Wallet", is_active=True),
+        }
+
+        zenith = SimpleNamespace(
+            bank_account_id=uuid.uuid4(),
+            bank_name="Zenith Bank",
+            account_name="Collections",
+            account_number="1016946461",
+            is_primary=True,
+            created_at=None,
+        )
+        flutter = SimpleNamespace(
+            bank_account_id=uuid.uuid4(),
+            bank_name="Flutterwave",
+            account_name="Main",
+            account_number="FW-001",
+            is_primary=False,
+            created_at=None,
+        )
+
+        db.scalars.return_value.all.return_value = [zenith, flutter]
+
+        svc._build_bank_account_mapping()
+
+        assert svc._bank_account_mapping[1] == zenith.bank_account_id
+        assert svc._bank_account_mapping[2] == flutter.bank_account_id
+
+
+class TestAutoAllocateUnappliedPayments:
+    """Tests for strict Tier-A auto-allocation."""
+
+    @staticmethod
+    def _scalars_result(items: list[object]) -> MagicMock:
+        result = MagicMock()
+        result.all.return_value = items
+        return result
+
+    def test_allocates_unique_exact_customer_match(self) -> None:
+        db = MagicMock()
+        svc = _make_service(db)
+
+        customer_id = uuid.uuid4()
+        payment = SimpleNamespace(
+            payment_id=uuid.uuid4(),
+            customer_id=customer_id,
+            amount=Decimal("100.00"),
+            payment_date=date(2026, 2, 14),
+        )
+        invoice = FakeInvoice(
+            customer_id=customer_id,
+            total_amount=Decimal("100.00"),
+            amount_paid=Decimal("0"),
+            status=InvoiceStatus.POSTED,
+            invoice_type=InvoiceType.STANDARD,
+        )
+
+        db.scalars.side_effect = [
+            self._scalars_result([payment]),
+            self._scalars_result([invoice]),
+        ]
+
+        summary = svc.auto_allocate_unapplied_payments()
+
+        assert summary["allocated"] == 1
+        assert summary["ambiguous"] == 0
+        assert summary["no_candidate"] == 0
+        assert invoice.amount_paid == Decimal("100.00")
+        assert invoice.status == InvoiceStatus.PAID
+        db.add.assert_called_once()
+        db.flush.assert_called_once()
+
+    def test_skips_when_ambiguous_multiple_invoice_candidates(self) -> None:
+        db = MagicMock()
+        svc = _make_service(db)
+
+        customer_id = uuid.uuid4()
+        payment = SimpleNamespace(
+            payment_id=uuid.uuid4(),
+            customer_id=customer_id,
+            amount=Decimal("50.00"),
+            payment_date=date(2026, 2, 14),
+        )
+        inv1 = FakeInvoice(
+            customer_id=customer_id,
+            total_amount=Decimal("50.00"),
+            amount_paid=Decimal("0"),
+            status=InvoiceStatus.POSTED,
+            invoice_type=InvoiceType.STANDARD,
+        )
+        inv2 = FakeInvoice(
+            customer_id=customer_id,
+            total_amount=Decimal("50.00"),
+            amount_paid=Decimal("0"),
+            status=InvoiceStatus.PARTIALLY_PAID,
+            invoice_type=InvoiceType.STANDARD,
+        )
+
+        db.scalars.side_effect = [
+            self._scalars_result([payment]),
+            self._scalars_result([inv1, inv2]),
+        ]
+
+        summary = svc.auto_allocate_unapplied_payments()
+
+        assert summary["allocated"] == 0
+        assert summary["ambiguous"] == 1
+        assert summary["no_candidate"] == 0
+        db.add.assert_not_called()
+
+    def test_skips_when_no_exact_balance_candidate(self) -> None:
+        db = MagicMock()
+        svc = _make_service(db)
+
+        customer_id = uuid.uuid4()
+        payment = SimpleNamespace(
+            payment_id=uuid.uuid4(),
+            customer_id=customer_id,
+            amount=Decimal("80.00"),
+            payment_date=date(2026, 2, 14),
+        )
+        invoice = FakeInvoice(
+            customer_id=customer_id,
+            total_amount=Decimal("100.00"),
+            amount_paid=Decimal("10.00"),
+            status=InvoiceStatus.POSTED,
+            invoice_type=InvoiceType.STANDARD,
+        )
+
+        db.scalars.side_effect = [
+            self._scalars_result([payment]),
+            self._scalars_result([invoice]),
+        ]
+
+        summary = svc.auto_allocate_unapplied_payments()
+
+        assert summary["allocated"] == 0
+        assert summary["ambiguous"] == 0
+        assert summary["no_candidate"] == 1
+        db.add.assert_not_called()
+
+
+class TestRepairPaymentInvoiceRelationships:
+    """Tests for repair_payment_invoice_relationships."""
+
+    def test_creates_missing_allocation_from_splynx_invoice_link(self) -> None:
+        db = MagicMock()
+        svc = _make_service(db)
+
+        customer_id = uuid.uuid4()
+        local_payment = SimpleNamespace(
+            payment_id=uuid.uuid4(),
+            customer_id=customer_id,
+            payment_date=date(2026, 2, 14),
+        )
+        target_invoice = FakeInvoice(
+            customer_id=customer_id,
+            total_amount=Decimal("120.00"),
+            amount_paid=Decimal("0"),
+            status=InvoiceStatus.POSTED,
+            invoice_type=InvoiceType.STANDARD,
+            splynx_id="1001",
+        )
+
+        svc._client.get_payments.return_value = iter(
+            [_make_splynx_payment(amount=Decimal("120.00"), invoice_id=1001)]
+        )
+        db.scalar.side_effect = [
+            local_payment,  # local payment by splynx_id
+            target_invoice,  # invoice by splynx_id
+            None,  # existing allocation
+            Decimal("120.00"),  # recompute invoice allocated sum
+        ]
+        db.get.return_value = target_invoice
+
+        summary = svc.repair_payment_invoice_relationships()
+
+        assert summary["processed"] == 1
+        assert summary["fixed"] == 1
+        assert summary["created_allocations"] == 1
+        assert summary["relinked_allocations"] == 0
+        assert target_invoice.amount_paid == Decimal("120.00")
+        assert target_invoice.status == InvoiceStatus.PAID
+        db.add.assert_called_once()
+        db.flush.assert_called_once()
+
+    def test_relinks_existing_allocation_and_updates_amount(self) -> None:
+        db = MagicMock()
+        svc = _make_service(db)
+
+        customer_id = uuid.uuid4()
+        local_payment = SimpleNamespace(
+            payment_id=uuid.uuid4(),
+            customer_id=customer_id,
+            payment_date=date(2026, 2, 14),
+        )
+        old_invoice = FakeInvoice(
+            customer_id=customer_id,
+            total_amount=Decimal("80.00"),
+            amount_paid=Decimal("80.00"),
+            status=InvoiceStatus.PAID,
+            invoice_type=InvoiceType.STANDARD,
+            splynx_id="999",
+        )
+        target_invoice = FakeInvoice(
+            customer_id=customer_id,
+            total_amount=Decimal("100.00"),
+            amount_paid=Decimal("0"),
+            status=InvoiceStatus.POSTED,
+            invoice_type=InvoiceType.STANDARD,
+            splynx_id="1001",
+        )
+        existing_alloc = SimpleNamespace(
+            payment_id=local_payment.payment_id,
+            invoice_id=old_invoice.invoice_id,
+            allocated_amount=Decimal("80.00"),
+            allocation_date=date(2026, 2, 10),
+        )
+
+        svc._client.get_payments.return_value = iter(
+            [_make_splynx_payment(amount=Decimal("100.00"), invoice_id=1001)]
+        )
+        db.scalar.side_effect = [
+            local_payment,  # local payment
+            target_invoice,  # invoice by splynx_id
+            existing_alloc,  # existing allocation
+            Decimal("0"),  # recompute old invoice
+            Decimal("100.00"),  # recompute target invoice
+        ]
+        db.get.side_effect = lambda _model, invoice_id: (
+            old_invoice if invoice_id == old_invoice.invoice_id else target_invoice
+        )
+
+        summary = svc.repair_payment_invoice_relationships()
+
+        assert summary["fixed"] == 1
+        assert summary["created_allocations"] == 0
+        assert summary["relinked_allocations"] == 1
+        assert summary["updated_amounts"] == 1
+        assert existing_alloc.invoice_id == target_invoice.invoice_id
+        assert existing_alloc.allocated_amount == Decimal("100.00")
+        assert old_invoice.amount_paid == Decimal("0")
+        assert old_invoice.status == InvoiceStatus.POSTED
+        assert target_invoice.amount_paid == Decimal("100.00")
+        assert target_invoice.status == InvoiceStatus.PAID
+        db.add.assert_not_called()
+
+    def test_tracks_missing_local_invoice(self) -> None:
+        db = MagicMock()
+        svc = _make_service(db)
+
+        local_payment = SimpleNamespace(
+            payment_id=uuid.uuid4(),
+            customer_id=uuid.uuid4(),
+            payment_date=date(2026, 2, 14),
+        )
+        svc._client.get_payments.return_value = iter(
+            [_make_splynx_payment(invoice_id=1001)]
+        )
+        db.scalar.side_effect = [
+            local_payment,  # local payment
+            None,  # invoice by splynx_id
+            None,  # fallback by correlation id
+        ]
+
+        summary = svc.repair_payment_invoice_relationships()
+
+        assert summary["processed"] == 1
+        assert summary["fixed"] == 0
+        assert summary["missing_local_invoice"] == 1
+        db.add.assert_not_called()
+        db.flush.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

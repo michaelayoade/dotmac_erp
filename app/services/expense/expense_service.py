@@ -1256,6 +1256,9 @@ class ExpenseService:
             return False
         if claim.journal_entry_id is not None:
             return False  # Already has GL entries
+        # Zero-amount claims have nothing to post
+        if claim.total_approved_amount == Decimal("0"):
+            return False
 
         try:
             from app.services.expense.expense_posting_adapter import (
@@ -1276,7 +1279,7 @@ class ExpenseService:
                 auto_post=True,
                 idempotency_key=f"ensure-gl-exp-{claim.claim_id}",
             )
-            if result.success:
+            if result.success and result.journal_entry_id is not None:
                 claim.journal_entry_id = result.journal_entry_id
                 logger.info(
                     "Auto-posted expense claim %s (journal %s)",
@@ -1284,6 +1287,13 @@ class ExpenseService:
                     result.journal_entry_id,
                 )
                 return True
+            if result.success and result.journal_entry_id is None:
+                logger.warning(
+                    "Auto-post returned success without journal for expense claim %s: %s",
+                    claim.claim_id,
+                    result.message,
+                )
+                return False
             else:
                 logger.warning(
                     "Auto-post failed for expense claim %s: %s",

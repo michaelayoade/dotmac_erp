@@ -531,6 +531,9 @@ class SupplierPaymentService(ListResponseMixin):
             return False
         if payment.journal_entry_id is not None:
             return False  # Already has GL entries
+        # Zero-amount payments have nothing to post
+        if payment.amount == Decimal("0"):
+            return False
 
         try:
             from app.services.finance.ap.ap_posting_adapter import APPostingAdapter

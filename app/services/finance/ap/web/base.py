@@ -74,6 +74,7 @@ def parse_payment_status(value: str | None) -> APPaymentStatus | None:
         return None
     status_map = {
         "POSTED": APPaymentStatus.CLEARED,
+        "RECONCILED": APPaymentStatus.CLEARED,
         "VOIDED": APPaymentStatus.VOID,
     }
     if value in status_map:

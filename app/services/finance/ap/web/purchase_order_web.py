@@ -445,7 +445,7 @@ class PurchaseOrderWebService:
         db: Session,
     ) -> HTMLResponse:
         """Render purchase orders list page."""
-        context = base_context(request, auth, "Purchase Orders", "ap")
+        context = base_context(request, auth, "Purchase Orders", "ap", db=db)
         context.update(
             self.list_purchase_orders_context(
                 db,

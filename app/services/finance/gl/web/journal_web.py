@@ -17,9 +17,10 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
-from app.models.finance.gl.journal_entry import JournalEntry, JournalType
+from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, JournalType
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.finance.gl.journal import JournalService
 from app.services.finance.gl.web.base import (
     format_currency,
@@ -82,6 +83,38 @@ class JournalWebService:
             .offset(offset)
             .all()
         )
+        stats_query = build_journal_query(
+            db=db,
+            organization_id=organization_id,
+            search=search,
+            status=None,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        stats_total = (
+            stats_query.with_entities(
+                func.count(JournalEntry.journal_entry_id)
+            ).scalar()
+            or 0
+        )
+        draft_count = (
+            stats_query.filter(JournalEntry.status == JournalStatus.DRAFT)
+            .with_entities(func.count(JournalEntry.journal_entry_id))
+            .scalar()
+            or 0
+        )
+        posted_count = (
+            stats_query.filter(JournalEntry.status == JournalStatus.POSTED)
+            .with_entities(func.count(JournalEntry.journal_entry_id))
+            .scalar()
+            or 0
+        )
+        reversed_count = (
+            stats_query.filter(JournalEntry.status == JournalStatus.REVERSED)
+            .with_entities(func.count(JournalEntry.journal_entry_id))
+            .scalar()
+            or 0
+        )
 
         entries_view = []
         for entry in entries:
@@ -103,6 +136,27 @@ class JournalWebService:
             )
 
         total_pages = max(1, (total_count + limit - 1) // limit)
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "start_date": start_date,
+                "end_date": end_date,
+                "search": search,
+            },
+            labels={
+                "status": "Status",
+                "start_date": "From",
+                "end_date": "To",
+                "search": "Search",
+            },
+            options={
+                "status": {
+                    "DRAFT": "Draft",
+                    "POSTED": "Posted",
+                    "REVERSED": "Reversed",
+                }
+            },
+        )
 
         logger.debug("list_journals_context: found %d entries", total_count)
 
@@ -112,6 +166,11 @@ class JournalWebService:
             "status": status,
             "start_date": start_date,
             "end_date": end_date,
+            "active_filters": active_filters,
+            "stats_total": stats_total,
+            "draft_count": draft_count,
+            "posted_count": posted_count,
+            "reversed_count": reversed_count,
             "page": page,
             "limit": limit,
             "total_count": total_count,

@@ -589,7 +589,7 @@ class OperationsInventoryWebService:
         """Bill of Materials list page."""
         from app.models.inventory.bom import BillOfMaterials, BOMType
 
-        context = base_context(request, auth, "Bill of Materials", "boms")
+        context = base_context(request, auth, "Bill of Materials", "boms", db=db)
         org_id = auth.organization_id
         per_page = 50
 

@@ -1,0 +1,4266 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - link "Default Organization logo Default Organization Finance" [ref=e5] [cursor=pointer]:
+          - /url: /finance/dashboard
+          - img "Default Organization logo" [ref=e6]
+          - generic [ref=e7]:
+            - paragraph [ref=e8]: Default Organization
+            - generic [ref=e9]: Finance
+        - button "Close sidebar" [ref=e10] [cursor=pointer]:
+          - img [ref=e11]
+      - navigation "Finance navigation" [ref=e13]:
+        - link "Dashboard" [ref=e14] [cursor=pointer]:
+          - /url: /finance/dashboard
+          - img [ref=e15]
+          - generic [ref=e17]: Dashboard
+        - generic [ref=e18]: Core
+        - button "General Ledger" [ref=e20] [cursor=pointer]:
+          - img [ref=e21]
+          - generic [ref=e23]: General Ledger
+          - img [ref=e24]
+        - generic [ref=e26]: Sub-Ledgers
+        - button "Accounts Payable" [ref=e28] [cursor=pointer]:
+          - img [ref=e29]
+          - generic [ref=e31]: Accounts Payable
+          - img [ref=e32]
+        - button "Accounts Receivable" [ref=e35] [cursor=pointer]:
+          - img [ref=e36]
+          - generic [ref=e38]: Accounts Receivable
+          - img [ref=e39]
+        - button "Fixed Assets" [ref=e42] [cursor=pointer]:
+          - img [ref=e43]
+          - generic [ref=e45]: Fixed Assets
+          - img [ref=e46]
+        - button "Tax" [ref=e49] [cursor=pointer]:
+          - img [ref=e50]
+          - generic [ref=e52]: Tax
+          - img [ref=e53]
+        - generic [ref=e55]: Treasury
+        - generic [ref=e56]:
+          - button "Banking" [ref=e57] [cursor=pointer]:
+            - img [ref=e58]
+            - generic [ref=e60]: Banking
+            - img [ref=e61]
+          - generic [ref=e63]:
+            - link "Bank Accounts" [ref=e64] [cursor=pointer]:
+              - /url: /finance/banking/accounts
+            - link "Statements" [ref=e65] [cursor=pointer]:
+              - /url: /finance/banking/statements
+            - link "Reconciliations" [ref=e66] [cursor=pointer]:
+              - /url: /finance/banking/reconciliations
+            - link "Transaction Rules" [ref=e67] [cursor=pointer]:
+              - /url: /finance/banking/rules
+            - link "Payees" [ref=e68] [cursor=pointer]:
+              - /url: /finance/banking/payees
+        - generic [ref=e69]: Reporting
+        - button "Reports" [ref=e71] [cursor=pointer]:
+          - img [ref=e72]
+          - generic [ref=e74]: Reports
+          - img [ref=e75]
+        - generic [ref=e77]: Automation
+        - button "Automation" [ref=e79] [cursor=pointer]:
+          - img [ref=e80]
+          - generic [ref=e82]: Automation
+          - img [ref=e83]
+        - generic [ref=e85]: Switch Module
+        - link "People" [ref=e86] [cursor=pointer]:
+          - /url: /people/hr/employees
+          - img [ref=e87]
+          - generic [ref=e89]: People
+        - link "Inventory" [ref=e90] [cursor=pointer]:
+          - /url: /inventory/items
+          - img [ref=e91]
+          - generic [ref=e93]: Inventory
+        - link "Fleet" [ref=e94] [cursor=pointer]:
+          - /url: /fleet
+          - img [ref=e95]
+          - generic [ref=e97]: Fleet
+        - link "Support" [ref=e98] [cursor=pointer]:
+          - /url: /support/tickets
+          - img [ref=e99]
+          - generic [ref=e101]: Support
+        - link "Procurement" [ref=e102] [cursor=pointer]:
+          - /url: /procurement
+          - img [ref=e103]
+          - generic [ref=e105]: Procurement
+        - link "Projects" [ref=e106] [cursor=pointer]:
+          - /url: /projects
+          - img [ref=e107]
+          - generic [ref=e109]: Projects
+        - link "Expenses" [ref=e110] [cursor=pointer]:
+          - /url: /expense
+          - img [ref=e111]
+          - generic [ref=e113]: Expenses
+        - link "Admin" [ref=e114] [cursor=pointer]:
+          - /url: /admin
+          - img [ref=e115]
+          - generic [ref=e118]: Admin
+      - generic [ref=e119]:
+        - link "Settings" [ref=e120] [cursor=pointer]:
+          - /url: /settings
+          - img [ref=e121]
+          - generic [ref=e124]: Settings
+        - link "Help & Support" [ref=e125] [cursor=pointer]:
+          - /url: /support/dashboard
+          - img [ref=e126]
+          - generic [ref=e128]: Help & Support
+        - button "A admin" [ref=e131] [cursor=pointer]:
+          - generic [ref=e132]: A
+          - generic [ref=e134]: admin
+          - img [ref=e135]
+    - generic [ref=e137]:
+      - banner [ref=e138]:
+        - generic [ref=e139]:
+          - generic [ref=e140]:
+            - button "Open sidebar" [ref=e141] [cursor=pointer]:
+              - img [ref=e142]
+            - generic [ref=e144]:
+              - heading "Bank Statement" [level=1] [ref=e145]
+              - navigation "Breadcrumb" [ref=e146]:
+                - link "Finance" [ref=e147] [cursor=pointer]:
+                  - /url: /finance/dashboard
+                - img [ref=e148]
+                - link "Statements" [ref=e150] [cursor=pointer]:
+                  - /url: /finance/banking/statements
+                - img [ref=e151]
+                - generic [ref=e153]: PSK-20260210-20260211
+            - button "Search..." [ref=e154] [cursor=pointer]:
+              - img [ref=e155]
+              - generic [ref=e157]: Search...
+          - generic [ref=e158]:
+            - button "Toggle theme" [ref=e159] [cursor=pointer]:
+              - img [ref=e160]
+            - button "Notifications" [ref=e163] [cursor=pointer]:
+              - img [ref=e164]
+      - main [ref=e166]:
+        - generic [ref=e168]:
+          - generic [ref=e169]:
+            - generic [ref=e171]:
+              - img [ref=e173]
+              - generic [ref=e175]:
+                - paragraph [ref=e176]: NGN -10,869,510.00
+                - paragraph [ref=e177]: Opening Balance
+            - generic [ref=e179]:
+              - img [ref=e181]
+              - generic [ref=e183]:
+                - paragraph [ref=e184]: NGN -10,998,710.00
+                - paragraph [ref=e185]: Closing Balance
+            - generic [ref=e187]:
+              - img [ref=e189]
+              - generic [ref=e191]:
+                - paragraph [ref=e192]: "11"
+                - paragraph [ref=e193]: Total Lines
+            - generic [ref=e195]:
+              - img [ref=e197]
+              - generic [ref=e199]:
+                - paragraph [ref=e201]: 9%
+                - paragraph [ref=e202]: Match Rate (1/11)
+          - generic [ref=e203]:
+            - generic [ref=e204]:
+              - generic [ref=e205]:
+                - generic [ref=e206]:
+                  - generic [ref=e207]:
+                    - heading "PSK-20260210-20260211" [level=2] [ref=e208]
+                    - paragraph [ref=e209]: 10/02/2026 — 11/02/2026
+                  - generic [ref=e211]: Imported
+                - generic [ref=e212]:
+                  - generic [ref=e213]:
+                    - paragraph [ref=e214]: Total Credits
+                    - paragraph [ref=e215]: +NGN 0.00
+                  - generic [ref=e216]:
+                    - paragraph [ref=e217]: Total Debits
+                    - paragraph [ref=e218]: −NGN 129,200.00
+                  - generic [ref=e219]:
+                    - paragraph [ref=e220]: Net Change
+                    - paragraph [ref=e221]: "-129,200.00"
+                - generic [ref=e223]:
+                  - generic [ref=e224]: Matching Progress
+                  - generic [ref=e225]: 1 / 11 matched
+              - generic [ref=e228]:
+                - generic [ref=e230]:
+                  - heading "Transaction Lines" [level=3] [ref=e231]
+                  - generic [ref=e232]:
+                    - generic [ref=e233]: 1 matched
+                    - generic [ref=e234]: 10 unmatched
+                - table [ref=e236]:
+                  - rowgroup [ref=e237]:
+                    - row "# Date Description Amount Status GL Match" [ref=e238]:
+                      - columnheader "#" [ref=e239]
+                      - columnheader "Date" [ref=e240]
+                      - columnheader "Description" [ref=e241]
+                      - columnheader "Amount" [ref=e242]
+                      - columnheader "Status" [ref=e243]
+                      - columnheader "GL Match" [ref=e244]
+                  - rowgroup [ref=e245]:
+                    - 'row "1 10/02/2026 Transfer: Expense Claim Payment - ACC-PAY-2026-03050 Isaac Danlami Bawa -NGN 3,500.00 Matched Linked Remove match" [ref=e4183]':
+                      - cell "1" [ref=e247]
+                      - cell "10/02/2026" [ref=e248]
+                      - 'cell "Transfer: Expense Claim Payment - ACC-PAY-2026-03050 Isaac Danlami Bawa" [ref=e249]':
+                        - paragraph [ref=e250]: "Transfer: Expense Claim Payment - ACC-PAY-2026-03050"
+                        - paragraph [ref=e251]: Isaac Danlami Bawa
+                      - cell "-NGN 3,500.00" [ref=e252]
+                      - cell "Matched" [ref=e4184]:
+                        - generic [ref=e254]:
+                          - img [ref=e255]
+                          - text: Matched
+                      - cell "Linked Remove match" [ref=e4185]:
+                        - generic [ref=e258]:
+                          - img [ref=e259]
+                          - link "Linked" [ref=e4186] [cursor=pointer]:
+                            - /url: /finance/ar/receipts/a0521184-cf1f-4946-9f1c-1e981e15d0c9
+                          - button "Remove match" [ref=e262] [cursor=pointer]:
+                            - img [ref=e263]
+                    - 'row "2 10/02/2026 Transfer: Expense Claim Payment - ACC-PAY-2026-03048 Adesanya taiwo -NGN 15,000.00 Unmatched Find GL match" [ref=e265]':
+                      - cell "2" [ref=e266]
+                      - cell "10/02/2026" [ref=e267]
+                      - 'cell "Transfer: Expense Claim Payment - ACC-PAY-2026-03048 Adesanya taiwo" [ref=e268]':
+                        - paragraph [ref=e269]: "Transfer: Expense Claim Payment - ACC-PAY-2026-03048"
+                        - paragraph [ref=e270]: Adesanya taiwo
+                      - cell "-NGN 15,000.00" [ref=e271]
+                      - cell "Unmatched" [ref=e272]:
+                        - generic [ref=e273]: Unmatched
+                      - cell "Find GL match" [ref=e274]:
+                        - button "Find GL match" [ref=e276] [cursor=pointer]:
+                          - img [ref=e277]
+                          - generic [ref=e279]: Find
+                    - 'row "3 10/02/2026 Transfer: Expense Claim Payment - ACC-PAY-2026-03046 Nasiru Ibrahim -NGN 25,000.00 Unmatched Find GL match" [ref=e280]':
+                      - cell "3" [ref=e281]
+                      - cell "10/02/2026" [ref=e282]
+                      - 'cell "Transfer: Expense Claim Payment - ACC-PAY-2026-03046 Nasiru Ibrahim" [ref=e283]':
+                        - paragraph [ref=e284]: "Transfer: Expense Claim Payment - ACC-PAY-2026-03046"
+                        - paragraph [ref=e285]: Nasiru Ibrahim
+                      - cell "-NGN 25,000.00" [ref=e286]
+                      - cell "Unmatched" [ref=e287]:
+                        - generic [ref=e288]: Unmatched
+                      - cell "Find GL match" [ref=e289]:
+                        - button "Find GL match" [ref=e291] [cursor=pointer]:
+                          - img [ref=e292]
+                          - generic [ref=e294]: Find
+                    - 'row "4 10/02/2026 Transfer: Expense Claim Payment - ACC-PAY-2026-03044 Godwin Shuiabu -NGN 10,000.00 Unmatched Find GL match" [ref=e295]':
+                      - cell "4" [ref=e296]
+                      - cell "10/02/2026" [ref=e297]
+                      - 'cell "Transfer: Expense Claim Payment - ACC-PAY-2026-03044 Godwin Shuiabu" [ref=e298]':
+                        - paragraph [ref=e299]: "Transfer: Expense Claim Payment - ACC-PAY-2026-03044"
+                        - paragraph [ref=e300]: Godwin Shuiabu
+                      - cell "-NGN 10,000.00" [ref=e301]
+                      - cell "Unmatched" [ref=e302]:
+                        - generic [ref=e303]: Unmatched
+                      - cell "Find GL match" [ref=e304]:
+                        - button "Find GL match" [active] [ref=e306] [cursor=pointer]:
+                          - img [ref=e307]
+                          - generic [ref=e309]: Find
+                    - 'row "5 10/02/2026 Transfer: Expense Claim Payment - ACC-PAY-2026-03042 JONAH kentah amos -NGN 5,000.00 Unmatched Find GL match" [ref=e310]':
+                      - cell "5" [ref=e311]
+                      - cell "10/02/2026" [ref=e312]
+                      - 'cell "Transfer: Expense Claim Payment - ACC-PAY-2026-03042 JONAH kentah amos" [ref=e313]':
+                        - paragraph [ref=e314]: "Transfer: Expense Claim Payment - ACC-PAY-2026-03042"
+                        - paragraph [ref=e315]: JONAH kentah amos
+                      - cell "-NGN 5,000.00" [ref=e316]
+                      - cell "Unmatched" [ref=e317]:
+                        - generic [ref=e318]: Unmatched
+                      - cell "Find GL match" [ref=e319]:
+                        - button "Find GL match" [ref=e321] [cursor=pointer]:
+                          - img [ref=e322]
+                          - generic [ref=e324]: Find
+                    - 'row "6 10/02/2026 Transfer: Expense Claim Payment - ACC-PAY-2026-03030 Pinko Hattut -NGN 25,000.00 Unmatched Find GL match" [ref=e325]':
+                      - cell "6" [ref=e326]
+                      - cell "10/02/2026" [ref=e327]
+                      - 'cell "Transfer: Expense Claim Payment - ACC-PAY-2026-03030 Pinko Hattut" [ref=e328]':
+                        - paragraph [ref=e329]: "Transfer: Expense Claim Payment - ACC-PAY-2026-03030"
+                        - paragraph [ref=e330]: Pinko Hattut
+                      - cell "-NGN 25,000.00" [ref=e331]
+                      - cell "Unmatched" [ref=e332]:
+                        - generic [ref=e333]: Unmatched
+                      - cell "Find GL match" [ref=e334]:
+                        - button "Find GL match" [ref=e336] [cursor=pointer]:
+                          - img [ref=e337]
+                          - generic [ref=e339]: Find
+                    - 'row "7 10/02/2026 Transfer: Expense Claim Payment - ACC-PAY-2026-03041 Samuel Ebi Igelle -NGN 3,000.00 Unmatched Find GL match" [ref=e340]':
+                      - cell "7" [ref=e341]
+                      - cell "10/02/2026" [ref=e342]
+                      - 'cell "Transfer: Expense Claim Payment - ACC-PAY-2026-03041 Samuel Ebi Igelle" [ref=e343]':
+                        - paragraph [ref=e344]: "Transfer: Expense Claim Payment - ACC-PAY-2026-03041"
+                        - paragraph [ref=e345]: Samuel Ebi Igelle
+                      - cell "-NGN 3,000.00" [ref=e346]
+                      - cell "Unmatched" [ref=e347]:
+                        - generic [ref=e348]: Unmatched
+                      - cell "Find GL match" [ref=e349]:
+                        - button "Find GL match" [ref=e351] [cursor=pointer]:
+                          - img [ref=e352]
+                          - generic [ref=e354]: Find
+                    - 'row "8 10/02/2026 Transfer: Expense Claim Payment - ACC-PAY-2026-03039 Simon Adah -NGN 4,000.00 Unmatched Find GL match" [ref=e355]':
+                      - cell "8" [ref=e356]
+                      - cell "10/02/2026" [ref=e357]
+                      - 'cell "Transfer: Expense Claim Payment - ACC-PAY-2026-03039 Simon Adah" [ref=e358]':
+                        - paragraph [ref=e359]: "Transfer: Expense Claim Payment - ACC-PAY-2026-03039"
+                        - paragraph [ref=e360]: Simon Adah
+                      - cell "-NGN 4,000.00" [ref=e361]
+                      - cell "Unmatched" [ref=e362]:
+                        - generic [ref=e363]: Unmatched
+                      - cell "Find GL match" [ref=e364]:
+                        - button "Find GL match" [ref=e366] [cursor=pointer]:
+                          - img [ref=e367]
+                          - generic [ref=e369]: Find
+                    - 'row "9 10/02/2026 Transfer: Expense Claim Payment - ACC-PAY-2026-03037 JONAH kentah amos -NGN 10,500.00 Unmatched Find GL match" [ref=e370]':
+                      - cell "9" [ref=e371]
+                      - cell "10/02/2026" [ref=e372]
+                      - 'cell "Transfer: Expense Claim Payment - ACC-PAY-2026-03037 JONAH kentah amos" [ref=e373]':
+                        - paragraph [ref=e374]: "Transfer: Expense Claim Payment - ACC-PAY-2026-03037"
+                        - paragraph [ref=e375]: JONAH kentah amos
+                      - cell "-NGN 10,500.00" [ref=e376]
+                      - cell "Unmatched" [ref=e377]:
+                        - generic [ref=e378]: Unmatched
+                      - cell "Find GL match" [ref=e379]:
+                        - button "Find GL match" [ref=e381] [cursor=pointer]:
+                          - img [ref=e382]
+                          - generic [ref=e384]: Find
+                    - 'row "10 10/02/2026 Transfer: Expense Claim Payment - ACC-PAY-2026-03036 Odeyemi Peter -NGN 3,200.00 Unmatched Find GL match" [ref=e385]':
+                      - cell "10" [ref=e386]
+                      - cell "10/02/2026" [ref=e387]
+                      - 'cell "Transfer: Expense Claim Payment - ACC-PAY-2026-03036 Odeyemi Peter" [ref=e388]':
+                        - paragraph [ref=e389]: "Transfer: Expense Claim Payment - ACC-PAY-2026-03036"
+                        - paragraph [ref=e390]: Odeyemi Peter
+                      - cell "-NGN 3,200.00" [ref=e391]
+                      - cell "Unmatched" [ref=e392]:
+                        - generic [ref=e393]: Unmatched
+                      - cell "Find GL match" [ref=e394]:
+                        - button "Find GL match" [ref=e396] [cursor=pointer]:
+                          - img [ref=e397]
+                          - generic [ref=e399]: Find
+                    - 'row "11 10/02/2026 Transfer: Expense Claim Payment - ACC-PAY-2026-03034 Isaac Alex tobiloba -NGN 25,000.00 Unmatched Find GL match" [ref=e400]':
+                      - cell "11" [ref=e401]
+                      - cell "10/02/2026" [ref=e402]
+                      - 'cell "Transfer: Expense Claim Payment - ACC-PAY-2026-03034 Isaac Alex tobiloba" [ref=e403]':
+                        - paragraph [ref=e404]: "Transfer: Expense Claim Payment - ACC-PAY-2026-03034"
+                        - paragraph [ref=e405]: Isaac Alex tobiloba
+                      - cell "-NGN 25,000.00" [ref=e406]
+                      - cell "Unmatched" [ref=e407]:
+                        - generic [ref=e408]: Unmatched
+                      - cell "Find GL match" [ref=e409]:
+                        - button "Find GL match" [ref=e411] [cursor=pointer]:
+                          - img [ref=e412]
+                          - generic [ref=e414]: Find
+            - generic [ref=e415]:
+              - generic [ref=e416]:
+                - heading "Account Details" [level=3] [ref=e417]
+                - generic [ref=e418]:
+                  - generic [ref=e419]:
+                    - term [ref=e420]: Bank
+                    - definition [ref=e421]: Paystack
+                  - generic [ref=e422]:
+                    - term [ref=e423]: Account Number
+                    - definition [ref=e424]: PSK-OPEX
+                  - generic [ref=e425]:
+                    - term [ref=e426]: Currency
+                    - definition [ref=e427]: NGN
+                  - generic [ref=e428]:
+                    - term [ref=e429]: Statement Date
+                    - definition [ref=e430]: 11/02/2026
+                  - generic [ref=e431]:
+                    - term [ref=e432]: Period
+                    - definition [ref=e433]: 10/02/2026 — 11/02/2026
+              - generic [ref=e434]:
+                - heading "Actions" [level=3] [ref=e435]
+                - generic [ref=e436]:
+                  - button "Apply Rules" [ref=e438] [cursor=pointer]:
+                    - img [ref=e439]
+                    - text: Apply Rules
+                  - button "Auto-Match Payments" [ref=e442] [cursor=pointer]:
+                    - img [ref=e443]
+                    - text: Auto-Match Payments
+                  - link "View Account" [ref=e445] [cursor=pointer]:
+                    - /url: /finance/banking/accounts/548e51bd-2171-429c-87d0-d0ff631ab75a
+                    - img [ref=e446]
+                    - text: View Account
+                  - link "New Reconciliation" [ref=e448] [cursor=pointer]:
+                    - /url: /finance/banking/reconciliations/new?account_id=548e51bd-2171-429c-87d0-d0ff631ab75a&statement_id=54e1ee38-10db-4bec-89de-f462ac1ba48f
+                    - img [ref=e449]
+                    - text: New Reconciliation
+                  - link "All Statements" [ref=e451] [cursor=pointer]:
+                    - /url: /finance/banking/statements
+                    - img [ref=e452]
+                    - text: All Statements
+                  - button "Delete Statement" [ref=e455] [cursor=pointer]:
+                    - img [ref=e456]
+                    - text: Delete Statement
+              - generic [ref=e458]:
+                - heading "Balance Summary" [level=3] [ref=e459]
+                - generic [ref=e460]:
+                  - generic [ref=e461]:
+                    - term [ref=e462]: Opening
+                    - definition [ref=e463]: NGN -10,869,510.00
+                  - generic [ref=e464]:
+                    - term [ref=e465]: Credits
+                    - definition [ref=e466]: +NGN 0.00
+                  - generic [ref=e467]:
+                    - term [ref=e468]: Debits
+                    - definition [ref=e469]: −NGN 129,200.00
+                  - generic [ref=e470]:
+                    - term [ref=e471]: Closing
+                    - definition [ref=e472]: NGN -10,998,710.00
+          - dialog "Find GL Transaction" [ref=e497]:
+            - generic [ref=e499]:
+              - generic [ref=e500]:
+                - generic [ref=e501]:
+                  - generic [ref=e502]:
+                    - heading "Find GL Transaction" [level=3] [ref=e503]
+                    - paragraph [ref=e504]: Select multiple GL entries whose amounts sum to the bank line
+                  - button "Multi ON" [ref=e7803] [cursor=pointer]:
+                    - img [ref=e506]
+                    - generic [ref=e508]: Multi ON
+                - button "Close" [ref=e509] [cursor=pointer]:
+                  - img [ref=e510]
+              - generic [ref=e512]:
+                - paragraph [ref=e513]: Matching Bank Line
+                - generic [ref=e514]:
+                  - generic [ref=e515]:
+                    - paragraph [ref=e516]: "Transfer: Expense Claim Payment - ACC-PAY-2026-03044"
+                    - generic [ref=e517]:
+                      - generic [ref=e518]: 10/02/2026
+                      - generic [ref=e519]: Godwin Shuiabu
+                  - generic [ref=e520]: "-NGN 10,000.00"
+              - generic [ref=e521]:
+                - generic [ref=e522]:
+                  - img [ref=e523]
+                  - textbox "Search by description, reference, counterparty, or amount..." [ref=e525]
+                - generic [ref=e526]:
+                  - generic [ref=e527]:
+                    - text: From
+                    - textbox [ref=e528]
+                  - generic [ref=e529]:
+                    - text: To
+                    - textbox [ref=e530]
+                  - generic [ref=e531]:
+                    - text: Source Type
+                    - combobox [ref=e532]:
+                      - option "All Types" [selected]
+                      - option "CUSTOMER PAYMENT"
+                  - generic [ref=e533]:
+                    - text: Direction
+                    - combobox [ref=e534]:
+                      - option "All" [selected]
+                      - option "Debits (In)"
+                      - option "Credits (Out)"
+                  - generic [ref=e535]:
+                    - generic [ref=e536]:
+                      - button "Score" [ref=e537] [cursor=pointer]:
+                        - img [ref=e538]
+                        - text: Score
+                      - button "Amount" [ref=e540] [cursor=pointer]
+                      - button "Date" [ref=e541] [cursor=pointer]
+                    - button "Clear" [ref=e542] [cursor=pointer]
+              - table [ref=e4194]:
+                - rowgroup [ref=e4195]:
+                  - row "Score Date Description Type Counterparty Amount" [ref=e4196]:
+                    - columnheader [ref=e7804]
+                    - columnheader "Score" [ref=e4197]
+                    - columnheader "Date" [ref=e4198]
+                    - columnheader "Description" [ref=e4199]
+                    - columnheader "Type" [ref=e4200]
+                    - columnheader "Counterparty" [ref=e4201]
+                    - columnheader "Amount" [ref=e4202]
+                    - columnheader [ref=e4203]
+                - rowgroup [ref=e4204]:
+                  - row "26 07 Feb 2026 AR Payment PMT202602-60703 - Prince Godwin Momoh 2026-05-00929 Customer Payment Prince Godwin Momoh PMT202602-60703 +NGN 18,812.50 Already matched" [ref=e4205]:
+                    - cell [ref=e7805]
+                    - cell "26" [ref=e4206]:
+                      - generic [ref=e4207]: "26"
+                    - cell "07 Feb 2026" [ref=e4208]
+                    - cell "AR Payment PMT202602-60703 - Prince Godwin Momoh 2026-05-00929" [ref=e4209]:
+                      - paragraph [ref=e4210]: AR Payment PMT202602-60703 - Prince Godwin Momoh
+                      - paragraph [ref=e4211]: 2026-05-00929
+                    - cell "Customer Payment" [ref=e4212]:
+                      - generic [ref=e4213]: Customer Payment
+                    - cell "Prince Godwin Momoh PMT202602-60703" [ref=e4214]:
+                      - generic [ref=e4215]: Prince Godwin Momoh
+                      - paragraph [ref=e4216]: PMT202602-60703
+                    - cell "+NGN 18,812.50" [ref=e4217]
+                    - cell "Already matched" [ref=e4218]:
+                      - generic [ref=e4220]: Already matched
+                  - row "18 07 Feb 2026 AR Payment PMT202602-60694 - Mr. Destiny Anegbode 2026-11-00764 Customer Payment Mr. Destiny Anegbode PMT202602-60694 +NGN 18,812.50 View source document" [ref=e7806]:
+                    - cell [ref=e7807]:
+                      - checkbox [ref=e7808]
+                    - cell "18" [ref=e4222]:
+                      - generic [ref=e4223]: "18"
+                    - cell "07 Feb 2026" [ref=e4224]
+                    - cell "AR Payment PMT202602-60694 - Mr. Destiny Anegbode 2026-11-00764" [ref=e4225]:
+                      - paragraph [ref=e4226]: AR Payment PMT202602-60694 - Mr. Destiny Anegbode
+                      - paragraph [ref=e4227]: 2026-11-00764
+                    - cell "Customer Payment" [ref=e4228]:
+                      - generic [ref=e4229]: Customer Payment
+                    - cell "Mr. Destiny Anegbode PMT202602-60694" [ref=e4230]:
+                      - generic [ref=e4231]: Mr. Destiny Anegbode
+                      - paragraph [ref=e4232]: PMT202602-60694
+                    - cell "+NGN 18,812.50" [ref=e4233]
+                    - cell "View source document" [ref=e7809]:
+                      - link "View source document" [ref=e7810] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/05c2de24-4bd4-4f0c-bc2c-55b17b060ebb
+                        - text: View
+                  - row "18 07 Feb 2026 AR Payment PMT202602-60688 - Ebere Vida Uchegbu 2026-05-00916 Customer Payment Ebere Vida Uchegbu PMT202602-60688 +NGN 18,812.50 View source document" [ref=e7811]:
+                    - cell [ref=e7812]:
+                      - checkbox [ref=e7813]
+                    - cell "18" [ref=e4240]:
+                      - generic [ref=e4241]: "18"
+                    - cell "07 Feb 2026" [ref=e4242]
+                    - cell "AR Payment PMT202602-60688 - Ebere Vida Uchegbu 2026-05-00916" [ref=e4243]:
+                      - paragraph [ref=e4244]: AR Payment PMT202602-60688 - Ebere Vida Uchegbu
+                      - paragraph [ref=e4245]: 2026-05-00916
+                    - cell "Customer Payment" [ref=e4246]:
+                      - generic [ref=e4247]: Customer Payment
+                    - cell "Ebere Vida Uchegbu PMT202602-60688" [ref=e4248]:
+                      - generic [ref=e4249]: Ebere Vida Uchegbu
+                      - paragraph [ref=e4250]: PMT202602-60688
+                    - cell "+NGN 18,812.50" [ref=e4251]
+                    - cell "View source document" [ref=e7814]:
+                      - link "View source document" [ref=e7815] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/12d89412-223c-478c-b9ca-715d76166269
+                        - text: View
+                  - row "18 07 Feb 2026 AR Payment PMT202602-60702 - Qudus Ganiu 2026-05-00928 Customer Payment Qudus Ganiu PMT202602-60702 +NGN 18,812.50 View source document" [ref=e7816]:
+                    - cell [ref=e7817]:
+                      - checkbox [ref=e7818]
+                    - cell "18" [ref=e4258]:
+                      - generic [ref=e4259]: "18"
+                    - cell "07 Feb 2026" [ref=e4260]
+                    - cell "AR Payment PMT202602-60702 - Qudus Ganiu 2026-05-00928" [ref=e4261]:
+                      - paragraph [ref=e4262]: AR Payment PMT202602-60702 - Qudus Ganiu
+                      - paragraph [ref=e4263]: 2026-05-00928
+                    - cell "Customer Payment" [ref=e4264]:
+                      - generic [ref=e4265]: Customer Payment
+                    - cell "Qudus Ganiu PMT202602-60702" [ref=e4266]:
+                      - generic [ref=e4267]: Qudus Ganiu
+                      - paragraph [ref=e4268]: PMT202602-60702
+                    - cell "+NGN 18,812.50" [ref=e4269]
+                    - cell "View source document" [ref=e7819]:
+                      - link "View source document" [ref=e7820] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/fe9bd52d-c347-4502-abf1-3b2806e19f5e
+                        - text: View
+                  - row "18 07 Feb 2026 AR Payment PMT202602-60698 - Owoeye Omoniyi 2026-05-00925 Customer Payment Owoeye Omoniyi PMT202602-60698 +NGN 18,812.50 View source document" [ref=e7821]:
+                    - cell [ref=e7822]:
+                      - checkbox [ref=e7823]
+                    - cell "18" [ref=e4276]:
+                      - generic [ref=e4277]: "18"
+                    - cell "07 Feb 2026" [ref=e4278]
+                    - cell "AR Payment PMT202602-60698 - Owoeye Omoniyi 2026-05-00925" [ref=e4279]:
+                      - paragraph [ref=e4280]: AR Payment PMT202602-60698 - Owoeye Omoniyi
+                      - paragraph [ref=e4281]: 2026-05-00925
+                    - cell "Customer Payment" [ref=e4282]:
+                      - generic [ref=e4283]: Customer Payment
+                    - cell "Owoeye Omoniyi PMT202602-60698" [ref=e4284]:
+                      - generic [ref=e4285]: Owoeye Omoniyi
+                      - paragraph [ref=e4286]: PMT202602-60698
+                    - cell "+NGN 18,812.50" [ref=e4287]
+                    - cell "View source document" [ref=e7824]:
+                      - link "View source document" [ref=e7825] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/fb17ae52-dbb0-44b3-8af0-8c6115483d56
+                        - text: View
+                  - row "18 07 Feb 2026 AR Payment PMT202602-60692 - OliverTwist Supermarket Lokogoma 2026-05-00920 Customer Payment OliverTwist Supermarket Lokogoma PMT202602-60692 +NGN 18,812.50 View source document" [ref=e7826]:
+                    - cell [ref=e7827]:
+                      - checkbox [ref=e7828]
+                    - cell "18" [ref=e4294]:
+                      - generic [ref=e4295]: "18"
+                    - cell "07 Feb 2026" [ref=e4296]
+                    - cell "AR Payment PMT202602-60692 - OliverTwist Supermarket Lokogoma 2026-05-00920" [ref=e4297]:
+                      - paragraph [ref=e4298]: AR Payment PMT202602-60692 - OliverTwist Supermarket Lokogoma
+                      - paragraph [ref=e4299]: 2026-05-00920
+                    - cell "Customer Payment" [ref=e4300]:
+                      - generic [ref=e4301]: Customer Payment
+                    - cell "OliverTwist Supermarket Lokogoma PMT202602-60692" [ref=e4302]:
+                      - generic [ref=e4303]: OliverTwist Supermarket Lokogoma
+                      - paragraph [ref=e4304]: PMT202602-60692
+                    - cell "+NGN 18,812.50" [ref=e4305]
+                    - cell "View source document" [ref=e7829]:
+                      - link "View source document" [ref=e7830] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/d97b9d6d-0774-43d0-80ec-ba635ba45f30
+                        - text: View
+                  - row "18 07 Feb 2026 AR Payment PMT202602-60697 - Sunday Iji 2026-05-00924 Customer Payment Sunday Iji PMT202602-60697 +NGN 18,812.50 View source document" [ref=e7831]:
+                    - cell [ref=e7832]:
+                      - checkbox [ref=e7833]
+                    - cell "18" [ref=e4312]:
+                      - generic [ref=e4313]: "18"
+                    - cell "07 Feb 2026" [ref=e4314]
+                    - cell "AR Payment PMT202602-60697 - Sunday Iji 2026-05-00924" [ref=e4315]:
+                      - paragraph [ref=e4316]: AR Payment PMT202602-60697 - Sunday Iji
+                      - paragraph [ref=e4317]: 2026-05-00924
+                    - cell "Customer Payment" [ref=e4318]:
+                      - generic [ref=e4319]: Customer Payment
+                    - cell "Sunday Iji PMT202602-60697" [ref=e4320]:
+                      - generic [ref=e4321]: Sunday Iji
+                      - paragraph [ref=e4322]: PMT202602-60697
+                    - cell "+NGN 18,812.50" [ref=e4323]
+                    - cell "View source document" [ref=e7834]:
+                      - link "View source document" [ref=e7835] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/d35ca2b6-699d-4257-a57b-d6a4a09b3a5b
+                        - text: View
+                  - row "18 07 Feb 2026 AR Payment PMT202602-60687 - Ibrahim Anas Aliyu 2026-05-00913 Customer Payment Ibrahim Anas Aliyu PMT202602-60687 +NGN 18,812.50 View source document" [ref=e7836]:
+                    - cell [ref=e7837]:
+                      - checkbox [ref=e7838]
+                    - cell "18" [ref=e4330]:
+                      - generic [ref=e4331]: "18"
+                    - cell "07 Feb 2026" [ref=e4332]
+                    - cell "AR Payment PMT202602-60687 - Ibrahim Anas Aliyu 2026-05-00913" [ref=e4333]:
+                      - paragraph [ref=e4334]: AR Payment PMT202602-60687 - Ibrahim Anas Aliyu
+                      - paragraph [ref=e4335]: 2026-05-00913
+                    - cell "Customer Payment" [ref=e4336]:
+                      - generic [ref=e4337]: Customer Payment
+                    - cell "Ibrahim Anas Aliyu PMT202602-60687" [ref=e4338]:
+                      - generic [ref=e4339]: Ibrahim Anas Aliyu
+                      - paragraph [ref=e4340]: PMT202602-60687
+                    - cell "+NGN 18,812.50" [ref=e4341]
+                    - cell "View source document" [ref=e7839]:
+                      - link "View source document" [ref=e7840] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/c5f10595-6171-46a2-aa29-ddfa77aa8ae0
+                        - text: View
+                  - row "18 07 Feb 2026 AR Payment PMT202602-60704 - Umar Yakubu Bello 2026-05-00930 Customer Payment Umar Yakubu Bello PMT202602-60704 +NGN 18,812.50 View source document" [ref=e7841]:
+                    - cell [ref=e7842]:
+                      - checkbox [ref=e7843]
+                    - cell "18" [ref=e4348]:
+                      - generic [ref=e4349]: "18"
+                    - cell "07 Feb 2026" [ref=e4350]
+                    - cell "AR Payment PMT202602-60704 - Umar Yakubu Bello 2026-05-00930" [ref=e4351]:
+                      - paragraph [ref=e4352]: AR Payment PMT202602-60704 - Umar Yakubu Bello
+                      - paragraph [ref=e4353]: 2026-05-00930
+                    - cell "Customer Payment" [ref=e4354]:
+                      - generic [ref=e4355]: Customer Payment
+                    - cell "Umar Yakubu Bello PMT202602-60704" [ref=e4356]:
+                      - generic [ref=e4357]: Umar Yakubu Bello
+                      - paragraph [ref=e4358]: PMT202602-60704
+                    - cell "+NGN 18,812.50" [ref=e4359]
+                    - cell "View source document" [ref=e7844]:
+                      - link "View source document" [ref=e7845] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/bfd619d0-93b6-4d35-8163-2010238a15f8
+                        - text: View
+                  - row "18 07 Feb 2026 AR Payment PMT202602-60701 - Khalil Ajana 2026-05-00927 Customer Payment Khalil Ajana PMT202602-60701 +NGN 37,625.00 View source document" [ref=e7846]:
+                    - cell [ref=e7847]:
+                      - checkbox [ref=e7848]
+                    - cell "18" [ref=e4366]:
+                      - generic [ref=e4367]: "18"
+                    - cell "07 Feb 2026" [ref=e4368]
+                    - cell "AR Payment PMT202602-60701 - Khalil Ajana 2026-05-00927" [ref=e4369]:
+                      - paragraph [ref=e4370]: AR Payment PMT202602-60701 - Khalil Ajana
+                      - paragraph [ref=e4371]: 2026-05-00927
+                    - cell "Customer Payment" [ref=e4372]:
+                      - generic [ref=e4373]: Customer Payment
+                    - cell "Khalil Ajana PMT202602-60701" [ref=e4374]:
+                      - generic [ref=e4375]: Khalil Ajana
+                      - paragraph [ref=e4376]: PMT202602-60701
+                    - cell "+NGN 37,625.00" [ref=e4377]
+                    - cell "View source document" [ref=e7849]:
+                      - link "View source document" [ref=e7850] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/8c9b8222-6f7a-4bad-a37d-32eda8166c3f
+                        - text: View
+                  - row "18 07 Feb 2026 AR Payment PMT202602-60695 - Asilika Josephine 2026-05-00923 Customer Payment Asilika Josephine PMT202602-60695 +NGN 18,812.50 View source document" [ref=e7851]:
+                    - cell [ref=e7852]:
+                      - checkbox [ref=e7853]
+                    - cell "18" [ref=e4384]:
+                      - generic [ref=e4385]: "18"
+                    - cell "07 Feb 2026" [ref=e4386]
+                    - cell "AR Payment PMT202602-60695 - Asilika Josephine 2026-05-00923" [ref=e4387]:
+                      - paragraph [ref=e4388]: AR Payment PMT202602-60695 - Asilika Josephine
+                      - paragraph [ref=e4389]: 2026-05-00923
+                    - cell "Customer Payment" [ref=e4390]:
+                      - generic [ref=e4391]: Customer Payment
+                    - cell "Asilika Josephine PMT202602-60695" [ref=e4392]:
+                      - generic [ref=e4393]: Asilika Josephine
+                      - paragraph [ref=e4394]: PMT202602-60695
+                    - cell "+NGN 18,812.50" [ref=e4395]
+                    - cell "View source document" [ref=e7854]:
+                      - link "View source document" [ref=e7855] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/825c3910-24d2-451c-8bf6-5d603412983c
+                        - text: View
+                  - row "18 07 Feb 2026 AR Payment PMT202602-60693 - Sam Adejoh Okedi 2026-11-00763 Customer Payment Sam Adejoh Okedi PMT202602-60693 +NGN 18,812.50 View source document" [ref=e7856]:
+                    - cell [ref=e7857]:
+                      - checkbox [ref=e7858]
+                    - cell "18" [ref=e4402]:
+                      - generic [ref=e4403]: "18"
+                    - cell "07 Feb 2026" [ref=e4404]
+                    - cell "AR Payment PMT202602-60693 - Sam Adejoh Okedi 2026-11-00763" [ref=e4405]:
+                      - paragraph [ref=e4406]: AR Payment PMT202602-60693 - Sam Adejoh Okedi
+                      - paragraph [ref=e4407]: 2026-11-00763
+                    - cell "Customer Payment" [ref=e4408]:
+                      - generic [ref=e4409]: Customer Payment
+                    - cell "Sam Adejoh Okedi PMT202602-60693" [ref=e4410]:
+                      - generic [ref=e4411]: Sam Adejoh Okedi
+                      - paragraph [ref=e4412]: PMT202602-60693
+                    - cell "+NGN 18,812.50" [ref=e4413]
+                    - cell "View source document" [ref=e7859]:
+                      - link "View source document" [ref=e7860] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/6cdd20b4-1732-4339-99fe-a3201b570bef
+                        - text: View
+                  - row "18 07 Feb 2026 AR Payment PMT202602-60689 - Yemakins Technologies Limited 2026-05-00917 Customer Payment Yemakins Technologies Limited PMT202602-60689 +NGN 18,812.50 View source document" [ref=e7861]:
+                    - cell [ref=e7862]:
+                      - checkbox [ref=e7863]
+                    - cell "18" [ref=e4420]:
+                      - generic [ref=e4421]: "18"
+                    - cell "07 Feb 2026" [ref=e4422]
+                    - cell "AR Payment PMT202602-60689 - Yemakins Technologies Limited 2026-05-00917" [ref=e4423]:
+                      - paragraph [ref=e4424]: AR Payment PMT202602-60689 - Yemakins Technologies Limited
+                      - paragraph [ref=e4425]: 2026-05-00917
+                    - cell "Customer Payment" [ref=e4426]:
+                      - generic [ref=e4427]: Customer Payment
+                    - cell "Yemakins Technologies Limited PMT202602-60689" [ref=e4428]:
+                      - generic [ref=e4429]: Yemakins Technologies Limited
+                      - paragraph [ref=e4430]: PMT202602-60689
+                    - cell "+NGN 18,812.50" [ref=e4431]
+                    - cell "View source document" [ref=e7864]:
+                      - link "View source document" [ref=e7865] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/5584ff3e-e101-4dac-8d45-84fafee400ed
+                        - text: View
+                  - row "11 06 Feb 2026 AR Payment PMT202602-60679 - Renzo Res 2026-05-00903 Customer Payment Renzo Res PMT202602-60679 +NGN 37,625.00 View source document" [ref=e7866]:
+                    - cell [ref=e7867]:
+                      - checkbox [ref=e7868]
+                    - cell "11" [ref=e4438]:
+                      - generic [ref=e4439]: "11"
+                    - cell "06 Feb 2026" [ref=e4440]
+                    - cell "AR Payment PMT202602-60679 - Renzo Res 2026-05-00903" [ref=e4441]:
+                      - paragraph [ref=e4442]: AR Payment PMT202602-60679 - Renzo Res
+                      - paragraph [ref=e4443]: 2026-05-00903
+                    - cell "Customer Payment" [ref=e4444]:
+                      - generic [ref=e4445]: Customer Payment
+                    - cell "Renzo Res PMT202602-60679" [ref=e4446]:
+                      - generic [ref=e4447]: Renzo Res
+                      - paragraph [ref=e4448]: PMT202602-60679
+                    - cell "+NGN 37,625.00" [ref=e4449]
+                    - cell "View source document" [ref=e7869]:
+                      - link "View source document" [ref=e7870] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/4990719e-ca1e-4a1b-9eca-ac92c07ea403
+                        - text: View
+                  - row "11 06 Feb 2026 AR Payment PMT202602-60665 - Mr. Andy Collins 2026-05-00885 Customer Payment Mr. Andy Collins PMT202602-60665 +NGN 18,812.50 View source document" [ref=e7871]:
+                    - cell [ref=e7872]:
+                      - checkbox [ref=e7873]
+                    - cell "11" [ref=e4456]:
+                      - generic [ref=e4457]: "11"
+                    - cell "06 Feb 2026" [ref=e4458]
+                    - cell "AR Payment PMT202602-60665 - Mr. Andy Collins 2026-05-00885" [ref=e4459]:
+                      - paragraph [ref=e4460]: AR Payment PMT202602-60665 - Mr. Andy Collins
+                      - paragraph [ref=e4461]: 2026-05-00885
+                    - cell "Customer Payment" [ref=e4462]:
+                      - generic [ref=e4463]: Customer Payment
+                    - cell "Mr. Andy Collins PMT202602-60665" [ref=e4464]:
+                      - generic [ref=e4465]: Mr. Andy Collins
+                      - paragraph [ref=e4466]: PMT202602-60665
+                    - cell "+NGN 18,812.50" [ref=e4467]
+                    - cell "View source document" [ref=e7874]:
+                      - link "View source document" [ref=e7875] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/db1b82e7-dbd4-4a19-afbe-79e2fa670c4b
+                        - text: View
+                  - row "11 06 Feb 2026 AR Payment PMT202602-60683 - AVM Sunday Makinde 2026-05-00908 Customer Payment AVM Sunday Makinde PMT202602-60683 +NGN 18,812.50 View source document" [ref=e7876]:
+                    - cell [ref=e7877]:
+                      - checkbox [ref=e7878]
+                    - cell "11" [ref=e4474]:
+                      - generic [ref=e4475]: "11"
+                    - cell "06 Feb 2026" [ref=e4476]
+                    - cell "AR Payment PMT202602-60683 - AVM Sunday Makinde 2026-05-00908" [ref=e4477]:
+                      - paragraph [ref=e4478]: AR Payment PMT202602-60683 - AVM Sunday Makinde
+                      - paragraph [ref=e4479]: 2026-05-00908
+                    - cell "Customer Payment" [ref=e4480]:
+                      - generic [ref=e4481]: Customer Payment
+                    - cell "AVM Sunday Makinde PMT202602-60683" [ref=e4482]:
+                      - generic [ref=e4483]: AVM Sunday Makinde
+                      - paragraph [ref=e4484]: PMT202602-60683
+                    - cell "+NGN 18,812.50" [ref=e4485]
+                    - cell "View source document" [ref=e7879]:
+                      - link "View source document" [ref=e7880] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/463e6a4f-4d3d-4b1b-bea7-e56ceacabf43
+                        - text: View
+                  - row "11 06 Feb 2026 AR Payment PMT202602-60676 - Iyanuoluwa Oyoloka 2026-05-00900 Customer Payment Iyanuoluwa Oyoloka PMT202602-60676 +NGN 34,668.75 View source document" [ref=e7881]:
+                    - cell [ref=e7882]:
+                      - checkbox [ref=e7883]
+                    - cell "11" [ref=e4492]:
+                      - generic [ref=e4493]: "11"
+                    - cell "06 Feb 2026" [ref=e4494]
+                    - cell "AR Payment PMT202602-60676 - Iyanuoluwa Oyoloka 2026-05-00900" [ref=e4495]:
+                      - paragraph [ref=e4496]: AR Payment PMT202602-60676 - Iyanuoluwa Oyoloka
+                      - paragraph [ref=e4497]: 2026-05-00900
+                    - cell "Customer Payment" [ref=e4498]:
+                      - generic [ref=e4499]: Customer Payment
+                    - cell "Iyanuoluwa Oyoloka PMT202602-60676" [ref=e4500]:
+                      - generic [ref=e4501]: Iyanuoluwa Oyoloka
+                      - paragraph [ref=e4502]: PMT202602-60676
+                    - cell "+NGN 34,668.75" [ref=e4503]
+                    - cell "View source document" [ref=e7884]:
+                      - link "View source document" [ref=e7885] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/43a4f643-70fd-4b84-8502-38471a734014
+                        - text: View
+                  - row "11 06 Feb 2026 AR Payment PMT202602-60680 - Ameerah Gidado 2026-05-00905 Customer Payment Ameerah Gidado PMT202602-60680 +NGN 18,812.50 View source document" [ref=e7886]:
+                    - cell [ref=e7887]:
+                      - checkbox [ref=e7888]
+                    - cell "11" [ref=e4510]:
+                      - generic [ref=e4511]: "11"
+                    - cell "06 Feb 2026" [ref=e4512]
+                    - cell "AR Payment PMT202602-60680 - Ameerah Gidado 2026-05-00905" [ref=e4513]:
+                      - paragraph [ref=e4514]: AR Payment PMT202602-60680 - Ameerah Gidado
+                      - paragraph [ref=e4515]: 2026-05-00905
+                    - cell "Customer Payment" [ref=e4516]:
+                      - generic [ref=e4517]: Customer Payment
+                    - cell "Ameerah Gidado PMT202602-60680" [ref=e4518]:
+                      - generic [ref=e4519]: Ameerah Gidado
+                      - paragraph [ref=e4520]: PMT202602-60680
+                    - cell "+NGN 18,812.50" [ref=e4521]
+                    - cell "View source document" [ref=e7889]:
+                      - link "View source document" [ref=e7890] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/3c7df549-f618-4431-a1d4-ef56c91b9820
+                        - text: View
+                  - row "11 06 Feb 2026 AR Payment PMT202602-60682 - The Luxury Loft 2 2026-05-00907 Customer Payment The Luxury Loft 2 PMT202602-60682 +NGN 18,812.50 View source document" [ref=e7891]:
+                    - cell [ref=e7892]:
+                      - checkbox [ref=e7893]
+                    - cell "11" [ref=e4528]:
+                      - generic [ref=e4529]: "11"
+                    - cell "06 Feb 2026" [ref=e4530]
+                    - cell "AR Payment PMT202602-60682 - The Luxury Loft 2 2026-05-00907" [ref=e4531]:
+                      - paragraph [ref=e4532]: AR Payment PMT202602-60682 - The Luxury Loft 2
+                      - paragraph [ref=e4533]: 2026-05-00907
+                    - cell "Customer Payment" [ref=e4534]:
+                      - generic [ref=e4535]: Customer Payment
+                    - cell "The Luxury Loft 2 PMT202602-60682" [ref=e4536]:
+                      - generic [ref=e4537]: The Luxury Loft 2
+                      - paragraph [ref=e4538]: PMT202602-60682
+                    - cell "+NGN 18,812.50" [ref=e4539]
+                    - cell "View source document" [ref=e7894]:
+                      - link "View source document" [ref=e7895] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/dbc678b4-5aca-4949-9697-399097694784
+                        - text: View
+                  - row "11 06 Feb 2026 AR Payment PMT202602-60663 - VICC (2.com) 2026-05-00883 Customer Payment VICC (2.com) PMT202602-60663 +NGN 56,437.50 View source document" [ref=e7896]:
+                    - cell [ref=e7897]:
+                      - checkbox [ref=e7898]
+                    - cell "11" [ref=e4546]:
+                      - generic [ref=e4547]: "11"
+                    - cell "06 Feb 2026" [ref=e4548]
+                    - cell "AR Payment PMT202602-60663 - VICC (2.com) 2026-05-00883" [ref=e4549]:
+                      - paragraph [ref=e4550]: AR Payment PMT202602-60663 - VICC (2.com)
+                      - paragraph [ref=e4551]: 2026-05-00883
+                    - cell "Customer Payment" [ref=e4552]:
+                      - generic [ref=e4553]: Customer Payment
+                    - cell "VICC (2.com) PMT202602-60663" [ref=e4554]:
+                      - generic [ref=e4555]: VICC (2.com)
+                      - paragraph [ref=e4556]: PMT202602-60663
+                    - cell "+NGN 56,437.50" [ref=e4557]
+                    - cell "View source document" [ref=e7899]:
+                      - link "View source document" [ref=e7900] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/254867d9-bbd7-4569-a9ca-83be40af0c6b
+                        - text: View
+                  - row "11 06 Feb 2026 AR Payment PMT202602-60677 - Foreign Commonwealth Development Office - Village 9 (House A2) 2026-05-00901 Customer Payment Foreign Commonwealth Development Office - Village 9 (House A2) PMT202602-60677 +NGN 18,812.50 View source document" [ref=e7901]:
+                    - cell [ref=e7902]:
+                      - checkbox [ref=e7903]
+                    - cell "11" [ref=e4564]:
+                      - generic [ref=e4565]: "11"
+                    - cell "06 Feb 2026" [ref=e4566]
+                    - cell "AR Payment PMT202602-60677 - Foreign Commonwealth Development Office - Village 9 (House A2) 2026-05-00901" [ref=e4567]:
+                      - paragraph [ref=e4568]: AR Payment PMT202602-60677 - Foreign Commonwealth Development Office - Village 9 (House A2)
+                      - paragraph [ref=e4569]: 2026-05-00901
+                    - cell "Customer Payment" [ref=e4570]:
+                      - generic [ref=e4571]: Customer Payment
+                    - cell "Foreign Commonwealth Development Office - Village 9 (House A2) PMT202602-60677" [ref=e4572]:
+                      - generic [ref=e4573]: Foreign Commonwealth Development Office - Village 9 (House A2)
+                      - paragraph [ref=e4574]: PMT202602-60677
+                    - cell "+NGN 18,812.50" [ref=e4575]
+                    - cell "View source document" [ref=e7904]:
+                      - link "View source document" [ref=e7905] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/0c4e65e1-4284-4ecb-a087-031e30b7c5ba
+                        - text: View
+                  - row "11 06 Feb 2026 AR Payment PMT202602-60674 - Chinedu Arthur 2026-05-00893 Customer Payment Chinedu Arthur PMT202602-60674 +NGN 16,125.00 View source document" [ref=e7906]:
+                    - cell [ref=e7907]:
+                      - checkbox [ref=e7908]
+                    - cell "11" [ref=e4582]:
+                      - generic [ref=e4583]: "11"
+                    - cell "06 Feb 2026" [ref=e4584]
+                    - cell "AR Payment PMT202602-60674 - Chinedu Arthur 2026-05-00893" [ref=e4585]:
+                      - paragraph [ref=e4586]: AR Payment PMT202602-60674 - Chinedu Arthur
+                      - paragraph [ref=e4587]: 2026-05-00893
+                    - cell "Customer Payment" [ref=e4588]:
+                      - generic [ref=e4589]: Customer Payment
+                    - cell "Chinedu Arthur PMT202602-60674" [ref=e4590]:
+                      - generic [ref=e4591]: Chinedu Arthur
+                      - paragraph [ref=e4592]: PMT202602-60674
+                    - cell "+NGN 16,125.00" [ref=e4593]
+                    - cell "View source document" [ref=e7909]:
+                      - link "View source document" [ref=e7910] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/03ea3083-8794-4b0a-9f0c-f4a49e572e37
+                        - text: View
+                  - row "11 06 Feb 2026 AR Payment PMT202602-60681 - The Luxury Loft 2026-05-00906 Customer Payment The Luxury Loft PMT202602-60681 +NGN 18,812.50 View source document" [ref=e7911]:
+                    - cell [ref=e7912]:
+                      - checkbox [ref=e7913]
+                    - cell "11" [ref=e4600]:
+                      - generic [ref=e4601]: "11"
+                    - cell "06 Feb 2026" [ref=e4602]
+                    - cell "AR Payment PMT202602-60681 - The Luxury Loft 2026-05-00906" [ref=e4603]:
+                      - paragraph [ref=e4604]: AR Payment PMT202602-60681 - The Luxury Loft
+                      - paragraph [ref=e4605]: 2026-05-00906
+                    - cell "Customer Payment" [ref=e4606]:
+                      - generic [ref=e4607]: Customer Payment
+                    - cell "The Luxury Loft PMT202602-60681" [ref=e4608]:
+                      - generic [ref=e4609]: The Luxury Loft
+                      - paragraph [ref=e4610]: PMT202602-60681
+                    - cell "+NGN 18,812.50" [ref=e4611]
+                    - cell "View source document" [ref=e7914]:
+                      - link "View source document" [ref=e7915] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/ed5f65bf-f5d3-4b3d-bcd2-6a435f2f40c5
+                        - text: View
+                  - row "11 06 Feb 2026 AR Payment PMT202602-60684 - Uchenna Onyejesi 2026-05-00909 Customer Payment Uchenna Onyejesi PMT202602-60684 +NGN 18,812.50 View source document" [ref=e7916]:
+                    - cell [ref=e7917]:
+                      - checkbox [ref=e7918]
+                    - cell "11" [ref=e4618]:
+                      - generic [ref=e4619]: "11"
+                    - cell "06 Feb 2026" [ref=e4620]
+                    - cell "AR Payment PMT202602-60684 - Uchenna Onyejesi 2026-05-00909" [ref=e4621]:
+                      - paragraph [ref=e4622]: AR Payment PMT202602-60684 - Uchenna Onyejesi
+                      - paragraph [ref=e4623]: 2026-05-00909
+                    - cell "Customer Payment" [ref=e4624]:
+                      - generic [ref=e4625]: Customer Payment
+                    - cell "Uchenna Onyejesi PMT202602-60684" [ref=e4626]:
+                      - generic [ref=e4627]: Uchenna Onyejesi
+                      - paragraph [ref=e4628]: PMT202602-60684
+                    - cell "+NGN 18,812.50" [ref=e4629]
+                    - cell "View source document" [ref=e7919]:
+                      - link "View source document" [ref=e7920] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/f0f3e8f1-1c86-4484-b9ca-0449e72f4fb5
+                        - text: View
+                  - row "11 06 Feb 2026 AR Payment PMT202602-60686 - Okechukwu Calista Adaorah 2026-05-00911 Customer Payment Okechukwu Calista Adaorah PMT202602-60686 +NGN 18,812.50 View source document" [ref=e7921]:
+                    - cell [ref=e7922]:
+                      - checkbox [ref=e7923]
+                    - cell "11" [ref=e4636]:
+                      - generic [ref=e4637]: "11"
+                    - cell "06 Feb 2026" [ref=e4638]
+                    - cell "AR Payment PMT202602-60686 - Okechukwu Calista Adaorah 2026-05-00911" [ref=e4639]:
+                      - paragraph [ref=e4640]: AR Payment PMT202602-60686 - Okechukwu Calista Adaorah
+                      - paragraph [ref=e4641]: 2026-05-00911
+                    - cell "Customer Payment" [ref=e4642]:
+                      - generic [ref=e4643]: Customer Payment
+                    - cell "Okechukwu Calista Adaorah PMT202602-60686" [ref=e4644]:
+                      - generic [ref=e4645]: Okechukwu Calista Adaorah
+                      - paragraph [ref=e4646]: PMT202602-60686
+                    - cell "+NGN 18,812.50" [ref=e4647]
+                    - cell "View source document" [ref=e7924]:
+                      - link "View source document" [ref=e7925] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/f895f08c-0080-4f3d-b253-6a58dc5c9e10
+                        - text: View
+                  - row "11 06 Feb 2026 AR Payment PMT202602-60685 - Dr. Robert Martins Eze 2026-05-00910 Customer Payment Dr. Robert Martins Eze PMT202602-60685 +NGN 18,812.50 View source document" [ref=e7926]:
+                    - cell [ref=e7927]:
+                      - checkbox [ref=e7928]
+                    - cell "11" [ref=e4654]:
+                      - generic [ref=e4655]: "11"
+                    - cell "06 Feb 2026" [ref=e4656]
+                    - cell "AR Payment PMT202602-60685 - Dr. Robert Martins Eze 2026-05-00910" [ref=e4657]:
+                      - paragraph [ref=e4658]: AR Payment PMT202602-60685 - Dr. Robert Martins Eze
+                      - paragraph [ref=e4659]: 2026-05-00910
+                    - cell "Customer Payment" [ref=e4660]:
+                      - generic [ref=e4661]: Customer Payment
+                    - cell "Dr. Robert Martins Eze PMT202602-60685" [ref=e4662]:
+                      - generic [ref=e4663]: Dr. Robert Martins Eze
+                      - paragraph [ref=e4664]: PMT202602-60685
+                    - cell "+NGN 18,812.50" [ref=e4665]
+                    - cell "View source document" [ref=e7929]:
+                      - link "View source document" [ref=e7930] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/c9dea209-a0a4-43f4-8c5c-f0a3708321c0
+                        - text: View
+                  - row "11 06 Feb 2026 AR Payment PMT202602-60673 - Oriyomi Oyerinde 2026-05-00891 Customer Payment Oriyomi Oyerinde PMT202602-60673 +NGN 18,812.50 View source document" [ref=e7931]:
+                    - cell [ref=e7932]:
+                      - checkbox [ref=e7933]
+                    - cell "11" [ref=e4672]:
+                      - generic [ref=e4673]: "11"
+                    - cell "06 Feb 2026" [ref=e4674]
+                    - cell "AR Payment PMT202602-60673 - Oriyomi Oyerinde 2026-05-00891" [ref=e4675]:
+                      - paragraph [ref=e4676]: AR Payment PMT202602-60673 - Oriyomi Oyerinde
+                      - paragraph [ref=e4677]: 2026-05-00891
+                    - cell "Customer Payment" [ref=e4678]:
+                      - generic [ref=e4679]: Customer Payment
+                    - cell "Oriyomi Oyerinde PMT202602-60673" [ref=e4680]:
+                      - generic [ref=e4681]: Oriyomi Oyerinde
+                      - paragraph [ref=e4682]: PMT202602-60673
+                    - cell "+NGN 18,812.50" [ref=e4683]
+                    - cell "View source document" [ref=e7934]:
+                      - link "View source document" [ref=e7935] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/a7875c8c-0cb5-48fa-8d17-ba31de838a4e
+                        - text: View
+                  - row "11 06 Feb 2026 AR Payment PMT202602-60667 - Morenikeji Wey 2026-11-00747 Customer Payment Morenikeji Wey PMT202602-60667 +NGN 18,812.50 View source document" [ref=e7936]:
+                    - cell [ref=e7937]:
+                      - checkbox [ref=e7938]
+                    - cell "11" [ref=e4690]:
+                      - generic [ref=e4691]: "11"
+                    - cell "06 Feb 2026" [ref=e4692]
+                    - cell "AR Payment PMT202602-60667 - Morenikeji Wey 2026-11-00747" [ref=e4693]:
+                      - paragraph [ref=e4694]: AR Payment PMT202602-60667 - Morenikeji Wey
+                      - paragraph [ref=e4695]: 2026-11-00747
+                    - cell "Customer Payment" [ref=e4696]:
+                      - generic [ref=e4697]: Customer Payment
+                    - cell "Morenikeji Wey PMT202602-60667" [ref=e4698]:
+                      - generic [ref=e4699]: Morenikeji Wey
+                      - paragraph [ref=e4700]: PMT202602-60667
+                    - cell "+NGN 18,812.50" [ref=e4701]
+                    - cell "View source document" [ref=e7939]:
+                      - link "View source document" [ref=e7940] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/960edbf7-9fd6-4d4a-8c80-9b13f014ac64
+                        - text: View
+                  - row "11 06 Feb 2026 AR Payment PMT202602-60672 - Oluwatoyin Olumodeji 2026-05-00889 Customer Payment Oluwatoyin Olumodeji PMT202602-60672 +NGN 18,812.50 View source document" [ref=e7941]:
+                    - cell [ref=e7942]:
+                      - checkbox [ref=e7943]
+                    - cell "11" [ref=e4708]:
+                      - generic [ref=e4709]: "11"
+                    - cell "06 Feb 2026" [ref=e4710]
+                    - cell "AR Payment PMT202602-60672 - Oluwatoyin Olumodeji 2026-05-00889" [ref=e4711]:
+                      - paragraph [ref=e4712]: AR Payment PMT202602-60672 - Oluwatoyin Olumodeji
+                      - paragraph [ref=e4713]: 2026-05-00889
+                    - cell "Customer Payment" [ref=e4714]:
+                      - generic [ref=e4715]: Customer Payment
+                    - cell "Oluwatoyin Olumodeji PMT202602-60672" [ref=e4716]:
+                      - generic [ref=e4717]: Oluwatoyin Olumodeji
+                      - paragraph [ref=e4718]: PMT202602-60672
+                    - cell "+NGN 18,812.50" [ref=e4719]
+                    - cell "View source document" [ref=e7944]:
+                      - link "View source document" [ref=e7945] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/907339c3-a367-4402-a389-b2b7018a32e4
+                        - text: View
+                  - row "11 06 Feb 2026 AR Payment PMT202602-60666 - Sobowale Abdullahi 2026-05-00886 Customer Payment Sobowale Abdullahi PMT202602-60666 +NGN 18,812.50 View source document" [ref=e7946]:
+                    - cell [ref=e7947]:
+                      - checkbox [ref=e7948]
+                    - cell "11" [ref=e4726]:
+                      - generic [ref=e4727]: "11"
+                    - cell "06 Feb 2026" [ref=e4728]
+                    - cell "AR Payment PMT202602-60666 - Sobowale Abdullahi 2026-05-00886" [ref=e4729]:
+                      - paragraph [ref=e4730]: AR Payment PMT202602-60666 - Sobowale Abdullahi
+                      - paragraph [ref=e4731]: 2026-05-00886
+                    - cell "Customer Payment" [ref=e4732]:
+                      - generic [ref=e4733]: Customer Payment
+                    - cell "Sobowale Abdullahi PMT202602-60666" [ref=e4734]:
+                      - generic [ref=e4735]: Sobowale Abdullahi
+                      - paragraph [ref=e4736]: PMT202602-60666
+                    - cell "+NGN 18,812.50" [ref=e4737]
+                    - cell "View source document" [ref=e7949]:
+                      - link "View source document" [ref=e7950] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/7c76f280-37c2-42b4-8a11-d209ebc43348
+                        - text: View
+                  - row "11 06 Feb 2026 AR Payment PMT202602-60664 - Mr Michael Etokakpan 2026-05-00884 Customer Payment Mr Michael Etokakpan PMT202602-60664 +NGN 18,812.50 View source document" [ref=e7951]:
+                    - cell [ref=e7952]:
+                      - checkbox [ref=e7953]
+                    - cell "11" [ref=e4744]:
+                      - generic [ref=e4745]: "11"
+                    - cell "06 Feb 2026" [ref=e4746]
+                    - cell "AR Payment PMT202602-60664 - Mr Michael Etokakpan 2026-05-00884" [ref=e4747]:
+                      - paragraph [ref=e4748]: AR Payment PMT202602-60664 - Mr Michael Etokakpan
+                      - paragraph [ref=e4749]: 2026-05-00884
+                    - cell "Customer Payment" [ref=e4750]:
+                      - generic [ref=e4751]: Customer Payment
+                    - cell "Mr Michael Etokakpan PMT202602-60664" [ref=e4752]:
+                      - generic [ref=e4753]: Mr Michael Etokakpan
+                      - paragraph [ref=e4754]: PMT202602-60664
+                    - cell "+NGN 18,812.50" [ref=e4755]
+                    - cell "View source document" [ref=e7954]:
+                      - link "View source document" [ref=e7955] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/698fdeef-518c-4224-be16-507b526c6c35
+                        - text: View
+                  - row "11 06 Feb 2026 AR Payment PMT202602-60675 - Ivana Suites | No 20 2026-05-00895 Customer Payment Ivana Suites | No 20 PMT202602-60675 +NGN 37,625.00 View source document" [ref=e7956]:
+                    - cell [ref=e7957]:
+                      - checkbox [ref=e7958]
+                    - cell "11" [ref=e4762]:
+                      - generic [ref=e4763]: "11"
+                    - cell "06 Feb 2026" [ref=e4764]
+                    - cell "AR Payment PMT202602-60675 - Ivana Suites | No 20 2026-05-00895" [ref=e4765]:
+                      - paragraph [ref=e4766]: AR Payment PMT202602-60675 - Ivana Suites | No 20
+                      - paragraph [ref=e4767]: 2026-05-00895
+                    - cell "Customer Payment" [ref=e4768]:
+                      - generic [ref=e4769]: Customer Payment
+                    - cell "Ivana Suites | No 20 PMT202602-60675" [ref=e4770]:
+                      - generic [ref=e4771]: Ivana Suites | No 20
+                      - paragraph [ref=e4772]: PMT202602-60675
+                    - cell "+NGN 37,625.00" [ref=e4773]
+                    - cell "View source document" [ref=e7959]:
+                      - link "View source document" [ref=e7960] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/66a1a35f-f364-40ea-bd7d-be095382b2a7
+                        - text: View
+                  - row "11 06 Feb 2026 AR Payment PMT202602-60678 - Aisha Muzzammil Hanga 2026-05-00902 Customer Payment Aisha Muzzammil Hanga PMT202602-60678 +NGN 18,812.50 View source document" [ref=e7961]:
+                    - cell [ref=e7962]:
+                      - checkbox [ref=e7963]
+                    - cell "11" [ref=e4780]:
+                      - generic [ref=e4781]: "11"
+                    - cell "06 Feb 2026" [ref=e4782]
+                    - cell "AR Payment PMT202602-60678 - Aisha Muzzammil Hanga 2026-05-00902" [ref=e4783]:
+                      - paragraph [ref=e4784]: AR Payment PMT202602-60678 - Aisha Muzzammil Hanga
+                      - paragraph [ref=e4785]: 2026-05-00902
+                    - cell "Customer Payment" [ref=e4786]:
+                      - generic [ref=e4787]: Customer Payment
+                    - cell "Aisha Muzzammil Hanga PMT202602-60678" [ref=e4788]:
+                      - generic [ref=e4789]: Aisha Muzzammil Hanga
+                      - paragraph [ref=e4790]: PMT202602-60678
+                    - cell "+NGN 18,812.50" [ref=e4791]
+                    - cell "View source document" [ref=e7964]:
+                      - link "View source document" [ref=e7965] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/57647db9-4925-4a0d-81a0-f85c5921618a
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60649 - Ben Onyibe 2026-05-00867 Customer Payment Ben Onyibe PMT202602-60649 +NGN 21,312.50 View source document" [ref=e7966]:
+                    - cell [ref=e7967]:
+                      - checkbox [ref=e7968]
+                    - cell "11" [ref=e4798]:
+                      - generic [ref=e4799]: "11"
+                    - cell "05 Feb 2026" [ref=e4800]
+                    - cell "AR Payment PMT202602-60649 - Ben Onyibe 2026-05-00867" [ref=e4801]:
+                      - paragraph [ref=e4802]: AR Payment PMT202602-60649 - Ben Onyibe
+                      - paragraph [ref=e4803]: 2026-05-00867
+                    - cell "Customer Payment" [ref=e4804]:
+                      - generic [ref=e4805]: Customer Payment
+                    - cell "Ben Onyibe PMT202602-60649" [ref=e4806]:
+                      - generic [ref=e4807]: Ben Onyibe
+                      - paragraph [ref=e4808]: PMT202602-60649
+                    - cell "+NGN 21,312.50" [ref=e4809]
+                    - cell "View source document" [ref=e7969]:
+                      - link "View source document" [ref=e7970] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/fb5afc8a-bd37-46d4-9e7c-8f3822b24f2c
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60645 - Mr. Richard Abrakson 2026-11-00734 Customer Payment Mr. Richard Abrakson PMT202602-60645 +NGN 18,812.50 View source document" [ref=e7971]:
+                    - cell [ref=e7972]:
+                      - checkbox [ref=e7973]
+                    - cell "11" [ref=e4816]:
+                      - generic [ref=e4817]: "11"
+                    - cell "05 Feb 2026" [ref=e4818]
+                    - cell "AR Payment PMT202602-60645 - Mr. Richard Abrakson 2026-11-00734" [ref=e4819]:
+                      - paragraph [ref=e4820]: AR Payment PMT202602-60645 - Mr. Richard Abrakson
+                      - paragraph [ref=e4821]: 2026-11-00734
+                    - cell "Customer Payment" [ref=e4822]:
+                      - generic [ref=e4823]: Customer Payment
+                    - cell "Mr. Richard Abrakson PMT202602-60645" [ref=e4824]:
+                      - generic [ref=e4825]: Mr. Richard Abrakson
+                      - paragraph [ref=e4826]: PMT202602-60645
+                    - cell "+NGN 18,812.50" [ref=e4827]
+                    - cell "View source document" [ref=e7974]:
+                      - link "View source document" [ref=e7975] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/06c4aad8-5f45-4cb3-9579-45d04138c10e
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60646 - Melvin Usman Jabi 2026-05-00864 Customer Payment Melvin Usman Jabi PMT202602-60646 +NGN 18,812.50 View source document" [ref=e7976]:
+                    - cell [ref=e7977]:
+                      - checkbox [ref=e7978]
+                    - cell "11" [ref=e4834]:
+                      - generic [ref=e4835]: "11"
+                    - cell "05 Feb 2026" [ref=e4836]
+                    - cell "AR Payment PMT202602-60646 - Melvin Usman Jabi 2026-05-00864" [ref=e4837]:
+                      - paragraph [ref=e4838]: AR Payment PMT202602-60646 - Melvin Usman Jabi
+                      - paragraph [ref=e4839]: 2026-05-00864
+                    - cell "Customer Payment" [ref=e4840]:
+                      - generic [ref=e4841]: Customer Payment
+                    - cell "Melvin Usman Jabi PMT202602-60646" [ref=e4842]:
+                      - generic [ref=e4843]: Melvin Usman Jabi
+                      - paragraph [ref=e4844]: PMT202602-60646
+                    - cell "+NGN 18,812.50" [ref=e4845]
+                    - cell "View source document" [ref=e7979]:
+                      - link "View source document" [ref=e7980] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/127b437b-01ff-440c-8a8a-38e4879666f4
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60641 - Nafisa Rabiu 2026-05-00862 Customer Payment Nafisa Rabiu PMT202602-60641 +NGN 18,812.50 View source document" [ref=e7981]:
+                    - cell [ref=e7982]:
+                      - checkbox [ref=e7983]
+                    - cell "11" [ref=e4852]:
+                      - generic [ref=e4853]: "11"
+                    - cell "05 Feb 2026" [ref=e4854]
+                    - cell "AR Payment PMT202602-60641 - Nafisa Rabiu 2026-05-00862" [ref=e4855]:
+                      - paragraph [ref=e4856]: AR Payment PMT202602-60641 - Nafisa Rabiu
+                      - paragraph [ref=e4857]: 2026-05-00862
+                    - cell "Customer Payment" [ref=e4858]:
+                      - generic [ref=e4859]: Customer Payment
+                    - cell "Nafisa Rabiu PMT202602-60641" [ref=e4860]:
+                      - generic [ref=e4861]: Nafisa Rabiu
+                      - paragraph [ref=e4862]: PMT202602-60641
+                    - cell "+NGN 18,812.50" [ref=e4863]
+                    - cell "View source document" [ref=e7984]:
+                      - link "View source document" [ref=e7985] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/1f5c5778-7c4c-45fe-8366-3e089235c976
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60640 - Intourist Travels & Tours LTD 2026-05-00861 Customer Payment Intourist Travels & Tours LTD PMT202602-60640 +NGN 37,625.00 View source document" [ref=e7986]:
+                    - cell [ref=e7987]:
+                      - checkbox [ref=e7988]
+                    - cell "11" [ref=e4870]:
+                      - generic [ref=e4871]: "11"
+                    - cell "05 Feb 2026" [ref=e4872]
+                    - cell "AR Payment PMT202602-60640 - Intourist Travels & Tours LTD 2026-05-00861" [ref=e4873]:
+                      - paragraph [ref=e4874]: AR Payment PMT202602-60640 - Intourist Travels & Tours LTD
+                      - paragraph [ref=e4875]: 2026-05-00861
+                    - cell "Customer Payment" [ref=e4876]:
+                      - generic [ref=e4877]: Customer Payment
+                    - cell "Intourist Travels & Tours LTD PMT202602-60640" [ref=e4878]:
+                      - generic [ref=e4879]: Intourist Travels & Tours LTD
+                      - paragraph [ref=e4880]: PMT202602-60640
+                    - cell "+NGN 37,625.00" [ref=e4881]
+                    - cell "View source document" [ref=e7989]:
+                      - link "View source document" [ref=e7990] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/22f80993-1d82-4a15-a946-47cdfefce370
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60659 - Ahmed Bashir ( George) 2026-05-00876 Customer Payment Ahmed Bashir ( George) PMT202602-60659 +NGN 18,812.50 View source document" [ref=e7991]:
+                    - cell [ref=e7992]:
+                      - checkbox [ref=e7993]
+                    - cell "11" [ref=e4888]:
+                      - generic [ref=e4889]: "11"
+                    - cell "05 Feb 2026" [ref=e4890]
+                    - cell "AR Payment PMT202602-60659 - Ahmed Bashir ( George) 2026-05-00876" [ref=e4891]:
+                      - paragraph [ref=e4892]: AR Payment PMT202602-60659 - Ahmed Bashir ( George)
+                      - paragraph [ref=e4893]: 2026-05-00876
+                    - cell "Customer Payment" [ref=e4894]:
+                      - generic [ref=e4895]: Customer Payment
+                    - cell "Ahmed Bashir ( George) PMT202602-60659" [ref=e4896]:
+                      - generic [ref=e4897]: Ahmed Bashir ( George)
+                      - paragraph [ref=e4898]: PMT202602-60659
+                    - cell "+NGN 18,812.50" [ref=e4899]
+                    - cell "View source document" [ref=e7994]:
+                      - link "View source document" [ref=e7995] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/3aa3a029-28e1-4c43-940d-5f1afe0c1507
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60639 - Ayodele Osuporu 2026-05-00860 Customer Payment Ayodele Osuporu PMT202602-60639 +NGN 18,812.50 View source document" [ref=e7996]:
+                    - cell [ref=e7997]:
+                      - checkbox [ref=e7998]
+                    - cell "11" [ref=e4906]:
+                      - generic [ref=e4907]: "11"
+                    - cell "05 Feb 2026" [ref=e4908]
+                    - cell "AR Payment PMT202602-60639 - Ayodele Osuporu 2026-05-00860" [ref=e4909]:
+                      - paragraph [ref=e4910]: AR Payment PMT202602-60639 - Ayodele Osuporu
+                      - paragraph [ref=e4911]: 2026-05-00860
+                    - cell "Customer Payment" [ref=e4912]:
+                      - generic [ref=e4913]: Customer Payment
+                    - cell "Ayodele Osuporu PMT202602-60639" [ref=e4914]:
+                      - generic [ref=e4915]: Ayodele Osuporu
+                      - paragraph [ref=e4916]: PMT202602-60639
+                    - cell "+NGN 18,812.50" [ref=e4917]
+                    - cell "View source document" [ref=e7999]:
+                      - link "View source document" [ref=e8000] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/43e00465-c17b-4861-8795-e1f72ac196ff
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60652 - Stanley Onyia (Area 3) 2 2026-05-00870 Customer Payment Stanley Onyia (Area 3) 2 PMT202602-60652 +NGN 18,812.50 View source document" [ref=e8001]:
+                    - cell [ref=e8002]:
+                      - checkbox [ref=e8003]
+                    - cell "11" [ref=e4924]:
+                      - generic [ref=e4925]: "11"
+                    - cell "05 Feb 2026" [ref=e4926]
+                    - cell "AR Payment PMT202602-60652 - Stanley Onyia (Area 3) 2 2026-05-00870" [ref=e4927]:
+                      - paragraph [ref=e4928]: AR Payment PMT202602-60652 - Stanley Onyia (Area 3) 2
+                      - paragraph [ref=e4929]: 2026-05-00870
+                    - cell "Customer Payment" [ref=e4930]:
+                      - generic [ref=e4931]: Customer Payment
+                    - cell "Stanley Onyia (Area 3) 2 PMT202602-60652" [ref=e4932]:
+                      - generic [ref=e4933]: Stanley Onyia (Area 3) 2
+                      - paragraph [ref=e4934]: PMT202602-60652
+                    - cell "+NGN 18,812.50" [ref=e4935]
+                    - cell "View source document" [ref=e8004]:
+                      - link "View source document" [ref=e8005] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/43fed32c-0776-45ba-9f84-42a1e5fe8bef
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60655 - Theodora Etim 2026-05-00874 Customer Payment Theodora Etim PMT202602-60655 +NGN 18,812.50 View source document" [ref=e8006]:
+                    - cell [ref=e8007]:
+                      - checkbox [ref=e8008]
+                    - cell "11" [ref=e4942]:
+                      - generic [ref=e4943]: "11"
+                    - cell "05 Feb 2026" [ref=e4944]
+                    - cell "AR Payment PMT202602-60655 - Theodora Etim 2026-05-00874" [ref=e4945]:
+                      - paragraph [ref=e4946]: AR Payment PMT202602-60655 - Theodora Etim
+                      - paragraph [ref=e4947]: 2026-05-00874
+                    - cell "Customer Payment" [ref=e4948]:
+                      - generic [ref=e4949]: Customer Payment
+                    - cell "Theodora Etim PMT202602-60655" [ref=e4950]:
+                      - generic [ref=e4951]: Theodora Etim
+                      - paragraph [ref=e4952]: PMT202602-60655
+                    - cell "+NGN 18,812.50" [ref=e4953]
+                    - cell "View source document" [ref=e8009]:
+                      - link "View source document" [ref=e8010] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/4400f025-cf75-4bbd-8669-448164bb8f57
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60654 - Mr Olaitan Akerele 2026-05-00873 Customer Payment Mr Olaitan Akerele PMT202602-60654 +NGN 18,812.50 View source document" [ref=e8011]:
+                    - cell [ref=e8012]:
+                      - checkbox [ref=e8013]
+                    - cell "11" [ref=e4960]:
+                      - generic [ref=e4961]: "11"
+                    - cell "05 Feb 2026" [ref=e4962]
+                    - cell "AR Payment PMT202602-60654 - Mr Olaitan Akerele 2026-05-00873" [ref=e4963]:
+                      - paragraph [ref=e4964]: AR Payment PMT202602-60654 - Mr Olaitan Akerele
+                      - paragraph [ref=e4965]: 2026-05-00873
+                    - cell "Customer Payment" [ref=e4966]:
+                      - generic [ref=e4967]: Customer Payment
+                    - cell "Mr Olaitan Akerele PMT202602-60654" [ref=e4968]:
+                      - generic [ref=e4969]: Mr Olaitan Akerele
+                      - paragraph [ref=e4970]: PMT202602-60654
+                    - cell "+NGN 18,812.50" [ref=e4971]
+                    - cell "View source document" [ref=e8014]:
+                      - link "View source document" [ref=e8015] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/5427f0a5-f5d9-4f40-a37f-62fe6ffbad75
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60653 - Olusegun Ajulo 2026-05-00872 Customer Payment Olusegun Ajulo PMT202602-60653 +NGN 37,625.00 View source document" [ref=e8016]:
+                    - cell [ref=e8017]:
+                      - checkbox [ref=e8018]
+                    - cell "11" [ref=e4978]:
+                      - generic [ref=e4979]: "11"
+                    - cell "05 Feb 2026" [ref=e4980]
+                    - cell "AR Payment PMT202602-60653 - Olusegun Ajulo 2026-05-00872" [ref=e4981]:
+                      - paragraph [ref=e4982]: AR Payment PMT202602-60653 - Olusegun Ajulo
+                      - paragraph [ref=e4983]: 2026-05-00872
+                    - cell "Customer Payment" [ref=e4984]:
+                      - generic [ref=e4985]: Customer Payment
+                    - cell "Olusegun Ajulo PMT202602-60653" [ref=e4986]:
+                      - generic [ref=e4987]: Olusegun Ajulo
+                      - paragraph [ref=e4988]: PMT202602-60653
+                    - cell "+NGN 37,625.00" [ref=e4989]
+                    - cell "View source document" [ref=e8019]:
+                      - link "View source document" [ref=e8020] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/5485ef9d-eb3b-4d6d-ba13-8d76e6f80819
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60651 - Muhammad Ahmad Sani Ahmad Sani 2026-05-00869 Customer Payment Muhammad Ahmad Sani Ahmad Sani PMT202602-60651 +NGN 37,625.00 View source document" [ref=e8021]:
+                    - cell [ref=e8022]:
+                      - checkbox [ref=e8023]
+                    - cell "11" [ref=e4996]:
+                      - generic [ref=e4997]: "11"
+                    - cell "05 Feb 2026" [ref=e4998]
+                    - cell "AR Payment PMT202602-60651 - Muhammad Ahmad Sani Ahmad Sani 2026-05-00869" [ref=e4999]:
+                      - paragraph [ref=e5000]: AR Payment PMT202602-60651 - Muhammad Ahmad Sani Ahmad Sani
+                      - paragraph [ref=e5001]: 2026-05-00869
+                    - cell "Customer Payment" [ref=e5002]:
+                      - generic [ref=e5003]: Customer Payment
+                    - cell "Muhammad Ahmad Sani Ahmad Sani PMT202602-60651" [ref=e5004]:
+                      - generic [ref=e5005]: Muhammad Ahmad Sani Ahmad Sani
+                      - paragraph [ref=e5006]: PMT202602-60651
+                    - cell "+NGN 37,625.00" [ref=e5007]
+                    - cell "View source document" [ref=e8024]:
+                      - link "View source document" [ref=e8025] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/5aaeca9f-cf36-41cc-a349-afff7bdff10e
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60647 - 2dotcom solutions(Mr Tunde) 2026-05-00865 Customer Payment 2dotcom solutions(Mr Tunde) PMT202602-60647 +NGN 56,437.50 View source document" [ref=e8026]:
+                    - cell [ref=e8027]:
+                      - checkbox [ref=e8028]
+                    - cell "11" [ref=e5014]:
+                      - generic [ref=e5015]: "11"
+                    - cell "05 Feb 2026" [ref=e5016]
+                    - cell "AR Payment PMT202602-60647 - 2dotcom solutions(Mr Tunde) 2026-05-00865" [ref=e5017]:
+                      - paragraph [ref=e5018]: AR Payment PMT202602-60647 - 2dotcom solutions(Mr Tunde)
+                      - paragraph [ref=e5019]: 2026-05-00865
+                    - cell "Customer Payment" [ref=e5020]:
+                      - generic [ref=e5021]: Customer Payment
+                    - cell "2dotcom solutions(Mr Tunde) PMT202602-60647" [ref=e5022]:
+                      - generic [ref=e5023]: 2dotcom solutions(Mr Tunde)
+                      - paragraph [ref=e5024]: PMT202602-60647
+                    - cell "+NGN 56,437.50" [ref=e5025]
+                    - cell "View source document" [ref=e8029]:
+                      - link "View source document" [ref=e8030] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/6d291630-e1e6-44ec-8125-9aa9bc944e30
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60637 - CKK Capital Limited 2026-05-00858 Customer Payment CKK Capital Limited PMT202602-60637 +NGN 37,625.00 View source document" [ref=e8031]:
+                    - cell [ref=e8032]:
+                      - checkbox [ref=e8033]
+                    - cell "11" [ref=e5032]:
+                      - generic [ref=e5033]: "11"
+                    - cell "05 Feb 2026" [ref=e5034]
+                    - cell "AR Payment PMT202602-60637 - CKK Capital Limited 2026-05-00858" [ref=e5035]:
+                      - paragraph [ref=e5036]: AR Payment PMT202602-60637 - CKK Capital Limited
+                      - paragraph [ref=e5037]: 2026-05-00858
+                    - cell "Customer Payment" [ref=e5038]:
+                      - generic [ref=e5039]: Customer Payment
+                    - cell "CKK Capital Limited PMT202602-60637" [ref=e5040]:
+                      - generic [ref=e5041]: CKK Capital Limited
+                      - paragraph [ref=e5042]: PMT202602-60637
+                    - cell "+NGN 37,625.00" [ref=e5043]
+                    - cell "View source document" [ref=e8034]:
+                      - link "View source document" [ref=e8035] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/794a054d-919c-49e9-925a-c61bcf018d2f
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60662 - Celestina Obiekea / 2dotcom Solutions 2026-05-00881 Customer Payment Celestina Obiekea / 2dotcom Solutions PMT202602-60662 +NGN 18,812.50 View source document" [ref=e8036]:
+                    - cell [ref=e8037]:
+                      - checkbox [ref=e8038]
+                    - cell "11" [ref=e5050]:
+                      - generic [ref=e5051]: "11"
+                    - cell "05 Feb 2026" [ref=e5052]
+                    - cell "AR Payment PMT202602-60662 - Celestina Obiekea / 2dotcom Solutions 2026-05-00881" [ref=e5053]:
+                      - paragraph [ref=e5054]: AR Payment PMT202602-60662 - Celestina Obiekea / 2dotcom Solutions
+                      - paragraph [ref=e5055]: 2026-05-00881
+                    - cell "Customer Payment" [ref=e5056]:
+                      - generic [ref=e5057]: Customer Payment
+                    - cell "Celestina Obiekea / 2dotcom Solutions PMT202602-60662" [ref=e5058]:
+                      - generic [ref=e5059]: Celestina Obiekea / 2dotcom Solutions
+                      - paragraph [ref=e5060]: PMT202602-60662
+                    - cell "+NGN 18,812.50" [ref=e5061]
+                    - cell "View source document" [ref=e8039]:
+                      - link "View source document" [ref=e8040] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/7ada79fb-1561-4151-a682-a1bf103bc6ef
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60658 - Skool Media Apartment(Peachville) 2026-05-00875 Customer Payment Skool Media Apartment(Peachville) PMT202602-60658 +NGN 56,437.50 View source document" [ref=e8041]:
+                    - cell [ref=e8042]:
+                      - checkbox [ref=e8043]
+                    - cell "11" [ref=e5068]:
+                      - generic [ref=e5069]: "11"
+                    - cell "05 Feb 2026" [ref=e5070]
+                    - cell "AR Payment PMT202602-60658 - Skool Media Apartment(Peachville) 2026-05-00875" [ref=e5071]:
+                      - paragraph [ref=e5072]: AR Payment PMT202602-60658 - Skool Media Apartment(Peachville)
+                      - paragraph [ref=e5073]: 2026-05-00875
+                    - cell "Customer Payment" [ref=e5074]:
+                      - generic [ref=e5075]: Customer Payment
+                    - cell "Skool Media Apartment(Peachville) PMT202602-60658" [ref=e5076]:
+                      - generic [ref=e5077]: Skool Media Apartment(Peachville)
+                      - paragraph [ref=e5078]: PMT202602-60658
+                    - cell "+NGN 56,437.50" [ref=e5079]
+                    - cell "View source document" [ref=e8044]:
+                      - link "View source document" [ref=e8045] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/83a3208a-cff6-4eef-a3d3-b7ab2b2c00b5
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60660 - Sarah Makeri 2026-05-00878 Customer Payment Sarah Makeri PMT202602-60660 +NGN 18,812.50 View source document" [ref=e8046]:
+                    - cell [ref=e8047]:
+                      - checkbox [ref=e8048]
+                    - cell "11" [ref=e5086]:
+                      - generic [ref=e5087]: "11"
+                    - cell "05 Feb 2026" [ref=e5088]
+                    - cell "AR Payment PMT202602-60660 - Sarah Makeri 2026-05-00878" [ref=e5089]:
+                      - paragraph [ref=e5090]: AR Payment PMT202602-60660 - Sarah Makeri
+                      - paragraph [ref=e5091]: 2026-05-00878
+                    - cell "Customer Payment" [ref=e5092]:
+                      - generic [ref=e5093]: Customer Payment
+                    - cell "Sarah Makeri PMT202602-60660" [ref=e5094]:
+                      - generic [ref=e5095]: Sarah Makeri
+                      - paragraph [ref=e5096]: PMT202602-60660
+                    - cell "+NGN 18,812.50" [ref=e5097]
+                    - cell "View source document" [ref=e8049]:
+                      - link "View source document" [ref=e8050] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/951029ef-3dcf-4fd3-ab54-78ab2213480f
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60661 - Christopher Inegbenoghu 2026-05-00880 Customer Payment Christopher Inegbenoghu PMT202602-60661 +NGN 18,812.50 View source document" [ref=e8051]:
+                    - cell [ref=e8052]:
+                      - checkbox [ref=e8053]
+                    - cell "11" [ref=e5104]:
+                      - generic [ref=e5105]: "11"
+                    - cell "05 Feb 2026" [ref=e5106]
+                    - cell "AR Payment PMT202602-60661 - Christopher Inegbenoghu 2026-05-00880" [ref=e5107]:
+                      - paragraph [ref=e5108]: AR Payment PMT202602-60661 - Christopher Inegbenoghu
+                      - paragraph [ref=e5109]: 2026-05-00880
+                    - cell "Customer Payment" [ref=e5110]:
+                      - generic [ref=e5111]: Customer Payment
+                    - cell "Christopher Inegbenoghu PMT202602-60661" [ref=e5112]:
+                      - generic [ref=e5113]: Christopher Inegbenoghu
+                      - paragraph [ref=e5114]: PMT202602-60661
+                    - cell "+NGN 18,812.50" [ref=e5115]
+                    - cell "View source document" [ref=e8054]:
+                      - link "View source document" [ref=e8055] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/bafd6d1f-fef0-411c-9c9c-537796de395f
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60638 - Ben Onwionoko 2026-05-00859 Customer Payment Ben Onwionoko PMT202602-60638 +NGN 18,812.50 View source document" [ref=e8056]:
+                    - cell [ref=e8057]:
+                      - checkbox [ref=e8058]
+                    - cell "11" [ref=e5122]:
+                      - generic [ref=e5123]: "11"
+                    - cell "05 Feb 2026" [ref=e5124]
+                    - cell "AR Payment PMT202602-60638 - Ben Onwionoko 2026-05-00859" [ref=e5125]:
+                      - paragraph [ref=e5126]: AR Payment PMT202602-60638 - Ben Onwionoko
+                      - paragraph [ref=e5127]: 2026-05-00859
+                    - cell "Customer Payment" [ref=e5128]:
+                      - generic [ref=e5129]: Customer Payment
+                    - cell "Ben Onwionoko PMT202602-60638" [ref=e5130]:
+                      - generic [ref=e5131]: Ben Onwionoko
+                      - paragraph [ref=e5132]: PMT202602-60638
+                    - cell "+NGN 18,812.50" [ref=e5133]
+                    - cell "View source document" [ref=e8059]:
+                      - link "View source document" [ref=e8060] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/bfe407a1-8d9f-49a3-aa19-d5e19d056f91
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60635 - HD Technologies 2026-05-00857 Customer Payment HD Technologies PMT202602-60635 +NGN 150,500.00 View source document" [ref=e8061]:
+                    - cell [ref=e8062]:
+                      - checkbox [ref=e8063]
+                    - cell "11" [ref=e5140]:
+                      - generic [ref=e5141]: "11"
+                    - cell "05 Feb 2026" [ref=e5142]
+                    - cell "AR Payment PMT202602-60635 - HD Technologies 2026-05-00857" [ref=e5143]:
+                      - paragraph [ref=e5144]: AR Payment PMT202602-60635 - HD Technologies
+                      - paragraph [ref=e5145]: 2026-05-00857
+                    - cell "Customer Payment" [ref=e5146]:
+                      - generic [ref=e5147]: Customer Payment
+                    - cell "HD Technologies PMT202602-60635" [ref=e5148]:
+                      - generic [ref=e5149]: HD Technologies
+                      - paragraph [ref=e5150]: PMT202602-60635
+                    - cell "+NGN 150,500.00" [ref=e5151]
+                    - cell "View source document" [ref=e8064]:
+                      - link "View source document" [ref=e8065] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/c1c0c217-e141-432b-b6f6-f0c52ec47686
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60650 - Emperor Wales 3 2026-05-00868 Customer Payment Emperor Wales 3 PMT202602-60650 +NGN 37,625.00 View source document" [ref=e8066]:
+                    - cell [ref=e8067]:
+                      - checkbox [ref=e8068]
+                    - cell "11" [ref=e5158]:
+                      - generic [ref=e5159]: "11"
+                    - cell "05 Feb 2026" [ref=e5160]
+                    - cell "AR Payment PMT202602-60650 - Emperor Wales 3 2026-05-00868" [ref=e5161]:
+                      - paragraph [ref=e5162]: AR Payment PMT202602-60650 - Emperor Wales 3
+                      - paragraph [ref=e5163]: 2026-05-00868
+                    - cell "Customer Payment" [ref=e5164]:
+                      - generic [ref=e5165]: Customer Payment
+                    - cell "Emperor Wales 3 PMT202602-60650" [ref=e5166]:
+                      - generic [ref=e5167]: Emperor Wales 3
+                      - paragraph [ref=e5168]: PMT202602-60650
+                    - cell "+NGN 37,625.00" [ref=e5169]
+                    - cell "View source document" [ref=e8069]:
+                      - link "View source document" [ref=e8070] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/caec16b1-6050-4ce7-a6a6-36cd3623cd79
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60648 - Pedery Abraham Lincoln 2026-05-00866 Customer Payment Pedery Abraham Lincoln PMT202602-60648 +NGN 18,812.50 View source document" [ref=e8071]:
+                    - cell [ref=e8072]:
+                      - checkbox [ref=e8073]
+                    - cell "11" [ref=e5176]:
+                      - generic [ref=e5177]: "11"
+                    - cell "05 Feb 2026" [ref=e5178]
+                    - cell "AR Payment PMT202602-60648 - Pedery Abraham Lincoln 2026-05-00866" [ref=e5179]:
+                      - paragraph [ref=e5180]: AR Payment PMT202602-60648 - Pedery Abraham Lincoln
+                      - paragraph [ref=e5181]: 2026-05-00866
+                    - cell "Customer Payment" [ref=e5182]:
+                      - generic [ref=e5183]: Customer Payment
+                    - cell "Pedery Abraham Lincoln PMT202602-60648" [ref=e5184]:
+                      - generic [ref=e5185]: Pedery Abraham Lincoln
+                      - paragraph [ref=e5186]: PMT202602-60648
+                    - cell "+NGN 18,812.50" [ref=e5187]
+                    - cell "View source document" [ref=e8074]:
+                      - link "View source document" [ref=e8075] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/d5a58f68-878b-4cb1-a41f-4c3602b1bd6b
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60643 - OWELEKE TV 2026-05-00863 Customer Payment OWELEKE TV PMT202602-60643 +NGN 18,812.50 View source document" [ref=e8076]:
+                    - cell [ref=e8077]:
+                      - checkbox [ref=e8078]
+                    - cell "11" [ref=e5194]:
+                      - generic [ref=e5195]: "11"
+                    - cell "05 Feb 2026" [ref=e5196]
+                    - cell "AR Payment PMT202602-60643 - OWELEKE TV 2026-05-00863" [ref=e5197]:
+                      - paragraph [ref=e5198]: AR Payment PMT202602-60643 - OWELEKE TV
+                      - paragraph [ref=e5199]: 2026-05-00863
+                    - cell "Customer Payment" [ref=e5200]:
+                      - generic [ref=e5201]: Customer Payment
+                    - cell "OWELEKE TV PMT202602-60643" [ref=e5202]:
+                      - generic [ref=e5203]: OWELEKE TV
+                      - paragraph [ref=e5204]: PMT202602-60643
+                    - cell "+NGN 18,812.50" [ref=e5205]
+                    - cell "View source document" [ref=e8079]:
+                      - link "View source document" [ref=e8080] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/ef2ce397-756f-480b-bfc7-3719ba3b2322
+                        - text: View
+                  - row "11 05 Feb 2026 AR Payment PMT202602-60656 - Heritage Arab Road 2026-11-00739 Customer Payment Heritage Arab Road PMT202602-60656 +NGN 18,812.50 View source document" [ref=e8081]:
+                    - cell [ref=e8082]:
+                      - checkbox [ref=e8083]
+                    - cell "11" [ref=e5212]:
+                      - generic [ref=e5213]: "11"
+                    - cell "05 Feb 2026" [ref=e5214]
+                    - cell "AR Payment PMT202602-60656 - Heritage Arab Road 2026-11-00739" [ref=e5215]:
+                      - paragraph [ref=e5216]: AR Payment PMT202602-60656 - Heritage Arab Road
+                      - paragraph [ref=e5217]: 2026-11-00739
+                    - cell "Customer Payment" [ref=e5218]:
+                      - generic [ref=e5219]: Customer Payment
+                    - cell "Heritage Arab Road PMT202602-60656" [ref=e5220]:
+                      - generic [ref=e5221]: Heritage Arab Road
+                      - paragraph [ref=e5222]: PMT202602-60656
+                    - cell "+NGN 18,812.50" [ref=e5223]
+                    - cell "View source document" [ref=e8084]:
+                      - link "View source document" [ref=e8085] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/fa2676b6-9031-45d6-b57d-19bcb5f26c8e
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60624 - Chinwe Biaduo 2026-05-00848 Customer Payment Chinwe Biaduo PMT202602-60624 +NGN 18,812.50 View source document" [ref=e8086]:
+                    - cell [ref=e8087]:
+                      - checkbox [ref=e8088]
+                    - cell "11" [ref=e5230]:
+                      - generic [ref=e5231]: "11"
+                    - cell "04 Feb 2026" [ref=e5232]
+                    - cell "AR Payment PMT202602-60624 - Chinwe Biaduo 2026-05-00848" [ref=e5233]:
+                      - paragraph [ref=e5234]: AR Payment PMT202602-60624 - Chinwe Biaduo
+                      - paragraph [ref=e5235]: 2026-05-00848
+                    - cell "Customer Payment" [ref=e5236]:
+                      - generic [ref=e5237]: Customer Payment
+                    - cell "Chinwe Biaduo PMT202602-60624" [ref=e5238]:
+                      - generic [ref=e5239]: Chinwe Biaduo
+                      - paragraph [ref=e5240]: PMT202602-60624
+                    - cell "+NGN 18,812.50" [ref=e5241]
+                    - cell "View source document" [ref=e8089]:
+                      - link "View source document" [ref=e8090] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/3c6621d5-b085-4ec3-91a0-6d19169ada03
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60633 - Chris Obodo 2026-05-00856 Customer Payment Chris Obodo PMT202602-60633 +NGN 18,812.50 View source document" [ref=e8091]:
+                    - cell [ref=e8092]:
+                      - checkbox [ref=e8093]
+                    - cell "11" [ref=e5248]:
+                      - generic [ref=e5249]: "11"
+                    - cell "04 Feb 2026" [ref=e5250]
+                    - cell "AR Payment PMT202602-60633 - Chris Obodo 2026-05-00856" [ref=e5251]:
+                      - paragraph [ref=e5252]: AR Payment PMT202602-60633 - Chris Obodo
+                      - paragraph [ref=e5253]: 2026-05-00856
+                    - cell "Customer Payment" [ref=e5254]:
+                      - generic [ref=e5255]: Customer Payment
+                    - cell "Chris Obodo PMT202602-60633" [ref=e5256]:
+                      - generic [ref=e5257]: Chris Obodo
+                      - paragraph [ref=e5258]: PMT202602-60633
+                    - cell "+NGN 18,812.50" [ref=e5259]
+                    - cell "View source document" [ref=e8094]:
+                      - link "View source document" [ref=e8095] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/81a7229c-d940-4164-bae0-fbfe4f3b4742
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60608 - Ascomnet Intl Ltd (Apo Nepa) 2026-05-00839 Customer Payment Ascomnet Intl Ltd (Apo Nepa) PMT202602-60608 +NGN 288,906.25 View source document" [ref=e8096]:
+                    - cell [ref=e8097]:
+                      - checkbox [ref=e8098]
+                    - cell "11" [ref=e5266]:
+                      - generic [ref=e5267]: "11"
+                    - cell "04 Feb 2026" [ref=e5268]
+                    - cell "AR Payment PMT202602-60608 - Ascomnet Intl Ltd (Apo Nepa) 2026-05-00839" [ref=e5269]:
+                      - paragraph [ref=e5270]: AR Payment PMT202602-60608 - Ascomnet Intl Ltd (Apo Nepa)
+                      - paragraph [ref=e5271]: 2026-05-00839
+                    - cell "Customer Payment" [ref=e5272]:
+                      - generic [ref=e5273]: Customer Payment
+                    - cell "Ascomnet Intl Ltd (Apo Nepa) PMT202602-60608" [ref=e5274]:
+                      - generic [ref=e5275]: Ascomnet Intl Ltd (Apo Nepa)
+                      - paragraph [ref=e5276]: PMT202602-60608
+                    - cell "+NGN 288,906.25" [ref=e5277]
+                    - cell "View source document" [ref=e8099]:
+                      - link "View source document" [ref=e8100] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/3a030e8f-e50e-421f-8e75-969f368255e5
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60619 - Ibitoye Oluwatoyin Mary 2026-05-00846 Customer Payment Ibitoye Oluwatoyin Mary PMT202602-60619 +NGN 18,812.50 View source document" [ref=e8101]:
+                    - cell [ref=e8102]:
+                      - checkbox [ref=e8103]
+                    - cell "11" [ref=e5284]:
+                      - generic [ref=e5285]: "11"
+                    - cell "04 Feb 2026" [ref=e5286]
+                    - cell "AR Payment PMT202602-60619 - Ibitoye Oluwatoyin Mary 2026-05-00846" [ref=e5287]:
+                      - paragraph [ref=e5288]: AR Payment PMT202602-60619 - Ibitoye Oluwatoyin Mary
+                      - paragraph [ref=e5289]: 2026-05-00846
+                    - cell "Customer Payment" [ref=e5290]:
+                      - generic [ref=e5291]: Customer Payment
+                    - cell "Ibitoye Oluwatoyin Mary PMT202602-60619" [ref=e5292]:
+                      - generic [ref=e5293]: Ibitoye Oluwatoyin Mary
+                      - paragraph [ref=e5294]: PMT202602-60619
+                    - cell "+NGN 18,812.50" [ref=e5295]
+                    - cell "View source document" [ref=e8104]:
+                      - link "View source document" [ref=e8105] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/20500f74-8852-4a7f-b473-42034eb11908
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60632 - Action Against Hunger (Wuse 2) 2026-05-00855 Customer Payment Action Against Hunger (Wuse 2) PMT202602-60632 +NGN 37,625.00 View source document" [ref=e8106]:
+                    - cell [ref=e8107]:
+                      - checkbox [ref=e8108]
+                    - cell "11" [ref=e5302]:
+                      - generic [ref=e5303]: "11"
+                    - cell "04 Feb 2026" [ref=e5304]
+                    - cell "AR Payment PMT202602-60632 - Action Against Hunger (Wuse 2) 2026-05-00855" [ref=e5305]:
+                      - paragraph [ref=e5306]: AR Payment PMT202602-60632 - Action Against Hunger (Wuse 2)
+                      - paragraph [ref=e5307]: 2026-05-00855
+                    - cell "Customer Payment" [ref=e5308]:
+                      - generic [ref=e5309]: Customer Payment
+                    - cell "Action Against Hunger (Wuse 2) PMT202602-60632" [ref=e5310]:
+                      - generic [ref=e5311]: Action Against Hunger (Wuse 2)
+                      - paragraph [ref=e5312]: PMT202602-60632
+                    - cell "+NGN 37,625.00" [ref=e5313]
+                    - cell "View source document" [ref=e8109]:
+                      - link "View source document" [ref=e8110] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/1649d00b-1fd5-4405-9c85-d646616789a4
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60629 - Gbenga Alabuja 2026-05-00853 Customer Payment Gbenga Alabuja PMT202602-60629 +NGN 18,812.50 View source document" [ref=e8111]:
+                    - cell [ref=e8112]:
+                      - checkbox [ref=e8113]
+                    - cell "11" [ref=e5320]:
+                      - generic [ref=e5321]: "11"
+                    - cell "04 Feb 2026" [ref=e5322]
+                    - cell "AR Payment PMT202602-60629 - Gbenga Alabuja 2026-05-00853" [ref=e5323]:
+                      - paragraph [ref=e5324]: AR Payment PMT202602-60629 - Gbenga Alabuja
+                      - paragraph [ref=e5325]: 2026-05-00853
+                    - cell "Customer Payment" [ref=e5326]:
+                      - generic [ref=e5327]: Customer Payment
+                    - cell "Gbenga Alabuja PMT202602-60629" [ref=e5328]:
+                      - generic [ref=e5329]: Gbenga Alabuja
+                      - paragraph [ref=e5330]: PMT202602-60629
+                    - cell "+NGN 18,812.50" [ref=e5331]
+                    - cell "View source document" [ref=e8114]:
+                      - link "View source document" [ref=e8115] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/01eebb1a-9233-4102-8623-b309f2038679
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60644 - Amara Okafor 2026-11-00729 Customer Payment Amara Okafor PMT202602-60644 +NGN 18,812.50 View source document" [ref=e8116]:
+                    - cell [ref=e8117]:
+                      - checkbox [ref=e8118]
+                    - cell "11" [ref=e5338]:
+                      - generic [ref=e5339]: "11"
+                    - cell "04 Feb 2026" [ref=e5340]
+                    - cell "AR Payment PMT202602-60644 - Amara Okafor 2026-11-00729" [ref=e5341]:
+                      - paragraph [ref=e5342]: AR Payment PMT202602-60644 - Amara Okafor
+                      - paragraph [ref=e5343]: 2026-11-00729
+                    - cell "Customer Payment" [ref=e5344]:
+                      - generic [ref=e5345]: Customer Payment
+                    - cell "Amara Okafor PMT202602-60644" [ref=e5346]:
+                      - generic [ref=e5347]: Amara Okafor
+                      - paragraph [ref=e5348]: PMT202602-60644
+                    - cell "+NGN 18,812.50" [ref=e5349]
+                    - cell "View source document" [ref=e8119]:
+                      - link "View source document" [ref=e8120] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/72f0de81-534b-4e8b-80f0-077980a54444
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60614 - Yusuf Bello 2026-11-00710 Customer Payment Yusuf Bello PMT202602-60614 +NGN 18,812.50 View source document" [ref=e8121]:
+                    - cell [ref=e8122]:
+                      - checkbox [ref=e8123]
+                    - cell "11" [ref=e5356]:
+                      - generic [ref=e5357]: "11"
+                    - cell "04 Feb 2026" [ref=e5358]
+                    - cell "AR Payment PMT202602-60614 - Yusuf Bello 2026-11-00710" [ref=e5359]:
+                      - paragraph [ref=e5360]: AR Payment PMT202602-60614 - Yusuf Bello
+                      - paragraph [ref=e5361]: 2026-11-00710
+                    - cell "Customer Payment" [ref=e5362]:
+                      - generic [ref=e5363]: Customer Payment
+                    - cell "Yusuf Bello PMT202602-60614" [ref=e5364]:
+                      - generic [ref=e5365]: Yusuf Bello
+                      - paragraph [ref=e5366]: PMT202602-60614
+                    - cell "+NGN 18,812.50" [ref=e5367]
+                    - cell "View source document" [ref=e8124]:
+                      - link "View source document" [ref=e8125] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/64987aa9-3a99-4d4f-96ea-a656ea987b51
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60610 - Hussaini Muhammed 2026-11-00701 Customer Payment Hussaini Muhammed PMT202602-60610 +NGN 18,812.50 View source document" [ref=e8126]:
+                    - cell [ref=e8127]:
+                      - checkbox [ref=e8128]
+                    - cell "11" [ref=e5374]:
+                      - generic [ref=e5375]: "11"
+                    - cell "04 Feb 2026" [ref=e5376]
+                    - cell "AR Payment PMT202602-60610 - Hussaini Muhammed 2026-11-00701" [ref=e5377]:
+                      - paragraph [ref=e5378]: AR Payment PMT202602-60610 - Hussaini Muhammed
+                      - paragraph [ref=e5379]: 2026-11-00701
+                    - cell "Customer Payment" [ref=e5380]:
+                      - generic [ref=e5381]: Customer Payment
+                    - cell "Hussaini Muhammed PMT202602-60610" [ref=e5382]:
+                      - generic [ref=e5383]: Hussaini Muhammed
+                      - paragraph [ref=e5384]: PMT202602-60610
+                    - cell "+NGN 18,812.50" [ref=e5385]
+                    - cell "View source document" [ref=e8129]:
+                      - link "View source document" [ref=e8130] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/85feb2e2-3c7e-4b95-9637-c31995c6ee94
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60616 - Senema productions limited 2026-05-00844 Customer Payment Senema productions limited PMT202602-60616 +NGN 18,812.50 View source document" [ref=e8131]:
+                    - cell [ref=e8132]:
+                      - checkbox [ref=e8133]
+                    - cell "11" [ref=e5392]:
+                      - generic [ref=e5393]: "11"
+                    - cell "04 Feb 2026" [ref=e5394]
+                    - cell "AR Payment PMT202602-60616 - Senema productions limited 2026-05-00844" [ref=e5395]:
+                      - paragraph [ref=e5396]: AR Payment PMT202602-60616 - Senema productions limited
+                      - paragraph [ref=e5397]: 2026-05-00844
+                    - cell "Customer Payment" [ref=e5398]:
+                      - generic [ref=e5399]: Customer Payment
+                    - cell "Senema productions limited PMT202602-60616" [ref=e5400]:
+                      - generic [ref=e5401]: Senema productions limited
+                      - paragraph [ref=e5402]: PMT202602-60616
+                    - cell "+NGN 18,812.50" [ref=e5403]
+                    - cell "View source document" [ref=e8134]:
+                      - link "View source document" [ref=e8135] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/f12a1e40-10e2-43ab-a034-476c58d7602a
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60631 - Okoye Samuel Santos Ekene 2026-05-00854 Customer Payment Okoye Samuel Santos Ekene PMT202602-60631 +NGN 18,812.50 View source document" [ref=e8136]:
+                    - cell [ref=e8137]:
+                      - checkbox [ref=e8138]
+                    - cell "11" [ref=e5410]:
+                      - generic [ref=e5411]: "11"
+                    - cell "04 Feb 2026" [ref=e5412]
+                    - cell "AR Payment PMT202602-60631 - Okoye Samuel Santos Ekene 2026-05-00854" [ref=e5413]:
+                      - paragraph [ref=e5414]: AR Payment PMT202602-60631 - Okoye Samuel Santos Ekene
+                      - paragraph [ref=e5415]: 2026-05-00854
+                    - cell "Customer Payment" [ref=e5416]:
+                      - generic [ref=e5417]: Customer Payment
+                    - cell "Okoye Samuel Santos Ekene PMT202602-60631" [ref=e5418]:
+                      - generic [ref=e5419]: Okoye Samuel Santos Ekene
+                      - paragraph [ref=e5420]: PMT202602-60631
+                    - cell "+NGN 18,812.50" [ref=e5421]
+                    - cell "View source document" [ref=e8139]:
+                      - link "View source document" [ref=e8140] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/c6c8cf40-9314-4687-982d-be7ab30cd4f8
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60628 - Edith Anekwe 2026-05-00852 Customer Payment Edith Anekwe PMT202602-60628 +NGN 18,812.50 View source document" [ref=e8141]:
+                    - cell [ref=e8142]:
+                      - checkbox [ref=e8143]
+                    - cell "11" [ref=e5428]:
+                      - generic [ref=e5429]: "11"
+                    - cell "04 Feb 2026" [ref=e5430]
+                    - cell "AR Payment PMT202602-60628 - Edith Anekwe 2026-05-00852" [ref=e5431]:
+                      - paragraph [ref=e5432]: AR Payment PMT202602-60628 - Edith Anekwe
+                      - paragraph [ref=e5433]: 2026-05-00852
+                    - cell "Customer Payment" [ref=e5434]:
+                      - generic [ref=e5435]: Customer Payment
+                    - cell "Edith Anekwe PMT202602-60628" [ref=e5436]:
+                      - generic [ref=e5437]: Edith Anekwe
+                      - paragraph [ref=e5438]: PMT202602-60628
+                    - cell "+NGN 18,812.50" [ref=e5439]
+                    - cell "View source document" [ref=e8144]:
+                      - link "View source document" [ref=e8145] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/c06b3930-f2d8-4887-8fca-c71f1183eafd
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60609 - Rappnet (Bolton White) Appartment 2026-05-00840 Customer Payment Rappnet (Bolton White) Appartment PMT202602-60609 +NGN 112,875.00 View source document" [ref=e8146]:
+                    - cell [ref=e8147]:
+                      - checkbox [ref=e8148]
+                    - cell "11" [ref=e5446]:
+                      - generic [ref=e5447]: "11"
+                    - cell "04 Feb 2026" [ref=e5448]
+                    - cell "AR Payment PMT202602-60609 - Rappnet (Bolton White) Appartment 2026-05-00840" [ref=e5449]:
+                      - paragraph [ref=e5450]: AR Payment PMT202602-60609 - Rappnet (Bolton White) Appartment
+                      - paragraph [ref=e5451]: 2026-05-00840
+                    - cell "Customer Payment" [ref=e5452]:
+                      - generic [ref=e5453]: Customer Payment
+                    - cell "Rappnet (Bolton White) Appartment PMT202602-60609" [ref=e5454]:
+                      - generic [ref=e5455]: Rappnet (Bolton White) Appartment
+                      - paragraph [ref=e5456]: PMT202602-60609
+                    - cell "+NGN 112,875.00" [ref=e5457]
+                    - cell "View source document" [ref=e8149]:
+                      - link "View source document" [ref=e8150] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/b6bd7a02-40e3-49bd-a3ad-8ebca954c419
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60606 - Bello Miracle Efomeh 2026-05-00838 Customer Payment Bello Miracle Efomeh PMT202602-60606 +NGN 18,812.50 View source document" [ref=e8151]:
+                    - cell [ref=e8152]:
+                      - checkbox [ref=e8153]
+                    - cell "11" [ref=e5464]:
+                      - generic [ref=e5465]: "11"
+                    - cell "04 Feb 2026" [ref=e5466]
+                    - cell "AR Payment PMT202602-60606 - Bello Miracle Efomeh 2026-05-00838" [ref=e5467]:
+                      - paragraph [ref=e5468]: AR Payment PMT202602-60606 - Bello Miracle Efomeh
+                      - paragraph [ref=e5469]: 2026-05-00838
+                    - cell "Customer Payment" [ref=e5470]:
+                      - generic [ref=e5471]: Customer Payment
+                    - cell "Bello Miracle Efomeh PMT202602-60606" [ref=e5472]:
+                      - generic [ref=e5473]: Bello Miracle Efomeh
+                      - paragraph [ref=e5474]: PMT202602-60606
+                    - cell "+NGN 18,812.50" [ref=e5475]
+                    - cell "View source document" [ref=e8154]:
+                      - link "View source document" [ref=e8155] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/af6f43e1-2d8c-4aa6-ba22-75c922b639e5
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60627 - Iyobosa Smart Imasuen 2026-05-00851 Customer Payment Iyobosa Smart Imasuen PMT202602-60627 +NGN 37,625.00 View source document" [ref=e8156]:
+                    - cell [ref=e8157]:
+                      - checkbox [ref=e8158]
+                    - cell "11" [ref=e5482]:
+                      - generic [ref=e5483]: "11"
+                    - cell "04 Feb 2026" [ref=e5484]
+                    - cell "AR Payment PMT202602-60627 - Iyobosa Smart Imasuen 2026-05-00851" [ref=e5485]:
+                      - paragraph [ref=e5486]: AR Payment PMT202602-60627 - Iyobosa Smart Imasuen
+                      - paragraph [ref=e5487]: 2026-05-00851
+                    - cell "Customer Payment" [ref=e5488]:
+                      - generic [ref=e5489]: Customer Payment
+                    - cell "Iyobosa Smart Imasuen PMT202602-60627" [ref=e5490]:
+                      - generic [ref=e5491]: Iyobosa Smart Imasuen
+                      - paragraph [ref=e5492]: PMT202602-60627
+                    - cell "+NGN 37,625.00" [ref=e5493]
+                    - cell "View source document" [ref=e8159]:
+                      - link "View source document" [ref=e8160] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/af6aaa11-696f-4b1e-a954-fa96886e0604
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60626 - OgheneTejiri Overen 2026-05-00850 Customer Payment OgheneTejiri Overen PMT202602-60626 +NGN 37,625.00 View source document" [ref=e8161]:
+                    - cell [ref=e8162]:
+                      - checkbox [ref=e8163]
+                    - cell "11" [ref=e5500]:
+                      - generic [ref=e5501]: "11"
+                    - cell "04 Feb 2026" [ref=e5502]
+                    - cell "AR Payment PMT202602-60626 - OgheneTejiri Overen 2026-05-00850" [ref=e5503]:
+                      - paragraph [ref=e5504]: AR Payment PMT202602-60626 - OgheneTejiri Overen
+                      - paragraph [ref=e5505]: 2026-05-00850
+                    - cell "Customer Payment" [ref=e5506]:
+                      - generic [ref=e5507]: Customer Payment
+                    - cell "OgheneTejiri Overen PMT202602-60626" [ref=e5508]:
+                      - generic [ref=e5509]: OgheneTejiri Overen
+                      - paragraph [ref=e5510]: PMT202602-60626
+                    - cell "+NGN 37,625.00" [ref=e5511]
+                    - cell "View source document" [ref=e8164]:
+                      - link "View source document" [ref=e8165] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/a1b5ce3e-5eab-4338-9746-53cdf3601382
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60621 - Firas . 2026-05-00847 Customer Payment Firas . PMT202602-60621 +NGN 37,625.00 View source document" [ref=e8166]:
+                    - cell [ref=e8167]:
+                      - checkbox [ref=e8168]
+                    - cell "11" [ref=e5518]:
+                      - generic [ref=e5519]: "11"
+                    - cell "04 Feb 2026" [ref=e5520]
+                    - cell "AR Payment PMT202602-60621 - Firas . 2026-05-00847" [ref=e5521]:
+                      - paragraph [ref=e5522]: AR Payment PMT202602-60621 - Firas .
+                      - paragraph [ref=e5523]: 2026-05-00847
+                    - cell "Customer Payment" [ref=e5524]:
+                      - generic [ref=e5525]: Customer Payment
+                    - cell "Firas . PMT202602-60621" [ref=e5526]:
+                      - generic [ref=e5527]: Firas .
+                      - paragraph [ref=e5528]: PMT202602-60621
+                    - cell "+NGN 37,625.00" [ref=e5529]
+                    - cell "View source document" [ref=e8169]:
+                      - link "View source document" [ref=e8170] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/a160dfec-ff6b-4b03-8861-86ee04c25248
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60611 - OPTIMA LTD 2026-05-00841 Customer Payment OPTIMA LTD PMT202602-60611 +NGN 56,437.50 View source document" [ref=e8171]:
+                    - cell [ref=e8172]:
+                      - checkbox [ref=e8173]
+                    - cell "11" [ref=e5536]:
+                      - generic [ref=e5537]: "11"
+                    - cell "04 Feb 2026" [ref=e5538]
+                    - cell "AR Payment PMT202602-60611 - OPTIMA LTD 2026-05-00841" [ref=e5539]:
+                      - paragraph [ref=e5540]: AR Payment PMT202602-60611 - OPTIMA LTD
+                      - paragraph [ref=e5541]: 2026-05-00841
+                    - cell "Customer Payment" [ref=e5542]:
+                      - generic [ref=e5543]: Customer Payment
+                    - cell "OPTIMA LTD PMT202602-60611" [ref=e5544]:
+                      - generic [ref=e5545]: OPTIMA LTD
+                      - paragraph [ref=e5546]: PMT202602-60611
+                    - cell "+NGN 56,437.50" [ref=e5547]
+                    - cell "View source document" [ref=e8174]:
+                      - link "View source document" [ref=e8175] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/9cff3f37-fa63-45b1-883a-7c9d1c6d3ef8
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60612 - MARYAM ISMAEL 2026-05-00842 Customer Payment MARYAM ISMAEL PMT202602-60612 +NGN 18,812.50 View source document" [ref=e8176]:
+                    - cell [ref=e8177]:
+                      - checkbox [ref=e8178]
+                    - cell "11" [ref=e5554]:
+                      - generic [ref=e5555]: "11"
+                    - cell "04 Feb 2026" [ref=e5556]
+                    - cell "AR Payment PMT202602-60612 - MARYAM ISMAEL 2026-05-00842" [ref=e5557]:
+                      - paragraph [ref=e5558]: AR Payment PMT202602-60612 - MARYAM ISMAEL
+                      - paragraph [ref=e5559]: 2026-05-00842
+                    - cell "Customer Payment" [ref=e5560]:
+                      - generic [ref=e5561]: Customer Payment
+                    - cell "MARYAM ISMAEL PMT202602-60612" [ref=e5562]:
+                      - generic [ref=e5563]: MARYAM ISMAEL
+                      - paragraph [ref=e5564]: PMT202602-60612
+                    - cell "+NGN 18,812.50" [ref=e5565]
+                    - cell "View source document" [ref=e8179]:
+                      - link "View source document" [ref=e8180] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/934f3ccb-6bfd-4fda-92fb-bb799dcc00e0
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60625 - Nwagbogwu Victor 3 2026-05-00849 Customer Payment Nwagbogwu Victor 3 PMT202602-60625 +NGN 37,625.00 View source document" [ref=e8181]:
+                    - cell [ref=e8182]:
+                      - checkbox [ref=e8183]
+                    - cell "11" [ref=e5572]:
+                      - generic [ref=e5573]: "11"
+                    - cell "04 Feb 2026" [ref=e5574]
+                    - cell "AR Payment PMT202602-60625 - Nwagbogwu Victor 3 2026-05-00849" [ref=e5575]:
+                      - paragraph [ref=e5576]: AR Payment PMT202602-60625 - Nwagbogwu Victor 3
+                      - paragraph [ref=e5577]: 2026-05-00849
+                    - cell "Customer Payment" [ref=e5578]:
+                      - generic [ref=e5579]: Customer Payment
+                    - cell "Nwagbogwu Victor 3 PMT202602-60625" [ref=e5580]:
+                      - generic [ref=e5581]: Nwagbogwu Victor 3
+                      - paragraph [ref=e5582]: PMT202602-60625
+                    - cell "+NGN 37,625.00" [ref=e5583]
+                    - cell "View source document" [ref=e8184]:
+                      - link "View source document" [ref=e8185] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/8e856e3b-95c9-4b95-a9a6-eee79d1f25e3
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60618 - Chinenye Nkwocha 2026-05-00845 Customer Payment Chinenye Nkwocha PMT202602-60618 +NGN 18,812.50 View source document" [ref=e8186]:
+                    - cell [ref=e8187]:
+                      - checkbox [ref=e8188]
+                    - cell "11" [ref=e5590]:
+                      - generic [ref=e5591]: "11"
+                    - cell "04 Feb 2026" [ref=e5592]
+                    - cell "AR Payment PMT202602-60618 - Chinenye Nkwocha 2026-05-00845" [ref=e5593]:
+                      - paragraph [ref=e5594]: AR Payment PMT202602-60618 - Chinenye Nkwocha
+                      - paragraph [ref=e5595]: 2026-05-00845
+                    - cell "Customer Payment" [ref=e5596]:
+                      - generic [ref=e5597]: Customer Payment
+                    - cell "Chinenye Nkwocha PMT202602-60618" [ref=e5598]:
+                      - generic [ref=e5599]: Chinenye Nkwocha
+                      - paragraph [ref=e5600]: PMT202602-60618
+                    - cell "+NGN 18,812.50" [ref=e5601]
+                    - cell "View source document" [ref=e8189]:
+                      - link "View source document" [ref=e8190] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/8cde74b2-462c-4d2b-9bf6-143d252b395f
+                        - text: View
+                  - row "11 04 Feb 2026 AR Payment PMT202602-60615 - Hon Tunde Ogunsaki 2026-11-00713 Customer Payment Hon Tunde Ogunsaki PMT202602-60615 +NGN 37,625.00 View source document" [ref=e8191]:
+                    - cell [ref=e8192]:
+                      - checkbox [ref=e8193]
+                    - cell "11" [ref=e5608]:
+                      - generic [ref=e5609]: "11"
+                    - cell "04 Feb 2026" [ref=e5610]
+                    - cell "AR Payment PMT202602-60615 - Hon Tunde Ogunsaki 2026-11-00713" [ref=e5611]:
+                      - paragraph [ref=e5612]: AR Payment PMT202602-60615 - Hon Tunde Ogunsaki
+                      - paragraph [ref=e5613]: 2026-11-00713
+                    - cell "Customer Payment" [ref=e5614]:
+                      - generic [ref=e5615]: Customer Payment
+                    - cell "Hon Tunde Ogunsaki PMT202602-60615" [ref=e5616]:
+                      - generic [ref=e5617]: Hon Tunde Ogunsaki
+                      - paragraph [ref=e5618]: PMT202602-60615
+                    - cell "+NGN 37,625.00" [ref=e5619]
+                    - cell "View source document" [ref=e8194]:
+                      - link "View source document" [ref=e8195] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/4e437106-2c6b-4c56-ad19-c9d487b6ae3f
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60583 - Temitope Onigbanjo 2026-05-00816 Customer Payment Temitope Onigbanjo PMT202602-60583 +NGN 18,812.50 View source document" [ref=e8196]:
+                    - cell [ref=e8197]:
+                      - checkbox [ref=e8198]
+                    - cell "11" [ref=e5626]:
+                      - generic [ref=e5627]: "11"
+                    - cell "03 Feb 2026" [ref=e5628]
+                    - cell "AR Payment PMT202602-60583 - Temitope Onigbanjo 2026-05-00816" [ref=e5629]:
+                      - paragraph [ref=e5630]: AR Payment PMT202602-60583 - Temitope Onigbanjo
+                      - paragraph [ref=e5631]: 2026-05-00816
+                    - cell "Customer Payment" [ref=e5632]:
+                      - generic [ref=e5633]: Customer Payment
+                    - cell "Temitope Onigbanjo PMT202602-60583" [ref=e5634]:
+                      - generic [ref=e5635]: Temitope Onigbanjo
+                      - paragraph [ref=e5636]: PMT202602-60583
+                    - cell "+NGN 18,812.50" [ref=e5637]
+                    - cell "View source document" [ref=e8199]:
+                      - link "View source document" [ref=e8200] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/ed246f9f-345f-47a2-83d8-86ad3f908f0a
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60584 - Matthew Danladi 2026-05-00817 Customer Payment Matthew Danladi PMT202602-60584 +NGN 56,437.50 View source document" [ref=e8201]:
+                    - cell [ref=e8202]:
+                      - checkbox [ref=e8203]
+                    - cell "11" [ref=e5644]:
+                      - generic [ref=e5645]: "11"
+                    - cell "03 Feb 2026" [ref=e5646]
+                    - cell "AR Payment PMT202602-60584 - Matthew Danladi 2026-05-00817" [ref=e5647]:
+                      - paragraph [ref=e5648]: AR Payment PMT202602-60584 - Matthew Danladi
+                      - paragraph [ref=e5649]: 2026-05-00817
+                    - cell "Customer Payment" [ref=e5650]:
+                      - generic [ref=e5651]: Customer Payment
+                    - cell "Matthew Danladi PMT202602-60584" [ref=e5652]:
+                      - generic [ref=e5653]: Matthew Danladi
+                      - paragraph [ref=e5654]: PMT202602-60584
+                    - cell "+NGN 56,437.50" [ref=e5655]
+                    - cell "View source document" [ref=e8204]:
+                      - link "View source document" [ref=e8205] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/e8416ece-76a8-4059-8a9a-e62edec39062
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60587 - Avm Segun Philip 2026-05-00819 Customer Payment Avm Segun Philip PMT202602-60587 +NGN 18,812.50 View source document" [ref=e8206]:
+                    - cell [ref=e8207]:
+                      - checkbox [ref=e8208]
+                    - cell "11" [ref=e5662]:
+                      - generic [ref=e5663]: "11"
+                    - cell "03 Feb 2026" [ref=e5664]
+                    - cell "AR Payment PMT202602-60587 - Avm Segun Philip 2026-05-00819" [ref=e5665]:
+                      - paragraph [ref=e5666]: AR Payment PMT202602-60587 - Avm Segun Philip
+                      - paragraph [ref=e5667]: 2026-05-00819
+                    - cell "Customer Payment" [ref=e5668]:
+                      - generic [ref=e5669]: Customer Payment
+                    - cell "Avm Segun Philip PMT202602-60587" [ref=e5670]:
+                      - generic [ref=e5671]: Avm Segun Philip
+                      - paragraph [ref=e5672]: PMT202602-60587
+                    - cell "+NGN 18,812.50" [ref=e5673]
+                    - cell "View source document" [ref=e8209]:
+                      - link "View source document" [ref=e8210] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/e3f2b866-fd33-4998-a984-7b6130b21851
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60578 - Mohammed Lokogoma 2026-05-00811 Customer Payment Mohammed Lokogoma PMT202602-60578 +NGN 18,812.50 View source document" [ref=e8211]:
+                    - cell [ref=e8212]:
+                      - checkbox [ref=e8213]
+                    - cell "11" [ref=e5680]:
+                      - generic [ref=e5681]: "11"
+                    - cell "03 Feb 2026" [ref=e5682]
+                    - cell "AR Payment PMT202602-60578 - Mohammed Lokogoma 2026-05-00811" [ref=e5683]:
+                      - paragraph [ref=e5684]: AR Payment PMT202602-60578 - Mohammed Lokogoma
+                      - paragraph [ref=e5685]: 2026-05-00811
+                    - cell "Customer Payment" [ref=e5686]:
+                      - generic [ref=e5687]: Customer Payment
+                    - cell "Mohammed Lokogoma PMT202602-60578" [ref=e5688]:
+                      - generic [ref=e5689]: Mohammed Lokogoma
+                      - paragraph [ref=e5690]: PMT202602-60578
+                    - cell "+NGN 18,812.50" [ref=e5691]
+                    - cell "View source document" [ref=e8214]:
+                      - link "View source document" [ref=e8215] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/ca906ae5-d7d4-4a54-a965-16459eb64bdf
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60601 - Skypro Okodugha Fidelia 2026-05-00832 Customer Payment Skypro Okodugha Fidelia PMT202602-60601 +NGN 18,812.50 View source document" [ref=e8216]:
+                    - cell [ref=e8217]:
+                      - checkbox [ref=e8218]
+                    - cell "11" [ref=e5698]:
+                      - generic [ref=e5699]: "11"
+                    - cell "03 Feb 2026" [ref=e5700]
+                    - cell "AR Payment PMT202602-60601 - Skypro Okodugha Fidelia 2026-05-00832" [ref=e5701]:
+                      - paragraph [ref=e5702]: AR Payment PMT202602-60601 - Skypro Okodugha Fidelia
+                      - paragraph [ref=e5703]: 2026-05-00832
+                    - cell "Customer Payment" [ref=e5704]:
+                      - generic [ref=e5705]: Customer Payment
+                    - cell "Skypro Okodugha Fidelia PMT202602-60601" [ref=e5706]:
+                      - generic [ref=e5707]: Skypro Okodugha Fidelia
+                      - paragraph [ref=e5708]: PMT202602-60601
+                    - cell "+NGN 18,812.50" [ref=e5709]
+                    - cell "View source document" [ref=e8219]:
+                      - link "View source document" [ref=e8220] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/bfe1ab68-ac9f-4bdf-bdc4-11a1a3222852
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60600 - Adamu Zainab 2026-05-00831 Customer Payment Adamu Zainab PMT202602-60600 +NGN 18,812.50 View source document" [ref=e8221]:
+                    - cell [ref=e8222]:
+                      - checkbox [ref=e8223]
+                    - cell "11" [ref=e5716]:
+                      - generic [ref=e5717]: "11"
+                    - cell "03 Feb 2026" [ref=e5718]
+                    - cell "AR Payment PMT202602-60600 - Adamu Zainab 2026-05-00831" [ref=e5719]:
+                      - paragraph [ref=e5720]: AR Payment PMT202602-60600 - Adamu Zainab
+                      - paragraph [ref=e5721]: 2026-05-00831
+                    - cell "Customer Payment" [ref=e5722]:
+                      - generic [ref=e5723]: Customer Payment
+                    - cell "Adamu Zainab PMT202602-60600" [ref=e5724]:
+                      - generic [ref=e5725]: Adamu Zainab
+                      - paragraph [ref=e5726]: PMT202602-60600
+                    - cell "+NGN 18,812.50" [ref=e5727]
+                    - cell "View source document" [ref=e8224]:
+                      - link "View source document" [ref=e8225] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/bec7210b-e74b-4758-84c5-aaffbbfa3dbb
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60589 - Stanley onyia (church gate) 2026-05-00821 Customer Payment Stanley onyia (church gate) PMT202602-60589 +NGN 18,812.50 View source document" [ref=e8226]:
+                    - cell [ref=e8227]:
+                      - checkbox [ref=e8228]
+                    - cell "11" [ref=e5734]:
+                      - generic [ref=e5735]: "11"
+                    - cell "03 Feb 2026" [ref=e5736]
+                    - cell "AR Payment PMT202602-60589 - Stanley onyia (church gate) 2026-05-00821" [ref=e5737]:
+                      - paragraph [ref=e5738]: AR Payment PMT202602-60589 - Stanley onyia (church gate)
+                      - paragraph [ref=e5739]: 2026-05-00821
+                    - cell "Customer Payment" [ref=e5740]:
+                      - generic [ref=e5741]: Customer Payment
+                    - cell "Stanley onyia (church gate) PMT202602-60589" [ref=e5742]:
+                      - generic [ref=e5743]: Stanley onyia (church gate)
+                      - paragraph [ref=e5744]: PMT202602-60589
+                    - cell "+NGN 18,812.50" [ref=e5745]
+                    - cell "View source document" [ref=e8229]:
+                      - link "View source document" [ref=e8230] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/baba4dc2-c394-4320-a78a-62ed96655996
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60595 - Ogheneovo Anthony 2026-05-00828 Customer Payment Ogheneovo Anthony PMT202602-60595 +NGN 18,812.50 View source document" [ref=e8231]:
+                    - cell [ref=e8232]:
+                      - checkbox [ref=e8233]
+                    - cell "11" [ref=e5752]:
+                      - generic [ref=e5753]: "11"
+                    - cell "03 Feb 2026" [ref=e5754]
+                    - cell "AR Payment PMT202602-60595 - Ogheneovo Anthony 2026-05-00828" [ref=e5755]:
+                      - paragraph [ref=e5756]: AR Payment PMT202602-60595 - Ogheneovo Anthony
+                      - paragraph [ref=e5757]: 2026-05-00828
+                    - cell "Customer Payment" [ref=e5758]:
+                      - generic [ref=e5759]: Customer Payment
+                    - cell "Ogheneovo Anthony PMT202602-60595" [ref=e5760]:
+                      - generic [ref=e5761]: Ogheneovo Anthony
+                      - paragraph [ref=e5762]: PMT202602-60595
+                    - cell "+NGN 18,812.50" [ref=e5763]
+                    - cell "View source document" [ref=e8234]:
+                      - link "View source document" [ref=e8235] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/b67c7023-cfe6-448f-a878-13e5c720f1ca
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60581 - Nnagbo Chidera 2026-05-00814 Customer Payment Nnagbo Chidera PMT202602-60581 +NGN 18,812.50 View source document" [ref=e8236]:
+                    - cell [ref=e8237]:
+                      - checkbox [ref=e8238]
+                    - cell "11" [ref=e5770]:
+                      - generic [ref=e5771]: "11"
+                    - cell "03 Feb 2026" [ref=e5772]
+                    - cell "AR Payment PMT202602-60581 - Nnagbo Chidera 2026-05-00814" [ref=e5773]:
+                      - paragraph [ref=e5774]: AR Payment PMT202602-60581 - Nnagbo Chidera
+                      - paragraph [ref=e5775]: 2026-05-00814
+                    - cell "Customer Payment" [ref=e5776]:
+                      - generic [ref=e5777]: Customer Payment
+                    - cell "Nnagbo Chidera PMT202602-60581" [ref=e5778]:
+                      - generic [ref=e5779]: Nnagbo Chidera
+                      - paragraph [ref=e5780]: PMT202602-60581
+                    - cell "+NGN 18,812.50" [ref=e5781]
+                    - cell "View source document" [ref=e8239]:
+                      - link "View source document" [ref=e8240] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/9ee51799-1663-4e03-a231-10c06a431590
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60604 - Sinachi Ehuriah 2026-05-00834 Customer Payment Sinachi Ehuriah PMT202602-60604 +NGN 37,625.00 View source document" [ref=e8241]:
+                    - cell [ref=e8242]:
+                      - checkbox [ref=e8243]
+                    - cell "11" [ref=e5788]:
+                      - generic [ref=e5789]: "11"
+                    - cell "03 Feb 2026" [ref=e5790]
+                    - cell "AR Payment PMT202602-60604 - Sinachi Ehuriah 2026-05-00834" [ref=e5791]:
+                      - paragraph [ref=e5792]: AR Payment PMT202602-60604 - Sinachi Ehuriah
+                      - paragraph [ref=e5793]: 2026-05-00834
+                    - cell "Customer Payment" [ref=e5794]:
+                      - generic [ref=e5795]: Customer Payment
+                    - cell "Sinachi Ehuriah PMT202602-60604" [ref=e5796]:
+                      - generic [ref=e5797]: Sinachi Ehuriah
+                      - paragraph [ref=e5798]: PMT202602-60604
+                    - cell "+NGN 37,625.00" [ref=e5799]
+                    - cell "View source document" [ref=e8244]:
+                      - link "View source document" [ref=e8245] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/99cc1cbc-816f-4f23-920b-005192146123
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60594 - Chibuzo Ezeokafor 2026-05-00827 Customer Payment Chibuzo Ezeokafor PMT202602-60594 +NGN 18,812.50 View source document" [ref=e8246]:
+                    - cell [ref=e8247]:
+                      - checkbox [ref=e8248]
+                    - cell "11" [ref=e5806]:
+                      - generic [ref=e5807]: "11"
+                    - cell "03 Feb 2026" [ref=e5808]
+                    - cell "AR Payment PMT202602-60594 - Chibuzo Ezeokafor 2026-05-00827" [ref=e5809]:
+                      - paragraph [ref=e5810]: AR Payment PMT202602-60594 - Chibuzo Ezeokafor
+                      - paragraph [ref=e5811]: 2026-05-00827
+                    - cell "Customer Payment" [ref=e5812]:
+                      - generic [ref=e5813]: Customer Payment
+                    - cell "Chibuzo Ezeokafor PMT202602-60594" [ref=e5814]:
+                      - generic [ref=e5815]: Chibuzo Ezeokafor
+                      - paragraph [ref=e5816]: PMT202602-60594
+                    - cell "+NGN 18,812.50" [ref=e5817]
+                    - cell "View source document" [ref=e8249]:
+                      - link "View source document" [ref=e8250] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/753d62c9-0145-46e6-ab6e-d3ad6ff94ec5
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60602 - Godson Amadi 2026-05-00833 Customer Payment Godson Amadi PMT202602-60602 +NGN 18,812.50 View source document" [ref=e8251]:
+                    - cell [ref=e8252]:
+                      - checkbox [ref=e8253]
+                    - cell "11" [ref=e5824]:
+                      - generic [ref=e5825]: "11"
+                    - cell "03 Feb 2026" [ref=e5826]
+                    - cell "AR Payment PMT202602-60602 - Godson Amadi 2026-05-00833" [ref=e5827]:
+                      - paragraph [ref=e5828]: AR Payment PMT202602-60602 - Godson Amadi
+                      - paragraph [ref=e5829]: 2026-05-00833
+                    - cell "Customer Payment" [ref=e5830]:
+                      - generic [ref=e5831]: Customer Payment
+                    - cell "Godson Amadi PMT202602-60602" [ref=e5832]:
+                      - generic [ref=e5833]: Godson Amadi
+                      - paragraph [ref=e5834]: PMT202602-60602
+                    - cell "+NGN 18,812.50" [ref=e5835]
+                    - cell "View source document" [ref=e8254]:
+                      - link "View source document" [ref=e8255] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/6d48937d-9e62-407e-a538-33752e6b4b97
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60579 - Elobe-Mbam Lawrence 2026-05-00812 Customer Payment Elobe-Mbam Lawrence PMT202602-60579 +NGN 18,812.50 View source document" [ref=e8256]:
+                    - cell [ref=e8257]:
+                      - checkbox [ref=e8258]
+                    - cell "11" [ref=e5842]:
+                      - generic [ref=e5843]: "11"
+                    - cell "03 Feb 2026" [ref=e5844]
+                    - cell "AR Payment PMT202602-60579 - Elobe-Mbam Lawrence 2026-05-00812" [ref=e5845]:
+                      - paragraph [ref=e5846]: AR Payment PMT202602-60579 - Elobe-Mbam Lawrence
+                      - paragraph [ref=e5847]: 2026-05-00812
+                    - cell "Customer Payment" [ref=e5848]:
+                      - generic [ref=e5849]: Customer Payment
+                    - cell "Elobe-Mbam Lawrence PMT202602-60579" [ref=e5850]:
+                      - generic [ref=e5851]: Elobe-Mbam Lawrence
+                      - paragraph [ref=e5852]: PMT202602-60579
+                    - cell "+NGN 18,812.50" [ref=e5853]
+                    - cell "View source document" [ref=e8259]:
+                      - link "View source document" [ref=e8260] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/6b899d7c-ebc1-47c9-ab4b-2d1976516d6a
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60599 - Paul Diwa 2026-05-00830 Customer Payment Paul Diwa PMT202602-60599 +NGN 18,812.50 View source document" [ref=e8261]:
+                    - cell [ref=e8262]:
+                      - checkbox [ref=e8263]
+                    - cell "11" [ref=e5860]:
+                      - generic [ref=e5861]: "11"
+                    - cell "03 Feb 2026" [ref=e5862]
+                    - cell "AR Payment PMT202602-60599 - Paul Diwa 2026-05-00830" [ref=e5863]:
+                      - paragraph [ref=e5864]: AR Payment PMT202602-60599 - Paul Diwa
+                      - paragraph [ref=e5865]: 2026-05-00830
+                    - cell "Customer Payment" [ref=e5866]:
+                      - generic [ref=e5867]: Customer Payment
+                    - cell "Paul Diwa PMT202602-60599" [ref=e5868]:
+                      - generic [ref=e5869]: Paul Diwa
+                      - paragraph [ref=e5870]: PMT202602-60599
+                    - cell "+NGN 18,812.50" [ref=e5871]
+                    - cell "View source document" [ref=e8264]:
+                      - link "View source document" [ref=e8265] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/6777aaa1-0028-4114-a2ab-34530089fbd8
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60580 - Chikalvia Integrated Nigeria Ltd (Flower Gate Apo) 2026-05-00813 Customer Payment Chikalvia Integrated Nigeria Ltd (Flower Gate Apo) PMT202602-60580 +NGN 18,812.50 View source document" [ref=e8266]:
+                    - cell [ref=e8267]:
+                      - checkbox [ref=e8268]
+                    - cell "11" [ref=e5878]:
+                      - generic [ref=e5879]: "11"
+                    - cell "03 Feb 2026" [ref=e5880]
+                    - cell "AR Payment PMT202602-60580 - Chikalvia Integrated Nigeria Ltd (Flower Gate Apo) 2026-05-00813" [ref=e5881]:
+                      - paragraph [ref=e5882]: AR Payment PMT202602-60580 - Chikalvia Integrated Nigeria Ltd (Flower Gate Apo)
+                      - paragraph [ref=e5883]: 2026-05-00813
+                    - cell "Customer Payment" [ref=e5884]:
+                      - generic [ref=e5885]: Customer Payment
+                    - cell "Chikalvia Integrated Nigeria Ltd (Flower Gate Apo) PMT202602-60580" [ref=e5886]:
+                      - generic [ref=e5887]: Chikalvia Integrated Nigeria Ltd (Flower Gate Apo)
+                      - paragraph [ref=e5888]: PMT202602-60580
+                    - cell "+NGN 18,812.50" [ref=e5889]
+                    - cell "View source document" [ref=e8269]:
+                      - link "View source document" [ref=e8270] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/58fc1cfa-bcfd-4900-8c48-9b04f2a382fd
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60585 - Mustapha D Suleiman 2026-05-00818 Customer Payment Mustapha D Suleiman PMT202602-60585 +NGN 37,625.00 View source document" [ref=e8271]:
+                    - cell [ref=e8272]:
+                      - checkbox [ref=e8273]
+                    - cell "11" [ref=e5896]:
+                      - generic [ref=e5897]: "11"
+                    - cell "03 Feb 2026" [ref=e5898]
+                    - cell "AR Payment PMT202602-60585 - Mustapha D Suleiman 2026-05-00818" [ref=e5899]:
+                      - paragraph [ref=e5900]: AR Payment PMT202602-60585 - Mustapha D Suleiman
+                      - paragraph [ref=e5901]: 2026-05-00818
+                    - cell "Customer Payment" [ref=e5902]:
+                      - generic [ref=e5903]: Customer Payment
+                    - cell "Mustapha D Suleiman PMT202602-60585" [ref=e5904]:
+                      - generic [ref=e5905]: Mustapha D Suleiman
+                      - paragraph [ref=e5906]: PMT202602-60585
+                    - cell "+NGN 37,625.00" [ref=e5907]
+                    - cell "View source document" [ref=e8274]:
+                      - link "View source document" [ref=e8275] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/58bbb7b4-a69b-4baf-92bc-e7763f463211
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60588 - Stanley Onyia (Area1) 2026-05-00820 Customer Payment Stanley Onyia (Area1) PMT202602-60588 +NGN 18,812.50 View source document" [ref=e8276]:
+                    - cell [ref=e8277]:
+                      - checkbox [ref=e8278]
+                    - cell "11" [ref=e5914]:
+                      - generic [ref=e5915]: "11"
+                    - cell "03 Feb 2026" [ref=e5916]
+                    - cell "AR Payment PMT202602-60588 - Stanley Onyia (Area1) 2026-05-00820" [ref=e5917]:
+                      - paragraph [ref=e5918]: AR Payment PMT202602-60588 - Stanley Onyia (Area1)
+                      - paragraph [ref=e5919]: 2026-05-00820
+                    - cell "Customer Payment" [ref=e5920]:
+                      - generic [ref=e5921]: Customer Payment
+                    - cell "Stanley Onyia (Area1) PMT202602-60588" [ref=e5922]:
+                      - generic [ref=e5923]: Stanley Onyia (Area1)
+                      - paragraph [ref=e5924]: PMT202602-60588
+                    - cell "+NGN 18,812.50" [ref=e5925]
+                    - cell "View source document" [ref=e8279]:
+                      - link "View source document" [ref=e8280] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/46faac9b-6f39-4dd6-a48a-6cdda45328c2
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60592 - Okoh Wisdom Ezeugo 2026-05-00824 Customer Payment Okoh Wisdom Ezeugo PMT202602-60592 +NGN 18,812.50 View source document" [ref=e8281]:
+                    - cell [ref=e8282]:
+                      - checkbox [ref=e8283]
+                    - cell "11" [ref=e5932]:
+                      - generic [ref=e5933]: "11"
+                    - cell "03 Feb 2026" [ref=e5934]
+                    - cell "AR Payment PMT202602-60592 - Okoh Wisdom Ezeugo 2026-05-00824" [ref=e5935]:
+                      - paragraph [ref=e5936]: AR Payment PMT202602-60592 - Okoh Wisdom Ezeugo
+                      - paragraph [ref=e5937]: 2026-05-00824
+                    - cell "Customer Payment" [ref=e5938]:
+                      - generic [ref=e5939]: Customer Payment
+                    - cell "Okoh Wisdom Ezeugo PMT202602-60592" [ref=e5940]:
+                      - generic [ref=e5941]: Okoh Wisdom Ezeugo
+                      - paragraph [ref=e5942]: PMT202602-60592
+                    - cell "+NGN 18,812.50" [ref=e5943]
+                    - cell "View source document" [ref=e8284]:
+                      - link "View source document" [ref=e8285] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/4372c253-d03b-4b12-9e54-a88a7f9865ce
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60657 - Mohammed Abubakar Fufore 2026-11-00740 Customer Payment Mohammed Abubakar Fufore PMT202602-60657 +NGN 18,812.50 View source document" [ref=e8286]:
+                    - cell [ref=e8287]:
+                      - checkbox [ref=e8288]
+                    - cell "11" [ref=e5950]:
+                      - generic [ref=e5951]: "11"
+                    - cell "03 Feb 2026" [ref=e5952]
+                    - cell "AR Payment PMT202602-60657 - Mohammed Abubakar Fufore 2026-11-00740" [ref=e5953]:
+                      - paragraph [ref=e5954]: AR Payment PMT202602-60657 - Mohammed Abubakar Fufore
+                      - paragraph [ref=e5955]: 2026-11-00740
+                    - cell "Customer Payment" [ref=e5956]:
+                      - generic [ref=e5957]: Customer Payment
+                    - cell "Mohammed Abubakar Fufore PMT202602-60657" [ref=e5958]:
+                      - generic [ref=e5959]: Mohammed Abubakar Fufore
+                      - paragraph [ref=e5960]: PMT202602-60657
+                    - cell "+NGN 18,812.50" [ref=e5961]
+                    - cell "View source document" [ref=e8289]:
+                      - link "View source document" [ref=e8290] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/28b50268-fc7d-47e7-8b37-54ecf71898a1
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60593 - Mrs Kings 2026-05-00825 Customer Payment Mrs Kings PMT202602-60593 +NGN 18,812.50 View source document" [ref=e8291]:
+                    - cell [ref=e8292]:
+                      - checkbox [ref=e8293]
+                    - cell "11" [ref=e5968]:
+                      - generic [ref=e5969]: "11"
+                    - cell "03 Feb 2026" [ref=e5970]
+                    - cell "AR Payment PMT202602-60593 - Mrs Kings 2026-05-00825" [ref=e5971]:
+                      - paragraph [ref=e5972]: AR Payment PMT202602-60593 - Mrs Kings
+                      - paragraph [ref=e5973]: 2026-05-00825
+                    - cell "Customer Payment" [ref=e5974]:
+                      - generic [ref=e5975]: Customer Payment
+                    - cell "Mrs Kings PMT202602-60593" [ref=e5976]:
+                      - generic [ref=e5977]: Mrs Kings
+                      - paragraph [ref=e5978]: PMT202602-60593
+                    - cell "+NGN 18,812.50" [ref=e5979]
+                    - cell "View source document" [ref=e8294]:
+                      - link "View source document" [ref=e8295] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/1e245006-172b-49aa-b119-afbd1f5fcf69
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60590 - Tijani Nasuru 2026-05-00822 Customer Payment Tijani Nasuru PMT202602-60590 +NGN 18,812.50 View source document" [ref=e8296]:
+                    - cell [ref=e8297]:
+                      - checkbox [ref=e8298]
+                    - cell "11" [ref=e5986]:
+                      - generic [ref=e5987]: "11"
+                    - cell "03 Feb 2026" [ref=e5988]
+                    - cell "AR Payment PMT202602-60590 - Tijani Nasuru 2026-05-00822" [ref=e5989]:
+                      - paragraph [ref=e5990]: AR Payment PMT202602-60590 - Tijani Nasuru
+                      - paragraph [ref=e5991]: 2026-05-00822
+                    - cell "Customer Payment" [ref=e5992]:
+                      - generic [ref=e5993]: Customer Payment
+                    - cell "Tijani Nasuru PMT202602-60590" [ref=e5994]:
+                      - generic [ref=e5995]: Tijani Nasuru
+                      - paragraph [ref=e5996]: PMT202602-60590
+                    - cell "+NGN 18,812.50" [ref=e5997]
+                    - cell "View source document" [ref=e8299]:
+                      - link "View source document" [ref=e8300] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/18e952ad-635a-4ef0-825e-ef5cfb0252df
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60591 - Daniel Oluwaseun 2026-05-00823 Customer Payment Daniel Oluwaseun PMT202602-60591 +NGN 18,812.50 View source document" [ref=e8301]:
+                    - cell [ref=e8302]:
+                      - checkbox [ref=e8303]
+                    - cell "11" [ref=e6004]:
+                      - generic [ref=e6005]: "11"
+                    - cell "03 Feb 2026" [ref=e6006]
+                    - cell "AR Payment PMT202602-60591 - Daniel Oluwaseun 2026-05-00823" [ref=e6007]:
+                      - paragraph [ref=e6008]: AR Payment PMT202602-60591 - Daniel Oluwaseun
+                      - paragraph [ref=e6009]: 2026-05-00823
+                    - cell "Customer Payment" [ref=e6010]:
+                      - generic [ref=e6011]: Customer Payment
+                    - cell "Daniel Oluwaseun PMT202602-60591" [ref=e6012]:
+                      - generic [ref=e6013]: Daniel Oluwaseun
+                      - paragraph [ref=e6014]: PMT202602-60591
+                    - cell "+NGN 18,812.50" [ref=e6015]
+                    - cell "View source document" [ref=e8304]:
+                      - link "View source document" [ref=e8305] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/0d5253ef-e2a5-4e8d-9f1e-2ab11aec297a
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60598 - Ramatu Shehu 2026-05-00829 Customer Payment Ramatu Shehu PMT202602-60598 +NGN 18,812.50 View source document" [ref=e8306]:
+                    - cell [ref=e8307]:
+                      - checkbox [ref=e8308]
+                    - cell "11" [ref=e6022]:
+                      - generic [ref=e6023]: "11"
+                    - cell "03 Feb 2026" [ref=e6024]
+                    - cell "AR Payment PMT202602-60598 - Ramatu Shehu 2026-05-00829" [ref=e6025]:
+                      - paragraph [ref=e6026]: AR Payment PMT202602-60598 - Ramatu Shehu
+                      - paragraph [ref=e6027]: 2026-05-00829
+                    - cell "Customer Payment" [ref=e6028]:
+                      - generic [ref=e6029]: Customer Payment
+                    - cell "Ramatu Shehu PMT202602-60598" [ref=e6030]:
+                      - generic [ref=e6031]: Ramatu Shehu
+                      - paragraph [ref=e6032]: PMT202602-60598
+                    - cell "+NGN 18,812.50" [ref=e6033]
+                    - cell "View source document" [ref=e8309]:
+                      - link "View source document" [ref=e8310] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/075fd5e7-12a4-4b79-ac2f-6071b091d5ff
+                        - text: View
+                  - row "11 03 Feb 2026 AR Payment PMT202602-60623 - Yakubu Ahmadu 2026-11-00719 Customer Payment Yakubu Ahmadu PMT202602-60623 +NGN 18,812.50 View source document" [ref=e8311]:
+                    - cell [ref=e8312]:
+                      - checkbox [ref=e8313]
+                    - cell "11" [ref=e6040]:
+                      - generic [ref=e6041]: "11"
+                    - cell "03 Feb 2026" [ref=e6042]
+                    - cell "AR Payment PMT202602-60623 - Yakubu Ahmadu 2026-11-00719" [ref=e6043]:
+                      - paragraph [ref=e6044]: AR Payment PMT202602-60623 - Yakubu Ahmadu
+                      - paragraph [ref=e6045]: 2026-11-00719
+                    - cell "Customer Payment" [ref=e6046]:
+                      - generic [ref=e6047]: Customer Payment
+                    - cell "Yakubu Ahmadu PMT202602-60623" [ref=e6048]:
+                      - generic [ref=e6049]: Yakubu Ahmadu
+                      - paragraph [ref=e6050]: PMT202602-60623
+                    - cell "+NGN 18,812.50" [ref=e6051]
+                    - cell "View source document" [ref=e8314]:
+                      - link "View source document" [ref=e8315] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/04996875-1355-4790-844e-151742a3ccc8
+                        - text: View
+                  - row "3 02 Feb 2026 AR Payment PMT202602-60563 - ALI MILLI 2026-05-00791 Customer Payment ALI MILLI PMT202602-60563 +NGN 18,812.50 View source document" [ref=e8316]:
+                    - cell [ref=e8317]:
+                      - checkbox [ref=e8318]
+                    - cell "3" [ref=e6058]:
+                      - generic [ref=e6059]: "3"
+                    - cell "02 Feb 2026" [ref=e6060]
+                    - cell "AR Payment PMT202602-60563 - ALI MILLI 2026-05-00791" [ref=e6061]:
+                      - paragraph [ref=e6062]: AR Payment PMT202602-60563 - ALI MILLI
+                      - paragraph [ref=e6063]: 2026-05-00791
+                    - cell "Customer Payment" [ref=e6064]:
+                      - generic [ref=e6065]: Customer Payment
+                    - cell "ALI MILLI PMT202602-60563" [ref=e6066]:
+                      - generic [ref=e6067]: ALI MILLI
+                      - paragraph [ref=e6068]: PMT202602-60563
+                    - cell "+NGN 18,812.50" [ref=e6069]
+                    - cell "View source document" [ref=e8319]:
+                      - link "View source document" [ref=e8320] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/2f04c524-9c8f-454e-a84f-dcc224b28999
+                        - text: View
+                  - row "3 02 Feb 2026 AR Payment PMT202602-60567 - Imonhiosen Ohimah 2026-05-00797 Customer Payment Imonhiosen Ohimah PMT202602-60567 +NGN 18,812.50 View source document" [ref=e8321]:
+                    - cell [ref=e8322]:
+                      - checkbox [ref=e8323]
+                    - cell "3" [ref=e6076]:
+                      - generic [ref=e6077]: "3"
+                    - cell "02 Feb 2026" [ref=e6078]
+                    - cell "AR Payment PMT202602-60567 - Imonhiosen Ohimah 2026-05-00797" [ref=e6079]:
+                      - paragraph [ref=e6080]: AR Payment PMT202602-60567 - Imonhiosen Ohimah
+                      - paragraph [ref=e6081]: 2026-05-00797
+                    - cell "Customer Payment" [ref=e6082]:
+                      - generic [ref=e6083]: Customer Payment
+                    - cell "Imonhiosen Ohimah PMT202602-60567" [ref=e6084]:
+                      - generic [ref=e6085]: Imonhiosen Ohimah
+                      - paragraph [ref=e6086]: PMT202602-60567
+                    - cell "+NGN 18,812.50" [ref=e6087]
+                    - cell "View source document" [ref=e8324]:
+                      - link "View source document" [ref=e8325] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/3081d628-1999-4336-92fa-68b857a9147d
+                        - text: View
+                  - row "3 02 Feb 2026 AR Payment PMT202602-60571 - Muhammad Aliyu NPA 2026-05-00800 Customer Payment Muhammad Aliyu NPA PMT202602-60571 +NGN 18,812.50 View source document" [ref=e8326]:
+                    - cell [ref=e8327]:
+                      - checkbox [ref=e8328]
+                    - cell "3" [ref=e6094]:
+                      - generic [ref=e6095]: "3"
+                    - cell "02 Feb 2026" [ref=e6096]
+                    - cell "AR Payment PMT202602-60571 - Muhammad Aliyu NPA 2026-05-00800" [ref=e6097]:
+                      - paragraph [ref=e6098]: AR Payment PMT202602-60571 - Muhammad Aliyu NPA
+                      - paragraph [ref=e6099]: 2026-05-00800
+                    - cell "Customer Payment" [ref=e6100]:
+                      - generic [ref=e6101]: Customer Payment
+                    - cell "Muhammad Aliyu NPA PMT202602-60571" [ref=e6102]:
+                      - generic [ref=e6103]: Muhammad Aliyu NPA
+                      - paragraph [ref=e6104]: PMT202602-60571
+                    - cell "+NGN 18,812.50" [ref=e6105]
+                    - cell "View source document" [ref=e8329]:
+                      - link "View source document" [ref=e8330] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/35350f29-2008-4a29-8005-1733bbb3c228
+                        - text: View
+                  - row "3 02 Feb 2026 AR Payment PMT202602-60562 - Pius Anyim 2026-05-00790 Customer Payment Pius Anyim PMT202602-60562 +NGN 18,812.50 View source document" [ref=e8331]:
+                    - cell [ref=e8332]:
+                      - checkbox [ref=e8333]
+                    - cell "3" [ref=e6112]:
+                      - generic [ref=e6113]: "3"
+                    - cell "02 Feb 2026" [ref=e6114]
+                    - cell "AR Payment PMT202602-60562 - Pius Anyim 2026-05-00790" [ref=e6115]:
+                      - paragraph [ref=e6116]: AR Payment PMT202602-60562 - Pius Anyim
+                      - paragraph [ref=e6117]: 2026-05-00790
+                    - cell "Customer Payment" [ref=e6118]:
+                      - generic [ref=e6119]: Customer Payment
+                    - cell "Pius Anyim PMT202602-60562" [ref=e6120]:
+                      - generic [ref=e6121]: Pius Anyim
+                      - paragraph [ref=e6122]: PMT202602-60562
+                    - cell "+NGN 18,812.50" [ref=e6123]
+                    - cell "View source document" [ref=e8334]:
+                      - link "View source document" [ref=e8335] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/3b7b2815-d656-4b5e-8ae7-8b6ce23220a0
+                        - text: View
+                  - row "3 02 Feb 2026 AR Payment PMT202602-60561 - Vitus Ikechukwu 2026-05-00788 Customer Payment Vitus Ikechukwu PMT202602-60561 +NGN 18,812.50 View source document" [ref=e8336]:
+                    - cell [ref=e8337]:
+                      - checkbox [ref=e8338]
+                    - cell "3" [ref=e6130]:
+                      - generic [ref=e6131]: "3"
+                    - cell "02 Feb 2026" [ref=e6132]
+                    - cell "AR Payment PMT202602-60561 - Vitus Ikechukwu 2026-05-00788" [ref=e6133]:
+                      - paragraph [ref=e6134]: AR Payment PMT202602-60561 - Vitus Ikechukwu
+                      - paragraph [ref=e6135]: 2026-05-00788
+                    - cell "Customer Payment" [ref=e6136]:
+                      - generic [ref=e6137]: Customer Payment
+                    - cell "Vitus Ikechukwu PMT202602-60561" [ref=e6138]:
+                      - generic [ref=e6139]: Vitus Ikechukwu
+                      - paragraph [ref=e6140]: PMT202602-60561
+                    - cell "+NGN 18,812.50" [ref=e6141]
+                    - cell "View source document" [ref=e8339]:
+                      - link "View source document" [ref=e8340] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/3d108717-3666-4252-a665-79b13fc0a910
+                        - text: View
+                  - row "3 02 Feb 2026 AR Payment PMT202602-60554 - Oluwaseun Akoyon 2026-05-00782 Customer Payment Oluwaseun Akoyon PMT202602-60554 +NGN 18,812.50 View source document" [ref=e8341]:
+                    - cell [ref=e8342]:
+                      - checkbox [ref=e8343]
+                    - cell "3" [ref=e6148]:
+                      - generic [ref=e6149]: "3"
+                    - cell "02 Feb 2026" [ref=e6150]
+                    - cell "AR Payment PMT202602-60554 - Oluwaseun Akoyon 2026-05-00782" [ref=e6151]:
+                      - paragraph [ref=e6152]: AR Payment PMT202602-60554 - Oluwaseun Akoyon
+                      - paragraph [ref=e6153]: 2026-05-00782
+                    - cell "Customer Payment" [ref=e6154]:
+                      - generic [ref=e6155]: Customer Payment
+                    - cell "Oluwaseun Akoyon PMT202602-60554" [ref=e6156]:
+                      - generic [ref=e6157]: Oluwaseun Akoyon
+                      - paragraph [ref=e6158]: PMT202602-60554
+                    - cell "+NGN 18,812.50" [ref=e6159]
+                    - cell "View source document" [ref=e8344]:
+                      - link "View source document" [ref=e8345] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/4c0373f8-b106-4ba5-b023-be6757fccd84
+                        - text: View
+                  - row "3 02 Feb 2026 AR Payment PMT202602-60569 - Benard Onyechi Ogbunude 2026-05-00798 Customer Payment Benard Onyechi Ogbunude PMT202602-60569 +NGN 18,812.50 View source document" [ref=e8346]:
+                    - cell [ref=e8347]:
+                      - checkbox [ref=e8348]
+                    - cell "3" [ref=e6166]:
+                      - generic [ref=e6167]: "3"
+                    - cell "02 Feb 2026" [ref=e6168]
+                    - cell "AR Payment PMT202602-60569 - Benard Onyechi Ogbunude 2026-05-00798" [ref=e6169]:
+                      - paragraph [ref=e6170]: AR Payment PMT202602-60569 - Benard Onyechi Ogbunude
+                      - paragraph [ref=e6171]: 2026-05-00798
+                    - cell "Customer Payment" [ref=e6172]:
+                      - generic [ref=e6173]: Customer Payment
+                    - cell "Benard Onyechi Ogbunude PMT202602-60569" [ref=e6174]:
+                      - generic [ref=e6175]: Benard Onyechi Ogbunude
+                      - paragraph [ref=e6176]: PMT202602-60569
+                    - cell "+NGN 18,812.50" [ref=e6177]
+                    - cell "View source document" [ref=e8349]:
+                      - link "View source document" [ref=e8350] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/645d9618-6ebf-4588-a27c-7a695a108419
+                        - text: View
+                  - row "3 02 Feb 2026 AR Payment PMT202602-60565 - Nsikak Usoro 2026-05-00793 Customer Payment Nsikak Usoro PMT202602-60565 +NGN 37,625.00 View source document" [ref=e8351]:
+                    - cell [ref=e8352]:
+                      - checkbox [ref=e8353]
+                    - cell "3" [ref=e6184]:
+                      - generic [ref=e6185]: "3"
+                    - cell "02 Feb 2026" [ref=e6186]
+                    - cell "AR Payment PMT202602-60565 - Nsikak Usoro 2026-05-00793" [ref=e6187]:
+                      - paragraph [ref=e6188]: AR Payment PMT202602-60565 - Nsikak Usoro
+                      - paragraph [ref=e6189]: 2026-05-00793
+                    - cell "Customer Payment" [ref=e6190]:
+                      - generic [ref=e6191]: Customer Payment
+                    - cell "Nsikak Usoro PMT202602-60565" [ref=e6192]:
+                      - generic [ref=e6193]: Nsikak Usoro
+                      - paragraph [ref=e6194]: PMT202602-60565
+                    - cell "+NGN 37,625.00" [ref=e6195]
+                    - cell "View source document" [ref=e8354]:
+                      - link "View source document" [ref=e8355] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/79489456-deb0-47fc-b63a-0c60906f3782
+                        - text: View
+                  - row "3 02 Feb 2026 AR Payment PMT202602-60576 - Momoh Bright 2026-05-00806 Customer Payment Momoh Bright PMT202602-60576 +NGN 18,812.50 View source document" [ref=e8356]:
+                    - cell [ref=e8357]:
+                      - checkbox [ref=e8358]
+                    - cell "3" [ref=e6202]:
+                      - generic [ref=e6203]: "3"
+                    - cell "02 Feb 2026" [ref=e6204]
+                    - cell "AR Payment PMT202602-60576 - Momoh Bright 2026-05-00806" [ref=e6205]:
+                      - paragraph [ref=e6206]: AR Payment PMT202602-60576 - Momoh Bright
+                      - paragraph [ref=e6207]: 2026-05-00806
+                    - cell "Customer Payment" [ref=e6208]:
+                      - generic [ref=e6209]: Customer Payment
+                    - cell "Momoh Bright PMT202602-60576" [ref=e6210]:
+                      - generic [ref=e6211]: Momoh Bright
+                      - paragraph [ref=e6212]: PMT202602-60576
+                    - cell "+NGN 18,812.50" [ref=e6213]
+                    - cell "View source document" [ref=e8359]:
+                      - link "View source document" [ref=e8360] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/80fe7be8-0ffd-489a-a6f6-cc0855f2a772
+                        - text: View
+                  - row "3 02 Feb 2026 AR Payment PMT202602-60572 - Adewole Valentino 2026-05-00801 Customer Payment Adewole Valentino PMT202602-60572 +NGN 18,812.50 View source document" [ref=e8361]:
+                    - cell [ref=e8362]:
+                      - checkbox [ref=e8363]
+                    - cell "3" [ref=e6220]:
+                      - generic [ref=e6221]: "3"
+                    - cell "02 Feb 2026" [ref=e6222]
+                    - cell "AR Payment PMT202602-60572 - Adewole Valentino 2026-05-00801" [ref=e6223]:
+                      - paragraph [ref=e6224]: AR Payment PMT202602-60572 - Adewole Valentino
+                      - paragraph [ref=e6225]: 2026-05-00801
+                    - cell "Customer Payment" [ref=e6226]:
+                      - generic [ref=e6227]: Customer Payment
+                    - cell "Adewole Valentino PMT202602-60572" [ref=e6228]:
+                      - generic [ref=e6229]: Adewole Valentino
+                      - paragraph [ref=e6230]: PMT202602-60572
+                    - cell "+NGN 18,812.50" [ref=e6231]
+                    - cell "View source document" [ref=e8364]:
+                      - link "View source document" [ref=e8365] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/902b495c-8cae-4c34-9b27-509f9a2013f9
+                        - text: View
+                  - row "3 02 Feb 2026 AR Payment PMT202602-60577 - Judith Warmate 2026-05-00809 Customer Payment Judith Warmate PMT202602-60577 +NGN 37,625.00 View source document" [ref=e8366]:
+                    - cell [ref=e8367]:
+                      - checkbox [ref=e8368]
+                    - cell "3" [ref=e6238]:
+                      - generic [ref=e6239]: "3"
+                    - cell "02 Feb 2026" [ref=e6240]
+                    - cell "AR Payment PMT202602-60577 - Judith Warmate 2026-05-00809" [ref=e6241]:
+                      - paragraph [ref=e6242]: AR Payment PMT202602-60577 - Judith Warmate
+                      - paragraph [ref=e6243]: 2026-05-00809
+                    - cell "Customer Payment" [ref=e6244]:
+                      - generic [ref=e6245]: Customer Payment
+                    - cell "Judith Warmate PMT202602-60577" [ref=e6246]:
+                      - generic [ref=e6247]: Judith Warmate
+                      - paragraph [ref=e6248]: PMT202602-60577
+                    - cell "+NGN 37,625.00" [ref=e6249]
+                    - cell "View source document" [ref=e8369]:
+                      - link "View source document" [ref=e8370] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/9550b993-29e8-4152-a0aa-8e1a88c8a1a5
+                        - text: View
+                  - row "3 02 Feb 2026 AR Payment PMT202602-60559 - Mrs Chinwe Onwuka 2026-05-00786 Customer Payment Mrs Chinwe Onwuka PMT202602-60559 +NGN 18,812.50 View source document" [ref=e8371]:
+                    - cell [ref=e8372]:
+                      - checkbox [ref=e8373]
+                    - cell "3" [ref=e6256]:
+                      - generic [ref=e6257]: "3"
+                    - cell "02 Feb 2026" [ref=e6258]
+                    - cell "AR Payment PMT202602-60559 - Mrs Chinwe Onwuka 2026-05-00786" [ref=e6259]:
+                      - paragraph [ref=e6260]: AR Payment PMT202602-60559 - Mrs Chinwe Onwuka
+                      - paragraph [ref=e6261]: 2026-05-00786
+                    - cell "Customer Payment" [ref=e6262]:
+                      - generic [ref=e6263]: Customer Payment
+                    - cell "Mrs Chinwe Onwuka PMT202602-60559" [ref=e6264]:
+                      - generic [ref=e6265]: Mrs Chinwe Onwuka
+                      - paragraph [ref=e6266]: PMT202602-60559
+                    - cell "+NGN 18,812.50" [ref=e6267]
+                    - cell "View source document" [ref=e8374]:
+                      - link "View source document" [ref=e8375] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/98565056-9e49-44ec-af88-a89a3ae7bcde
+                        - text: View
+                  - row "3 02 Feb 2026 AR Payment PMT202602-60564 - Telinxstex Life camp 2026-05-00792 Customer Payment Telinxstex Life camp PMT202602-60564 +NGN 75,250.00 View source document" [ref=e8376]:
+                    - cell [ref=e8377]:
+                      - checkbox [ref=e8378]
+                    - cell "3" [ref=e6274]:
+                      - generic [ref=e6275]: "3"
+                    - cell "02 Feb 2026" [ref=e6276]
+                    - cell "AR Payment PMT202602-60564 - Telinxstex Life camp 2026-05-00792" [ref=e6277]:
+                      - paragraph [ref=e6278]: AR Payment PMT202602-60564 - Telinxstex Life camp
+                      - paragraph [ref=e6279]: 2026-05-00792
+                    - cell "Customer Payment" [ref=e6280]:
+                      - generic [ref=e6281]: Customer Payment
+                    - cell "Telinxstex Life camp PMT202602-60564" [ref=e6282]:
+                      - generic [ref=e6283]: Telinxstex Life camp
+                      - paragraph [ref=e6284]: PMT202602-60564
+                    - cell "+NGN 75,250.00" [ref=e6285]
+                    - cell "View source document" [ref=e8379]:
+                      - link "View source document" [ref=e8380] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/b72b93de-4da3-40e9-b14e-56f99ecaa0f5
+                        - text: View
+                  - row "3 02 Feb 2026 AR Payment PMT202602-60560 - The House 2026-05-00787 Customer Payment The House PMT202602-60560 +NGN 56,437.50 View source document" [ref=e8381]:
+                    - cell [ref=e8382]:
+                      - checkbox [ref=e8383]
+                    - cell "3" [ref=e6292]:
+                      - generic [ref=e6293]: "3"
+                    - cell "02 Feb 2026" [ref=e6294]
+                    - cell "AR Payment PMT202602-60560 - The House 2026-05-00787" [ref=e6295]:
+                      - paragraph [ref=e6296]: AR Payment PMT202602-60560 - The House
+                      - paragraph [ref=e6297]: 2026-05-00787
+                    - cell "Customer Payment" [ref=e6298]:
+                      - generic [ref=e6299]: Customer Payment
+                    - cell "The House PMT202602-60560" [ref=e6300]:
+                      - generic [ref=e6301]: The House
+                      - paragraph [ref=e6302]: PMT202602-60560
+                    - cell "+NGN 56,437.50" [ref=e6303]
+                    - cell "View source document" [ref=e8384]:
+                      - link "View source document" [ref=e8385] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/c46a089d-1605-48c0-8a2a-538a483dd222
+                        - text: View
+                  - row "3 02 Feb 2026 AR Payment PMT202602-60573 - Abdulrasheed Ahmed 2026-05-00802 Customer Payment Abdulrasheed Ahmed PMT202602-60573 +NGN 18,812.50 View source document" [ref=e8386]:
+                    - cell [ref=e8387]:
+                      - checkbox [ref=e8388]
+                    - cell "3" [ref=e6310]:
+                      - generic [ref=e6311]: "3"
+                    - cell "02 Feb 2026" [ref=e6312]
+                    - cell "AR Payment PMT202602-60573 - Abdulrasheed Ahmed 2026-05-00802" [ref=e6313]:
+                      - paragraph [ref=e6314]: AR Payment PMT202602-60573 - Abdulrasheed Ahmed
+                      - paragraph [ref=e6315]: 2026-05-00802
+                    - cell "Customer Payment" [ref=e6316]:
+                      - generic [ref=e6317]: Customer Payment
+                    - cell "Abdulrasheed Ahmed PMT202602-60573" [ref=e6318]:
+                      - generic [ref=e6319]: Abdulrasheed Ahmed
+                      - paragraph [ref=e6320]: PMT202602-60573
+                    - cell "+NGN 18,812.50" [ref=e6321]
+                    - cell "View source document" [ref=e8389]:
+                      - link "View source document" [ref=e8390] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/d192b32d-a7a1-473b-af01-01d9cb9d5963
+                        - text: View
+                  - row "3 02 Feb 2026 AR Payment PMT202602-60566 - OliverTwist supermarket jabi 2026-05-00796 Customer Payment OliverTwist supermarket jabi PMT202602-60566 +NGN 18,812.50 View source document" [ref=e8391]:
+                    - cell [ref=e8392]:
+                      - checkbox [ref=e8393]
+                    - cell "3" [ref=e6328]:
+                      - generic [ref=e6329]: "3"
+                    - cell "02 Feb 2026" [ref=e6330]
+                    - cell "AR Payment PMT202602-60566 - OliverTwist supermarket jabi 2026-05-00796" [ref=e6331]:
+                      - paragraph [ref=e6332]: AR Payment PMT202602-60566 - OliverTwist supermarket jabi
+                      - paragraph [ref=e6333]: 2026-05-00796
+                    - cell "Customer Payment" [ref=e6334]:
+                      - generic [ref=e6335]: Customer Payment
+                    - cell "OliverTwist supermarket jabi PMT202602-60566" [ref=e6336]:
+                      - generic [ref=e6337]: OliverTwist supermarket jabi
+                      - paragraph [ref=e6338]: PMT202602-60566
+                    - cell "+NGN 18,812.50" [ref=e6339]
+                    - cell "View source document" [ref=e8394]:
+                      - link "View source document" [ref=e8395] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/dfeac7ee-36ff-4bd5-89fa-e2eed7d413ba
+                        - text: View
+                  - row "3 02 Feb 2026 AR Payment PMT202602-60557 - Mr. Mubajjaj Muazu 2026-05-00784 Customer Payment Mr. Mubajjaj Muazu PMT202602-60557 +NGN 18,812.50 View source document" [ref=e8396]:
+                    - cell [ref=e8397]:
+                      - checkbox [ref=e8398]
+                    - cell "3" [ref=e6346]:
+                      - generic [ref=e6347]: "3"
+                    - cell "02 Feb 2026" [ref=e6348]
+                    - cell "AR Payment PMT202602-60557 - Mr. Mubajjaj Muazu 2026-05-00784" [ref=e6349]:
+                      - paragraph [ref=e6350]: AR Payment PMT202602-60557 - Mr. Mubajjaj Muazu
+                      - paragraph [ref=e6351]: 2026-05-00784
+                    - cell "Customer Payment" [ref=e6352]:
+                      - generic [ref=e6353]: Customer Payment
+                    - cell "Mr. Mubajjaj Muazu PMT202602-60557" [ref=e6354]:
+                      - generic [ref=e6355]: Mr. Mubajjaj Muazu
+                      - paragraph [ref=e6356]: PMT202602-60557
+                    - cell "+NGN 18,812.50" [ref=e6357]
+                    - cell "View source document" [ref=e8399]:
+                      - link "View source document" [ref=e8400] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/f479ba5a-8e6d-480b-962e-311a003d7b0b
+                        - text: View
+                  - row "3 02 Feb 2026 AR Payment PMT202602-60574 - Ahamefule Thomas Emetoh 2026-05-00804 Customer Payment Ahamefule Thomas Emetoh PMT202602-60574 +NGN 18,812.50 View source document" [ref=e8401]:
+                    - cell [ref=e8402]:
+                      - checkbox [ref=e8403]
+                    - cell "3" [ref=e6364]:
+                      - generic [ref=e6365]: "3"
+                    - cell "02 Feb 2026" [ref=e6366]
+                    - cell "AR Payment PMT202602-60574 - Ahamefule Thomas Emetoh 2026-05-00804" [ref=e6367]:
+                      - paragraph [ref=e6368]: AR Payment PMT202602-60574 - Ahamefule Thomas Emetoh
+                      - paragraph [ref=e6369]: 2026-05-00804
+                    - cell "Customer Payment" [ref=e6370]:
+                      - generic [ref=e6371]: Customer Payment
+                    - cell "Ahamefule Thomas Emetoh PMT202602-60574" [ref=e6372]:
+                      - generic [ref=e6373]: Ahamefule Thomas Emetoh
+                      - paragraph [ref=e6374]: PMT202602-60574
+                    - cell "+NGN 18,812.50" [ref=e6375]
+                    - cell "View source document" [ref=e8404]:
+                      - link "View source document" [ref=e8405] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/f77e6795-e385-415f-a72c-16dfc97093d0
+                        - text: View
+                  - row "3 02 Feb 2026 AR Payment PMT202602-60558 - Vinci Hair Clinic Abuja 2026-05-00785 Customer Payment Vinci Hair Clinic Abuja PMT202602-60558 +NGN 16,125.00 View source document" [ref=e8406]:
+                    - cell [ref=e8407]:
+                      - checkbox [ref=e8408]
+                    - cell "3" [ref=e6382]:
+                      - generic [ref=e6383]: "3"
+                    - cell "02 Feb 2026" [ref=e6384]
+                    - cell "AR Payment PMT202602-60558 - Vinci Hair Clinic Abuja 2026-05-00785" [ref=e6385]:
+                      - paragraph [ref=e6386]: AR Payment PMT202602-60558 - Vinci Hair Clinic Abuja
+                      - paragraph [ref=e6387]: 2026-05-00785
+                    - cell "Customer Payment" [ref=e6388]:
+                      - generic [ref=e6389]: Customer Payment
+                    - cell "Vinci Hair Clinic Abuja PMT202602-60558" [ref=e6390]:
+                      - generic [ref=e6391]: Vinci Hair Clinic Abuja
+                      - paragraph [ref=e6392]: PMT202602-60558
+                    - cell "+NGN 16,125.00" [ref=e6393]
+                    - cell "View source document" [ref=e8409]:
+                      - link "View source document" [ref=e8410] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/2088a4cd-cb5f-4477-8f95-840d098d0927
+                        - text: View
+                  - row "3 02 Feb 2026 AR Payment PMT202602-60575 - Ewalefoh Jeremiah 2026-05-00805 Customer Payment Ewalefoh Jeremiah PMT202602-60575 +NGN 18,812.50 View source document" [ref=e8411]:
+                    - cell [ref=e8412]:
+                      - checkbox [ref=e8413]
+                    - cell "3" [ref=e6400]:
+                      - generic [ref=e6401]: "3"
+                    - cell "02 Feb 2026" [ref=e6402]
+                    - cell "AR Payment PMT202602-60575 - Ewalefoh Jeremiah 2026-05-00805" [ref=e6403]:
+                      - paragraph [ref=e6404]: AR Payment PMT202602-60575 - Ewalefoh Jeremiah
+                      - paragraph [ref=e6405]: 2026-05-00805
+                    - cell "Customer Payment" [ref=e6406]:
+                      - generic [ref=e6407]: Customer Payment
+                    - cell "Ewalefoh Jeremiah PMT202602-60575" [ref=e6408]:
+                      - generic [ref=e6409]: Ewalefoh Jeremiah
+                      - paragraph [ref=e6410]: PMT202602-60575
+                    - cell "+NGN 18,812.50" [ref=e6411]
+                    - cell "View source document" [ref=e8414]:
+                      - link "View source document" [ref=e8415] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/05d7d3ea-43c9-4533-9679-1e708ee29111
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60546 - Mykola Samosvatov 2026-05-00774 Customer Payment Mykola Samosvatov PMT202602-60546 +NGN 37,625.00 View source document" [ref=e8416]:
+                    - cell [ref=e8417]:
+                      - checkbox [ref=e8418]
+                    - cell "3" [ref=e6418]:
+                      - generic [ref=e6419]: "3"
+                    - cell "01 Feb 2026" [ref=e6420]
+                    - cell "AR Payment PMT202602-60546 - Mykola Samosvatov 2026-05-00774" [ref=e6421]:
+                      - paragraph [ref=e6422]: AR Payment PMT202602-60546 - Mykola Samosvatov
+                      - paragraph [ref=e6423]: 2026-05-00774
+                    - cell "Customer Payment" [ref=e6424]:
+                      - generic [ref=e6425]: Customer Payment
+                    - cell "Mykola Samosvatov PMT202602-60546" [ref=e6426]:
+                      - generic [ref=e6427]: Mykola Samosvatov
+                      - paragraph [ref=e6428]: PMT202602-60546
+                    - cell "+NGN 37,625.00" [ref=e6429]
+                    - cell "View source document" [ref=e8419]:
+                      - link "View source document" [ref=e8420] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/f889e600-3464-437f-9887-fcdb883ac61d
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60536 - Oyinkansola Bello 2026-05-00764 Customer Payment Oyinkansola Bello PMT202602-60536 +NGN 18,812.50 View source document" [ref=e8421]:
+                    - cell [ref=e8422]:
+                      - checkbox [ref=e8423]
+                    - cell "3" [ref=e6436]:
+                      - generic [ref=e6437]: "3"
+                    - cell "01 Feb 2026" [ref=e6438]
+                    - cell "AR Payment PMT202602-60536 - Oyinkansola Bello 2026-05-00764" [ref=e6439]:
+                      - paragraph [ref=e6440]: AR Payment PMT202602-60536 - Oyinkansola Bello
+                      - paragraph [ref=e6441]: 2026-05-00764
+                    - cell "Customer Payment" [ref=e6442]:
+                      - generic [ref=e6443]: Customer Payment
+                    - cell "Oyinkansola Bello PMT202602-60536" [ref=e6444]:
+                      - generic [ref=e6445]: Oyinkansola Bello
+                      - paragraph [ref=e6446]: PMT202602-60536
+                    - cell "+NGN 18,812.50" [ref=e6447]
+                    - cell "View source document" [ref=e8424]:
+                      - link "View source document" [ref=e8425] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/00d85256-3a10-490c-af23-5841ea7a826e
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60539 - Dr Iseko Iseko 2026-05-00769 Customer Payment Dr Iseko Iseko PMT202602-60539 +NGN 18,812.50 View source document" [ref=e8426]:
+                    - cell [ref=e8427]:
+                      - checkbox [ref=e8428]
+                    - cell "3" [ref=e6454]:
+                      - generic [ref=e6455]: "3"
+                    - cell "01 Feb 2026" [ref=e6456]
+                    - cell "AR Payment PMT202602-60539 - Dr Iseko Iseko 2026-05-00769" [ref=e6457]:
+                      - paragraph [ref=e6458]: AR Payment PMT202602-60539 - Dr Iseko Iseko
+                      - paragraph [ref=e6459]: 2026-05-00769
+                    - cell "Customer Payment" [ref=e6460]:
+                      - generic [ref=e6461]: Customer Payment
+                    - cell "Dr Iseko Iseko PMT202602-60539" [ref=e6462]:
+                      - generic [ref=e6463]: Dr Iseko Iseko
+                      - paragraph [ref=e6464]: PMT202602-60539
+                    - cell "+NGN 18,812.50" [ref=e6465]
+                    - cell "View source document" [ref=e8429]:
+                      - link "View source document" [ref=e8430] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/01b17438-73c9-4a8a-8e74-06a055d8bae8
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60555 - Mr. Adebayo Oduyemi 2026-11-00662 Customer Payment Mr. Adebayo Oduyemi PMT202602-60555 +NGN 18,812.50 View source document" [ref=e8431]:
+                    - cell [ref=e8432]:
+                      - checkbox [ref=e8433]
+                    - cell "3" [ref=e6472]:
+                      - generic [ref=e6473]: "3"
+                    - cell "01 Feb 2026" [ref=e6474]
+                    - cell "AR Payment PMT202602-60555 - Mr. Adebayo Oduyemi 2026-11-00662" [ref=e6475]:
+                      - paragraph [ref=e6476]: AR Payment PMT202602-60555 - Mr. Adebayo Oduyemi
+                      - paragraph [ref=e6477]: 2026-11-00662
+                    - cell "Customer Payment" [ref=e6478]:
+                      - generic [ref=e6479]: Customer Payment
+                    - cell "Mr. Adebayo Oduyemi PMT202602-60555" [ref=e6480]:
+                      - generic [ref=e6481]: Mr. Adebayo Oduyemi
+                      - paragraph [ref=e6482]: PMT202602-60555
+                    - cell "+NGN 18,812.50" [ref=e6483]
+                    - cell "View source document" [ref=e8434]:
+                      - link "View source document" [ref=e8435] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/0b1bd47a-c69b-4c90-8ea0-0ce2cce2a5a1
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60542 - Jeremiah Eugene 2026-05-00771 Customer Payment Jeremiah Eugene PMT202602-60542 +NGN 18,812.50 View source document" [ref=e8436]:
+                    - cell [ref=e8437]:
+                      - checkbox [ref=e8438]
+                    - cell "3" [ref=e6490]:
+                      - generic [ref=e6491]: "3"
+                    - cell "01 Feb 2026" [ref=e6492]
+                    - cell "AR Payment PMT202602-60542 - Jeremiah Eugene 2026-05-00771" [ref=e6493]:
+                      - paragraph [ref=e6494]: AR Payment PMT202602-60542 - Jeremiah Eugene
+                      - paragraph [ref=e6495]: 2026-05-00771
+                    - cell "Customer Payment" [ref=e6496]:
+                      - generic [ref=e6497]: Customer Payment
+                    - cell "Jeremiah Eugene PMT202602-60542" [ref=e6498]:
+                      - generic [ref=e6499]: Jeremiah Eugene
+                      - paragraph [ref=e6500]: PMT202602-60542
+                    - cell "+NGN 18,812.50" [ref=e6501]
+                    - cell "View source document" [ref=e8439]:
+                      - link "View source document" [ref=e8440] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/0d4b645f-627e-48b9-a7bb-4be605f9df75
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60544 - Mukhtar Babba 2026-05-00772 Customer Payment Mukhtar Babba PMT202602-60544 +NGN 18,812.50 View source document" [ref=e8441]:
+                    - cell [ref=e8442]:
+                      - checkbox [ref=e8443]
+                    - cell "3" [ref=e6508]:
+                      - generic [ref=e6509]: "3"
+                    - cell "01 Feb 2026" [ref=e6510]
+                    - cell "AR Payment PMT202602-60544 - Mukhtar Babba 2026-05-00772" [ref=e6511]:
+                      - paragraph [ref=e6512]: AR Payment PMT202602-60544 - Mukhtar Babba
+                      - paragraph [ref=e6513]: 2026-05-00772
+                    - cell "Customer Payment" [ref=e6514]:
+                      - generic [ref=e6515]: Customer Payment
+                    - cell "Mukhtar Babba PMT202602-60544" [ref=e6516]:
+                      - generic [ref=e6517]: Mukhtar Babba
+                      - paragraph [ref=e6518]: PMT202602-60544
+                    - cell "+NGN 18,812.50" [ref=e6519]
+                    - cell "View source document" [ref=e8444]:
+                      - link "View source document" [ref=e8445] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/1a19e568-3669-4c44-b245-97e3a6786076
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60545 - Ewomazino Omidi 2026-05-00773 Customer Payment Ewomazino Omidi PMT202602-60545 +NGN 18,812.50 View source document" [ref=e8446]:
+                    - cell [ref=e8447]:
+                      - checkbox [ref=e8448]
+                    - cell "3" [ref=e6526]:
+                      - generic [ref=e6527]: "3"
+                    - cell "01 Feb 2026" [ref=e6528]
+                    - cell "AR Payment PMT202602-60545 - Ewomazino Omidi 2026-05-00773" [ref=e6529]:
+                      - paragraph [ref=e6530]: AR Payment PMT202602-60545 - Ewomazino Omidi
+                      - paragraph [ref=e6531]: 2026-05-00773
+                    - cell "Customer Payment" [ref=e6532]:
+                      - generic [ref=e6533]: Customer Payment
+                    - cell "Ewomazino Omidi PMT202602-60545" [ref=e6534]:
+                      - generic [ref=e6535]: Ewomazino Omidi
+                      - paragraph [ref=e6536]: PMT202602-60545
+                    - cell "+NGN 18,812.50" [ref=e6537]
+                    - cell "View source document" [ref=e8449]:
+                      - link "View source document" [ref=e8450] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/38a83728-ccc4-43e4-9e5d-fecbd647d927
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60538 - Akinniyi Rotimi 2026-05-00766 Customer Payment Akinniyi Rotimi PMT202602-60538 +NGN 18,812.50 View source document" [ref=e8451]:
+                    - cell [ref=e8452]:
+                      - checkbox [ref=e8453]
+                    - cell "3" [ref=e6544]:
+                      - generic [ref=e6545]: "3"
+                    - cell "01 Feb 2026" [ref=e6546]
+                    - cell "AR Payment PMT202602-60538 - Akinniyi Rotimi 2026-05-00766" [ref=e6547]:
+                      - paragraph [ref=e6548]: AR Payment PMT202602-60538 - Akinniyi Rotimi
+                      - paragraph [ref=e6549]: 2026-05-00766
+                    - cell "Customer Payment" [ref=e6550]:
+                      - generic [ref=e6551]: Customer Payment
+                    - cell "Akinniyi Rotimi PMT202602-60538" [ref=e6552]:
+                      - generic [ref=e6553]: Akinniyi Rotimi
+                      - paragraph [ref=e6554]: PMT202602-60538
+                    - cell "+NGN 18,812.50" [ref=e6555]
+                    - cell "View source document" [ref=e8454]:
+                      - link "View source document" [ref=e8455] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/3a074d23-0188-4afb-86ad-3c06d53e473e
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60535 - Tremfolink Danage Apartments 2026-05-00763 Customer Payment Tremfolink Danage Apartments PMT202602-60535 +NGN 37,625.00 View source document" [ref=e8456]:
+                    - cell [ref=e8457]:
+                      - checkbox [ref=e8458]
+                    - cell "3" [ref=e6562]:
+                      - generic [ref=e6563]: "3"
+                    - cell "01 Feb 2026" [ref=e6564]
+                    - cell "AR Payment PMT202602-60535 - Tremfolink Danage Apartments 2026-05-00763" [ref=e6565]:
+                      - paragraph [ref=e6566]: AR Payment PMT202602-60535 - Tremfolink Danage Apartments
+                      - paragraph [ref=e6567]: 2026-05-00763
+                    - cell "Customer Payment" [ref=e6568]:
+                      - generic [ref=e6569]: Customer Payment
+                    - cell "Tremfolink Danage Apartments PMT202602-60535" [ref=e6570]:
+                      - generic [ref=e6571]: Tremfolink Danage Apartments
+                      - paragraph [ref=e6572]: PMT202602-60535
+                    - cell "+NGN 37,625.00" [ref=e6573]
+                    - cell "View source document" [ref=e8459]:
+                      - link "View source document" [ref=e8460] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/451824a8-2cf7-4180-ab9e-bc4409b591a4
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60552 - Nnaji ifeanyi George 2026-05-00780 Customer Payment Nnaji ifeanyi George PMT202602-60552 +NGN 18,812.50 View source document" [ref=e8461]:
+                    - cell [ref=e8462]:
+                      - checkbox [ref=e8463]
+                    - cell "3" [ref=e6580]:
+                      - generic [ref=e6581]: "3"
+                    - cell "01 Feb 2026" [ref=e6582]
+                    - cell "AR Payment PMT202602-60552 - Nnaji ifeanyi George 2026-05-00780" [ref=e6583]:
+                      - paragraph [ref=e6584]: AR Payment PMT202602-60552 - Nnaji ifeanyi George
+                      - paragraph [ref=e6585]: 2026-05-00780
+                    - cell "Customer Payment" [ref=e6586]:
+                      - generic [ref=e6587]: Customer Payment
+                    - cell "Nnaji ifeanyi George PMT202602-60552" [ref=e6588]:
+                      - generic [ref=e6589]: Nnaji ifeanyi George
+                      - paragraph [ref=e6590]: PMT202602-60552
+                    - cell "+NGN 18,812.50" [ref=e6591]
+                    - cell "View source document" [ref=e8464]:
+                      - link "View source document" [ref=e8465] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/468d5594-1d84-458c-9063-65b402db4d0b
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60549 - Ernest Ibeh 2026-05-00777 Customer Payment Ernest Ibeh PMT202602-60549 +NGN 18,812.50 View source document" [ref=e8466]:
+                    - cell [ref=e8467]:
+                      - checkbox [ref=e8468]
+                    - cell "3" [ref=e6598]:
+                      - generic [ref=e6599]: "3"
+                    - cell "01 Feb 2026" [ref=e6600]
+                    - cell "AR Payment PMT202602-60549 - Ernest Ibeh 2026-05-00777" [ref=e6601]:
+                      - paragraph [ref=e6602]: AR Payment PMT202602-60549 - Ernest Ibeh
+                      - paragraph [ref=e6603]: 2026-05-00777
+                    - cell "Customer Payment" [ref=e6604]:
+                      - generic [ref=e6605]: Customer Payment
+                    - cell "Ernest Ibeh PMT202602-60549" [ref=e6606]:
+                      - generic [ref=e6607]: Ernest Ibeh
+                      - paragraph [ref=e6608]: PMT202602-60549
+                    - cell "+NGN 18,812.50" [ref=e6609]
+                    - cell "View source document" [ref=e8469]:
+                      - link "View source document" [ref=e8470] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/541bac97-d6c7-4dc6-895d-0c8ba06bc749
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60547 - Isah Lata 2026-05-00775 Customer Payment Isah Lata PMT202602-60547 +NGN 18,812.50 View source document" [ref=e8471]:
+                    - cell [ref=e8472]:
+                      - checkbox [ref=e8473]
+                    - cell "3" [ref=e6616]:
+                      - generic [ref=e6617]: "3"
+                    - cell "01 Feb 2026" [ref=e6618]
+                    - cell "AR Payment PMT202602-60547 - Isah Lata 2026-05-00775" [ref=e6619]:
+                      - paragraph [ref=e6620]: AR Payment PMT202602-60547 - Isah Lata
+                      - paragraph [ref=e6621]: 2026-05-00775
+                    - cell "Customer Payment" [ref=e6622]:
+                      - generic [ref=e6623]: Customer Payment
+                    - cell "Isah Lata PMT202602-60547" [ref=e6624]:
+                      - generic [ref=e6625]: Isah Lata
+                      - paragraph [ref=e6626]: PMT202602-60547
+                    - cell "+NGN 18,812.50" [ref=e6627]
+                    - cell "View source document" [ref=e8474]:
+                      - link "View source document" [ref=e8475] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/78e0075a-3570-4505-b434-9c9c5fec1a1c
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60541 - Yaya Festus 2026-11-00654 Customer Payment Yaya Festus PMT202602-60541 +NGN 18,812.50 View source document" [ref=e8476]:
+                    - cell [ref=e8477]:
+                      - checkbox [ref=e8478]
+                    - cell "3" [ref=e6634]:
+                      - generic [ref=e6635]: "3"
+                    - cell "01 Feb 2026" [ref=e6636]
+                    - cell "AR Payment PMT202602-60541 - Yaya Festus 2026-11-00654" [ref=e6637]:
+                      - paragraph [ref=e6638]: AR Payment PMT202602-60541 - Yaya Festus
+                      - paragraph [ref=e6639]: 2026-11-00654
+                    - cell "Customer Payment" [ref=e6640]:
+                      - generic [ref=e6641]: Customer Payment
+                    - cell "Yaya Festus PMT202602-60541" [ref=e6642]:
+                      - generic [ref=e6643]: Yaya Festus
+                      - paragraph [ref=e6644]: PMT202602-60541
+                    - cell "+NGN 18,812.50" [ref=e6645]
+                    - cell "View source document" [ref=e8479]:
+                      - link "View source document" [ref=e8480] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/9968d87e-c6b1-47c9-b52a-648010b28a9d
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60540 - Ifeoluwa Ariyo 2026-05-00770 Customer Payment Ifeoluwa Ariyo PMT202602-60540 +NGN 18,812.50 View source document" [ref=e8481]:
+                    - cell [ref=e8482]:
+                      - checkbox [ref=e8483]
+                    - cell "3" [ref=e6652]:
+                      - generic [ref=e6653]: "3"
+                    - cell "01 Feb 2026" [ref=e6654]
+                    - cell "AR Payment PMT202602-60540 - Ifeoluwa Ariyo 2026-05-00770" [ref=e6655]:
+                      - paragraph [ref=e6656]: AR Payment PMT202602-60540 - Ifeoluwa Ariyo
+                      - paragraph [ref=e6657]: 2026-05-00770
+                    - cell "Customer Payment" [ref=e6658]:
+                      - generic [ref=e6659]: Customer Payment
+                    - cell "Ifeoluwa Ariyo PMT202602-60540" [ref=e6660]:
+                      - generic [ref=e6661]: Ifeoluwa Ariyo
+                      - paragraph [ref=e6662]: PMT202602-60540
+                    - cell "+NGN 18,812.50" [ref=e6663]
+                    - cell "View source document" [ref=e8484]:
+                      - link "View source document" [ref=e8485] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/ac14a730-c3af-40ec-8145-2d1b61e1b1ef
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60551 - Temitayo yinusa 2026-05-00779 Customer Payment Temitayo yinusa PMT202602-60551 +NGN 18,812.50 View source document" [ref=e8486]:
+                    - cell [ref=e8487]:
+                      - checkbox [ref=e8488]
+                    - cell "3" [ref=e6670]:
+                      - generic [ref=e6671]: "3"
+                    - cell "01 Feb 2026" [ref=e6672]
+                    - cell "AR Payment PMT202602-60551 - Temitayo yinusa 2026-05-00779" [ref=e6673]:
+                      - paragraph [ref=e6674]: AR Payment PMT202602-60551 - Temitayo yinusa
+                      - paragraph [ref=e6675]: 2026-05-00779
+                    - cell "Customer Payment" [ref=e6676]:
+                      - generic [ref=e6677]: Customer Payment
+                    - cell "Temitayo yinusa PMT202602-60551" [ref=e6678]:
+                      - generic [ref=e6679]: Temitayo yinusa
+                      - paragraph [ref=e6680]: PMT202602-60551
+                    - cell "+NGN 18,812.50" [ref=e6681]
+                    - cell "View source document" [ref=e8489]:
+                      - link "View source document" [ref=e8490] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/cda01bd9-7b75-4840-a99a-af73440fe1e3
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60537 - Dr Idris Mohammed Yelwa 2026-05-00765 Customer Payment Dr Idris Mohammed Yelwa PMT202602-60537 +NGN 18,812.50 View source document" [ref=e8491]:
+                    - cell [ref=e8492]:
+                      - checkbox [ref=e8493]
+                    - cell "3" [ref=e6688]:
+                      - generic [ref=e6689]: "3"
+                    - cell "01 Feb 2026" [ref=e6690]
+                    - cell "AR Payment PMT202602-60537 - Dr Idris Mohammed Yelwa 2026-05-00765" [ref=e6691]:
+                      - paragraph [ref=e6692]: AR Payment PMT202602-60537 - Dr Idris Mohammed Yelwa
+                      - paragraph [ref=e6693]: 2026-05-00765
+                    - cell "Customer Payment" [ref=e6694]:
+                      - generic [ref=e6695]: Customer Payment
+                    - cell "Dr Idris Mohammed Yelwa PMT202602-60537" [ref=e6696]:
+                      - generic [ref=e6697]: Dr Idris Mohammed Yelwa
+                      - paragraph [ref=e6698]: PMT202602-60537
+                    - cell "+NGN 18,812.50" [ref=e6699]
+                    - cell "View source document" [ref=e8494]:
+                      - link "View source document" [ref=e8495] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/cfc14fff-62ab-4b8b-bd21-ca750d12dcd1
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60553 - Mr Adelewa Williams 2026-05-00781 Customer Payment Mr Adelewa Williams PMT202602-60553 +NGN 37,625.00 View source document" [ref=e8496]:
+                    - cell [ref=e8497]:
+                      - checkbox [ref=e8498]
+                    - cell "3" [ref=e6706]:
+                      - generic [ref=e6707]: "3"
+                    - cell "01 Feb 2026" [ref=e6708]
+                    - cell "AR Payment PMT202602-60553 - Mr Adelewa Williams 2026-05-00781" [ref=e6709]:
+                      - paragraph [ref=e6710]: AR Payment PMT202602-60553 - Mr Adelewa Williams
+                      - paragraph [ref=e6711]: 2026-05-00781
+                    - cell "Customer Payment" [ref=e6712]:
+                      - generic [ref=e6713]: Customer Payment
+                    - cell "Mr Adelewa Williams PMT202602-60553" [ref=e6714]:
+                      - generic [ref=e6715]: Mr Adelewa Williams
+                      - paragraph [ref=e6716]: PMT202602-60553
+                    - cell "+NGN 37,625.00" [ref=e6717]
+                    - cell "View source document" [ref=e8499]:
+                      - link "View source document" [ref=e8500] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/d7b2dc2e-2b9e-4388-860f-5a65f010bda6
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60543 - Morenike Ogunbe 2026-11-00655 Customer Payment Morenike Ogunbe PMT202602-60543 +NGN 18,812.50 View source document" [ref=e8501]:
+                    - cell [ref=e8502]:
+                      - checkbox [ref=e8503]
+                    - cell "3" [ref=e6724]:
+                      - generic [ref=e6725]: "3"
+                    - cell "01 Feb 2026" [ref=e6726]
+                    - cell "AR Payment PMT202602-60543 - Morenike Ogunbe 2026-11-00655" [ref=e6727]:
+                      - paragraph [ref=e6728]: AR Payment PMT202602-60543 - Morenike Ogunbe
+                      - paragraph [ref=e6729]: 2026-11-00655
+                    - cell "Customer Payment" [ref=e6730]:
+                      - generic [ref=e6731]: Customer Payment
+                    - cell "Morenike Ogunbe PMT202602-60543" [ref=e6732]:
+                      - generic [ref=e6733]: Morenike Ogunbe
+                      - paragraph [ref=e6734]: PMT202602-60543
+                    - cell "+NGN 18,812.50" [ref=e6735]
+                    - cell "View source document" [ref=e8504]:
+                      - link "View source document" [ref=e8505] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/e1c05c29-923f-4d25-92b4-68c558b44b18
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60548 - Gen Nicholas 2026-05-00776 Customer Payment Gen Nicholas PMT202602-60548 +NGN 18,812.50 View source document" [ref=e8506]:
+                    - cell [ref=e8507]:
+                      - checkbox [ref=e8508]
+                    - cell "3" [ref=e6742]:
+                      - generic [ref=e6743]: "3"
+                    - cell "01 Feb 2026" [ref=e6744]
+                    - cell "AR Payment PMT202602-60548 - Gen Nicholas 2026-05-00776" [ref=e6745]:
+                      - paragraph [ref=e6746]: AR Payment PMT202602-60548 - Gen Nicholas
+                      - paragraph [ref=e6747]: 2026-05-00776
+                    - cell "Customer Payment" [ref=e6748]:
+                      - generic [ref=e6749]: Customer Payment
+                    - cell "Gen Nicholas PMT202602-60548" [ref=e6750]:
+                      - generic [ref=e6751]: Gen Nicholas
+                      - paragraph [ref=e6752]: PMT202602-60548
+                    - cell "+NGN 18,812.50" [ref=e6753]
+                    - cell "View source document" [ref=e8509]:
+                      - link "View source document" [ref=e8510] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/f8dcd971-42eb-4a4f-a564-484be97fbb3f
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60550 - Hannatu Tanko 2026-05-00778 Customer Payment Hannatu Tanko PMT202602-60550 +NGN 18,812.50 View source document" [ref=e8511]:
+                    - cell [ref=e8512]:
+                      - checkbox [ref=e8513]
+                    - cell "3" [ref=e6760]:
+                      - generic [ref=e6761]: "3"
+                    - cell "01 Feb 2026" [ref=e6762]
+                    - cell "AR Payment PMT202602-60550 - Hannatu Tanko 2026-05-00778" [ref=e6763]:
+                      - paragraph [ref=e6764]: AR Payment PMT202602-60550 - Hannatu Tanko
+                      - paragraph [ref=e6765]: 2026-05-00778
+                    - cell "Customer Payment" [ref=e6766]:
+                      - generic [ref=e6767]: Customer Payment
+                    - cell "Hannatu Tanko PMT202602-60550" [ref=e6768]:
+                      - generic [ref=e6769]: Hannatu Tanko
+                      - paragraph [ref=e6770]: PMT202602-60550
+                    - cell "+NGN 18,812.50" [ref=e6771]
+                    - cell "View source document" [ref=e8514]:
+                      - link "View source document" [ref=e8515] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/fd9a7151-a9af-4a7d-a1cb-3f84dc5b7614
+                        - text: View
+                  - row "3 01 Feb 2026 AR Payment PMT202602-60534 - Amirah Bello 2026-05-00762 Customer Payment Amirah Bello PMT202602-60534 +NGN 18,812.50 View source document" [ref=e8516]:
+                    - cell [ref=e8517]:
+                      - checkbox [ref=e8518]
+                    - cell "3" [ref=e6778]:
+                      - generic [ref=e6779]: "3"
+                    - cell "01 Feb 2026" [ref=e6780]
+                    - cell "AR Payment PMT202602-60534 - Amirah Bello 2026-05-00762" [ref=e6781]:
+                      - paragraph [ref=e6782]: AR Payment PMT202602-60534 - Amirah Bello
+                      - paragraph [ref=e6783]: 2026-05-00762
+                    - cell "Customer Payment" [ref=e6784]:
+                      - generic [ref=e6785]: Customer Payment
+                    - cell "Amirah Bello PMT202602-60534" [ref=e6786]:
+                      - generic [ref=e6787]: Amirah Bello
+                      - paragraph [ref=e6788]: PMT202602-60534
+                    - cell "+NGN 18,812.50" [ref=e6789]
+                    - cell "View source document" [ref=e8519]:
+                      - link "View source document" [ref=e8520] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/ffff269b-b18f-4cb0-8d42-7cf75fa04deb
+                        - text: View
+                  - row "3 31 Jan 2026 AR Payment PMT202601-60524 - Aminu Zerngo 2026-05-00753 Customer Payment Aminu Zerngo PMT202601-60524 +NGN 18,812.50 View source document" [ref=e8521]:
+                    - cell [ref=e8522]:
+                      - checkbox [ref=e8523]
+                    - cell "3" [ref=e6796]:
+                      - generic [ref=e6797]: "3"
+                    - cell "31 Jan 2026" [ref=e6798]
+                    - cell "AR Payment PMT202601-60524 - Aminu Zerngo 2026-05-00753" [ref=e6799]:
+                      - paragraph [ref=e6800]: AR Payment PMT202601-60524 - Aminu Zerngo
+                      - paragraph [ref=e6801]: 2026-05-00753
+                    - cell "Customer Payment" [ref=e6802]:
+                      - generic [ref=e6803]: Customer Payment
+                    - cell "Aminu Zerngo PMT202601-60524" [ref=e6804]:
+                      - generic [ref=e6805]: Aminu Zerngo
+                      - paragraph [ref=e6806]: PMT202601-60524
+                    - cell "+NGN 18,812.50" [ref=e6807]
+                    - cell "View source document" [ref=e8524]:
+                      - link "View source document" [ref=e8525] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/fd75ab59-74cb-43c0-8005-593cdd772b39
+                        - text: View
+                  - row "3 31 Jan 2026 AR Payment PMT202601-60530 - Alabi Kehinde 2026-05-00759 Customer Payment Alabi Kehinde PMT202601-60530 +NGN 37,625.00 View source document" [ref=e8526]:
+                    - cell [ref=e8527]:
+                      - checkbox [ref=e8528]
+                    - cell "3" [ref=e6814]:
+                      - generic [ref=e6815]: "3"
+                    - cell "31 Jan 2026" [ref=e6816]
+                    - cell "AR Payment PMT202601-60530 - Alabi Kehinde 2026-05-00759" [ref=e6817]:
+                      - paragraph [ref=e6818]: AR Payment PMT202601-60530 - Alabi Kehinde
+                      - paragraph [ref=e6819]: 2026-05-00759
+                    - cell "Customer Payment" [ref=e6820]:
+                      - generic [ref=e6821]: Customer Payment
+                    - cell "Alabi Kehinde PMT202601-60530" [ref=e6822]:
+                      - generic [ref=e6823]: Alabi Kehinde
+                      - paragraph [ref=e6824]: PMT202601-60530
+                    - cell "+NGN 37,625.00" [ref=e6825]
+                    - cell "View source document" [ref=e8529]:
+                      - link "View source document" [ref=e8530] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/d4a86730-0994-4e03-918c-45117b6a772d
+                        - text: View
+                  - row "3 31 Jan 2026 AR Payment PMT202601-60516 - Nwobodo Chukwuebuka 2026-05-00738 Customer Payment Nwobodo Chukwuebuka PMT202601-60516 +NGN 18,812.50 View source document" [ref=e8531]:
+                    - cell [ref=e8532]:
+                      - checkbox [ref=e8533]
+                    - cell "3" [ref=e6832]:
+                      - generic [ref=e6833]: "3"
+                    - cell "31 Jan 2026" [ref=e6834]
+                    - cell "AR Payment PMT202601-60516 - Nwobodo Chukwuebuka 2026-05-00738" [ref=e6835]:
+                      - paragraph [ref=e6836]: AR Payment PMT202601-60516 - Nwobodo Chukwuebuka
+                      - paragraph [ref=e6837]: 2026-05-00738
+                    - cell "Customer Payment" [ref=e6838]:
+                      - generic [ref=e6839]: Customer Payment
+                    - cell "Nwobodo Chukwuebuka PMT202601-60516" [ref=e6840]:
+                      - generic [ref=e6841]: Nwobodo Chukwuebuka
+                      - paragraph [ref=e6842]: PMT202601-60516
+                    - cell "+NGN 18,812.50" [ref=e6843]
+                    - cell "View source document" [ref=e8534]:
+                      - link "View source document" [ref=e8535] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/cb99da05-516e-4ec3-8348-3a76839dc777
+                        - text: View
+                  - row "3 31 Jan 2026 AR Payment PMT202601-60525 - Mr. Vincent Nnamdi 2026-05-00754 Customer Payment Mr. Vincent Nnamdi PMT202601-60525 +NGN 18,812.50 View source document" [ref=e8536]:
+                    - cell [ref=e8537]:
+                      - checkbox [ref=e8538]
+                    - cell "3" [ref=e6850]:
+                      - generic [ref=e6851]: "3"
+                    - cell "31 Jan 2026" [ref=e6852]
+                    - cell "AR Payment PMT202601-60525 - Mr. Vincent Nnamdi 2026-05-00754" [ref=e6853]:
+                      - paragraph [ref=e6854]: AR Payment PMT202601-60525 - Mr. Vincent Nnamdi
+                      - paragraph [ref=e6855]: 2026-05-00754
+                    - cell "Customer Payment" [ref=e6856]:
+                      - generic [ref=e6857]: Customer Payment
+                    - cell "Mr. Vincent Nnamdi PMT202601-60525" [ref=e6858]:
+                      - generic [ref=e6859]: Mr. Vincent Nnamdi
+                      - paragraph [ref=e6860]: PMT202601-60525
+                    - cell "+NGN 18,812.50" [ref=e6861]
+                    - cell "View source document" [ref=e8539]:
+                      - link "View source document" [ref=e8540] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/cb16ca95-cdac-4ae1-ab21-ba058161412a
+                        - text: View
+                  - row "3 31 Jan 2026 AR Payment PMT202601-60531 - Attoh Anthony 2026-05-00760 Customer Payment Attoh Anthony PMT202601-60531 +NGN 18,812.50 View source document" [ref=e8541]:
+                    - cell [ref=e8542]:
+                      - checkbox [ref=e8543]
+                    - cell "3" [ref=e6868]:
+                      - generic [ref=e6869]: "3"
+                    - cell "31 Jan 2026" [ref=e6870]
+                    - cell "AR Payment PMT202601-60531 - Attoh Anthony 2026-05-00760" [ref=e6871]:
+                      - paragraph [ref=e6872]: AR Payment PMT202601-60531 - Attoh Anthony
+                      - paragraph [ref=e6873]: 2026-05-00760
+                    - cell "Customer Payment" [ref=e6874]:
+                      - generic [ref=e6875]: Customer Payment
+                    - cell "Attoh Anthony PMT202601-60531" [ref=e6876]:
+                      - generic [ref=e6877]: Attoh Anthony
+                      - paragraph [ref=e6878]: PMT202601-60531
+                    - cell "+NGN 18,812.50" [ref=e6879]
+                    - cell "View source document" [ref=e8544]:
+                      - link "View source document" [ref=e8545] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/bda98dda-b8d3-4e80-8d3a-563ef5beef07
+                        - text: View
+                  - row "3 31 Jan 2026 AR Payment PMT202601-60526 - Bet9ja Mabushi 2026-05-00755 Customer Payment Bet9ja Mabushi PMT202601-60526 +NGN 18,812.50 View source document" [ref=e8546]:
+                    - cell [ref=e8547]:
+                      - checkbox [ref=e8548]
+                    - cell "3" [ref=e6886]:
+                      - generic [ref=e6887]: "3"
+                    - cell "31 Jan 2026" [ref=e6888]
+                    - cell "AR Payment PMT202601-60526 - Bet9ja Mabushi 2026-05-00755" [ref=e6889]:
+                      - paragraph [ref=e6890]: AR Payment PMT202601-60526 - Bet9ja Mabushi
+                      - paragraph [ref=e6891]: 2026-05-00755
+                    - cell "Customer Payment" [ref=e6892]:
+                      - generic [ref=e6893]: Customer Payment
+                    - cell "Bet9ja Mabushi PMT202601-60526" [ref=e6894]:
+                      - generic [ref=e6895]: Bet9ja Mabushi
+                      - paragraph [ref=e6896]: PMT202601-60526
+                    - cell "+NGN 18,812.50" [ref=e6897]
+                    - cell "View source document" [ref=e8549]:
+                      - link "View source document" [ref=e8550] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/ba5ec3ef-af33-4e5d-84bd-e5e075492585
+                        - text: View
+                  - row "3 31 Jan 2026 AR Payment PMT202601-60519 - Dreylinks Integrated Global Technologies Ltd (Nasiru Muhammed) 2026-05-00747 Customer Payment Dreylinks Integrated Global Technologies Ltd (Nasiru Muhammed) PMT202601-60519 +NGN 18,812.50 View source document" [ref=e8551]:
+                    - cell [ref=e8552]:
+                      - checkbox [ref=e8553]
+                    - cell "3" [ref=e6904]:
+                      - generic [ref=e6905]: "3"
+                    - cell "31 Jan 2026" [ref=e6906]
+                    - cell "AR Payment PMT202601-60519 - Dreylinks Integrated Global Technologies Ltd (Nasiru Muhammed) 2026-05-00747" [ref=e6907]:
+                      - paragraph [ref=e6908]: AR Payment PMT202601-60519 - Dreylinks Integrated Global Technologies Ltd (Nasiru Muhammed)
+                      - paragraph [ref=e6909]: 2026-05-00747
+                    - cell "Customer Payment" [ref=e6910]:
+                      - generic [ref=e6911]: Customer Payment
+                    - cell "Dreylinks Integrated Global Technologies Ltd (Nasiru Muhammed) PMT202601-60519" [ref=e6912]:
+                      - generic [ref=e6913]: Dreylinks Integrated Global Technologies Ltd (Nasiru Muhammed)
+                      - paragraph [ref=e6914]: PMT202601-60519
+                    - cell "+NGN 18,812.50" [ref=e6915]
+                    - cell "View source document" [ref=e8554]:
+                      - link "View source document" [ref=e8555] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/9ed46570-7d42-42c2-97a7-6b4d209c3df7
+                        - text: View
+                  - row "3 31 Jan 2026 AR Payment PMT202601-60520 - Mr. Dahiru Abubakar 2026-05-00749 Customer Payment Mr. Dahiru Abubakar PMT202601-60520 +NGN 18,812.50 View source document" [ref=e8556]:
+                    - cell [ref=e8557]:
+                      - checkbox [ref=e8558]
+                    - cell "3" [ref=e6922]:
+                      - generic [ref=e6923]: "3"
+                    - cell "31 Jan 2026" [ref=e6924]
+                    - cell "AR Payment PMT202601-60520 - Mr. Dahiru Abubakar 2026-05-00749" [ref=e6925]:
+                      - paragraph [ref=e6926]: AR Payment PMT202601-60520 - Mr. Dahiru Abubakar
+                      - paragraph [ref=e6927]: 2026-05-00749
+                    - cell "Customer Payment" [ref=e6928]:
+                      - generic [ref=e6929]: Customer Payment
+                    - cell "Mr. Dahiru Abubakar PMT202601-60520" [ref=e6930]:
+                      - generic [ref=e6931]: Mr. Dahiru Abubakar
+                      - paragraph [ref=e6932]: PMT202601-60520
+                    - cell "+NGN 18,812.50" [ref=e6933]
+                    - cell "View source document" [ref=e8559]:
+                      - link "View source document" [ref=e8560] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/752dc716-1a27-4b07-9744-7c222bc59d81
+                        - text: View
+                  - row "3 31 Jan 2026 AR Payment PMT202601-60527 - Harry Shedrack Okharedia 2026-05-00756 Customer Payment Harry Shedrack Okharedia PMT202601-60527 +NGN 18,812.50 View source document" [ref=e8561]:
+                    - cell [ref=e8562]:
+                      - checkbox [ref=e8563]
+                    - cell "3" [ref=e6940]:
+                      - generic [ref=e6941]: "3"
+                    - cell "31 Jan 2026" [ref=e6942]
+                    - cell "AR Payment PMT202601-60527 - Harry Shedrack Okharedia 2026-05-00756" [ref=e6943]:
+                      - paragraph [ref=e6944]: AR Payment PMT202601-60527 - Harry Shedrack Okharedia
+                      - paragraph [ref=e6945]: 2026-05-00756
+                    - cell "Customer Payment" [ref=e6946]:
+                      - generic [ref=e6947]: Customer Payment
+                    - cell "Harry Shedrack Okharedia PMT202601-60527" [ref=e6948]:
+                      - generic [ref=e6949]: Harry Shedrack Okharedia
+                      - paragraph [ref=e6950]: PMT202601-60527
+                    - cell "+NGN 18,812.50" [ref=e6951]
+                    - cell "View source document" [ref=e8564]:
+                      - link "View source document" [ref=e8565] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/6b05389f-e73b-4071-a155-b1a9fab7e67c
+                        - text: View
+                  - row "3 31 Jan 2026 AR Payment PMT202601-60529 - Mr. Osagie Oyegun 2026-05-00758 Customer Payment Mr. Osagie Oyegun PMT202601-60529 +NGN 18,812.50 View source document" [ref=e8566]:
+                    - cell [ref=e8567]:
+                      - checkbox [ref=e8568]
+                    - cell "3" [ref=e6958]:
+                      - generic [ref=e6959]: "3"
+                    - cell "31 Jan 2026" [ref=e6960]
+                    - cell "AR Payment PMT202601-60529 - Mr. Osagie Oyegun 2026-05-00758" [ref=e6961]:
+                      - paragraph [ref=e6962]: AR Payment PMT202601-60529 - Mr. Osagie Oyegun
+                      - paragraph [ref=e6963]: 2026-05-00758
+                    - cell "Customer Payment" [ref=e6964]:
+                      - generic [ref=e6965]: Customer Payment
+                    - cell "Mr. Osagie Oyegun PMT202601-60529" [ref=e6966]:
+                      - generic [ref=e6967]: Mr. Osagie Oyegun
+                      - paragraph [ref=e6968]: PMT202601-60529
+                    - cell "+NGN 18,812.50" [ref=e6969]
+                    - cell "View source document" [ref=e8569]:
+                      - link "View source document" [ref=e8570] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/5a4dfe00-fd50-4519-8c07-b4567ea04437
+                        - text: View
+                  - row "3 31 Jan 2026 AR Payment PMT202601-60532 - Mr Elyas Tijani Cisse 2026-05-00761 Customer Payment Mr Elyas Tijani Cisse PMT202601-60532 +NGN 18,812.50 View source document" [ref=e8571]:
+                    - cell [ref=e8572]:
+                      - checkbox [ref=e8573]
+                    - cell "3" [ref=e6976]:
+                      - generic [ref=e6977]: "3"
+                    - cell "31 Jan 2026" [ref=e6978]
+                    - cell "AR Payment PMT202601-60532 - Mr Elyas Tijani Cisse 2026-05-00761" [ref=e6979]:
+                      - paragraph [ref=e6980]: AR Payment PMT202601-60532 - Mr Elyas Tijani Cisse
+                      - paragraph [ref=e6981]: 2026-05-00761
+                    - cell "Customer Payment" [ref=e6982]:
+                      - generic [ref=e6983]: Customer Payment
+                    - cell "Mr Elyas Tijani Cisse PMT202601-60532" [ref=e6984]:
+                      - generic [ref=e6985]: Mr Elyas Tijani Cisse
+                      - paragraph [ref=e6986]: PMT202601-60532
+                    - cell "+NGN 18,812.50" [ref=e6987]
+                    - cell "View source document" [ref=e8574]:
+                      - link "View source document" [ref=e8575] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/5a11909c-c330-4b75-8910-f232d700638f
+                        - text: View
+                  - row "3 31 Jan 2026 AR Payment PMT202601-60523 - Samson Goddy Samuel 2026-05-00752 Customer Payment Samson Goddy Samuel PMT202601-60523 +NGN 59,125.00 View source document" [ref=e8576]:
+                    - cell [ref=e8577]:
+                      - checkbox [ref=e8578]
+                    - cell "3" [ref=e6994]:
+                      - generic [ref=e6995]: "3"
+                    - cell "31 Jan 2026" [ref=e6996]
+                    - cell "AR Payment PMT202601-60523 - Samson Goddy Samuel 2026-05-00752" [ref=e6997]:
+                      - paragraph [ref=e6998]: AR Payment PMT202601-60523 - Samson Goddy Samuel
+                      - paragraph [ref=e6999]: 2026-05-00752
+                    - cell "Customer Payment" [ref=e7000]:
+                      - generic [ref=e7001]: Customer Payment
+                    - cell "Samson Goddy Samuel PMT202601-60523" [ref=e7002]:
+                      - generic [ref=e7003]: Samson Goddy Samuel
+                      - paragraph [ref=e7004]: PMT202601-60523
+                    - cell "+NGN 59,125.00" [ref=e7005]
+                    - cell "View source document" [ref=e8579]:
+                      - link "View source document" [ref=e8580] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/566d0e73-3780-4421-8f0e-d41ee09f72b0
+                        - text: View
+                  - row "3 31 Jan 2026 AR Payment PMT202601-60521 - NIX TECHNOLOGY(samuel) 2026-05-00750 Customer Payment NIX TECHNOLOGY(samuel) PMT202601-60521 +NGN 85,250.00 View source document" [ref=e8581]:
+                    - cell [ref=e8582]:
+                      - checkbox [ref=e8583]
+                    - cell "3" [ref=e7012]:
+                      - generic [ref=e7013]: "3"
+                    - cell "31 Jan 2026" [ref=e7014]
+                    - cell "AR Payment PMT202601-60521 - NIX TECHNOLOGY(samuel) 2026-05-00750" [ref=e7015]:
+                      - paragraph [ref=e7016]: AR Payment PMT202601-60521 - NIX TECHNOLOGY(samuel)
+                      - paragraph [ref=e7017]: 2026-05-00750
+                    - cell "Customer Payment" [ref=e7018]:
+                      - generic [ref=e7019]: Customer Payment
+                    - cell "NIX TECHNOLOGY(samuel) PMT202601-60521" [ref=e7020]:
+                      - generic [ref=e7021]: NIX TECHNOLOGY(samuel)
+                      - paragraph [ref=e7022]: PMT202601-60521
+                    - cell "+NGN 85,250.00" [ref=e7023]
+                    - cell "View source document" [ref=e8584]:
+                      - link "View source document" [ref=e8585] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/31463a50-15ec-4191-9a50-09c036303c94
+                        - text: View
+                  - row "3 31 Jan 2026 AR Payment PMT202601-60528 - Olaniyan kayode akorede 2026-05-00757 Customer Payment Olaniyan kayode akorede PMT202601-60528 +NGN 18,812.50 View source document" [ref=e8586]:
+                    - cell [ref=e8587]:
+                      - checkbox [ref=e8588]
+                    - cell "3" [ref=e7030]:
+                      - generic [ref=e7031]: "3"
+                    - cell "31 Jan 2026" [ref=e7032]
+                    - cell "AR Payment PMT202601-60528 - Olaniyan kayode akorede 2026-05-00757" [ref=e7033]:
+                      - paragraph [ref=e7034]: AR Payment PMT202601-60528 - Olaniyan kayode akorede
+                      - paragraph [ref=e7035]: 2026-05-00757
+                    - cell "Customer Payment" [ref=e7036]:
+                      - generic [ref=e7037]: Customer Payment
+                    - cell "Olaniyan kayode akorede PMT202601-60528" [ref=e7038]:
+                      - generic [ref=e7039]: Olaniyan kayode akorede
+                      - paragraph [ref=e7040]: PMT202601-60528
+                    - cell "+NGN 18,812.50" [ref=e7041]
+                    - cell "View source document" [ref=e8589]:
+                      - link "View source document" [ref=e8590] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/24514a0a-7011-443e-9a80-867f04bc76d9
+                        - text: View
+                  - row "3 31 Jan 2026 AR Payment PMT202601-60517 - Nyamida David 2026-05-00745 Customer Payment Nyamida David PMT202601-60517 +NGN 18,812.50 View source document" [ref=e8591]:
+                    - cell [ref=e8592]:
+                      - checkbox [ref=e8593]
+                    - cell "3" [ref=e7048]:
+                      - generic [ref=e7049]: "3"
+                    - cell "31 Jan 2026" [ref=e7050]
+                    - cell "AR Payment PMT202601-60517 - Nyamida David 2026-05-00745" [ref=e7051]:
+                      - paragraph [ref=e7052]: AR Payment PMT202601-60517 - Nyamida David
+                      - paragraph [ref=e7053]: 2026-05-00745
+                    - cell "Customer Payment" [ref=e7054]:
+                      - generic [ref=e7055]: Customer Payment
+                    - cell "Nyamida David PMT202601-60517" [ref=e7056]:
+                      - generic [ref=e7057]: Nyamida David
+                      - paragraph [ref=e7058]: PMT202601-60517
+                    - cell "+NGN 18,812.50" [ref=e7059]
+                    - cell "View source document" [ref=e8594]:
+                      - link "View source document" [ref=e8595] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/1bc4bb6d-7c52-41af-867e-63c5f425f8e9
+                        - text: View
+                  - row "3 30 Jan 2026 AR Payment PMT202601-60503 - Musbaudeen Idris Girei 2026-05-00726 Customer Payment Musbaudeen Idris Girei PMT202601-60503 +NGN 18,812.50 View source document" [ref=e8596]:
+                    - cell [ref=e8597]:
+                      - checkbox [ref=e8598]
+                    - cell "3" [ref=e7066]:
+                      - generic [ref=e7067]: "3"
+                    - cell "30 Jan 2026" [ref=e7068]
+                    - cell "AR Payment PMT202601-60503 - Musbaudeen Idris Girei 2026-05-00726" [ref=e7069]:
+                      - paragraph [ref=e7070]: AR Payment PMT202601-60503 - Musbaudeen Idris Girei
+                      - paragraph [ref=e7071]: 2026-05-00726
+                    - cell "Customer Payment" [ref=e7072]:
+                      - generic [ref=e7073]: Customer Payment
+                    - cell "Musbaudeen Idris Girei PMT202601-60503" [ref=e7074]:
+                      - generic [ref=e7075]: Musbaudeen Idris Girei
+                      - paragraph [ref=e7076]: PMT202601-60503
+                    - cell "+NGN 18,812.50" [ref=e7077]
+                    - cell "View source document" [ref=e8599]:
+                      - link "View source document" [ref=e8600] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/f47a914d-ddcf-49ef-bac4-7460639a3b5b
+                        - text: View
+                  - row "3 30 Jan 2026 AR Payment PMT202601-60498 - Vcit Wuse2c 2026-05-00723 Customer Payment Vcit Wuse2c PMT202601-60498 +NGN 18,812.50 View source document" [ref=e8601]:
+                    - cell [ref=e8602]:
+                      - checkbox [ref=e8603]
+                    - cell "3" [ref=e7084]:
+                      - generic [ref=e7085]: "3"
+                    - cell "30 Jan 2026" [ref=e7086]
+                    - cell "AR Payment PMT202601-60498 - Vcit Wuse2c 2026-05-00723" [ref=e7087]:
+                      - paragraph [ref=e7088]: AR Payment PMT202601-60498 - Vcit Wuse2c
+                      - paragraph [ref=e7089]: 2026-05-00723
+                    - cell "Customer Payment" [ref=e7090]:
+                      - generic [ref=e7091]: Customer Payment
+                    - cell "Vcit Wuse2c PMT202601-60498" [ref=e7092]:
+                      - generic [ref=e7093]: Vcit Wuse2c
+                      - paragraph [ref=e7094]: PMT202601-60498
+                    - cell "+NGN 18,812.50" [ref=e7095]
+                    - cell "View source document" [ref=e8604]:
+                      - link "View source document" [ref=e8605] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/ec8137c4-fff0-4301-a22d-4ca4fba38e82
+                        - text: View
+                  - row "3 30 Jan 2026 AR Payment PMT202601-60505 - Dreylinks Luna Apartment 2026-05-00728 Customer Payment Dreylinks Luna Apartment PMT202601-60505 +NGN 18,812.50 View source document" [ref=e8606]:
+                    - cell [ref=e8607]:
+                      - checkbox [ref=e8608]
+                    - cell "3" [ref=e7102]:
+                      - generic [ref=e7103]: "3"
+                    - cell "30 Jan 2026" [ref=e7104]
+                    - cell "AR Payment PMT202601-60505 - Dreylinks Luna Apartment 2026-05-00728" [ref=e7105]:
+                      - paragraph [ref=e7106]: AR Payment PMT202601-60505 - Dreylinks Luna Apartment
+                      - paragraph [ref=e7107]: 2026-05-00728
+                    - cell "Customer Payment" [ref=e7108]:
+                      - generic [ref=e7109]: Customer Payment
+                    - cell "Dreylinks Luna Apartment PMT202601-60505" [ref=e7110]:
+                      - generic [ref=e7111]: Dreylinks Luna Apartment
+                      - paragraph [ref=e7112]: PMT202601-60505
+                    - cell "+NGN 18,812.50" [ref=e7113]
+                    - cell "View source document" [ref=e8609]:
+                      - link "View source document" [ref=e8610] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/baef34d9-7e06-454a-afd3-3fe3d9b7a6bd
+                        - text: View
+                  - row "3 30 Jan 2026 AR Payment PMT202601-60509 - Mr Ibrahim Husseini 2026-05-00733 Customer Payment Mr Ibrahim Husseini PMT202601-60509 +NGN 18,812.50 View source document" [ref=e8611]:
+                    - cell [ref=e8612]:
+                      - checkbox [ref=e8613]
+                    - cell "3" [ref=e7120]:
+                      - generic [ref=e7121]: "3"
+                    - cell "30 Jan 2026" [ref=e7122]
+                    - cell "AR Payment PMT202601-60509 - Mr Ibrahim Husseini 2026-05-00733" [ref=e7123]:
+                      - paragraph [ref=e7124]: AR Payment PMT202601-60509 - Mr Ibrahim Husseini
+                      - paragraph [ref=e7125]: 2026-05-00733
+                    - cell "Customer Payment" [ref=e7126]:
+                      - generic [ref=e7127]: Customer Payment
+                    - cell "Mr Ibrahim Husseini PMT202601-60509" [ref=e7128]:
+                      - generic [ref=e7129]: Mr Ibrahim Husseini
+                      - paragraph [ref=e7130]: PMT202601-60509
+                    - cell "+NGN 18,812.50" [ref=e7131]
+                    - cell "View source document" [ref=e8614]:
+                      - link "View source document" [ref=e8615] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/abb850f2-7bc8-471d-bbed-5132ff2aef28
+                        - text: View
+                  - row "3 30 Jan 2026 AR Payment PMT202601-60506 - Pope Don Abu 2026-05-00730 Customer Payment Pope Don Abu PMT202601-60506 +NGN 18,812.50 View source document" [ref=e8616]:
+                    - cell [ref=e8617]:
+                      - checkbox [ref=e8618]
+                    - cell "3" [ref=e7138]:
+                      - generic [ref=e7139]: "3"
+                    - cell "30 Jan 2026" [ref=e7140]
+                    - cell "AR Payment PMT202601-60506 - Pope Don Abu 2026-05-00730" [ref=e7141]:
+                      - paragraph [ref=e7142]: AR Payment PMT202601-60506 - Pope Don Abu
+                      - paragraph [ref=e7143]: 2026-05-00730
+                    - cell "Customer Payment" [ref=e7144]:
+                      - generic [ref=e7145]: Customer Payment
+                    - cell "Pope Don Abu PMT202601-60506" [ref=e7146]:
+                      - generic [ref=e7147]: Pope Don Abu
+                      - paragraph [ref=e7148]: PMT202601-60506
+                    - cell "+NGN 18,812.50" [ref=e7149]
+                    - cell "View source document" [ref=e8619]:
+                      - link "View source document" [ref=e8620] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/a9829e3b-58c6-4b98-93d0-bde3e7e459d7
+                        - text: View
+                  - row "3 30 Jan 2026 AR Payment PMT202601-60504 - Valuemart Guzape 2026-05-00727 Customer Payment Valuemart Guzape PMT202601-60504 +NGN 86,000.00 View source document" [ref=e8621]:
+                    - cell [ref=e8622]:
+                      - checkbox [ref=e8623]
+                    - cell "3" [ref=e7156]:
+                      - generic [ref=e7157]: "3"
+                    - cell "30 Jan 2026" [ref=e7158]
+                    - cell "AR Payment PMT202601-60504 - Valuemart Guzape 2026-05-00727" [ref=e7159]:
+                      - paragraph [ref=e7160]: AR Payment PMT202601-60504 - Valuemart Guzape
+                      - paragraph [ref=e7161]: 2026-05-00727
+                    - cell "Customer Payment" [ref=e7162]:
+                      - generic [ref=e7163]: Customer Payment
+                    - cell "Valuemart Guzape PMT202601-60504" [ref=e7164]:
+                      - generic [ref=e7165]: Valuemart Guzape
+                      - paragraph [ref=e7166]: PMT202601-60504
+                    - cell "+NGN 86,000.00" [ref=e7167]
+                    - cell "View source document" [ref=e8624]:
+                      - link "View source document" [ref=e8625] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/9f9bd9e0-f56b-4675-a342-b8523c993875
+                        - text: View
+                  - row "3 30 Jan 2026 AR Payment PMT202601-60522 - Skypro Hamza Hamajo 2026-11-00647 Customer Payment Skypro Hamza Hamajo PMT202601-60522 +NGN 18,812.50 View source document" [ref=e8626]:
+                    - cell [ref=e8627]:
+                      - checkbox [ref=e8628]
+                    - cell "3" [ref=e7174]:
+                      - generic [ref=e7175]: "3"
+                    - cell "30 Jan 2026" [ref=e7176]
+                    - cell "AR Payment PMT202601-60522 - Skypro Hamza Hamajo 2026-11-00647" [ref=e7177]:
+                      - paragraph [ref=e7178]: AR Payment PMT202601-60522 - Skypro Hamza Hamajo
+                      - paragraph [ref=e7179]: 2026-11-00647
+                    - cell "Customer Payment" [ref=e7180]:
+                      - generic [ref=e7181]: Customer Payment
+                    - cell "Skypro Hamza Hamajo PMT202601-60522" [ref=e7182]:
+                      - generic [ref=e7183]: Skypro Hamza Hamajo
+                      - paragraph [ref=e7184]: PMT202601-60522
+                    - cell "+NGN 18,812.50" [ref=e7185]
+                    - cell "View source document" [ref=e8629]:
+                      - link "View source document" [ref=e8630] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/9f643cb2-bfb1-4707-9351-e1286243923c
+                        - text: View
+                  - row "3 30 Jan 2026 AR Payment PMT202601-60495 - Fidelis Ekeh 2026-05-00716 Customer Payment Fidelis Ekeh PMT202601-60495 +NGN 37,625.00 View source document" [ref=e8631]:
+                    - cell [ref=e8632]:
+                      - checkbox [ref=e8633]
+                    - cell "3" [ref=e7192]:
+                      - generic [ref=e7193]: "3"
+                    - cell "30 Jan 2026" [ref=e7194]
+                    - cell "AR Payment PMT202601-60495 - Fidelis Ekeh 2026-05-00716" [ref=e7195]:
+                      - paragraph [ref=e7196]: AR Payment PMT202601-60495 - Fidelis Ekeh
+                      - paragraph [ref=e7197]: 2026-05-00716
+                    - cell "Customer Payment" [ref=e7198]:
+                      - generic [ref=e7199]: Customer Payment
+                    - cell "Fidelis Ekeh PMT202601-60495" [ref=e7200]:
+                      - generic [ref=e7201]: Fidelis Ekeh
+                      - paragraph [ref=e7202]: PMT202601-60495
+                    - cell "+NGN 37,625.00" [ref=e7203]
+                    - cell "View source document" [ref=e8634]:
+                      - link "View source document" [ref=e8635] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/98472e92-c1f9-488e-a21c-b82958cc7ab1
+                        - text: View
+                  - row "3 30 Jan 2026 AR Payment PMT202601-60515 - Adebisi Frederick 2026-11-00639 Customer Payment Adebisi Frederick PMT202601-60515 +NGN 18,812.50 View source document" [ref=e8636]:
+                    - cell [ref=e8637]:
+                      - checkbox [ref=e8638]
+                    - cell "3" [ref=e7210]:
+                      - generic [ref=e7211]: "3"
+                    - cell "30 Jan 2026" [ref=e7212]
+                    - cell "AR Payment PMT202601-60515 - Adebisi Frederick 2026-11-00639" [ref=e7213]:
+                      - paragraph [ref=e7214]: AR Payment PMT202601-60515 - Adebisi Frederick
+                      - paragraph [ref=e7215]: 2026-11-00639
+                    - cell "Customer Payment" [ref=e7216]:
+                      - generic [ref=e7217]: Customer Payment
+                    - cell "Adebisi Frederick PMT202601-60515" [ref=e7218]:
+                      - generic [ref=e7219]: Adebisi Frederick
+                      - paragraph [ref=e7220]: PMT202601-60515
+                    - cell "+NGN 18,812.50" [ref=e7221]
+                    - cell "View source document" [ref=e8639]:
+                      - link "View source document" [ref=e8640] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/86b97e8b-3ed7-41fb-acc7-fc8dc2e64a76
+                        - text: View
+                  - row "3 30 Jan 2026 AR Payment PMT202601-60513 - Chijioke Obumneme 2026-05-00737 Customer Payment Chijioke Obumneme PMT202601-60513 +NGN 18,812.50 View source document" [ref=e8641]:
+                    - cell [ref=e8642]:
+                      - checkbox [ref=e8643]
+                    - cell "3" [ref=e7228]:
+                      - generic [ref=e7229]: "3"
+                    - cell "30 Jan 2026" [ref=e7230]
+                    - cell "AR Payment PMT202601-60513 - Chijioke Obumneme 2026-05-00737" [ref=e7231]:
+                      - paragraph [ref=e7232]: AR Payment PMT202601-60513 - Chijioke Obumneme
+                      - paragraph [ref=e7233]: 2026-05-00737
+                    - cell "Customer Payment" [ref=e7234]:
+                      - generic [ref=e7235]: Customer Payment
+                    - cell "Chijioke Obumneme PMT202601-60513" [ref=e7236]:
+                      - generic [ref=e7237]: Chijioke Obumneme
+                      - paragraph [ref=e7238]: PMT202601-60513
+                    - cell "+NGN 18,812.50" [ref=e7239]
+                    - cell "View source document" [ref=e8644]:
+                      - link "View source document" [ref=e8645] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/6c1c1d6d-e58f-4ea6-aff9-75eea3b8bd2f
+                        - text: View
+                  - row "3 30 Jan 2026 AR Payment PMT202601-60507 - Emeka Odumegwu - Ojukwu 2026-05-00731 Customer Payment Emeka Odumegwu - Ojukwu PMT202601-60507 +NGN 18,812.50 View source document" [ref=e8646]:
+                    - cell [ref=e8647]:
+                      - checkbox [ref=e8648]
+                    - cell "3" [ref=e7246]:
+                      - generic [ref=e7247]: "3"
+                    - cell "30 Jan 2026" [ref=e7248]
+                    - cell "AR Payment PMT202601-60507 - Emeka Odumegwu - Ojukwu 2026-05-00731" [ref=e7249]:
+                      - paragraph [ref=e7250]: AR Payment PMT202601-60507 - Emeka Odumegwu - Ojukwu
+                      - paragraph [ref=e7251]: 2026-05-00731
+                    - cell "Customer Payment" [ref=e7252]:
+                      - generic [ref=e7253]: Customer Payment
+                    - cell "Emeka Odumegwu - Ojukwu PMT202601-60507" [ref=e7254]:
+                      - generic [ref=e7255]: Emeka Odumegwu - Ojukwu
+                      - paragraph [ref=e7256]: PMT202601-60507
+                    - cell "+NGN 18,812.50" [ref=e7257]
+                    - cell "View source document" [ref=e8649]:
+                      - link "View source document" [ref=e8650] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/6c17b2b2-b490-4be0-aae7-96e8529bbbdd
+                        - text: View
+                  - row "3 30 Jan 2026 AR Payment PMT202601-60499 - Maryam Bello 2026-11-00621 Customer Payment Maryam Bello PMT202601-60499 +NGN 37,625.00 View source document" [ref=e8651]:
+                    - cell [ref=e8652]:
+                      - checkbox [ref=e8653]
+                    - cell "3" [ref=e7264]:
+                      - generic [ref=e7265]: "3"
+                    - cell "30 Jan 2026" [ref=e7266]
+                    - cell "AR Payment PMT202601-60499 - Maryam Bello 2026-11-00621" [ref=e7267]:
+                      - paragraph [ref=e7268]: AR Payment PMT202601-60499 - Maryam Bello
+                      - paragraph [ref=e7269]: 2026-11-00621
+                    - cell "Customer Payment" [ref=e7270]:
+                      - generic [ref=e7271]: Customer Payment
+                    - cell "Maryam Bello PMT202601-60499" [ref=e7272]:
+                      - generic [ref=e7273]: Maryam Bello
+                      - paragraph [ref=e7274]: PMT202601-60499
+                    - cell "+NGN 37,625.00" [ref=e7275]
+                    - cell "View source document" [ref=e8654]:
+                      - link "View source document" [ref=e8655] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/490fe3f5-b179-477a-8e2c-bc1cd50c5d6a
+                        - text: View
+                  - row "3 30 Jan 2026 AR Payment PMT202601-60497 - Faridah Ismaila Mohammed 2026-05-00718 Customer Payment Faridah Ismaila Mohammed PMT202601-60497 +NGN 37,625.00 View source document" [ref=e8656]:
+                    - cell [ref=e8657]:
+                      - checkbox [ref=e8658]
+                    - cell "3" [ref=e7282]:
+                      - generic [ref=e7283]: "3"
+                    - cell "30 Jan 2026" [ref=e7284]
+                    - cell "AR Payment PMT202601-60497 - Faridah Ismaila Mohammed 2026-05-00718" [ref=e7285]:
+                      - paragraph [ref=e7286]: AR Payment PMT202601-60497 - Faridah Ismaila Mohammed
+                      - paragraph [ref=e7287]: 2026-05-00718
+                    - cell "Customer Payment" [ref=e7288]:
+                      - generic [ref=e7289]: Customer Payment
+                    - cell "Faridah Ismaila Mohammed PMT202601-60497" [ref=e7290]:
+                      - generic [ref=e7291]: Faridah Ismaila Mohammed
+                      - paragraph [ref=e7292]: PMT202601-60497
+                    - cell "+NGN 37,625.00" [ref=e7293]
+                    - cell "View source document" [ref=e8659]:
+                      - link "View source document" [ref=e8660] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/3d0a0e74-35da-4e15-b8e7-3e9bc1715a29
+                        - text: View
+                  - row "3 30 Jan 2026 AR Payment PMT202601-60512 - Chijioke Ikpo (Gwarimpa) 2026-05-00736 Customer Payment Chijioke Ikpo (Gwarimpa) PMT202601-60512 +NGN 18,812.50 View source document" [ref=e8661]:
+                    - cell [ref=e8662]:
+                      - checkbox [ref=e8663]
+                    - cell "3" [ref=e7300]:
+                      - generic [ref=e7301]: "3"
+                    - cell "30 Jan 2026" [ref=e7302]
+                    - cell "AR Payment PMT202601-60512 - Chijioke Ikpo (Gwarimpa) 2026-05-00736" [ref=e7303]:
+                      - paragraph [ref=e7304]: AR Payment PMT202601-60512 - Chijioke Ikpo (Gwarimpa)
+                      - paragraph [ref=e7305]: 2026-05-00736
+                    - cell "Customer Payment" [ref=e7306]:
+                      - generic [ref=e7307]: Customer Payment
+                    - cell "Chijioke Ikpo (Gwarimpa) PMT202601-60512" [ref=e7308]:
+                      - generic [ref=e7309]: Chijioke Ikpo (Gwarimpa)
+                      - paragraph [ref=e7310]: PMT202601-60512
+                    - cell "+NGN 18,812.50" [ref=e7311]
+                    - cell "View source document" [ref=e8664]:
+                      - link "View source document" [ref=e8665] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/209b3f19-b6a4-4ef2-8be8-80ed3e9b144d
+                        - text: View
+                  - row "3 30 Jan 2026 AR Payment PMT202601-60511 - Unilag (CHSD) 2026-05-00735 Customer Payment Unilag (CHSD) PMT202601-60511 +NGN 56,437.50 View source document" [ref=e8666]:
+                    - cell [ref=e8667]:
+                      - checkbox [ref=e8668]
+                    - cell "3" [ref=e7318]:
+                      - generic [ref=e7319]: "3"
+                    - cell "30 Jan 2026" [ref=e7320]
+                    - cell "AR Payment PMT202601-60511 - Unilag (CHSD) 2026-05-00735" [ref=e7321]:
+                      - paragraph [ref=e7322]: AR Payment PMT202601-60511 - Unilag (CHSD)
+                      - paragraph [ref=e7323]: 2026-05-00735
+                    - cell "Customer Payment" [ref=e7324]:
+                      - generic [ref=e7325]: Customer Payment
+                    - cell "Unilag (CHSD) PMT202601-60511" [ref=e7326]:
+                      - generic [ref=e7327]: Unilag (CHSD)
+                      - paragraph [ref=e7328]: PMT202601-60511
+                    - cell "+NGN 56,437.50" [ref=e7329]
+                    - cell "View source document" [ref=e8669]:
+                      - link "View source document" [ref=e8670] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/1862f9a9-3a91-4fcc-977f-f93bea102ecb
+                        - text: View
+                  - row "3 30 Jan 2026 AR Payment PMT202601-60508 - Ohifeme Ejemai 2026-05-00732 Customer Payment Ohifeme Ejemai PMT202601-60508 +NGN 18,812.50 View source document" [ref=e8671]:
+                    - cell [ref=e8672]:
+                      - checkbox [ref=e8673]
+                    - cell "3" [ref=e7336]:
+                      - generic [ref=e7337]: "3"
+                    - cell "30 Jan 2026" [ref=e7338]
+                    - cell "AR Payment PMT202601-60508 - Ohifeme Ejemai 2026-05-00732" [ref=e7339]:
+                      - paragraph [ref=e7340]: AR Payment PMT202601-60508 - Ohifeme Ejemai
+                      - paragraph [ref=e7341]: 2026-05-00732
+                    - cell "Customer Payment" [ref=e7342]:
+                      - generic [ref=e7343]: Customer Payment
+                    - cell "Ohifeme Ejemai PMT202601-60508" [ref=e7344]:
+                      - generic [ref=e7345]: Ohifeme Ejemai
+                      - paragraph [ref=e7346]: PMT202601-60508
+                    - cell "+NGN 18,812.50" [ref=e7347]
+                    - cell "View source document" [ref=e8674]:
+                      - link "View source document" [ref=e8675] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/1810785e-fd71-4e20-8e33-896f8f685d52
+                        - text: View
+                  - row "3 30 Jan 2026 AR Payment PMT202601-60596 - STEVE EHIKHAMENOR 2026-11-00688 Customer Payment STEVE EHIKHAMENOR PMT202601-60596 +NGN 18,812.50 View source document" [ref=e8676]:
+                    - cell [ref=e8677]:
+                      - checkbox [ref=e8678]
+                    - cell "3" [ref=e7354]:
+                      - generic [ref=e7355]: "3"
+                    - cell "30 Jan 2026" [ref=e7356]
+                    - cell "AR Payment PMT202601-60596 - STEVE EHIKHAMENOR 2026-11-00688" [ref=e7357]:
+                      - paragraph [ref=e7358]: AR Payment PMT202601-60596 - STEVE EHIKHAMENOR
+                      - paragraph [ref=e7359]: 2026-11-00688
+                    - cell "Customer Payment" [ref=e7360]:
+                      - generic [ref=e7361]: Customer Payment
+                    - cell "STEVE EHIKHAMENOR PMT202601-60596" [ref=e7362]:
+                      - generic [ref=e7363]: STEVE EHIKHAMENOR
+                      - paragraph [ref=e7364]: PMT202601-60596
+                    - cell "+NGN 18,812.50" [ref=e7365]
+                    - cell "View source document" [ref=e8679]:
+                      - link "View source document" [ref=e8680] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/14c35d2a-9c63-4228-b1b5-cc59834e6afa
+                        - text: View
+                  - row "3 30 Jan 2026 AR Payment PMT202601-60510 - Jack Ogunewe 2026-05-00734 Customer Payment Jack Ogunewe PMT202601-60510 +NGN 18,812.50 View source document" [ref=e8681]:
+                    - cell [ref=e8682]:
+                      - checkbox [ref=e8683]
+                    - cell "3" [ref=e7372]:
+                      - generic [ref=e7373]: "3"
+                    - cell "30 Jan 2026" [ref=e7374]
+                    - cell "AR Payment PMT202601-60510 - Jack Ogunewe 2026-05-00734" [ref=e7375]:
+                      - paragraph [ref=e7376]: AR Payment PMT202601-60510 - Jack Ogunewe
+                      - paragraph [ref=e7377]: 2026-05-00734
+                    - cell "Customer Payment" [ref=e7378]:
+                      - generic [ref=e7379]: Customer Payment
+                    - cell "Jack Ogunewe PMT202601-60510" [ref=e7380]:
+                      - generic [ref=e7381]: Jack Ogunewe
+                      - paragraph [ref=e7382]: PMT202601-60510
+                    - cell "+NGN 18,812.50" [ref=e7383]
+                    - cell "View source document" [ref=e8684]:
+                      - link "View source document" [ref=e8685] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/06748b8e-7b04-48a1-855d-cc1bff46b4f7
+                        - text: View
+                  - row "3 30 Jan 2026 AR Payment PMT202601-60500 - Onyia stanley (Maitama) 2026-05-00724 Customer Payment Onyia stanley (Maitama) PMT202601-60500 +NGN 37,625.00 View source document" [ref=e8686]:
+                    - cell [ref=e8687]:
+                      - checkbox [ref=e8688]
+                    - cell "3" [ref=e7390]:
+                      - generic [ref=e7391]: "3"
+                    - cell "30 Jan 2026" [ref=e7392]
+                    - cell "AR Payment PMT202601-60500 - Onyia stanley (Maitama) 2026-05-00724" [ref=e7393]:
+                      - paragraph [ref=e7394]: AR Payment PMT202601-60500 - Onyia stanley (Maitama)
+                      - paragraph [ref=e7395]: 2026-05-00724
+                    - cell "Customer Payment" [ref=e7396]:
+                      - generic [ref=e7397]: Customer Payment
+                    - cell "Onyia stanley (Maitama) PMT202601-60500" [ref=e7398]:
+                      - generic [ref=e7399]: Onyia stanley (Maitama)
+                      - paragraph [ref=e7400]: PMT202601-60500
+                    - cell "+NGN 37,625.00" [ref=e7401]
+                    - cell "View source document" [ref=e8689]:
+                      - link "View source document" [ref=e8690] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/000b5394-f41f-4098-b570-57be649bbb0c
+                        - text: View
+                  - row "3 29 Jan 2026 AR Payment PMT202601-60494 - Adeniyi Johnson Opeyemi 2026-05-00713 Customer Payment Adeniyi Johnson Opeyemi PMT202601-60494 +NGN 18,812.50 View source document" [ref=e8691]:
+                    - cell [ref=e8692]:
+                      - checkbox [ref=e8693]
+                    - cell "3" [ref=e7408]:
+                      - generic [ref=e7409]: "3"
+                    - cell "29 Jan 2026" [ref=e7410]
+                    - cell "AR Payment PMT202601-60494 - Adeniyi Johnson Opeyemi 2026-05-00713" [ref=e7411]:
+                      - paragraph [ref=e7412]: AR Payment PMT202601-60494 - Adeniyi Johnson Opeyemi
+                      - paragraph [ref=e7413]: 2026-05-00713
+                    - cell "Customer Payment" [ref=e7414]:
+                      - generic [ref=e7415]: Customer Payment
+                    - cell "Adeniyi Johnson Opeyemi PMT202601-60494" [ref=e7416]:
+                      - generic [ref=e7417]: Adeniyi Johnson Opeyemi
+                      - paragraph [ref=e7418]: PMT202601-60494
+                    - cell "+NGN 18,812.50" [ref=e7419]
+                    - cell "View source document" [ref=e8694]:
+                      - link "View source document" [ref=e8695] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/0d5ed4fc-055e-4cf1-b2ba-abeddc7f9118
+                        - text: View
+                  - row "3 29 Jan 2026 AR Payment PMT202601-60482 - Prodev fresh stores (Games village branch) 2026-05-00700 Customer Payment Prodev fresh stores (Games village branch) PMT202601-60482 +NGN 18,812.50 View source document" [ref=e8696]:
+                    - cell [ref=e8697]:
+                      - checkbox [ref=e8698]
+                    - cell "3" [ref=e7426]:
+                      - generic [ref=e7427]: "3"
+                    - cell "29 Jan 2026" [ref=e7428]
+                    - cell "AR Payment PMT202601-60482 - Prodev fresh stores (Games village branch) 2026-05-00700" [ref=e7429]:
+                      - paragraph [ref=e7430]: AR Payment PMT202601-60482 - Prodev fresh stores (Games village branch)
+                      - paragraph [ref=e7431]: 2026-05-00700
+                    - cell "Customer Payment" [ref=e7432]:
+                      - generic [ref=e7433]: Customer Payment
+                    - cell "Prodev fresh stores (Games village branch) PMT202601-60482" [ref=e7434]:
+                      - generic [ref=e7435]: Prodev fresh stores (Games village branch)
+                      - paragraph [ref=e7436]: PMT202601-60482
+                    - cell "+NGN 18,812.50" [ref=e7437]
+                    - cell "View source document" [ref=e8699]:
+                      - link "View source document" [ref=e8700] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/c91c5587-8341-4147-8c18-caf9591725ed
+                        - text: View
+                  - row "3 29 Jan 2026 AR Payment PMT202601-60487 - Vivian Mustapha 2026-05-00705 Customer Payment Vivian Mustapha PMT202601-60487 +NGN 18,812.50 View source document" [ref=e8701]:
+                    - cell [ref=e8702]:
+                      - checkbox [ref=e8703]
+                    - cell "3" [ref=e7444]:
+                      - generic [ref=e7445]: "3"
+                    - cell "29 Jan 2026" [ref=e7446]
+                    - cell "AR Payment PMT202601-60487 - Vivian Mustapha 2026-05-00705" [ref=e7447]:
+                      - paragraph [ref=e7448]: AR Payment PMT202601-60487 - Vivian Mustapha
+                      - paragraph [ref=e7449]: 2026-05-00705
+                    - cell "Customer Payment" [ref=e7450]:
+                      - generic [ref=e7451]: Customer Payment
+                    - cell "Vivian Mustapha PMT202601-60487" [ref=e7452]:
+                      - generic [ref=e7453]: Vivian Mustapha
+                      - paragraph [ref=e7454]: PMT202601-60487
+                    - cell "+NGN 18,812.50" [ref=e7455]
+                    - cell "View source document" [ref=e8704]:
+                      - link "View source document" [ref=e8705] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/0b9eb23c-4056-4371-b2f8-9266a3c7d1aa
+                        - text: View
+                  - row "3 29 Jan 2026 AR Payment PMT202601-60481 - Prodev Fresh Store Abacha Barracks Branch 2026-05-00699 Customer Payment Prodev Fresh Store Abacha Barracks Branch PMT202601-60481 +NGN 18,812.50 View source document" [ref=e8706]:
+                    - cell [ref=e8707]:
+                      - checkbox [ref=e8708]
+                    - cell "3" [ref=e7462]:
+                      - generic [ref=e7463]: "3"
+                    - cell "29 Jan 2026" [ref=e7464]
+                    - cell "AR Payment PMT202601-60481 - Prodev Fresh Store Abacha Barracks Branch 2026-05-00699" [ref=e7465]:
+                      - paragraph [ref=e7466]: AR Payment PMT202601-60481 - Prodev Fresh Store Abacha Barracks Branch
+                      - paragraph [ref=e7467]: 2026-05-00699
+                    - cell "Customer Payment" [ref=e7468]:
+                      - generic [ref=e7469]: Customer Payment
+                    - cell "Prodev Fresh Store Abacha Barracks Branch PMT202601-60481" [ref=e7470]:
+                      - generic [ref=e7471]: Prodev Fresh Store Abacha Barracks Branch
+                      - paragraph [ref=e7472]: PMT202601-60481
+                    - cell "+NGN 18,812.50" [ref=e7473]
+                    - cell "View source document" [ref=e8709]:
+                      - link "View source document" [ref=e8710] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/cc63c3c7-1bd8-40b1-b311-ee187ddf9a48
+                        - text: View
+                  - row "3 29 Jan 2026 AR Payment PMT202601-60472 - ZIBATECH CHERRY MOON 2 2026-05-00692 Customer Payment ZIBATECH CHERRY MOON 2 PMT202601-60472 +NGN 18,812.50 View source document" [ref=e8711]:
+                    - cell [ref=e8712]:
+                      - checkbox [ref=e8713]
+                    - cell "3" [ref=e7480]:
+                      - generic [ref=e7481]: "3"
+                    - cell "29 Jan 2026" [ref=e7482]
+                    - cell "AR Payment PMT202601-60472 - ZIBATECH CHERRY MOON 2 2026-05-00692" [ref=e7483]:
+                      - paragraph [ref=e7484]: AR Payment PMT202601-60472 - ZIBATECH CHERRY MOON 2
+                      - paragraph [ref=e7485]: 2026-05-00692
+                    - cell "Customer Payment" [ref=e7486]:
+                      - generic [ref=e7487]: Customer Payment
+                    - cell "ZIBATECH CHERRY MOON 2 PMT202601-60472" [ref=e7488]:
+                      - generic [ref=e7489]: ZIBATECH CHERRY MOON 2
+                      - paragraph [ref=e7490]: PMT202601-60472
+                    - cell "+NGN 18,812.50" [ref=e7491]
+                    - cell "View source document" [ref=e8714]:
+                      - link "View source document" [ref=e8715] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/d28b5778-68fd-4ae0-ae22-fd444f626cee
+                        - text: View
+                  - row "3 29 Jan 2026 AR Payment PMT202601-60489 - Yanang R. Silas-Bossan 2026-11-00609 Customer Payment Yanang R. Silas-Bossan PMT202601-60489 +NGN 18,812.50 View source document" [ref=e8716]:
+                    - cell [ref=e8717]:
+                      - checkbox [ref=e8718]
+                    - cell "3" [ref=e7498]:
+                      - generic [ref=e7499]: "3"
+                    - cell "29 Jan 2026" [ref=e7500]
+                    - cell "AR Payment PMT202601-60489 - Yanang R. Silas-Bossan 2026-11-00609" [ref=e7501]:
+                      - paragraph [ref=e7502]: AR Payment PMT202601-60489 - Yanang R. Silas-Bossan
+                      - paragraph [ref=e7503]: 2026-11-00609
+                    - cell "Customer Payment" [ref=e7504]:
+                      - generic [ref=e7505]: Customer Payment
+                    - cell "Yanang R. Silas-Bossan PMT202601-60489" [ref=e7506]:
+                      - generic [ref=e7507]: Yanang R. Silas-Bossan
+                      - paragraph [ref=e7508]: PMT202601-60489
+                    - cell "+NGN 18,812.50" [ref=e7509]
+                    - cell "View source document" [ref=e8719]:
+                      - link "View source document" [ref=e8720] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/edadbd50-a85d-4df3-94e6-20cf7e289e03
+                        - text: View
+                  - row "3 29 Jan 2026 AR Payment PMT202601-60485 - Dr Folajuwon B Ayeni 2026-05-00703 Customer Payment Dr Folajuwon B Ayeni PMT202601-60485 +NGN 18,812.50 View source document" [ref=e8721]:
+                    - cell [ref=e8722]:
+                      - checkbox [ref=e8723]
+                    - cell "3" [ref=e7516]:
+                      - generic [ref=e7517]: "3"
+                    - cell "29 Jan 2026" [ref=e7518]
+                    - cell "AR Payment PMT202601-60485 - Dr Folajuwon B Ayeni 2026-05-00703" [ref=e7519]:
+                      - paragraph [ref=e7520]: AR Payment PMT202601-60485 - Dr Folajuwon B Ayeni
+                      - paragraph [ref=e7521]: 2026-05-00703
+                    - cell "Customer Payment" [ref=e7522]:
+                      - generic [ref=e7523]: Customer Payment
+                    - cell "Dr Folajuwon B Ayeni PMT202601-60485" [ref=e7524]:
+                      - generic [ref=e7525]: Dr Folajuwon B Ayeni
+                      - paragraph [ref=e7526]: PMT202601-60485
+                    - cell "+NGN 18,812.50" [ref=e7527]
+                    - cell "View source document" [ref=e8724]:
+                      - link "View source document" [ref=e8725] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/f6e28abd-70e6-4a59-b0ee-a0f240718a2c
+                        - text: View
+                  - row "3 29 Jan 2026 AR Payment PMT202601-60490 - Muhammad Salisu Aminu 2026-05-00707 Customer Payment Muhammad Salisu Aminu PMT202601-60490 +NGN 18,812.50 View source document" [ref=e8726]:
+                    - cell [ref=e8727]:
+                      - checkbox [ref=e8728]
+                    - cell "3" [ref=e7534]:
+                      - generic [ref=e7535]: "3"
+                    - cell "29 Jan 2026" [ref=e7536]
+                    - cell "AR Payment PMT202601-60490 - Muhammad Salisu Aminu 2026-05-00707" [ref=e7537]:
+                      - paragraph [ref=e7538]: AR Payment PMT202601-60490 - Muhammad Salisu Aminu
+                      - paragraph [ref=e7539]: 2026-05-00707
+                    - cell "Customer Payment" [ref=e7540]:
+                      - generic [ref=e7541]: Customer Payment
+                    - cell "Muhammad Salisu Aminu PMT202601-60490" [ref=e7542]:
+                      - generic [ref=e7543]: Muhammad Salisu Aminu
+                      - paragraph [ref=e7544]: PMT202601-60490
+                    - cell "+NGN 18,812.50" [ref=e7545]
+                    - cell "View source document" [ref=e8729]:
+                      - link "View source document" [ref=e8730] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/a6bf6feb-e43b-4021-84bf-c16f4ec478b5
+                        - text: View
+                  - row "3 29 Jan 2026 AR Payment PMT202601-60491 - Mohammed Wabi Ibrahim Alhussaini 2026-05-00709 Customer Payment Mohammed Wabi Ibrahim Alhussaini PMT202601-60491 +NGN 18,812.50 View source document" [ref=e8731]:
+                    - cell [ref=e8732]:
+                      - checkbox [ref=e8733]
+                    - cell "3" [ref=e7552]:
+                      - generic [ref=e7553]: "3"
+                    - cell "29 Jan 2026" [ref=e7554]
+                    - cell "AR Payment PMT202601-60491 - Mohammed Wabi Ibrahim Alhussaini 2026-05-00709" [ref=e7555]:
+                      - paragraph [ref=e7556]: AR Payment PMT202601-60491 - Mohammed Wabi Ibrahim Alhussaini
+                      - paragraph [ref=e7557]: 2026-05-00709
+                    - cell "Customer Payment" [ref=e7558]:
+                      - generic [ref=e7559]: Customer Payment
+                    - cell "Mohammed Wabi Ibrahim Alhussaini PMT202601-60491" [ref=e7560]:
+                      - generic [ref=e7561]: Mohammed Wabi Ibrahim Alhussaini
+                      - paragraph [ref=e7562]: PMT202601-60491
+                    - cell "+NGN 18,812.50" [ref=e7563]
+                    - cell "View source document" [ref=e8734]:
+                      - link "View source document" [ref=e8735] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/75c9103e-dc1a-4d7c-a56a-ce6a4ef728f0
+                        - text: View
+                  - row "3 29 Jan 2026 AR Payment PMT202601-60484 - Udeh Joseph Izuchukwu 2026-05-00702 Customer Payment Udeh Joseph Izuchukwu PMT202601-60484 +NGN 18,812.50 View source document" [ref=e8736]:
+                    - cell [ref=e8737]:
+                      - checkbox [ref=e8738]
+                    - cell "3" [ref=e7570]:
+                      - generic [ref=e7571]: "3"
+                    - cell "29 Jan 2026" [ref=e7572]
+                    - cell "AR Payment PMT202601-60484 - Udeh Joseph Izuchukwu 2026-05-00702" [ref=e7573]:
+                      - paragraph [ref=e7574]: AR Payment PMT202601-60484 - Udeh Joseph Izuchukwu
+                      - paragraph [ref=e7575]: 2026-05-00702
+                    - cell "Customer Payment" [ref=e7576]:
+                      - generic [ref=e7577]: Customer Payment
+                    - cell "Udeh Joseph Izuchukwu PMT202601-60484" [ref=e7578]:
+                      - generic [ref=e7579]: Udeh Joseph Izuchukwu
+                      - paragraph [ref=e7580]: PMT202601-60484
+                    - cell "+NGN 18,812.50" [ref=e7581]
+                    - cell "View source document" [ref=e8739]:
+                      - link "View source document" [ref=e8740] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/6c429664-7191-4110-b07c-3d3b92df024c
+                        - text: View
+                  - row "3 29 Jan 2026 AR Payment PMT202601-60486 - Utitofon Ikopbo 2026-05-00704 Customer Payment Utitofon Ikopbo PMT202601-60486 +NGN 18,812.50 View source document" [ref=e8741]:
+                    - cell [ref=e8742]:
+                      - checkbox [ref=e8743]
+                    - cell "3" [ref=e7588]:
+                      - generic [ref=e7589]: "3"
+                    - cell "29 Jan 2026" [ref=e7590]
+                    - cell "AR Payment PMT202601-60486 - Utitofon Ikopbo 2026-05-00704" [ref=e7591]:
+                      - paragraph [ref=e7592]: AR Payment PMT202601-60486 - Utitofon Ikopbo
+                      - paragraph [ref=e7593]: 2026-05-00704
+                    - cell "Customer Payment" [ref=e7594]:
+                      - generic [ref=e7595]: Customer Payment
+                    - cell "Utitofon Ikopbo PMT202601-60486" [ref=e7596]:
+                      - generic [ref=e7597]: Utitofon Ikopbo
+                      - paragraph [ref=e7598]: PMT202601-60486
+                    - cell "+NGN 18,812.50" [ref=e7599]
+                    - cell "View source document" [ref=e8744]:
+                      - link "View source document" [ref=e8745] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/68c5ab41-5eb6-4cc6-92d3-39f06fcfad67
+                        - text: View
+                  - row "3 29 Jan 2026 AR Payment PMT202601-60492 - Adefolawe Fashawe 2026-05-00711 Customer Payment Adefolawe Fashawe PMT202601-60492 +NGN 56,437.50 View source document" [ref=e8746]:
+                    - cell [ref=e8747]:
+                      - checkbox [ref=e8748]
+                    - cell "3" [ref=e7606]:
+                      - generic [ref=e7607]: "3"
+                    - cell "29 Jan 2026" [ref=e7608]
+                    - cell "AR Payment PMT202601-60492 - Adefolawe Fashawe 2026-05-00711" [ref=e7609]:
+                      - paragraph [ref=e7610]: AR Payment PMT202601-60492 - Adefolawe Fashawe
+                      - paragraph [ref=e7611]: 2026-05-00711
+                    - cell "Customer Payment" [ref=e7612]:
+                      - generic [ref=e7613]: Customer Payment
+                    - cell "Adefolawe Fashawe PMT202601-60492" [ref=e7614]:
+                      - generic [ref=e7615]: Adefolawe Fashawe
+                      - paragraph [ref=e7616]: PMT202601-60492
+                    - cell "+NGN 56,437.50" [ref=e7617]
+                    - cell "View source document" [ref=e8749]:
+                      - link "View source document" [ref=e8750] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/60c5bc66-6fde-4a2b-a8e8-338e5fa5a73c
+                        - text: View
+                  - row "3 29 Jan 2026 AR Payment PMT202601-60493 - Chidozie Amakwe 2026-05-00712 Customer Payment Chidozie Amakwe PMT202601-60493 +NGN 18,812.50 View source document" [ref=e8751]:
+                    - cell [ref=e8752]:
+                      - checkbox [ref=e8753]
+                    - cell "3" [ref=e7624]:
+                      - generic [ref=e7625]: "3"
+                    - cell "29 Jan 2026" [ref=e7626]
+                    - cell "AR Payment PMT202601-60493 - Chidozie Amakwe 2026-05-00712" [ref=e7627]:
+                      - paragraph [ref=e7628]: AR Payment PMT202601-60493 - Chidozie Amakwe
+                      - paragraph [ref=e7629]: 2026-05-00712
+                    - cell "Customer Payment" [ref=e7630]:
+                      - generic [ref=e7631]: Customer Payment
+                    - cell "Chidozie Amakwe PMT202601-60493" [ref=e7632]:
+                      - generic [ref=e7633]: Chidozie Amakwe
+                      - paragraph [ref=e7634]: PMT202601-60493
+                    - cell "+NGN 18,812.50" [ref=e7635]
+                    - cell "View source document" [ref=e8754]:
+                      - link "View source document" [ref=e8755] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/5ff68f22-894a-44d5-817a-f2a543ea83ca
+                        - text: View
+                  - row "3 29 Jan 2026 AR Payment PMT202601-60479 - Skypro Ngozi Jennifer 2026-05-00698 Customer Payment Skypro Ngozi Jennifer PMT202601-60479 +NGN 18,812.50 View source document" [ref=e8756]:
+                    - cell [ref=e8757]:
+                      - checkbox [ref=e8758]
+                    - cell "3" [ref=e7642]:
+                      - generic [ref=e7643]: "3"
+                    - cell "29 Jan 2026" [ref=e7644]
+                    - cell "AR Payment PMT202601-60479 - Skypro Ngozi Jennifer 2026-05-00698" [ref=e7645]:
+                      - paragraph [ref=e7646]: AR Payment PMT202601-60479 - Skypro Ngozi Jennifer
+                      - paragraph [ref=e7647]: 2026-05-00698
+                    - cell "Customer Payment" [ref=e7648]:
+                      - generic [ref=e7649]: Customer Payment
+                    - cell "Skypro Ngozi Jennifer PMT202601-60479" [ref=e7650]:
+                      - generic [ref=e7651]: Skypro Ngozi Jennifer
+                      - paragraph [ref=e7652]: PMT202601-60479
+                    - cell "+NGN 18,812.50" [ref=e7653]
+                    - cell "View source document" [ref=e8759]:
+                      - link "View source document" [ref=e8760] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/a786f455-7bdd-4db2-b7bb-84223c508a8a
+                        - text: View
+                  - row "3 29 Jan 2026 AR Payment PMT202601-60471 - Mr Iro Garba Gasau 2026-05-00691 Customer Payment Mr Iro Garba Gasau PMT202601-60471 +NGN 18,812.50 View source document" [ref=e8761]:
+                    - cell [ref=e8762]:
+                      - checkbox [ref=e8763]
+                    - cell "3" [ref=e7660]:
+                      - generic [ref=e7661]: "3"
+                    - cell "29 Jan 2026" [ref=e7662]
+                    - cell "AR Payment PMT202601-60471 - Mr Iro Garba Gasau 2026-05-00691" [ref=e7663]:
+                      - paragraph [ref=e7664]: AR Payment PMT202601-60471 - Mr Iro Garba Gasau
+                      - paragraph [ref=e7665]: 2026-05-00691
+                    - cell "Customer Payment" [ref=e7666]:
+                      - generic [ref=e7667]: Customer Payment
+                    - cell "Mr Iro Garba Gasau PMT202601-60471" [ref=e7668]:
+                      - generic [ref=e7669]: Mr Iro Garba Gasau
+                      - paragraph [ref=e7670]: PMT202601-60471
+                    - cell "+NGN 18,812.50" [ref=e7671]
+                    - cell "View source document" [ref=e8764]:
+                      - link "View source document" [ref=e8765] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/5c86808a-8d39-444f-8081-e325cb183c51
+                        - text: View
+                  - row "3 29 Jan 2026 AR Payment PMT202601-60488 - Eliyatser Ben Eseku 2026-05-00706 Customer Payment Eliyatser Ben Eseku PMT202601-60488 +NGN 37,625.00 View source document" [ref=e8766]:
+                    - cell [ref=e8767]:
+                      - checkbox [ref=e8768]
+                    - cell "3" [ref=e7678]:
+                      - generic [ref=e7679]: "3"
+                    - cell "29 Jan 2026" [ref=e7680]
+                    - cell "AR Payment PMT202601-60488 - Eliyatser Ben Eseku 2026-05-00706" [ref=e7681]:
+                      - paragraph [ref=e7682]: AR Payment PMT202601-60488 - Eliyatser Ben Eseku
+                      - paragraph [ref=e7683]: 2026-05-00706
+                    - cell "Customer Payment" [ref=e7684]:
+                      - generic [ref=e7685]: Customer Payment
+                    - cell "Eliyatser Ben Eseku PMT202601-60488" [ref=e7686]:
+                      - generic [ref=e7687]: Eliyatser Ben Eseku
+                      - paragraph [ref=e7688]: PMT202601-60488
+                    - cell "+NGN 37,625.00" [ref=e7689]
+                    - cell "View source document" [ref=e8769]:
+                      - link "View source document" [ref=e8770] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/533f826c-a4f7-469a-9f9b-dfc0b336226e
+                        - text: View
+                  - row "3 29 Jan 2026 AR Payment PMT202601-60475 - Clarence Onosedeba Aigbuza 2026-05-00696 Customer Payment Clarence Onosedeba Aigbuza PMT202601-60475 +NGN 37,625.00 View source document" [ref=e8771]:
+                    - cell [ref=e8772]:
+                      - checkbox [ref=e8773]
+                    - cell "3" [ref=e7696]:
+                      - generic [ref=e7697]: "3"
+                    - cell "29 Jan 2026" [ref=e7698]
+                    - cell "AR Payment PMT202601-60475 - Clarence Onosedeba Aigbuza 2026-05-00696" [ref=e7699]:
+                      - paragraph [ref=e7700]: AR Payment PMT202601-60475 - Clarence Onosedeba Aigbuza
+                      - paragraph [ref=e7701]: 2026-05-00696
+                    - cell "Customer Payment" [ref=e7702]:
+                      - generic [ref=e7703]: Customer Payment
+                    - cell "Clarence Onosedeba Aigbuza PMT202601-60475" [ref=e7704]:
+                      - generic [ref=e7705]: Clarence Onosedeba Aigbuza
+                      - paragraph [ref=e7706]: PMT202601-60475
+                    - cell "+NGN 37,625.00" [ref=e7707]
+                    - cell "View source document" [ref=e8774]:
+                      - link "View source document" [ref=e8775] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/3a95a720-c331-4a74-b1c5-afb91f370b41
+                        - text: View
+                  - row "3 29 Jan 2026 AR Payment PMT202601-60473 - Mr Arome Adaji 2026-05-00693 Customer Payment Mr Arome Adaji PMT202601-60473 +NGN 18,812.50 View source document" [ref=e8776]:
+                    - cell [ref=e8777]:
+                      - checkbox [ref=e8778]
+                    - cell "3" [ref=e7714]:
+                      - generic [ref=e7715]: "3"
+                    - cell "29 Jan 2026" [ref=e7716]
+                    - cell "AR Payment PMT202601-60473 - Mr Arome Adaji 2026-05-00693" [ref=e7717]:
+                      - paragraph [ref=e7718]: AR Payment PMT202601-60473 - Mr Arome Adaji
+                      - paragraph [ref=e7719]: 2026-05-00693
+                    - cell "Customer Payment" [ref=e7720]:
+                      - generic [ref=e7721]: Customer Payment
+                    - cell "Mr Arome Adaji PMT202601-60473" [ref=e7722]:
+                      - generic [ref=e7723]: Mr Arome Adaji
+                      - paragraph [ref=e7724]: PMT202601-60473
+                    - cell "+NGN 18,812.50" [ref=e7725]
+                    - cell "View source document" [ref=e8779]:
+                      - link "View source document" [ref=e8780] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/36d2615c-42f7-4b54-b71a-dad8110f5e45
+                        - text: View
+                  - row "3 29 Jan 2026 AR Payment PMT202601-60483 - Prodev fresh stores (69Road Gwarinpa branch) 2026-05-00701 Customer Payment Prodev fresh stores (69Road Gwarinpa branch) PMT202601-60483 +NGN 18,812.50 View source document" [ref=e8781]:
+                    - cell [ref=e8782]:
+                      - checkbox [ref=e8783]
+                    - cell "3" [ref=e7732]:
+                      - generic [ref=e7733]: "3"
+                    - cell "29 Jan 2026" [ref=e7734]
+                    - cell "AR Payment PMT202601-60483 - Prodev fresh stores (69Road Gwarinpa branch) 2026-05-00701" [ref=e7735]:
+                      - paragraph [ref=e7736]: AR Payment PMT202601-60483 - Prodev fresh stores (69Road Gwarinpa branch)
+                      - paragraph [ref=e7737]: 2026-05-00701
+                    - cell "Customer Payment" [ref=e7738]:
+                      - generic [ref=e7739]: Customer Payment
+                    - cell "Prodev fresh stores (69Road Gwarinpa branch) PMT202601-60483" [ref=e7740]:
+                      - generic [ref=e7741]: Prodev fresh stores (69Road Gwarinpa branch)
+                      - paragraph [ref=e7742]: PMT202601-60483
+                    - cell "+NGN 18,812.50" [ref=e7743]
+                    - cell "View source document" [ref=e8784]:
+                      - link "View source document" [ref=e8785] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/2a0185cb-20d0-49d3-a2f0-711a0379a892
+                        - text: View
+                  - row "3 29 Jan 2026 AR Payment PMT202601-60477 - Books Embassy 2026-05-00697 Customer Payment Books Embassy PMT202601-60477 +NGN 75,250.00 View source document" [ref=e8786]:
+                    - cell [ref=e8787]:
+                      - checkbox [ref=e8788]
+                    - cell "3" [ref=e7750]:
+                      - generic [ref=e7751]: "3"
+                    - cell "29 Jan 2026" [ref=e7752]
+                    - cell "AR Payment PMT202601-60477 - Books Embassy 2026-05-00697" [ref=e7753]:
+                      - paragraph [ref=e7754]: AR Payment PMT202601-60477 - Books Embassy
+                      - paragraph [ref=e7755]: 2026-05-00697
+                    - cell "Customer Payment" [ref=e7756]:
+                      - generic [ref=e7757]: Customer Payment
+                    - cell "Books Embassy PMT202601-60477" [ref=e7758]:
+                      - generic [ref=e7759]: Books Embassy
+                      - paragraph [ref=e7760]: PMT202601-60477
+                    - cell "+NGN 75,250.00" [ref=e7761]
+                    - cell "View source document" [ref=e8789]:
+                      - link "View source document" [ref=e8790] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/26e37c3f-8963-4b2c-baa1-03c470712b7c
+                        - text: View
+                  - row "3 28 Jan 2026 AR Payment PMT202601-60468 - Ugochukwu ajayi 2026-05-00689 Customer Payment Ugochukwu ajayi PMT202601-60468 +NGN 18,812.50 View source document" [ref=e8791]:
+                    - cell [ref=e8792]:
+                      - checkbox [ref=e8793]
+                    - cell "3" [ref=e7768]:
+                      - generic [ref=e7769]: "3"
+                    - cell "28 Jan 2026" [ref=e7770]
+                    - cell "AR Payment PMT202601-60468 - Ugochukwu ajayi 2026-05-00689" [ref=e7771]:
+                      - paragraph [ref=e7772]: AR Payment PMT202601-60468 - Ugochukwu ajayi
+                      - paragraph [ref=e7773]: 2026-05-00689
+                    - cell "Customer Payment" [ref=e7774]:
+                      - generic [ref=e7775]: Customer Payment
+                    - cell "Ugochukwu ajayi PMT202601-60468" [ref=e7776]:
+                      - generic [ref=e7777]: Ugochukwu ajayi
+                      - paragraph [ref=e7778]: PMT202601-60468
+                    - cell "+NGN 18,812.50" [ref=e7779]
+                    - cell "View source document" [ref=e8794]:
+                      - link "View source document" [ref=e8795] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/0aa69552-4bd6-440c-a8df-1cbb7610d94d
+                        - text: View
+                  - row "3 28 Jan 2026 AR Payment PMT202601-60476 - Adeniyi Fagbemi 2026-11-00595 Customer Payment Adeniyi Fagbemi PMT202601-60476 +NGN 18,812.50 View source document" [ref=e8796]:
+                    - cell [ref=e8797]:
+                      - checkbox [ref=e8798]
+                    - cell "3" [ref=e7786]:
+                      - generic [ref=e7787]: "3"
+                    - cell "28 Jan 2026" [ref=e7788]
+                    - cell "AR Payment PMT202601-60476 - Adeniyi Fagbemi 2026-11-00595" [ref=e7789]:
+                      - paragraph [ref=e7790]: AR Payment PMT202601-60476 - Adeniyi Fagbemi
+                      - paragraph [ref=e7791]: 2026-11-00595
+                    - cell "Customer Payment" [ref=e7792]:
+                      - generic [ref=e7793]: Customer Payment
+                    - cell "Adeniyi Fagbemi PMT202601-60476" [ref=e7794]:
+                      - generic [ref=e7795]: Adeniyi Fagbemi
+                      - paragraph [ref=e7796]: PMT202601-60476
+                    - cell "+NGN 18,812.50" [ref=e7797]
+                    - cell "View source document" [ref=e8799]:
+                      - link "View source document" [ref=e8800] [cursor=pointer]:
+                        - /url: /finance/ar/receipts/0d47959e-0c94-4052-a506-6c5d5f81fce0
+                        - text: View
+              - generic [ref=e4155]:
+                - generic [ref=e4156]: Showing 200 transactions
+                - button "Cancel" [ref=e4157] [cursor=pointer]
+  - status

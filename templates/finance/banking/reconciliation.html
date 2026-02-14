@@ -83,7 +83,34 @@
     selectedStatements: [],
     selectedGLs: [],
     suggestions: {{ match_suggestions | tojson }},
+    statementAmounts: {{ statement_line_amounts | default({}) | tojson }},
+    glAmounts: {{ gl_line_amounts | default({}) | tojson }},
+    mismatchThreshold: 0.01,
     csrfToken() { return document.querySelector("[name=csrf_token]")?.value || ""; },
+    _checkAmountMismatch(statementLineId, journalLineId) {
+        const stmtAmount = this.statementAmounts[statementLineId];
+        const glAmount = this.glAmounts[journalLineId];
+        if (stmtAmount === undefined || glAmount === undefined) {
+            return { proceed: true, forceMatch: false };
+        }
+        const absStmt = Math.abs(stmtAmount);
+        const absGl = Math.abs(glAmount);
+        if (absStmt === 0 && absGl === 0) {
+            return { proceed: true, forceMatch: false };
+        }
+        const maxAmt = Math.max(absStmt, absGl);
+        const diff = Math.abs(absStmt - absGl);
+        if (maxAmt === 0 || diff / maxAmt <= this.mismatchThreshold) {
+            return { proceed: true, forceMatch: false };
+        }
+        const fmt = (amt) => Math.abs(amt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const proceed = window.confirm(
+            "Amount mismatch: bank line is " + fmt(stmtAmount) +
+            " but selected receipt/transaction is " + fmt(glAmount) +
+            " (difference: " + fmt(diff) + "). Continue and force match?"
+        );
+        return { proceed, forceMatch: proceed };
+    },
     toggleStatement(id) {
         if (this.multiMode) {
             let idx = this.selectedStatements.indexOf(id);
@@ -112,28 +139,48 @@
         return this.multiMode ? this.selectedGLs.includes(id) : this.selectedGL === id;
     },
     matchSingle() {
+        const mismatch = this._checkAmountMismatch(this.selectedStatement, this.selectedGL);
+        if (!mismatch.proceed) return;
         fetch("/finance/banking/reconciliations/{{ reconciliation.reconciliation_id }}/matches", {
             method: "POST",
             headers: { "Content-Type": "application/json", "X-CSRF-Token": this.csrfToken() },
             body: JSON.stringify({
                 statement_line_id: this.selectedStatement,
                 journal_line_id: this.selectedGL,
-                match_type: "manual"
+                match_type: "manual",
+                force_match: mismatch.forceMatch
             })
-        }).then(() => location.reload());
+        }).then(async (r) => {
+            if (!r.ok) {
+                const data = await r.json().catch(() => ({}));
+                window.showToast(data.detail || "Match failed", "error");
+                return;
+            }
+            location.reload();
+        });
     },
     acceptSuggestion() {
         let sug = this.suggestions[this.selectedStatement];
         if (!sug) return;
+        const mismatch = this._checkAmountMismatch(this.selectedStatement, sug.journal_line_id);
+        if (!mismatch.proceed) return;
         fetch("/finance/banking/reconciliations/{{ reconciliation.reconciliation_id }}/matches", {
             method: "POST",
             headers: { "Content-Type": "application/json", "X-CSRF-Token": this.csrfToken() },
             body: JSON.stringify({
                 statement_line_id: this.selectedStatement,
                 journal_line_id: sug.journal_line_id,
-                match_type: "auto_fuzzy"
+                match_type: "auto_fuzzy",
+                force_match: mismatch.forceMatch
             })
-        }).then(() => location.reload());
+        }).then(async (r) => {
+            if (!r.ok) {
+                const data = await r.json().catch(() => ({}));
+                window.showToast(data.detail || "Match failed", "error");
+                return;
+            }
+            location.reload();
+        });
     },
     matchMultiple() {
         fetch("/finance/banking/reconciliations/{{ reconciliation.reconciliation_id }}/multi-match", {
@@ -233,6 +280,17 @@
                                     {{ sug.confidence }}% match
                                     {% if sug.counterparty_name %}<span class="font-medium">| {{ sug.counterparty_name }}</span>{% endif %}
                                 </span>
+                                {% if sug.source_url %}
+                                <a href="{{ sug.source_url }}" target="_blank" rel="noopener"
+                                   class="mt-1 inline-flex items-center gap-1 text-xs font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300"
+                                   @click.stop>
+                                    View matched receipt
+                                    <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 3h7m0 0v7m0-7L10 14"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10v9a1 1 0 001 1h9"/>
+                                    </svg>
+                                </a>
+                                {% endif %}
                                 {% endif %}
                             </td>
                             <td class="text-right font-medium font-mono tabular-nums {{ 'text-emerald-600 dark:text-emerald-400' if line.transaction_type == 'credit' else 'text-rose-600 dark:text-rose-400' }}">

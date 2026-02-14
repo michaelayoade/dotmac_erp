@@ -42,6 +42,7 @@ class MockInvoice:
         status: InvoiceStatus = InvoiceStatus.APPROVED,
         ar_control_account_id: uuid.UUID = None,
         correlation_id: uuid.UUID = None,
+        erpnext_id: str | None = None,
     ):
         self.invoice_id = invoice_id or uuid.uuid4()
         self.organization_id = organization_id or uuid.uuid4()
@@ -57,6 +58,7 @@ class MockInvoice:
         self.status = status
         self.ar_control_account_id = ar_control_account_id or uuid.uuid4()
         self.correlation_id = correlation_id or uuid.uuid4()
+        self.erpnext_id = erpnext_id
 
 
 class MockInvoiceLine:
@@ -423,6 +425,130 @@ class TestPostInvoice:
         assert result.success is True
         assert result.journal_entry_id == journal.journal_entry_id
         assert "successfully" in result.message.lower()
+
+    @patch(
+        "app.services.finance.ar.posting.invoice.BasePostingAdapter.create_and_approve_journal"
+    )
+    @patch("app.services.finance.ar.posting.invoice.BasePostingAdapter.post_to_ledger")
+    def test_post_invoice_sync_delta_allocation_balances_journal(
+        self,
+        mock_post_to_ledger,
+        mock_create_and_approve,
+        mock_db,
+        organization_id,
+        user_id,
+        mock_customer,
+    ):
+        """ERPNext-imported invoices should allocate header/line delta to stay balanced."""
+        invoice = MockInvoice(
+            organization_id=organization_id,
+            customer_id=mock_customer.customer_id,
+            total_amount=Decimal("107.50"),
+            functional_currency_amount=Decimal("107.50"),
+            erpnext_id="SINV-0001",
+            status=InvoiceStatus.POSTED,
+        )
+        line = MockInvoiceLine(
+            invoice_id=invoice.invoice_id,
+            line_amount=Decimal("100.00"),
+            tax_amount=Decimal("0"),
+        )
+
+        def get_side_effect(model, id):
+            if str(id) == str(invoice.invoice_id):
+                return invoice
+            if str(id) == str(mock_customer.customer_id):
+                return mock_customer
+            return None
+
+        mock_db.get.side_effect = get_side_effect
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+            line
+        ]
+
+        journal = MockJournal()
+        mock_create_and_approve.return_value = (journal, None)
+        mock_post_to_ledger.return_value = MockPostingResult(success=True)
+
+        result = ARPostingAdapter.post_invoice(
+            db=mock_db,
+            organization_id=organization_id,
+            invoice_id=invoice.invoice_id,
+            posting_date=date.today(),
+            posted_by_user_id=user_id,
+        )
+
+        assert result.success is True
+        call_args = mock_create_and_approve.call_args
+        journal_input = call_args[0][2]
+        assert journal_input.lines[0].debit_amount == Decimal("107.50")
+        assert journal_input.lines[1].credit_amount == Decimal("107.50")
+
+    @patch(
+        "app.services.finance.ar.posting.invoice._resolve_tax_accounts",
+        return_value={},
+    )
+    @patch(
+        "app.services.finance.ar.posting.invoice.BasePostingAdapter.create_and_approve_journal"
+    )
+    @patch("app.services.finance.ar.posting.invoice.BasePostingAdapter.post_to_ledger")
+    def test_post_invoice_posts_tax_to_dedicated_tax_account(
+        self,
+        mock_post_to_ledger,
+        mock_create_and_approve,
+        mock_resolve_tax_accounts,
+        mock_db,
+        organization_id,
+        user_id,
+        mock_customer,
+    ):
+        """When tax account mapping exists, tax should post to dedicated tax account."""
+        tax_account_id = uuid.uuid4()
+        invoice = MockInvoice(
+            organization_id=organization_id,
+            customer_id=mock_customer.customer_id,
+            total_amount=Decimal("110.00"),
+            functional_currency_amount=Decimal("110.00"),
+            status=InvoiceStatus.POSTED,
+        )
+        line = MockInvoiceLine(
+            invoice_id=invoice.invoice_id,
+            line_amount=Decimal("100.00"),
+            tax_amount=Decimal("10.00"),
+            tax_code_id=uuid.uuid4(),
+        )
+        mock_resolve_tax_accounts.return_value = {line.tax_code_id: tax_account_id}
+
+        def get_side_effect(model, id):
+            if str(id) == str(invoice.invoice_id):
+                return invoice
+            if str(id) == str(mock_customer.customer_id):
+                return mock_customer
+            return None
+
+        mock_db.get.side_effect = get_side_effect
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+            line
+        ]
+
+        journal = MockJournal()
+        mock_create_and_approve.return_value = (journal, None)
+        mock_post_to_ledger.return_value = MockPostingResult(success=True)
+
+        result = ARPostingAdapter.post_invoice(
+            db=mock_db,
+            organization_id=organization_id,
+            invoice_id=invoice.invoice_id,
+            posting_date=date.today(),
+            posted_by_user_id=user_id,
+        )
+
+        assert result.success is True
+        journal_input = mock_create_and_approve.call_args[0][2]
+        assert journal_input.lines[0].debit_amount == Decimal("110.00")
+        assert journal_input.lines[1].credit_amount == Decimal("100.00")
+        assert journal_input.lines[2].account_id == tax_account_id
+        assert journal_input.lines[2].credit_amount == Decimal("10.00")
 
     @patch(
         "app.services.finance.ar.posting.invoice.BasePostingAdapter.create_and_approve_journal"
@@ -906,6 +1032,11 @@ class TestPostPayment:
                 return mock_payment
             if str(id) == str(mock_customer.customer_id):
                 return mock_customer
+            model_name = getattr(model, "__name__", str(model))
+            if model_name == "Account" and str(id) == str(mock_payment.bank_account_id):
+                account = MagicMock()
+                account.organization_id = organization_id
+                return account
             return None
 
         mock_db.get.side_effect = get_side_effect
@@ -939,6 +1070,65 @@ class TestPostPayment:
         "app.services.finance.ar.posting.payment.BasePostingAdapter.create_and_approve_journal"
     )
     @patch("app.services.finance.ar.posting.payment.BasePostingAdapter.post_to_ledger")
+    def test_post_payment_resolves_banking_account_to_gl_account(
+        self,
+        mock_post_to_ledger,
+        mock_create_and_approve,
+        mock_db,
+        organization_id,
+        user_id,
+        mock_payment,
+        mock_customer,
+    ):
+        """Payments using banking account IDs should map to GL account for posting."""
+        bank_account_id = uuid.uuid4()
+        gl_account_id = uuid.uuid4()
+        mock_payment.customer_id = mock_customer.customer_id
+        mock_payment.bank_account_id = bank_account_id
+
+        bank_account = MagicMock()
+        bank_account.organization_id = organization_id
+        bank_account.gl_account_id = gl_account_id
+
+        gl_account = MagicMock()
+        gl_account.organization_id = organization_id
+
+        def get_side_effect(model, id):
+            model_name = getattr(model, "__name__", str(model))
+            if str(id) == str(mock_payment.payment_id):
+                return mock_payment
+            if str(id) == str(mock_customer.customer_id):
+                return mock_customer
+            if model_name == "Account" and str(id) == str(bank_account_id):
+                return None
+            if model_name == "BankAccount" and str(id) == str(bank_account_id):
+                return bank_account
+            if model_name == "Account" and str(id) == str(gl_account_id):
+                return gl_account
+            return None
+
+        mock_db.get.side_effect = get_side_effect
+
+        journal = MockJournal()
+        mock_create_and_approve.return_value = (journal, None)
+        mock_post_to_ledger.return_value = MockPostingResult(success=True)
+
+        result = ARPostingAdapter.post_payment(
+            db=mock_db,
+            organization_id=organization_id,
+            payment_id=mock_payment.payment_id,
+            posting_date=date.today(),
+            posted_by_user_id=user_id,
+        )
+
+        assert result.success is True
+        journal_input = mock_create_and_approve.call_args[0][2]
+        assert journal_input.lines[0].account_id == gl_account_id
+
+    @patch(
+        "app.services.finance.ar.posting.payment.BasePostingAdapter.create_and_approve_journal"
+    )
+    @patch("app.services.finance.ar.posting.payment.BasePostingAdapter.post_to_ledger")
     def test_post_multicurrency_payment(
         self,
         mock_post_to_ledger,
@@ -962,6 +1152,11 @@ class TestPostPayment:
                 return payment
             if str(id) == str(mock_customer.customer_id):
                 return mock_customer
+            model_name = getattr(model, "__name__", str(model))
+            if model_name == "Account" and str(id) == str(payment.bank_account_id):
+                account = MagicMock()
+                account.organization_id = organization_id
+                return account
             return None
 
         mock_db.get.side_effect = get_side_effect
@@ -1006,6 +1201,11 @@ class TestPostPayment:
                 return mock_payment
             if str(id) == str(mock_customer.customer_id):
                 return mock_customer
+            model_name = getattr(model, "__name__", str(model))
+            if model_name == "Account" and str(id) == str(mock_payment.bank_account_id):
+                account = MagicMock()
+                account.organization_id = organization_id
+                return account
             return None
 
         mock_db.get.side_effect = get_side_effect
@@ -1050,6 +1250,11 @@ class TestPostPayment:
                 return mock_payment
             if str(id) == str(mock_customer.customer_id):
                 return mock_customer
+            model_name = getattr(model, "__name__", str(model))
+            if model_name == "Account" and str(id) == str(mock_payment.bank_account_id):
+                account = MagicMock()
+                account.organization_id = organization_id
+                return account
             return None
 
         mock_db.get.side_effect = get_side_effect
@@ -1095,6 +1300,11 @@ class TestPostPayment:
                 return mock_payment
             if str(id) == str(mock_customer.customer_id):
                 return mock_customer
+            model_name = getattr(model, "__name__", str(model))
+            if model_name == "Account" and str(id) == str(mock_payment.bank_account_id):
+                account = MagicMock()
+                account.organization_id = organization_id
+                return account
             return None
 
         mock_db.get.side_effect = get_side_effect

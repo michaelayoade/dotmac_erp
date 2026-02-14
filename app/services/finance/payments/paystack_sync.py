@@ -268,11 +268,17 @@ class PaystackSyncService:
                 break
             page += 1
 
-        # Get existing transaction IDs to avoid duplicates
+        # Get existing transaction IDs to avoid duplicates across ALL
+        # statements for this bank account (overlapping daily windows).
         existing_ids = set(
             self.db.scalars(
-                select(BankStatementLine.transaction_id).where(
-                    BankStatementLine.statement_id == statement.statement_id,
+                select(BankStatementLine.transaction_id)
+                .join(
+                    BankStatement,
+                    BankStatementLine.statement_id == BankStatement.statement_id,
+                )
+                .where(
+                    BankStatement.bank_account_id == account.bank_account_id,
                     BankStatementLine.transaction_id.isnot(None),
                 )
             ).all()
@@ -366,11 +372,17 @@ class PaystackSyncService:
                 break
             page += 1
 
-        # Get existing transfer codes to avoid duplicates
+        # Get existing transfer codes to avoid duplicates across ALL
+        # statements for this bank account (overlapping daily windows).
         existing_codes = set(
             self.db.scalars(
-                select(BankStatementLine.bank_reference).where(
-                    BankStatementLine.statement_id == statement.statement_id,
+                select(BankStatementLine.bank_reference)
+                .join(
+                    BankStatement,
+                    BankStatementLine.statement_id == BankStatement.statement_id,
+                )
+                .where(
+                    BankStatement.bank_account_id == account.bank_account_id,
                     BankStatementLine.bank_reference.isnot(None),
                 )
             ).all()
@@ -464,12 +476,19 @@ class PaystackSyncService:
                 break
             page += 1
 
-        # Get existing settlement IDs to avoid duplicates
-        # Use settlement ID as transaction_id with 'STL-' prefix
+        # Get existing settlement IDs to avoid duplicates across ALL
+        # statements for this bank account (not just the current one).
+        # The daily sync window overlaps, so the same settlement can
+        # appear in adjacent date ranges.
         existing_ids = set(
             self.db.scalars(
-                select(BankStatementLine.transaction_id).where(
-                    BankStatementLine.statement_id == statement.statement_id,
+                select(BankStatementLine.transaction_id)
+                .join(
+                    BankStatement,
+                    BankStatementLine.statement_id == BankStatement.statement_id,
+                )
+                .where(
+                    BankStatement.bank_account_id == account.bank_account_id,
                     BankStatementLine.transaction_id.like("STL-%"),
                 )
             ).all()

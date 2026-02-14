@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import live_search, pagination, status_badge, empty_state, stats_card, action_buttons %}
+{% from "components/macros.html" import compact_filters, pagination, status_badge, empty_state, stats_card, action_buttons, filter_select_field %}
 
 {% block page_title %}Bank Accounts{% endblock %}
 
@@ -24,33 +24,28 @@
 
 {% block content %}
 <div class="space-y-6">
+    {% set zero_amount = ((presentation_currency_code or default_currency_code) ~ ' 0.00') if (presentation_currency_code or default_currency_code) else '0.00' %}
     {# Stats Row #}
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {{ stats_card("Total Accounts", total_count | default(0), icon="bank", color="slate") }}
         {{ stats_card("Active", active_count | default(0), icon="check-circle", color="emerald") }}
-        {{ stats_card("Total Balance", total_balance | default("₦0.00"), icon="currency", color="teal") }}
+        {{ stats_card("Total Balance", total_balance | default(zero_amount), icon="currency", color="teal") }}
         {{ stats_card("Pending Reconciliation", pending_recon | default(0), icon="clock", color="amber") }}
     </div>
 
-    {# Search with Auto-suggest and Filters #}
-    {{ live_search(
-        search=search,
-        entity_type="bank_accounts",
-        filters=[
-            {
-                "name": "status",
-                "label": "All Status",
-                "value": status,
-                "options": [
-                    {"value": "active", "label": "Active"},
-                    {"value": "inactive", "label": "Inactive"},
-                    {"value": "closed", "label": "Closed"}
-                ]
-            }
-        ],
-        base_url="/banking/accounts",
-        placeholder="Search bank accounts by name or number..."
-    ) }}
+    {% call(filter_attrs) compact_filters(
+        base_url="/finance/banking/accounts",
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search | default('', true),
+        search_placeholder="Search bank accounts by name or number..."
+    ) %}
+        {{ filter_select_field("status", "Status", status, [
+            {"value": "active", "label": "Active"},
+            {"value": "inactive", "label": "Inactive"},
+            {"value": "closed", "label": "Closed"}
+        ], filter_attrs) }}
+    {% endcall %}
 
     <div id="results-container">
     {# Bank Accounts Table #}
@@ -94,32 +89,21 @@
                         <td class="text-center">
                             {{ status_badge(account.status | default('active'), 'sm') }}
                         </td>
-                        <td>
-                            <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <a href="/finance/banking/reconciliations/new?account_id={{ account.bank_account_id }}"
-                                   class="rounded-lg p-2 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400 transition-colors"
-                                   title="Reconcile">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                    </svg>
-                                </a>
-                                <a href="/finance/banking/accounts/{{ account.bank_account_id }}"
-                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
-                                   title="View details" aria-label="View details">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                    </svg>
-                                </a>
-                                <a href="/finance/banking/accounts/{{ account.bank_account_id }}/edit"
-                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
-                                   title="Edit account" aria-label="Edit account">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                                    </svg>
-                                </a>
-                            </div>
-                        </td>
+                            <td>
+                                {{ action_buttons(
+                                    view_href="/finance/banking/accounts/" ~ account.bank_account_id,
+                                    edit_href="/finance/banking/accounts/" ~ account.bank_account_id ~ "/edit",
+                                    extra_actions=[
+                                        {
+                                            "href": "/finance/banking/reconciliations/new?account_id=" ~ account.bank_account_id,
+                                            "title": "Reconcile",
+                                            "icon": "check-circle",
+                                            "aria_label": "Reconcile account",
+                                            "class": "rounded-lg p-2 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-900/30 dark:hover:text-emerald-400 transition-colors"
+                                        }
+                                    ]
+                                ) }}
+                            </td>
                     </tr>
                     {% else %}
                     <tr>

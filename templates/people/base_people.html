@@ -440,10 +440,11 @@
 
     <!-- Main Content -->
     <div class="app-main">
+        {% set back_fallback_url %}{% block back_fallback %}{{ '/people' if 'people' in modules else '/people/self/attendance' }}{% endblock %}{% endset %}
         {% set page_title_html %}{% block page_title %}{{ page_title | default("People") }}{% endblock %}{% endset %}
         {% set breadcrumbs_html %}{% block breadcrumbs %}{% endblock %}{% endset %}
         {% set header_actions_html %}{% block header_actions %}{% endblock %}{% endset %}
-        {{ topbar(page_title_html, breadcrumbs_html, header_actions_html, accent="violet") }}
+        {{ topbar(page_title_html, breadcrumbs_html, header_actions_html, accent="violet", back_fallback=(back_fallback_url | trim)) }}
 
         <!-- Page Content -->
         <main class="min-h-[calc(100vh-4rem)] bg-dashboard">

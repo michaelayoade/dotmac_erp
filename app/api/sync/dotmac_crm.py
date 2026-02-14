@@ -30,6 +30,8 @@ from app.schemas.sync.dotmac_crm import (
     CRMMaterialRequestStatusRead,
     CRMProjectPayload,
     CRMProjectRead,
+    CRMPurchaseOrderPayload,
+    CRMPurchaseOrderResponse,
     CRMTicketPayload,
     CRMTicketRead,
     CRMWorkOrderPayload,
@@ -41,6 +43,7 @@ from app.schemas.sync.dotmac_crm import (
     InventoryListResponse,
     PersonListResponse,
     SyncError,
+    WorkforceEmployeeListResponse,
 )
 from app.services.auth import hash_api_key
 from app.services.auth_dependencies import require_tenant_auth
@@ -131,6 +134,7 @@ def require_service_auth(
 
     return {
         "organization_id": person.organization_id,
+        "person_id": person.id,
         "api_key_id": api_key.id,
         "service_label": api_key.label,
     }
@@ -180,9 +184,18 @@ def bulk_sync(
     for ticket in payload.tickets:
         savepoint = db.begin_nested()
         try:
-            service.sync_ticket(org_id, ticket)
+            ticket_item_errors: list[str] = []
+            service.sync_ticket(org_id, ticket, item_errors=ticket_item_errors)
             savepoint.commit()
             tickets_synced += 1
+            for item_error in ticket_item_errors:
+                errors.append(
+                    SyncError(
+                        entity_type="ticket_item",
+                        crm_id=ticket.crm_id,
+                        error=item_error,
+                    )
+                )
         except Exception as e:
             savepoint.rollback()
             logger.exception("Failed to sync ticket %s", ticket.crm_id)
@@ -455,6 +468,29 @@ def list_inventory(
 # ============ Workforce / Department Endpoints (ERP → CRM) ============
 
 
+@router.get("/workforce/employees", response_model=WorkforceEmployeeListResponse)
+def list_workforce_employees(
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(_get_db),
+    include_inactive: bool = False,
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> WorkforceEmployeeListResponse:
+    """
+    List employees for CRM staff/author mapping.
+
+    Returns employees with stable employee_id and email.
+    """
+    org_id = auth["organization_id"]
+    service = DotMacCRMSyncService(db)
+    return service.list_workforce_employees(
+        org_id,
+        include_inactive=include_inactive,
+        limit=limit,
+        offset=offset,
+    )
+
+
 @router.get("/workforce/departments", response_model=DepartmentListResponse)
 def list_departments(
     auth: dict = Depends(require_service_auth),
@@ -589,3 +625,42 @@ def get_material_request_status(
             status_code=404, detail=f"Material request not found: {omni_id}"
         )
     return result
+
+
+# ============ Purchase Order Endpoints (CRM → ERP) ============
+
+
+@router.post(
+    "/purchase-orders",
+    response_model=CRMPurchaseOrderResponse,
+    status_code=201,
+)
+def create_purchase_order(
+    payload: CRMPurchaseOrderPayload,
+    auth: dict = Depends(require_service_auth),
+    db: Session = Depends(_get_db),
+) -> CRMPurchaseOrderResponse:
+    """
+    Create a DRAFT purchase order from a CRM vendor quote approval.
+
+    Idempotent: if a PO for the same omni_work_order_id already exists, returns
+    the existing PO.
+    """
+    org_id = auth["organization_id"]
+    person_id = auth["person_id"]
+    service = DotMacCRMSyncService(db)
+
+    try:
+        result = service.create_purchase_order(org_id, payload, person_id)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception(
+            "Failed to create purchase order omni_work_order_id=%s",
+            payload.omni_work_order_id,
+        )
+        raise HTTPException(status_code=500, detail=_sanitize_error(e)) from e

@@ -30,6 +30,13 @@ from app.services.finance.banking.categorization import (
     TransactionCategorizationService,
     categorization_service,
 )
+from app.services.finance.banking.contra_matching import (
+    ContraLineCandidate,
+    ContraMatch,
+    build_contra_idempotency_key,
+    choose_best_contra_matches,
+    score_contra_pair,
+)
 
 __all__ = [
     # Bank Account
@@ -53,4 +60,10 @@ __all__ = [
     "CategorizationResult",
     "BatchCategorizationResult",
     "categorization_service",
+    # Contra matching
+    "ContraLineCandidate",
+    "ContraMatch",
+    "build_contra_idempotency_key",
+    "score_contra_pair",
+    "choose_best_contra_matches",
 ]

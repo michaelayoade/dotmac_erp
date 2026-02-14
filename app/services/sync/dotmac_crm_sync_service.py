@@ -12,25 +12,33 @@ Handles:
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
+
+if TYPE_CHECKING:
+    from app.models.finance.ap.supplier import Supplier  # noqa: F401
 
 from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
 from app.models.finance.core_org.project import Project, ProjectStatus, ProjectType
 from app.models.people.hr.employee import Employee
 from app.models.person import Person
 from app.models.pm.task import Task, TaskPriority, TaskStatus
+from app.models.support.comment import CommentType, TicketComment
 from app.models.support.ticket import Ticket, TicketPriority, TicketStatus
 from app.models.sync.dotmac_crm_sync import (
     CRMEntityType,
     CRMSyncMapping,
     CRMSyncStatus,
 )
+from app.models.sync.sync_entity import SyncEntity, SyncStatus
 from app.schemas.sync.dotmac_crm import (
     CompanyContactRead,
     CompanyListResponse,
@@ -40,6 +48,10 @@ from app.schemas.sync.dotmac_crm import (
     CRMMaterialRequestStatusRead,
     CRMProjectPayload,
     CRMProjectRead,
+    CRMPurchaseOrderPayload,
+    CRMPurchaseOrderResponse,
+    CRMTicketActivityEntry,
+    CRMTicketCommentItem,
     CRMTicketPayload,
     CRMTicketRead,
     CRMWorkOrderPayload,
@@ -54,6 +66,8 @@ from app.schemas.sync.dotmac_crm import (
     PersonContactRead,
     PersonListResponse,
     WarehouseStock,
+    WorkforceEmployeeListResponse,
+    WorkforceEmployeeRead,
 )
 
 logger = logging.getLogger(__name__)
@@ -105,7 +119,7 @@ CRM_SYNC_STATUS_MAP = {
 
 
 # Valid local_entity_type values for CRMSyncMapping
-VALID_LOCAL_ENTITY_TYPES = frozenset({"project", "ticket", "task"})
+VALID_LOCAL_ENTITY_TYPES = frozenset({"project", "ticket", "task", "purchase_order"})
 
 
 class DotMacCRMSyncService:
@@ -176,12 +190,14 @@ class DotMacCRMSyncService:
         self,
         org_id: UUID,
         data: CRMTicketPayload,
+        item_errors: list[str] | None = None,
     ) -> CRMSyncMapping:
         """
         Sync a ticket from CRM to ERP.
 
         Creates or updates both the local Ticket and the CRMSyncMapping.
         """
+        ticket_crm_data = self._build_ticket_crm_data(data)
         mapping = self._get_mapping(org_id, CRMEntityType.TICKET, data.crm_id)
 
         if mapping:
@@ -199,7 +215,7 @@ class DotMacCRMSyncService:
                 data.ticket_number,
                 data.customer_name,
                 data.status,
-                data.metadata,
+                ticket_crm_data,
             )
         else:
             ticket = self._create_ticket(org_id, data)
@@ -217,12 +233,31 @@ class DotMacCRMSyncService:
                 display_name=data.subject,
                 display_code=data.ticket_number,
                 customer_name=data.customer_name,
-                crm_data=data.metadata,
+                crm_data=ticket_crm_data,
                 synced_at=datetime.now(UTC),
             )
             self.db.add(mapping)
 
-        logger.info("Synced CRM ticket %s -> %s", data.crm_id, mapping.local_entity_id)
+        comments_processed, comment_dedupe_hits, comment_errors = (
+            self._sync_ticket_comments(org_id, ticket, data.comments)
+        )
+        activity_processed, activity_dedupe_hits, activity_errors = (
+            self._sync_ticket_activity(org_id, ticket, data.activity_log, data.comments)
+        )
+
+        if item_errors is not None:
+            item_errors.extend(comment_errors)
+            item_errors.extend(activity_errors)
+
+        logger.info(
+            "Synced CRM ticket %s -> %s comments_processed=%d activity_processed=%d "
+            "dedupe_hits=%d",
+            data.crm_id,
+            mapping.local_entity_id,
+            comments_processed,
+            activity_processed,
+            comment_dedupe_hits + activity_dedupe_hits,
+        )
         return mapping
 
     def sync_work_order(
@@ -843,6 +878,71 @@ class DotMacCRMSyncService:
 
     # ============ Workforce / Department Endpoints ============
 
+    def list_workforce_employees(
+        self,
+        org_id: UUID,
+        *,
+        include_inactive: bool = False,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> WorkforceEmployeeListResponse:
+        """List employees for CRM author/staff lookup."""
+        from app.models.people.hr.employee import Employee, EmployeeStatus
+
+        stmt = (
+            select(Employee)
+            .options(
+                joinedload(Employee.person),
+                joinedload(Employee.department),
+                joinedload(Employee.designation),
+            )
+            .where(Employee.organization_id == org_id)
+        )
+        if not include_inactive:
+            stmt = stmt.where(Employee.status == EmployeeStatus.ACTIVE)
+
+        # Exclude rows without a person/email because CRM needs email key for mapping.
+        employees_all = list(
+            self.db.scalars(stmt.order_by(Employee.employee_code)).all()
+        )
+        employees_filtered = [
+            emp
+            for emp in employees_all
+            if emp.person and (emp.person.email or "").strip()
+        ]
+
+        total = len(employees_filtered)
+        page = employees_filtered[offset : offset + limit]
+        has_more = offset + limit < total
+
+        rows = [
+            WorkforceEmployeeRead(
+                employee_id=emp.employee_id,
+                email=emp.person.email.strip().lower()
+                if emp.person and emp.person.email
+                else "",
+                is_active=emp.status == EmployeeStatus.ACTIVE,
+                full_name=(
+                    f"{emp.person.first_name or ''} {emp.person.last_name or ''}".strip()
+                    if emp.person
+                    else None
+                ),
+                department=emp.department.department_name if emp.department else None,
+                designation=emp.designation.designation_name
+                if emp.designation
+                else None,
+            )
+            for emp in page
+        ]
+
+        return WorkforceEmployeeListResponse(
+            employees=rows,
+            total=total,
+            limit=limit,
+            offset=offset,
+            has_more=has_more,
+        )
+
     def list_departments(
         self,
         org_id: UUID,
@@ -1244,6 +1344,238 @@ class DotMacCRMSyncService:
             created_at=mr.created_at,
         )
 
+    # ============ Purchase Order (CRM → ERP) ============
+
+    def create_purchase_order(
+        self,
+        org_id: UUID,
+        data: CRMPurchaseOrderPayload,
+        created_by_person_id: UUID,
+    ) -> CRMPurchaseOrderResponse:
+        """
+        Create a DRAFT purchase order from a CRM vendor quote approval.
+
+        Idempotent: if a PO for the same omni_work_order_id already exists, return it.
+
+        Args:
+            org_id: Organization scope.
+            data: CRM purchase order payload.
+            created_by_person_id: Person ID of the API key user (fallback creator).
+
+        Raises:
+            ValueError: If supplier not found or other validation fails.
+        """
+        from app.models.finance.ap.purchase_order import PurchaseOrder
+        from app.services.finance.ap.purchase_order import (
+            POLineInput,
+            PurchaseOrderInput,
+            PurchaseOrderService,
+        )
+
+        correlation_id = f"crm-wo:{data.omni_work_order_id}"
+
+        # 1. Idempotency: check CRMSyncMapping first
+        existing_mapping = self._get_mapping(
+            org_id, CRMEntityType.PURCHASE_ORDER, data.omni_work_order_id
+        )
+        if existing_mapping:
+            po = self.db.get(PurchaseOrder, existing_mapping.local_entity_id)
+            if po:
+                logger.info(
+                    "PO already exists for omni_work_order_id=%s (mapping), returning existing",
+                    data.omni_work_order_id,
+                )
+                return CRMPurchaseOrderResponse(
+                    purchase_order_id=po.po_number,
+                    po_id=po.po_id,
+                    status=po.status.value.lower(),
+                    omni_work_order_id=data.omni_work_order_id,
+                )
+
+        # 2. Fallback idempotency: check by correlation_id (PO committed but mapping failed)
+        fallback_stmt = select(PurchaseOrder).where(
+            PurchaseOrder.organization_id == org_id,
+            PurchaseOrder.correlation_id == correlation_id,
+        )
+        existing_po = self.db.scalar(fallback_stmt)
+        if existing_po:
+            logger.info(
+                "PO already exists for omni_work_order_id=%s (correlation_id), "
+                "re-creating mapping",
+                data.omni_work_order_id,
+            )
+            # Re-create the missing mapping and persist it
+            self._create_po_sync_mapping(
+                org_id, data, existing_po.po_id, existing_po.po_number
+            )
+            self.db.commit()
+            return CRMPurchaseOrderResponse(
+                purchase_order_id=existing_po.po_number,
+                po_id=existing_po.po_id,
+                status=existing_po.status.value.lower(),
+                omni_work_order_id=data.omni_work_order_id,
+            )
+
+        # 3. Resolve supplier
+        supplier = self._resolve_supplier(org_id, data.vendor_erp_id, data.vendor_code)
+
+        # 4. Resolve project (optional)
+        project_id = self._resolve_project_id(org_id, data.omni_project_id)
+
+        # 5. Resolve approver → person_id for created_by
+        approver_person_id = self._resolve_person_id_by_email(
+            org_id, data.approved_by_email
+        )
+        creator_id = approver_person_id or created_by_person_id
+
+        # 6. Build PO input — distribute tax_total proportionally across lines
+        po_lines: list[POLineInput] = []
+        line_subtotal = sum(i.amount for i in data.items) or Decimal("1")
+        tax_distributed = Decimal("0")
+        for idx, item in enumerate(data.items):
+            if idx == len(data.items) - 1:
+                # Last line gets remainder to avoid rounding drift
+                line_tax = data.tax_total - tax_distributed
+            else:
+                line_tax = (data.tax_total * item.amount / line_subtotal).quantize(
+                    Decimal("0.01")
+                )
+                tax_distributed += line_tax
+            po_lines.append(
+                POLineInput(
+                    description=item.description,
+                    quantity_ordered=item.quantity,
+                    unit_price=item.unit_price,
+                    tax_amount=line_tax,
+                    project_id=project_id,
+                )
+            )
+
+        po_input = PurchaseOrderInput(
+            supplier_id=supplier.supplier_id,
+            po_date=date.today(),
+            currency_code=data.currency,
+            lines=po_lines,
+            correlation_id=correlation_id,
+            terms_and_conditions=data.title,
+        )
+
+        # 7. Create PO (commits internally)
+        po = PurchaseOrderService.create_po(self.db, org_id, po_input, creator_id)
+
+        # 8. Create CRMSyncMapping (tracks the PO for idempotency)
+        self._create_po_sync_mapping(org_id, data, po.po_id, po.po_number)
+        self.db.commit()
+
+        logger.info(
+            "Created PO %s for omni_work_order_id=%s, supplier=%s",
+            po.po_number,
+            data.omni_work_order_id,
+            supplier.supplier_code,
+        )
+
+        return CRMPurchaseOrderResponse(
+            purchase_order_id=po.po_number,
+            po_id=po.po_id,
+            status=po.status.value.lower(),
+            omni_work_order_id=data.omni_work_order_id,
+        )
+
+    def _resolve_supplier(
+        self,
+        org_id: UUID,
+        vendor_erp_id: str | None,
+        vendor_code: str | None,
+    ) -> Supplier:
+        """Resolve a supplier by erpnext_id or supplier_code.
+
+        Raises:
+            ValueError: If supplier not found.
+        """
+        from app.models.finance.ap.supplier import Supplier
+
+        if vendor_erp_id:
+            stmt = select(Supplier).where(
+                Supplier.organization_id == org_id,
+                Supplier.erpnext_id == vendor_erp_id,
+                Supplier.is_active.is_(True),
+            )
+            supplier = self.db.scalar(stmt)
+            if supplier:
+                return supplier
+
+        if vendor_code:
+            stmt = select(Supplier).where(
+                Supplier.organization_id == org_id,
+                Supplier.supplier_code == vendor_code,
+                Supplier.is_active.is_(True),
+            )
+            supplier = self.db.scalar(stmt)
+            if supplier:
+                return supplier
+
+        raise ValueError(
+            f"Supplier not found: erp_id={vendor_erp_id}, code={vendor_code}"
+        )
+
+    def _resolve_person_id_by_email(
+        self, org_id: UUID, email: str | None
+    ) -> UUID | None:
+        """Resolve an email to a Person ID (via Employee → Person)."""
+        if not email:
+            return None
+
+        email_lower = email.lower()
+        stmt = (
+            select(Person.id)
+            .join(Employee, Employee.person_id == Person.id)
+            .where(
+                Employee.organization_id == org_id,
+                func.lower(Person.email) == email_lower,
+            )
+        )
+        result = self.db.scalar(stmt)
+        if result:
+            return result
+
+        # Fallback to personal_email on Employee
+        stmt = select(Employee.person_id).where(
+            Employee.organization_id == org_id,
+            func.lower(Employee.personal_email) == email_lower,
+        )
+        return self.db.scalar(stmt)
+
+    def _create_po_sync_mapping(
+        self,
+        org_id: UUID,
+        data: CRMPurchaseOrderPayload,
+        po_id: UUID,
+        po_number: str,
+    ) -> None:
+        """Create a CRMSyncMapping for a purchase order."""
+        mapping = CRMSyncMapping(
+            organization_id=org_id,
+            crm_entity_type=CRMEntityType.PURCHASE_ORDER,
+            crm_id=data.omni_work_order_id,
+            local_entity_type="purchase_order",
+            local_entity_id=po_id,
+            crm_status=CRMSyncStatus.ACTIVE,
+            display_name=data.title[:255],
+            display_code=po_number,
+            customer_name=data.vendor_name,
+            crm_data={
+                "omni_work_order_id": data.omni_work_order_id,
+                "omni_quote_id": data.omni_quote_id,
+                "omni_project_id": data.omni_project_id,
+                "project_code": data.project_code,
+                "vendor_erp_id": data.vendor_erp_id,
+                "vendor_code": data.vendor_code,
+                "total": str(data.total),
+            },
+        )
+        self.db.add(mapping)
+        self.db.flush()
+
     # ============ Lookup Helpers ============
 
     def get_local_project_id(self, org_id: UUID, crm_id: str) -> UUID | None:
@@ -1366,6 +1698,7 @@ class DotMacCRMSyncService:
             organization_id=org_id,
             ticket_number=ticket_number,
             subject=data.subject,
+            description=data.description,
             status=TICKET_STATUS_MAP.get(data.status.lower(), TicketStatus.OPEN),
             priority=self._map_ticket_priority(data.priority),
         )
@@ -1375,8 +1708,284 @@ class DotMacCRMSyncService:
     def _update_ticket(self, ticket: Ticket, data: CRMTicketPayload) -> None:
         """Update existing ticket from CRM data."""
         ticket.subject = data.subject
+        if data.description is not None:
+            ticket.description = data.description
         ticket.status = TICKET_STATUS_MAP.get(data.status.lower(), TicketStatus.OPEN)
         ticket.priority = self._map_ticket_priority(data.priority)
+
+    def _build_ticket_crm_data(self, data: CRMTicketPayload) -> dict | None:
+        """Build mapping crm_data for ticket payload, preserving backward compatibility."""
+        crm_data: dict = dict(data.metadata or {})
+        if data.description is not None:
+            crm_data["description"] = data.description
+        if data.comments:
+            crm_data["comments"] = data.comments
+        if data.activity_log:
+            crm_data["activity_log"] = data.activity_log
+        return crm_data or None
+
+    def _sync_ticket_comments(
+        self,
+        org_id: UUID,
+        ticket: Ticket,
+        raw_comments: list[dict[str, Any]],
+    ) -> tuple[int, int, list[str]]:
+        """Sync CRM comment items to support.ticket_comment with idempotent dedupe."""
+        processed = 0
+        dedupe_hits = 0
+        errors: list[str] = []
+
+        for idx, raw in enumerate(raw_comments or []):
+            try:
+                item = CRMTicketCommentItem.model_validate(raw)
+            except ValidationError as exc:
+                errors.append(
+                    f"comments[{idx}] validation failed: {exc.errors()[0].get('msg', 'invalid')}"
+                )
+                continue
+
+            _, dedupe = self._upsert_crm_comment_item(org_id, ticket, item)
+            processed += 1
+            dedupe_hits += dedupe
+
+        return processed, dedupe_hits, errors
+
+    def _sync_ticket_activity(
+        self,
+        org_id: UUID,
+        ticket: Ticket,
+        raw_activity: list[dict[str, Any]],
+        raw_comments: list[dict[str, Any]],
+    ) -> tuple[int, int, list[str]]:
+        """Sync CRM activity_log entries to support.ticket_comment (activity timeline)."""
+        processed = 0
+        dedupe_hits = 0
+        errors: list[str] = []
+
+        comment_ids = {
+            str(item.get("id"))
+            for item in (raw_comments or [])
+            if isinstance(item, dict) and item.get("id")
+        }
+
+        for idx, raw in enumerate(raw_activity or []):
+            try:
+                entry = CRMTicketActivityEntry.model_validate(raw)
+            except ValidationError as exc:
+                errors.append(
+                    f"activity_log[{idx}] validation failed: {exc.errors()[0].get('msg', 'invalid')}"
+                )
+                continue
+
+            # Avoid double insert when comment appears in both comments[] and activity_log[].
+            if entry.kind == "comment" and entry.id in comment_ids:
+                dedupe_hits += 1
+                logger.debug(
+                    "CRM ticket activity dedupe hit: kind=comment id=%s ticket=%s",
+                    entry.id,
+                    ticket.ticket_number,
+                )
+                continue
+
+            _, dedupe = self._upsert_crm_activity_item(org_id, ticket, entry)
+            processed += 1
+            dedupe_hits += dedupe
+
+        return processed, dedupe_hits, errors
+
+    def _upsert_crm_comment_item(
+        self,
+        org_id: UUID,
+        ticket: Ticket,
+        item: CRMTicketCommentItem,
+    ) -> tuple[TicketComment, int]:
+        """Upsert a CRM comment item by SyncEntity(source='crm', doctype, id)."""
+        sync = self.db.scalar(
+            select(SyncEntity).where(
+                SyncEntity.organization_id == org_id,
+                SyncEntity.source_system == "crm",
+                SyncEntity.source_doctype == "ticket_comment",
+                SyncEntity.source_name == item.id,
+            )
+        )
+
+        author_id = self._resolve_crm_person_id(org_id, item.author_person_id)
+        comment_type = (
+            CommentType.INTERNAL_NOTE if item.is_internal else CommentType.COMMENT
+        )
+
+        if sync and sync.target_id:
+            existing = self.db.get(TicketComment, sync.target_id)
+            if existing:
+                existing.ticket_id = ticket.ticket_id
+                existing.comment_type = comment_type
+                existing.is_internal = item.is_internal
+                existing.author_id = author_id
+                existing.content = item.body or ""
+                if item.timestamp:
+                    existing.created_at = item.timestamp
+                sync.mark_synced(existing.comment_id)
+                logger.debug(
+                    "CRM ticket comment dedupe hit: id=%s ticket=%s",
+                    item.id,
+                    ticket.ticket_number,
+                )
+                return existing, 1
+
+        comment = TicketComment(
+            ticket_id=ticket.ticket_id,
+            comment_type=comment_type,
+            content=item.body or "",
+            author_id=author_id,
+            is_internal=item.is_internal,
+        )
+        if item.timestamp:
+            comment.created_at = item.timestamp
+        self.db.add(comment)
+        self.db.flush()
+
+        if sync:
+            sync.target_table = "support.ticket_comment"
+            sync.target_id = comment.comment_id
+            sync.mark_synced(comment.comment_id)
+        else:
+            self.db.add(
+                SyncEntity(
+                    organization_id=org_id,
+                    source_system="crm",
+                    source_doctype="ticket_comment",
+                    source_name=item.id,
+                    target_table="support.ticket_comment",
+                    target_id=comment.comment_id,
+                    sync_status=SyncStatus.SYNCED,
+                )
+            )
+        return comment, 0
+
+    def _upsert_crm_activity_item(
+        self,
+        org_id: UUID,
+        ticket: Ticket,
+        entry: CRMTicketActivityEntry,
+    ) -> tuple[TicketComment, int]:
+        """Upsert a CRM activity item by SyncEntity(source='crm', kind, id)."""
+        doctype = f"ticket_activity_{entry.kind}"
+        sync = self.db.scalar(
+            select(SyncEntity).where(
+                SyncEntity.organization_id == org_id,
+                SyncEntity.source_system == "crm",
+                SyncEntity.source_doctype == doctype,
+                SyncEntity.source_name == entry.id,
+            )
+        )
+        author_id = self._resolve_crm_person_id(org_id, entry.author_person_id)
+
+        if entry.kind == "comment":
+            comment_type = (
+                CommentType.INTERNAL_NOTE if entry.is_internal else CommentType.COMMENT
+            )
+            content = entry.body or ""
+            action = None
+            old_value = None
+            new_value = None
+            is_internal = entry.is_internal
+        else:
+            comment_type = CommentType.SYSTEM
+            details_str = (
+                json.dumps(entry.details, sort_keys=True) if entry.details else ""
+            )
+            content = (
+                entry.body or f"{entry.event_type or 'event'} {details_str}".strip()
+            )
+            action = entry.event_type or "crm_event"
+            old_value = None
+            new_value = entry.status
+            is_internal = True
+
+        if sync and sync.target_id:
+            existing = self.db.get(TicketComment, sync.target_id)
+            if existing:
+                existing.ticket_id = ticket.ticket_id
+                existing.comment_type = comment_type
+                existing.content = content
+                existing.author_id = author_id
+                existing.is_internal = is_internal
+                existing.action = action
+                existing.old_value = old_value
+                existing.new_value = new_value
+                if entry.timestamp:
+                    existing.created_at = entry.timestamp
+                sync.mark_synced(existing.comment_id)
+                logger.debug(
+                    "CRM ticket activity dedupe hit: kind=%s id=%s ticket=%s",
+                    entry.kind,
+                    entry.id,
+                    ticket.ticket_number,
+                )
+                return existing, 1
+
+        comment = TicketComment(
+            ticket_id=ticket.ticket_id,
+            comment_type=comment_type,
+            content=content,
+            author_id=author_id,
+            is_internal=is_internal,
+            action=action,
+            old_value=old_value,
+            new_value=new_value,
+        )
+        if entry.timestamp:
+            comment.created_at = entry.timestamp
+        self.db.add(comment)
+        self.db.flush()
+
+        if sync:
+            sync.target_table = "support.ticket_comment"
+            sync.target_id = comment.comment_id
+            sync.mark_synced(comment.comment_id)
+        else:
+            self.db.add(
+                SyncEntity(
+                    organization_id=org_id,
+                    source_system="crm",
+                    source_doctype=doctype,
+                    source_name=entry.id,
+                    target_table="support.ticket_comment",
+                    target_id=comment.comment_id,
+                    sync_status=SyncStatus.SYNCED,
+                )
+            )
+        return comment, 0
+
+    def _resolve_crm_person_id(
+        self, org_id: UUID, author_person_id: str | None
+    ) -> UUID | None:
+        """Resolve CRM author to local Person ID.
+
+        Accepts either:
+        - Person UUID (people.id)
+        - Employee UUID (hr.employee.employee_id), then maps to person_id.
+        """
+        if not author_person_id:
+            return None
+        try:
+            external_id = UUID(author_person_id)
+        except (TypeError, ValueError):
+            return None
+
+        # 1) Direct Person UUID
+        person = self.db.get(Person, external_id)
+        if not person or person.organization_id != org_id:
+            # 2) Employee UUID -> Person UUID fallback
+            employee = self.db.get(Employee, external_id)
+            if (
+                employee
+                and employee.organization_id == org_id
+                and employee.person_id is not None
+            ):
+                return employee.person_id
+            return None
+        return external_id
 
     def _create_task(
         self,

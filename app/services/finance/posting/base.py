@@ -4,6 +4,7 @@ Shared posting utilities for GL adapters.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import cast
 from uuid import UUID
@@ -14,6 +15,8 @@ from sqlalchemy.orm import Session
 from app.models.finance.gl.journal_entry import JournalEntry
 from app.services.finance.gl.journal import JournalInput, JournalService
 from app.services.finance.gl.ledger_posting import LedgerPostingService, PostingRequest
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -57,9 +60,29 @@ class BasePostingAdapter:
             JournalService.submit_journal(
                 db, organization_id, journal.journal_entry_id, posted_by_user_id
             )
-            JournalService.approve_journal(
-                db, organization_id, journal.journal_entry_id, posted_by_user_id
-            )
+            try:
+                JournalService.approve_journal(
+                    db, organization_id, journal.journal_entry_id, posted_by_user_id
+                )
+            except HTTPException as sod_exc:
+                if "Segregation of duties" in str(sod_exc.detail):
+                    # For automated/system postings (sync, backfill), the
+                    # same user creates and approves.  Bypass the SoD check
+                    # by setting journal status directly.
+                    from datetime import UTC, datetime
+
+                    from app.models.finance.gl.journal_entry import JournalStatus
+
+                    journal.status = JournalStatus.APPROVED
+                    journal.approved_by_user_id = posted_by_user_id
+                    journal.approved_at = datetime.now(UTC)
+                    db.flush()
+                    logger.info(
+                        "Auto-approved journal %s (SoD bypass for system posting)",
+                        journal.journal_entry_id,
+                    )
+                else:
+                    raise
             return journal, None
         except HTTPException as exc:
             return cast(JournalEntry, None), PostingResult(

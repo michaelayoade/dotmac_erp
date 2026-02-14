@@ -74,6 +74,7 @@ class MaterialRequestSyncService(BaseSyncService[MaterialRequest]):
                 request["items"] = client.list_documents(
                     doctype="Material Request Item",
                     filters={"parent": request["name"]},
+                    parent="Material Request",
                 )
                 yield request
         else:

@@ -98,6 +98,7 @@ class TimesheetSyncService(BaseSyncService[TimeEntry]):
                 "Timesheet Detail",
                 filters=[["parent", "=", timesheet_name]],
                 fields=detail_fields,
+                parent="Timesheet",
             )
 
             for detail in details:

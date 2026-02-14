@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{%- from "components/macros.html" import status_badge, pagination, live_search %}
+{%- from "components/macros.html" import compact_filters, filter_select_field, status_badge, pagination %}
 
 {% block page_title %}Salary Components{% endblock %}
 
@@ -24,15 +24,15 @@
 
 {% block content %}
 <div class="space-y-6">
-    {{ live_search(
-        search=search,
-        filters=[
-            {"name": "component_type", "label": "All Types", "value": component_type,
-             "options": [{"value": "EARNING", "label": "Earning"}, {"value": "DEDUCTION", "label": "Deduction"}]}
-        ],
+    {% call(filter_attrs) compact_filters(
         base_url="/people/payroll/components",
-        placeholder="Search components..."
-    ) }}
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search components..."
+    ) %}
+        {{ filter_select_field("component_type", "Component Type", component_type, [{"value": "EARNING", "label": "Earning"}, {"value": "DEDUCTION", "label": "Deduction"}], filter_attrs) }}
+    {% endcall %}
 
     <div id="results-container">
     {# Components Grid #}

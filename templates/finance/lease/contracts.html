@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import status_badge, live_search, pagination %}
+{% from "components/macros.html" import status_badge, compact_filters, pagination %}
 
 {% block page_title %}Lease Contracts{% endblock %}
 
@@ -23,37 +23,35 @@
 
 {% block content %}
 <div class="space-y-6">
-    {# Search and Filters #}
-    {{ live_search(
-        search=search,
-        filters=[
-            {
-                "name": "status",
-                "label": "All Status",
-                "value": status,
-                "options": [
-                    {"value": "DRAFT", "label": "Draft"},
-                    {"value": "ACTIVE", "label": "Active"},
-                    {"value": "MODIFIED", "label": "Modified"},
-                    {"value": "TERMINATED", "label": "Terminated"},
-                    {"value": "EXPIRED", "label": "Expired"}
-                ]
-            },
-            {
-                "name": "lease_type",
-                "label": "All Types",
-                "value": lease_type,
-                "options": [
-                    {"value": "FINANCE", "label": "Finance"},
-                    {"value": "OPERATING", "label": "Operating"},
-                    {"value": "SHORT_TERM", "label": "Short Term"},
-                    {"value": "LOW_VALUE", "label": "Low Value"}
-                ]
-            }
-        ],
+    {% call(filter_attrs) compact_filters(
         base_url="/finance/lease/contracts",
-        placeholder="Search contracts..."
-    ) }}
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search | default('', true),
+        search_placeholder="Search contracts..."
+    ) %}
+        <div>
+            <label class="form-label text-xs">Status</label>
+            <select name="status" class="form-select w-full" {{ filter_attrs }}>
+                <option value="">All Status</option>
+                <option value="DRAFT" {{ 'selected' if status == 'DRAFT' else '' }}>Draft</option>
+                <option value="ACTIVE" {{ 'selected' if status == 'ACTIVE' else '' }}>Active</option>
+                <option value="MODIFIED" {{ 'selected' if status == 'MODIFIED' else '' }}>Modified</option>
+                <option value="TERMINATED" {{ 'selected' if status == 'TERMINATED' else '' }}>Terminated</option>
+                <option value="EXPIRED" {{ 'selected' if status == 'EXPIRED' else '' }}>Expired</option>
+            </select>
+        </div>
+        <div>
+            <label class="form-label text-xs">Type</label>
+            <select name="lease_type" class="form-select w-full" {{ filter_attrs }}>
+                <option value="">All Types</option>
+                <option value="FINANCE" {{ 'selected' if lease_type == 'FINANCE' else '' }}>Finance</option>
+                <option value="OPERATING" {{ 'selected' if lease_type == 'OPERATING' else '' }}>Operating</option>
+                <option value="SHORT_TERM" {{ 'selected' if lease_type == 'SHORT_TERM' else '' }}>Short Term</option>
+                <option value="LOW_VALUE" {{ 'selected' if lease_type == 'LOW_VALUE' else '' }}>Low Value</option>
+            </select>
+        </div>
+    {% endcall %}
 
     <div id="results-container">
     <div class="rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800/50">

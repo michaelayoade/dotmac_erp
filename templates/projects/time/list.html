@@ -79,6 +79,7 @@
     </div>
     {% endcall %}
 
+    <div id="results-container">
     <!-- Bulk Actions Bar -->
     <div x-show="selectedEntries.length > 0" x-cloak
          class="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-700 dark:bg-amber-900/20">
@@ -219,5 +220,6 @@
         </nav>
     </div>
     {% endif %}
+    </div>
 </div>
 {% endblock %}

@@ -4,6 +4,7 @@ from app.tasks.automation import (
     execute_workflow_action,
     process_scheduled_workflow_rules,
 )
+from app.tasks.banking import auto_match_unreconciled_statements
 from app.tasks.email import send_email_async
 from app.tasks.expense import (
     calculate_expense_analytics,
@@ -16,6 +17,9 @@ from app.tasks.expense import (
 )
 from app.tasks.finance import (
     sync_paystack_transactions,
+)
+from app.tasks.fleet import (
+    process_document_expiry_notifications,
 )
 from app.tasks.hr import (
     calculate_hr_analytics,
@@ -39,6 +43,12 @@ from app.tasks.performance import (
     process_cycle_phase_transitions,
     sync_all_cycle_progress,
 )
+from app.tasks.splynx import (
+    run_scheduled_splynx_sync,
+    run_splynx_daily_reconciliation,
+    run_splynx_full_reconciliation,
+    run_splynx_incremental_sync,
+)
 from app.tasks.sync import (
     push_expense_claim_to_erpnext,
     run_full_erpnext_sync,
@@ -56,6 +66,10 @@ __all__ = [
     "scheduled_hr_sync",
     "scheduled_expense_sync",
     "push_expense_claim_to_erpnext",
+    "run_scheduled_splynx_sync",
+    "run_splynx_incremental_sync",
+    "run_splynx_daily_reconciliation",
+    "run_splynx_full_reconciliation",
     # Expense module tasks
     "refresh_period_usage_cache",
     "process_expense_approval_reminders",
@@ -72,6 +86,8 @@ __all__ = [
     "process_performance_review_reminders",
     "process_certification_expiry_notifications",
     "calculate_hr_analytics",
+    # Fleet module tasks
+    "process_document_expiry_notifications",
     # Performance module tasks
     "process_cycle_phase_transitions",
     "generate_cycle_appraisals",
@@ -92,4 +108,6 @@ __all__ = [
     "process_scheduled_workflow_rules",
     # Finance tasks
     "sync_paystack_transactions",
+    # Banking tasks
+    "auto_match_unreconciled_statements",
 ]

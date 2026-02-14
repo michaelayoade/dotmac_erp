@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{%- from "components/macros.html" import status_badge, pagination, live_search %}
+{%- from "components/macros.html" import compact_filters, filter_select_field, status_badge, pagination %}
 
 {% block page_title %}Employee Loans{% endblock %}
 
@@ -33,12 +33,14 @@
 
 {% block content %}
 <div class="space-y-6">
-    {% call(search_attrs) live_search(
-        search=search,
+    {% call(filter_attrs) compact_filters(
         base_url="/people/payroll/loans",
-        placeholder="Search loans..."
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search,
+        search_placeholder="Search loans..."
     ) %}
-        <select name="status" class="form-select" {{ search_attrs }}>
+        <select name="status" class="form-select" {{ filter_attrs }}>
             <option value="">All Statuses</option>
             {% for val, label in statuses %}
             <option value="{{ val }}" {{ 'selected' if status == val else '' }}>{{ label }}</option>

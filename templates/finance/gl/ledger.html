@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import live_search, pagination %}
+{% from "components/macros.html" import compact_filters, pagination, stats_card, filter_custom_select_field %}
 
 {% block page_title %}General Ledger{% endblock %}
 
@@ -34,23 +34,31 @@
 
 {% block content %}
 <div class="space-y-6 page-enter">
-    {% call(search_attrs) live_search(
-        search=search,
+    {% set zero_amount = ((presentation_currency_code or default_currency_code) ~ ' 0.00') if (presentation_currency_code or default_currency_code) else '0.00' %}
+    <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {{ stats_card("Entries", total_count | default(0), icon="list", color="slate") }}
+        {{ stats_card("Total Debit", total_debit | default(zero_amount), icon="arrow-up", color="amber") }}
+        {{ stats_card("Total Credit", total_credit | default(zero_amount), icon="arrow-down", color="teal") }}
+        {{ stats_card("Net Movement", net_movement | default(zero_amount), icon="chart", color="blue") }}
+    </div>
+
+    {% call(filter_attrs) compact_filters(
         base_url="/finance/gl/ledger",
-        placeholder="Description, reference..."
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search | default('', true),
+        search_placeholder="Description, reference...",
+        date_range=true,
+        start_date=start_date | default('', true),
+        end_date=end_date | default('', true)
     ) %}
-        <select name="account_id" class="form-select" {{ search_attrs }}>
-            <option value="">All Accounts</option>
-            {% for account in accounts %}
-            <option value="{{ account.account_id }}" {{ 'selected' if selected_account_id == account.account_id else '' }}>
-                {{ account.account_code }} - {{ account.account_name }}
-            </option>
-            {% endfor %}
-        </select>
-        <input type="date" name="start_date" value="{{ start_date if start_date else '' }}"
-               class="form-input" {{ search_attrs }}>
-        <input type="date" name="end_date" value="{{ end_date if end_date else '' }}"
-               class="form-input" {{ search_attrs }}>
+        {% call filter_custom_select_field("account_id", "Account", filter_attrs) %}
+        {% for account in accounts %}
+        <option value="{{ account.account_id }}" {{ 'selected' if selected_account_id == account.account_id else '' }}>
+            {{ account.account_code }} - {{ account.account_name }}
+        </option>
+        {% endfor %}
+        {% endcall %}
     {% endcall %}
 
     <!-- Account Header (when single account selected) -->
@@ -155,7 +163,8 @@
             total_pages=total_pages,
             total_count=total_count,
             limit=limit,
-            search=search
+            search=search,
+            filters={"account_id": selected_account_id, "start_date": start_date, "end_date": end_date}
         ) }}
     </div>
 

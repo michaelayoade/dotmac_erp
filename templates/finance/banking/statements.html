@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card, compact_filters, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_export, bulk_icon_delete %}
+{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card, compact_filters, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_export, bulk_icon_delete, filter_select_field, filter_custom_select_field, action_buttons %}
 
 {% block page_title %}Bank Statements{% endblock %}
 
@@ -40,26 +40,24 @@
         start_date=start_date | default('', true),
         end_date=end_date | default('', true)
     ) %}
-    <div>
-        <label class="form-label text-xs">Account</label>
-        <select name="account_id" data-testid="bank-statements-account" class="form-select w-full" {{ filter_attrs }}>
-            <option value="">All Accounts</option>
-            {% for acc in accounts %}
-            <option value="{{ acc.bank_account_id }}" {{ 'selected' if account_id == acc.bank_account_id|string else '' }}>
-                {{ acc.bank_name }} - {{ acc.account_number }}
-            </option>
-            {% endfor %}
-        </select>
-    </div>
-    <div>
-        <label class="form-label text-xs">Status</label>
-        <select name="status" data-testid="bank-statements-status" class="form-select w-full" {{ filter_attrs }}>
-            <option value="">All Status</option>
-            <option value="imported" {{ 'selected' if status == 'imported' else '' }}>Imported</option>
-            <option value="in_progress" {{ 'selected' if status == 'in_progress' else '' }}>In Progress</option>
-            <option value="reconciled" {{ 'selected' if status == 'reconciled' else '' }}>Reconciled</option>
-        </select>
-    </div>
+    {% call filter_custom_select_field("account_id", "Account", "data-testid='bank-statements-account' " ~ filter_attrs) %}
+    {% for acc in accounts %}
+    <option value="{{ acc.bank_account_id }}" {{ 'selected' if account_id == acc.bank_account_id|string else '' }}>
+        {{ acc.bank_name }} - {{ acc.account_number }}
+    </option>
+    {% endfor %}
+    {% endcall %}
+    {{ filter_select_field(
+        "status",
+        "Status",
+        status,
+        [
+            {"value": "imported", "label": "Imported"},
+            {"value": "in_progress", "label": "In Progress"},
+            {"value": "reconciled", "label": "Reconciled"}
+        ],
+        'data-testid="bank-statements-status" ' ~ filter_attrs
+    ) }}
     {% endcall %}
 
     {# Results Container (HTMX target) #}
@@ -70,6 +68,7 @@
                 <thead>
                     <tr>
                         {{ bulk_select_header() }}
+                        <th scope="col">Statement Date</th>
                         <th scope="col">Statement #</th>
                         <th scope="col">Bank Account</th>
                         <th scope="col">Period</th>
@@ -84,11 +83,13 @@
                     {% for stmt in statements %}
                     <tr class="group">
                         {{ bulk_select_cell(stmt.statement_id) }}
+                        <td class="text-slate-600 dark:text-slate-400 whitespace-nowrap">
+                            {{ stmt.statement_date }}
+                        </td>
                         <td>
                             <a href="/finance/banking/statements/{{ stmt.statement_id }}" class="font-mono text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
                                 {{ stmt.statement_number }}
                             </a>
-                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ stmt.statement_date }}</p>
                         </td>
                         <td>
                             <p class="text-sm font-medium text-slate-900 dark:text-white">{{ stmt.bank_name | default("") }}</p>
@@ -109,21 +110,12 @@
                             {{ status_badge(stmt.status | default('imported'), 'sm') }}
                         </td>
                         <td>
-                            <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <a href="/finance/banking/statements/{{ stmt.statement_id }}"
-                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
-                                   title="View statement" aria-label="View statement">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                    </svg>
-                                </a>
-                            </div>
+                            {{ action_buttons(view_href="/finance/banking/statements/" ~ stmt.statement_id) }}
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="9" class="py-12">
+                        <td colspan="10" class="py-12">
                             {{ empty_state(
                                 'No bank statements found',
                                 'Import your first bank statement to get started' if not (active_filters | default([])) else 'Try adjusting your filter criteria',

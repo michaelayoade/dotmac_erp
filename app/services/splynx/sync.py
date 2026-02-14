@@ -8,6 +8,7 @@ to Dotmac ERP AR module.
 import hashlib
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -142,9 +143,12 @@ class SplynxSyncService:
     DEFAULT_BANK_NAME_MAPPING: dict[str, str | None] = {
         "zenith 461": "zenith 461",
         "zenith 523": "zenith 523",
-        "paystack": "paystack",
+        "paystack": "paystack collections",
+        "pay stack": "paystack collections",
         "uba": "uba 96",
         "flutterwave": "flutterwave",
+        "flutter wave": "flutterwave",
+        "fluterwave": "flutterwave",
         "dotmac usd": "zenith usd",
         "cash": None,  # Cash doesn't map to a bank account
     }
@@ -188,6 +192,7 @@ class SplynxSyncService:
         self._bank_account_mapping: dict[
             int, UUID
         ] = {}  # splynx_method_id -> erp_bank_account_id
+        self._default_bank_account_cache: dict[str, UUID] = {}
 
     @property
     def client(self) -> SplynxClient:
@@ -222,30 +227,74 @@ class SplynxSyncService:
         """
         from app.models.finance.banking.bank_account import BankAccount
 
-        # Get ERP bank accounts via ORM
-        stmt = select(BankAccount).where(
-            BankAccount.organization_id == self.organization_id
+        def _normalize_text(value: str | None) -> str:
+            if not value:
+                return ""
+            # Keep alphanumeric only so we match variants like
+            # "Pay stack", "Paystack", "Flutter-Wave", "Fluterwave".
+            return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+        def _matches_account_pattern(pattern: str, account_search: str) -> bool:
+            if pattern in account_search:
+                return True
+            # Handle compact patterns like "zenith461" by checking alpha+digit
+            # fragments independently in the normalized account corpus.
+            m = re.fullmatch(r"([a-z]+)(\d+)", pattern)
+            if m:
+                return m.group(1) in account_search and m.group(2) in account_search
+            return False
+
+        # Get ERP bank accounts via ORM (prefer primary first for stable mapping)
+        stmt = (
+            select(BankAccount)
+            .where(BankAccount.organization_id == self.organization_id)
+            .order_by(BankAccount.is_primary.desc(), BankAccount.created_at.asc())
         )
         accounts = self.db.scalars(stmt).all()
-        erp_accounts = {
-            acct.account_name.lower(): acct.bank_account_id for acct in accounts
+
+        account_candidates: list[tuple[UUID, str]] = []
+        for acct in accounts:
+            search_parts = [
+                acct.bank_name,
+                acct.account_name,
+                f"{acct.bank_name} {acct.account_name}",
+                acct.account_number,
+            ]
+            if acct.account_number and len(acct.account_number) >= 4:
+                search_parts.append(acct.account_number[-4:])
+
+            normalized_search = " ".join(
+                part for part in (_normalize_text(p) for p in search_parts) if part
+            )
+            account_candidates.append((acct.bank_account_id, normalized_search))
+
+        normalized_rules = {
+            _normalize_text(splynx_pattern): (
+                _normalize_text(erp_pattern) if erp_pattern else None
+            )
+            for splynx_pattern, erp_pattern in self._bank_name_mapping.items()
         }
 
         for method_id, method in self._payment_method_cache.items():
-            method_name_lower = method.name.lower()
+            normalized_method_name = _normalize_text(method.name)
 
-            for splynx_pattern, erp_pattern in self._bank_name_mapping.items():
-                if splynx_pattern in method_name_lower and erp_pattern:
-                    for erp_name, erp_id in erp_accounts.items():
-                        if erp_pattern in erp_name:
-                            self._bank_account_mapping[method_id] = erp_id
-                            logger.debug(
-                                "Mapped Splynx method '%s' to ERP bank '%s'",
-                                method.name,
-                                erp_name,
-                            )
-                            break
+            for splynx_pattern, erp_pattern in normalized_rules.items():
+                if not splynx_pattern or splynx_pattern not in normalized_method_name:
+                    continue
+                if not erp_pattern:
+                    # Explicitly unsupported/no-bank mapping (e.g. cash)
                     break
+
+                for bank_account_id, account_search in account_candidates:
+                    if _matches_account_pattern(erp_pattern, account_search):
+                        self._bank_account_mapping[method_id] = bank_account_id
+                        logger.debug(
+                            "Mapped Splynx method '%s' via pattern '%s'",
+                            method.name,
+                            splynx_pattern,
+                        )
+                        break
+                break
 
         logger.info(
             "Built bank account mapping: %d of %d payment methods mapped",
@@ -253,10 +302,38 @@ class SplynxSyncService:
             len(self._payment_method_cache),
         )
 
-    def _get_bank_account_for_payment(self, payment_type: int) -> UUID | None:
+    def _get_default_bank_account(self, currency_code: str) -> UUID | None:
+        """Get the organization's default active bank account for a currency."""
+        from app.models.finance.banking.bank_account import BankAccount
+
+        code = (currency_code or "NGN").upper()
+        cached = self._default_bank_account_cache.get(code)
+        if cached:
+            return cached
+
+        stmt = (
+            select(BankAccount.bank_account_id)
+            .where(
+                BankAccount.organization_id == self.organization_id,
+                BankAccount.currency_code == code,
+                BankAccount.status == "active",
+            )
+            .order_by(BankAccount.is_primary.desc(), BankAccount.created_at.asc())
+        )
+        bank_account_id = self.db.scalar(stmt)
+        if bank_account_id:
+            self._default_bank_account_cache[code] = bank_account_id
+        return bank_account_id
+
+    def _get_bank_account_for_payment(
+        self, payment_type: int, currency_code: str
+    ) -> UUID | None:
         """Get ERP bank account ID for a Splynx payment type."""
         self._load_payment_methods()
-        return self._bank_account_mapping.get(payment_type)
+        mapped = self._bank_account_mapping.get(payment_type)
+        if mapped:
+            return mapped
+        return self._get_default_bank_account(currency_code)
 
     def _get_payment_method_name(self, payment_type: int) -> str:
         """Get payment method name for display."""
@@ -274,7 +351,12 @@ class SplynxSyncService:
         name_lower = method.name.lower()
         if "cash" in name_lower:
             return PaymentMethod.CASH
-        elif "paystack" in name_lower or "flutterwave" in name_lower:
+        elif (
+            "paystack" in name_lower
+            or "flutterwave" in name_lower
+            or "flutter wave" in name_lower
+            or "fluterwave" in name_lower
+        ):
             return PaymentMethod.CARD
         elif "remita" in name_lower:
             return PaymentMethod.DIRECT_DEBIT
@@ -285,10 +367,35 @@ class SplynxSyncService:
         """Generate customer code from Splynx ID."""
         return f"{self.SOURCE_PREFIX}-{splynx_id}"
 
-    def _make_invoice_number(self, splynx_id: int) -> str:
-        """Generate invoice number from Splynx invoice ID (max 30 chars)."""
-        # Use ID instead of full number to stay under 30 char limit
-        return f"SPL-INV-{splynx_id}"
+    def _generate_invoice_number(self, reference_date: date | None = None) -> str:
+        """Generate sequential invoice number via numbering service."""
+        from app.models.finance.core_config.numbering_sequence import SequenceType
+        from app.services.finance.common.numbering import SyncNumberingService
+
+        svc = SyncNumberingService(self.db)
+        return svc.generate_next_number(
+            self.organization_id, SequenceType.INVOICE, reference_date
+        )
+
+    def _generate_payment_number(self, reference_date: date | None = None) -> str:
+        """Generate sequential payment number via numbering service."""
+        from app.models.finance.core_config.numbering_sequence import SequenceType
+        from app.services.finance.common.numbering import SyncNumberingService
+
+        svc = SyncNumberingService(self.db)
+        return svc.generate_next_number(
+            self.organization_id, SequenceType.PAYMENT, reference_date
+        )
+
+    def _generate_credit_note_number(self, reference_date: date | None = None) -> str:
+        """Generate sequential credit note number via numbering service."""
+        from app.models.finance.core_config.numbering_sequence import SequenceType
+        from app.services.finance.common.numbering import SyncNumberingService
+
+        svc = SyncNumberingService(self.db)
+        return svc.generate_next_number(
+            self.organization_id, SequenceType.CREDIT_NOTE, reference_date
+        )
 
     def _parse_date(self, date_str: str | None) -> date | None:
         """Parse date string from Splynx."""
@@ -604,9 +711,11 @@ class SplynxSyncService:
                     break
 
                 try:
+                    savepoint = self.db.begin_nested()
                     self._sync_single_customer(
                         splynx_customer, created_by_user_id, result, skip_unchanged
                     )
+                    savepoint.commit()
                     processed += 1
 
                     # Commit + expunge periodically to prevent OOM
@@ -616,6 +725,10 @@ class SplynxSyncService:
                         logger.info("Progress: %d customers processed", processed)
 
                 except Exception as e:
+                    try:
+                        savepoint.rollback()
+                    except Exception:
+                        self.db.rollback()
                     result.errors.append(f"Customer {splynx_customer.id}: {str(e)}")
                     logger.exception("Error syncing customer %s", splynx_customer.id)
 
@@ -750,6 +863,7 @@ class SplynxSyncService:
         self,
         date_from: date | None = None,
         date_to: date | None = None,
+        status: str | None = None,
         created_by_user_id: UUID | None = None,
         batch_size: int | None = None,
         skip_unchanged: bool = True,
@@ -760,6 +874,7 @@ class SplynxSyncService:
         Args:
             date_from: Only sync invoices created after this date
             date_to: Only sync invoices created before this date
+            status: Filter by Splynx status (paid, unpaid, partially_paid)
             created_by_user_id: User ID to record as creator
             batch_size: Max number of records to sync (None = all)
             skip_unchanged: Skip records that haven't changed (default True)
@@ -775,6 +890,7 @@ class SplynxSyncService:
             for splynx_invoice in self.client.get_invoices(
                 date_from=date_from,
                 date_to=date_to,
+                status=status,
             ):
                 # Check batch limit
                 if batch_size and processed >= batch_size:
@@ -782,9 +898,11 @@ class SplynxSyncService:
                     break
 
                 try:
+                    savepoint = self.db.begin_nested()
                     self._sync_single_invoice(
                         splynx_invoice, created_by_user_id, result, skip_unchanged
                     )
+                    savepoint.commit()
                     processed += 1
 
                     # Commit + expunge periodically to prevent OOM
@@ -794,6 +912,10 @@ class SplynxSyncService:
                         logger.info("Progress: %d invoices processed", processed)
 
                 except Exception as e:
+                    try:
+                        savepoint.rollback()
+                    except Exception:
+                        self.db.rollback()
                     result.errors.append(f"Invoice {splynx_invoice.number}: {str(e)}")
                     logger.exception("Error syncing invoice %s", splynx_invoice.number)
 
@@ -840,14 +962,21 @@ class SplynxSyncService:
             result.skipped += 1
             return
 
-        # Check for existing via sync tracking
+        # Check for existing via sync tracking, splynx_id, or legacy invoice number
         local_id = self._get_synced_entity(EntityType.INVOICE, external_id)
         existing = None
         if local_id:
             existing = self.db.get(Invoice, local_id)
-        else:
-            invoice_number = self._make_invoice_number(splynx_invoice.id)
-            existing = self._get_existing_invoice(invoice_number)
+        if not existing:
+            # Try by splynx_id column
+            stmt = select(Invoice).where(
+                Invoice.organization_id == self.organization_id,
+                Invoice.splynx_id == str(splynx_invoice.id),
+            )
+            existing = self.db.scalar(stmt)
+        if not existing:
+            # Legacy fallback: old SPL-INV-{id} format
+            existing = self._get_existing_invoice(f"SPL-INV-{splynx_invoice.id}")
 
         # Get customer ID
         customer_id = self._get_or_create_customer_id(splynx_invoice.customer_id)
@@ -869,7 +998,6 @@ class SplynxSyncService:
         status = self._map_invoice_status(
             splynx_invoice.status, splynx_invoice.total_due
         )
-        invoice_number = self._make_invoice_number(splynx_invoice.id)
 
         currency_code = splynx_invoice.currency or "NGN"
 
@@ -885,42 +1013,25 @@ class SplynxSyncService:
             existing.amount_paid = amount_paid
             existing.status = status
             existing.notes = splynx_invoice.note
-            # Ensure invoice line reflects updated total
-            line = None
-            if hasattr(existing, "lines"):
-                try:
-                    existing_lines = list(existing.lines or [])
-                except Exception:
-                    existing_lines = []
-                if existing_lines:
-                    line = existing_lines[0]
-            if line:
-                line.description = f"Splynx Invoice {splynx_invoice.number}"
-                line.unit_price = splynx_invoice.total
-                line.line_amount = splynx_invoice.total
-                line.tax_amount = Decimal("0")
-            elif self.default_revenue_account_id:
-                line = InvoiceLine(
-                    invoice_id=existing.invoice_id,
-                    line_number=1,
-                    description=f"Splynx Invoice {splynx_invoice.number}",
-                    quantity=Decimal("1"),
-                    unit_price=splynx_invoice.total,
-                    discount_percentage=Decimal("0"),
-                    discount_amount=Decimal("0"),
-                    line_amount=splynx_invoice.total,
-                    tax_amount=Decimal("0"),
-                    revenue_account_id=self.default_revenue_account_id,
-                )
-                self.db.add(line)
+            existing.splynx_id = str(splynx_invoice.id)
+            existing.splynx_number = splynx_invoice.number
+            existing.last_synced_at = datetime.now(UTC)
+
+            # Replace invoice lines with parsed items
+            self._replace_invoice_lines(
+                existing.invoice_id, splynx_invoice, is_credit_note=False
+            )
+
             result.updated += 1
             # Record sync
             self._record_sync(
                 EntityType.INVOICE, external_id, existing.invoice_id, data_hash
             )
-            # Ensure GL entries exist for posted invoices
-            self._ensure_invoice_gl_posted(existing, created_by_user_id)
+            # GL posting deferred to backfill script
         else:
+            # Generate own sequential number
+            invoice_number = self._generate_invoice_number(invoice_date)
+
             # Create new invoice
             invoice = Invoice(
                 organization_id=self.organization_id,
@@ -942,33 +1053,99 @@ class SplynxSyncService:
                 notes=splynx_invoice.note,
                 internal_notes=f"Imported from Splynx. Original ID: {splynx_invoice.id}",
                 created_by_user_id=created_by_user_id or SYSTEM_USER_ID,
+                splynx_id=str(splynx_invoice.id),
+                splynx_number=splynx_invoice.number,
+                last_synced_at=datetime.now(UTC),
             )
             self.db.add(invoice)
             self.db.flush()
 
-            # Add invoice line (single line for the total)
-            if self.default_revenue_account_id:
-                line = InvoiceLine(
-                    invoice_id=invoice.invoice_id,
-                    line_number=1,
-                    description=f"Splynx Invoice {splynx_invoice.number}",
-                    quantity=Decimal("1"),
-                    unit_price=splynx_invoice.total,
-                    discount_percentage=Decimal("0"),
-                    discount_amount=Decimal("0"),
-                    line_amount=splynx_invoice.total,
-                    tax_amount=Decimal("0"),
-                    revenue_account_id=self.default_revenue_account_id,
-                )
-                self.db.add(line)
+            # Add invoice lines from Splynx items (or single fallback line)
+            self._create_invoice_lines(
+                invoice.invoice_id, splynx_invoice, is_credit_note=False
+            )
 
             result.created += 1
             # Record sync
             self._record_sync(
                 EntityType.INVOICE, external_id, invoice.invoice_id, data_hash
             )
-            # Ensure GL entries exist for posted invoices
-            self._ensure_invoice_gl_posted(invoice, created_by_user_id)
+            # GL posting deferred to backfill script
+
+    def _create_invoice_lines(
+        self,
+        invoice_id: UUID,
+        splynx_doc: SplynxInvoice | SplynxCreditNote,
+        *,
+        is_credit_note: bool = False,
+    ) -> None:
+        """Create InvoiceLine records from Splynx items array.
+
+        Falls back to a single summary line if items array is empty or missing.
+        """
+        if not self.default_revenue_account_id:
+            return
+
+        items = getattr(splynx_doc, "items", []) or []
+        label = "Credit Note" if is_credit_note else "Invoice"
+
+        if items:
+            for seq, item in enumerate(items, 1):
+                qty = Decimal(str(item.get("quantity", 1)))
+                price = Decimal(str(item.get("unit_price", item.get("price", 0))))
+                total = Decimal(str(item.get("total", 0)))
+                if total == Decimal("0") and qty and price:
+                    total = qty * price
+                desc = item.get("description") or item.get("service_name") or ""
+                if not desc:
+                    desc = f"Splynx {label} {splynx_doc.number} - line {seq}"
+
+                line = InvoiceLine(
+                    invoice_id=invoice_id,
+                    line_number=seq,
+                    description=desc,
+                    quantity=qty,
+                    unit_price=price,
+                    discount_percentage=Decimal("0"),
+                    discount_amount=Decimal("0"),
+                    line_amount=total,
+                    tax_amount=Decimal("0"),
+                    revenue_account_id=self.default_revenue_account_id,
+                )
+                self.db.add(line)
+        else:
+            # Fallback: single summary line
+            line = InvoiceLine(
+                invoice_id=invoice_id,
+                line_number=1,
+                description=f"Splynx {label} {splynx_doc.number}",
+                quantity=Decimal("1"),
+                unit_price=splynx_doc.total,
+                discount_percentage=Decimal("0"),
+                discount_amount=Decimal("0"),
+                line_amount=splynx_doc.total,
+                tax_amount=Decimal("0"),
+                revenue_account_id=self.default_revenue_account_id,
+            )
+            self.db.add(line)
+
+    def _replace_invoice_lines(
+        self,
+        invoice_id: UUID,
+        splynx_doc: SplynxInvoice | SplynxCreditNote,
+        *,
+        is_credit_note: bool = False,
+    ) -> None:
+        """Delete existing lines and recreate from current Splynx data."""
+        # Delete old lines
+        from sqlalchemy import delete
+
+        stmt = delete(InvoiceLine).where(InvoiceLine.invoice_id == invoice_id)
+        self.db.execute(stmt)
+        # Create fresh lines
+        self._create_invoice_lines(
+            invoice_id, splynx_doc, is_credit_note=is_credit_note
+        )
 
     def _ensure_invoice_gl_posted(
         self,
@@ -1041,9 +1218,11 @@ class SplynxSyncService:
                     break
 
                 try:
+                    savepoint = self.db.begin_nested()
                     self._sync_single_payment(
                         splynx_payment, result, created_by_user_id, skip_unchanged
                     )
+                    savepoint.commit()
                     processed += 1
 
                     # Commit + expunge periodically to prevent OOM
@@ -1053,6 +1232,10 @@ class SplynxSyncService:
                         logger.info("Progress: %d payments processed", processed)
 
                 except Exception as e:
+                    try:
+                        savepoint.rollback()
+                    except Exception:
+                        self.db.rollback()
                     result.errors.append(f"Payment {splynx_payment.id}: {str(e)}")
                     logger.exception("Error syncing payment %s", splynx_payment.id)
 
@@ -1082,7 +1265,9 @@ class SplynxSyncService:
         Sync a single payment.
 
         Creates CustomerPayment record with bank account mapping and
-        allocates payment to the associated invoice.
+        allocates payment to the associated invoice.  Payments without
+        an invoice_id are created as unapplied (prepayment / advance);
+        future syncs will allocate them once Splynx assigns the invoice.
         """
         external_id = str(splynx_payment.id)
 
@@ -1104,46 +1289,53 @@ class SplynxSyncService:
             result.skipped += 1
             return
 
-        if not splynx_payment.invoice_id:
-            result.skipped += 1
-            result.errors.append(
-                f"Payment {splynx_payment.id}: No invoice_id, skipping"
-            )
-            return
-
         # Check if already synced (update path)
         local_id = self._get_synced_entity(EntityType.PAYMENT, external_id)
 
-        # Find the invoice by correlation_id
-        correlation_id = f"splynx-inv-{splynx_payment.invoice_id}"
-        stmt = select(Invoice).where(
-            Invoice.organization_id == self.organization_id,
-            Invoice.correlation_id == correlation_id,
-        )
-        invoice = self.db.scalar(stmt)
-
-        if not invoice:
-            result.skipped += 1
-            result.errors.append(
-                f"Payment {splynx_payment.id}: Invoice {splynx_payment.invoice_id} not synced"
+        # Resolve invoice (optional — payments may be unapplied prepayments)
+        invoice: Invoice | None = None
+        if splynx_payment.invoice_id:
+            correlation_id = f"splynx-inv-{splynx_payment.invoice_id}"
+            stmt = select(Invoice).where(
+                Invoice.organization_id == self.organization_id,
+                Invoice.correlation_id == correlation_id,
             )
-            return
+            invoice = self.db.scalar(stmt)
 
-        # Get bank account for this payment method
+            if not invoice:
+                result.skipped += 1
+                result.errors.append(
+                    f"Payment {splynx_payment.id}: Invoice {splynx_payment.invoice_id} not synced"
+                )
+                return
+
+        # Resolve customer — from invoice if available, otherwise from Splynx customer_id
+        customer_id: UUID
+        if invoice:
+            customer_id = invoice.customer_id
+            currency_code = invoice.currency_code or "NGN"
+        else:
+            resolved_cust = self._get_or_create_customer_id(splynx_payment.customer_id)
+            if not resolved_cust:
+                result.skipped += 1
+                result.errors.append(
+                    f"Payment {splynx_payment.id}: Customer {splynx_payment.customer_id} not synced"
+                )
+                return
+            customer_id = resolved_cust
+            # Use customer's currency or org default
+            customer = self.db.get(Customer, customer_id)
+            currency_code = (customer.currency_code if customer else None) or "NGN"
+
+        # Get bank account for this payment method, with fallback by currency
         bank_account_id = self._get_bank_account_for_payment(
-            splynx_payment.payment_type
+            splynx_payment.payment_type, currency_code
         )
         payment_method = self._map_payment_method(splynx_payment.payment_type)
         method_name = self._get_payment_method_name(splynx_payment.payment_type)
 
         # Parse payment date
         payment_date = self._parse_date(splynx_payment.date) or date.today()
-
-        # Generate payment number (max 30 chars)
-        payment_number = f"SPL-PMT-{splynx_payment.id}"
-
-        # Use the invoice's currency so multi-currency is correct
-        currency_code = invoice.currency_code or "NGN"
 
         if local_id:
             payment = self.db.get(CustomerPayment, local_id)
@@ -1168,7 +1360,7 @@ class SplynxSyncService:
                     old_invoice = None
 
                 # Update payment fields
-                payment.customer_id = invoice.customer_id
+                payment.customer_id = customer_id
                 payment.payment_date = payment_date
                 payment.payment_method = payment_method
                 payment.currency_code = currency_code
@@ -1182,68 +1374,77 @@ class SplynxSyncService:
                 payment.description = (
                     f"Splynx payment via {method_name}. {splynx_payment.comment or ''}"
                 ).strip()
+                payment.splynx_id = str(splynx_payment.id)
+                payment.splynx_receipt_number = splynx_payment.receipt_number
+                payment.last_synced_at = datetime.now(UTC)
 
-                if allocation:
-                    if allocation.invoice_id != invoice.invoice_id and old_invoice:
-                        # Remove from old invoice
-                        old_invoice.amount_paid = max(
-                            Decimal("0"),
-                            old_invoice.amount_paid - allocation.allocated_amount,
+                if invoice:
+                    # Payment has an invoice — create or update allocation
+                    if allocation:
+                        if allocation.invoice_id != invoice.invoice_id and old_invoice:
+                            # Remove from old invoice
+                            old_invoice.amount_paid = max(
+                                Decimal("0"),
+                                old_invoice.amount_paid - allocation.allocated_amount,
+                            )
+                            if old_invoice.amount_paid >= old_invoice.total_amount:
+                                old_invoice.status = InvoiceStatus.PAID
+                            elif old_invoice.amount_paid > Decimal("0"):
+                                old_invoice.status = InvoiceStatus.PARTIALLY_PAID
+                            else:
+                                old_invoice.status = InvoiceStatus.POSTED
+
+                        # Update allocation to new invoice/amount/date
+                        allocation.invoice_id = invoice.invoice_id
+                        allocation.allocated_amount = splynx_payment.amount
+                        allocation.allocation_date = payment_date
+                    else:
+                        # Previously unapplied → now has invoice: create allocation
+                        allocation = PaymentAllocation(
+                            payment_id=payment.payment_id,
+                            invoice_id=invoice.invoice_id,
+                            allocated_amount=splynx_payment.amount,
+                            allocation_date=payment_date,
                         )
-                        if old_invoice.amount_paid >= old_invoice.total_amount:
-                            old_invoice.status = InvoiceStatus.PAID
-                        elif old_invoice.amount_paid > Decimal("0"):
-                            old_invoice.status = InvoiceStatus.PARTIALLY_PAID
-                        else:
-                            old_invoice.status = InvoiceStatus.POSTED
+                        self.db.add(allocation)
 
-                    # Update allocation to new invoice/amount/date
-                    allocation.invoice_id = invoice.invoice_id
-                    allocation.allocated_amount = splynx_payment.amount
-                    allocation.allocation_date = payment_date
-                else:
-                    allocation = PaymentAllocation(
-                        payment_id=payment.payment_id,
-                        invoice_id=invoice.invoice_id,
-                        allocated_amount=splynx_payment.amount,
-                        allocation_date=payment_date,
-                    )
-                    self.db.add(allocation)
+                    # Update invoice amount_paid
+                    if old_invoice_id == invoice.invoice_id:
+                        # If allocation existed on same invoice, compute delta
+                        delta = splynx_payment.amount - old_allocated_amount
+                        invoice.amount_paid = min(
+                            max(Decimal("0"), invoice.amount_paid + delta),
+                            invoice.total_amount,
+                        )
+                    else:
+                        invoice.amount_paid = min(
+                            invoice.amount_paid + splynx_payment.amount,
+                            invoice.total_amount,
+                        )
 
-                # Update invoice amount_paid
-                if old_invoice_id == invoice.invoice_id:
-                    # If allocation existed on same invoice, compute delta
-                    delta = splynx_payment.amount - old_allocated_amount
-                    invoice.amount_paid = min(
-                        max(Decimal("0"), invoice.amount_paid + delta),
-                        invoice.total_amount,
-                    )
-                else:
-                    invoice.amount_paid = min(
-                        invoice.amount_paid + splynx_payment.amount,
-                        invoice.total_amount,
-                    )
-
-                if invoice.amount_paid >= invoice.total_amount:
-                    invoice.status = InvoiceStatus.PAID
-                elif invoice.amount_paid > Decimal("0"):
-                    invoice.status = InvoiceStatus.PARTIALLY_PAID
-                else:
-                    invoice.status = InvoiceStatus.POSTED
+                    if invoice.amount_paid >= invoice.total_amount:
+                        invoice.status = InvoiceStatus.PAID
+                    elif invoice.amount_paid > Decimal("0"):
+                        invoice.status = InvoiceStatus.PARTIALLY_PAID
+                    else:
+                        invoice.status = InvoiceStatus.POSTED
+                # else: no invoice — payment stays unapplied (no allocation change)
 
                 # Record sync tracking
                 self._record_sync(
                     EntityType.PAYMENT, external_id, payment.payment_id, data_hash
                 )
-                # Ensure GL entries exist for cleared payments
-                self._ensure_payment_gl_posted(payment, created_by_user_id)
+                # GL posting deferred to backfill script
                 result.updated += 1
                 return
+
+        # Generate sequential payment number
+        payment_number = self._generate_payment_number(payment_date)
 
         # Create CustomerPayment record
         payment = CustomerPayment(
             organization_id=self.organization_id,
-            customer_id=invoice.customer_id,
+            customer_id=customer_id,
             payment_number=payment_number,
             payment_date=payment_date,
             payment_method=payment_method,
@@ -1258,29 +1459,38 @@ class SplynxSyncService:
             status=PaymentStatus.CLEARED,
             correlation_id=f"splynx-pmt-{splynx_payment.id}",
             created_by_user_id=created_by_user_id or SYSTEM_USER_ID,
+            splynx_id=str(splynx_payment.id),
+            splynx_receipt_number=splynx_payment.receipt_number,
+            last_synced_at=datetime.now(UTC),
         )
         self.db.add(payment)
         self.db.flush()  # Get payment_id
 
-        # Create payment allocation to link payment to invoice
-        allocation = PaymentAllocation(
-            payment_id=payment.payment_id,
-            invoice_id=invoice.invoice_id,
-            allocated_amount=splynx_payment.amount,
-            allocation_date=payment_date,
-        )
-        self.db.add(allocation)
+        # Allocate to invoice if available; otherwise unapplied prepayment
+        if invoice:
+            allocation = PaymentAllocation(
+                payment_id=payment.payment_id,
+                invoice_id=invoice.invoice_id,
+                allocated_amount=splynx_payment.amount,
+                allocation_date=payment_date,
+            )
+            self.db.add(allocation)
 
-        # Update invoice amount_paid
-        invoice.amount_paid = min(
-            invoice.amount_paid + splynx_payment.amount,
-            invoice.total_amount,
-        )
+            # Update invoice amount_paid
+            invoice.amount_paid = min(
+                invoice.amount_paid + splynx_payment.amount,
+                invoice.total_amount,
+            )
 
-        if invoice.amount_paid >= invoice.total_amount:
-            invoice.status = InvoiceStatus.PAID
-        elif invoice.amount_paid > Decimal("0"):
-            invoice.status = InvoiceStatus.PARTIALLY_PAID
+            if invoice.amount_paid >= invoice.total_amount:
+                invoice.status = InvoiceStatus.PAID
+            elif invoice.amount_paid > Decimal("0"):
+                invoice.status = InvoiceStatus.PARTIALLY_PAID
+        else:
+            logger.info(
+                "Payment %s created as unapplied (no invoice_id from Splynx)",
+                splynx_payment.id,
+            )
 
         # Record sync tracking
         self._record_sync(
@@ -1288,8 +1498,7 @@ class SplynxSyncService:
         )
 
         result.created += 1
-        # Ensure GL entries exist for cleared payments
-        self._ensure_payment_gl_posted(payment, created_by_user_id)
+        # GL posting deferred to backfill script
 
     def _ensure_payment_gl_posted(
         self,
@@ -1303,6 +1512,294 @@ class SplynxSyncService:
             self.db, payment, posted_by_user_id=created_by_user_id
         )
 
+    def auto_allocate_unapplied_payments(self) -> dict[str, Any]:
+        """Auto-allocate unapplied Splynx payments to unique open invoices.
+
+        Strict Tier-A policy:
+        - Same customer
+        - Exact amount match against invoice balance due (2dp)
+        - Exactly one invoice candidate
+        """
+        open_statuses = {
+            InvoiceStatus.POSTED,
+            InvoiceStatus.PARTIALLY_PAID,
+            InvoiceStatus.OVERDUE,
+        }
+
+        unapplied_payments = list(
+            self.db.scalars(
+                select(CustomerPayment).where(
+                    CustomerPayment.organization_id == self.organization_id,
+                    CustomerPayment.splynx_id.isnot(None),
+                    CustomerPayment.status == PaymentStatus.CLEARED,
+                    ~select(PaymentAllocation.allocation_id)
+                    .where(PaymentAllocation.payment_id == CustomerPayment.payment_id)
+                    .exists(),
+                )
+            ).all()
+        )
+        if not unapplied_payments:
+            return {
+                "allocated": 0,
+                "ambiguous": 0,
+                "no_candidate": 0,
+                "errors": [],
+            }
+
+        open_invoices = list(
+            self.db.scalars(
+                select(Invoice).where(
+                    Invoice.organization_id == self.organization_id,
+                    Invoice.invoice_type == InvoiceType.STANDARD,
+                    Invoice.status.in_(open_statuses),
+                )
+            ).all()
+        )
+
+        def _to_cents(value: Decimal) -> int:
+            return int(value.quantize(Decimal("0.01")) * 100)
+
+        invoice_index: dict[tuple[UUID, int], list[Invoice]] = {}
+        for inv in open_invoices:
+            balance_due = getattr(
+                inv, "balance_due", inv.total_amount - inv.amount_paid
+            )
+            if balance_due <= Decimal("0"):
+                continue
+            key = (inv.customer_id, _to_cents(balance_due))
+            invoice_index.setdefault(key, []).append(inv)
+
+        allocated = 0
+        ambiguous = 0
+        no_candidate = 0
+        errors: list[str] = []
+        used_invoice_ids: set[UUID] = set()
+
+        sorted_payments = sorted(
+            unapplied_payments,
+            key=lambda p: (p.customer_id, p.payment_date, str(p.payment_id)),
+        )
+        for payment in sorted_payments:
+            try:
+                key = (payment.customer_id, _to_cents(payment.amount))
+                candidates = [
+                    inv
+                    for inv in invoice_index.get(key, [])
+                    if inv.invoice_id not in used_invoice_ids
+                ]
+                if len(candidates) != 1:
+                    if len(candidates) > 1:
+                        ambiguous += 1
+                    else:
+                        no_candidate += 1
+                    continue
+
+                invoice = candidates[0]
+                allocation = PaymentAllocation(
+                    payment_id=payment.payment_id,
+                    invoice_id=invoice.invoice_id,
+                    allocated_amount=payment.amount,
+                    allocation_date=payment.payment_date,
+                )
+                self.db.add(allocation)
+
+                invoice.amount_paid = min(
+                    invoice.total_amount,
+                    invoice.amount_paid + payment.amount,
+                )
+                if invoice.amount_paid >= invoice.total_amount:
+                    invoice.status = InvoiceStatus.PAID
+                elif invoice.amount_paid > Decimal("0"):
+                    invoice.status = InvoiceStatus.PARTIALLY_PAID
+                else:
+                    invoice.status = InvoiceStatus.POSTED
+
+                used_invoice_ids.add(invoice.invoice_id)
+                allocated += 1
+            except Exception as exc:
+                logger.exception(
+                    "Auto-allocation error for payment %s: %s",
+                    payment.payment_id,
+                    exc,
+                )
+                errors.append(f"Payment {payment.payment_id}: {exc}")
+
+        self.db.flush()
+        logger.info(
+            "Auto-allocation complete: %d allocated, %d ambiguous, %d no-candidate",
+            allocated,
+            ambiguous,
+            no_candidate,
+        )
+        return {
+            "allocated": allocated,
+            "ambiguous": ambiguous,
+            "no_candidate": no_candidate,
+            "errors": errors,
+        }
+
+    def _set_invoice_status_from_amount_paid(self, invoice: Invoice) -> None:
+        """Set invoice status from amount_paid using AR sync rules."""
+        if invoice.amount_paid >= invoice.total_amount:
+            invoice.status = InvoiceStatus.PAID
+        elif invoice.amount_paid > Decimal("0"):
+            invoice.status = InvoiceStatus.PARTIALLY_PAID
+        else:
+            invoice.status = InvoiceStatus.POSTED
+
+    def _recompute_invoice_paid_from_allocations(self, invoice: Invoice) -> Decimal:
+        """Recompute invoice.amount_paid from all payment allocations."""
+        total_allocated = self.db.scalar(
+            select(
+                func.coalesce(func.sum(PaymentAllocation.allocated_amount), 0)
+            ).where(PaymentAllocation.invoice_id == invoice.invoice_id)
+        )
+        allocated = Decimal(str(total_allocated or 0))
+        invoice.amount_paid = min(invoice.total_amount, allocated)
+        self._set_invoice_status_from_amount_paid(invoice)
+        return allocated
+
+    def repair_payment_invoice_relationships(
+        self,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        batch_size: int | None = None,
+    ) -> dict[str, Any]:
+        """Repair payment->invoice allocations using Splynx payment.invoice_id links.
+
+        This is idempotent and safe to run repeatedly:
+        - maps local payments by splynx payment id
+        - finds target invoice by splynx invoice id (fallback to correlation_id)
+        - fixes or creates payment allocations
+        - recomputes invoice amount_paid/status from allocations
+        """
+        summary: dict[str, Any] = {
+            "processed": 0,
+            "already_correct": 0,
+            "fixed": 0,
+            "created_allocations": 0,
+            "relinked_allocations": 0,
+            "updated_amounts": 0,
+            "no_invoice_link": 0,
+            "missing_local_payment": 0,
+            "missing_local_invoice": 0,
+            "customer_mismatch": 0,
+            "overallocated_invoices": 0,
+            "errors": [],
+        }
+
+        touched_invoice_ids: set[UUID] = set()
+        processed = 0
+        for splynx_payment in self.client.get_payments(
+            date_from=date_from,
+            date_to=date_to,
+        ):
+            if batch_size and processed >= batch_size:
+                break
+            processed += 1
+            summary["processed"] += 1
+
+            try:
+                if not splynx_payment.invoice_id:
+                    summary["no_invoice_link"] += 1
+                    continue
+
+                payment = self.db.scalar(
+                    select(CustomerPayment).where(
+                        CustomerPayment.organization_id == self.organization_id,
+                        CustomerPayment.splynx_id == str(splynx_payment.id),
+                    )
+                )
+                if not payment:
+                    summary["missing_local_payment"] += 1
+                    continue
+
+                invoice = self.db.scalar(
+                    select(Invoice).where(
+                        Invoice.organization_id == self.organization_id,
+                        Invoice.splynx_id == str(splynx_payment.invoice_id),
+                    )
+                )
+                if not invoice:
+                    invoice = self.db.scalar(
+                        select(Invoice).where(
+                            Invoice.organization_id == self.organization_id,
+                            Invoice.correlation_id
+                            == f"splynx-inv-{splynx_payment.invoice_id}",
+                        )
+                    )
+                if not invoice:
+                    summary["missing_local_invoice"] += 1
+                    continue
+
+                if payment.customer_id != invoice.customer_id:
+                    summary["customer_mismatch"] += 1
+                    continue
+
+                allocation_date = (
+                    self._parse_date(splynx_payment.date) or payment.payment_date
+                )
+                existing_allocation = self.db.scalar(
+                    select(PaymentAllocation).where(
+                        PaymentAllocation.payment_id == payment.payment_id
+                    )
+                )
+
+                if existing_allocation:
+                    allocation_matches = (
+                        existing_allocation.invoice_id == invoice.invoice_id
+                        and existing_allocation.allocated_amount
+                        == splynx_payment.amount
+                        and existing_allocation.allocation_date == allocation_date
+                    )
+                    if allocation_matches:
+                        summary["already_correct"] += 1
+                        continue
+
+                    touched_invoice_ids.add(existing_allocation.invoice_id)
+                    if existing_allocation.invoice_id != invoice.invoice_id:
+                        summary["relinked_allocations"] += 1
+                    if existing_allocation.allocated_amount != splynx_payment.amount:
+                        summary["updated_amounts"] += 1
+
+                    existing_allocation.invoice_id = invoice.invoice_id
+                    existing_allocation.allocated_amount = splynx_payment.amount
+                    existing_allocation.allocation_date = allocation_date
+                    touched_invoice_ids.add(invoice.invoice_id)
+                    summary["fixed"] += 1
+                    continue
+
+                self.db.add(
+                    PaymentAllocation(
+                        payment_id=payment.payment_id,
+                        invoice_id=invoice.invoice_id,
+                        allocated_amount=splynx_payment.amount,
+                        allocation_date=allocation_date,
+                    )
+                )
+                touched_invoice_ids.add(invoice.invoice_id)
+                summary["created_allocations"] += 1
+                summary["fixed"] += 1
+            except Exception as exc:
+                logger.exception(
+                    "Relationship repair error for Splynx payment %s: %s",
+                    splynx_payment.id,
+                    exc,
+                )
+                summary["errors"].append(f"Payment {splynx_payment.id}: {exc}")
+
+        for invoice_id in touched_invoice_ids:
+            invoice = self.db.get(Invoice, invoice_id)
+            if not invoice:
+                continue
+            allocated_total = self._recompute_invoice_paid_from_allocations(invoice)
+            if allocated_total > invoice.total_amount:
+                summary["overallocated_invoices"] += 1
+
+        self.db.flush()
+        logger.info("Splynx relationship repair summary: %s", summary)
+        return summary
+
     # =========================================================================
     # Credit Note Sync
     # =========================================================================
@@ -1312,13 +1809,23 @@ class SplynxSyncService:
         date_from: date | None = None,
         date_to: date | None = None,
         created_by_user_id: UUID | None = None,
+        batch_size: int | None = None,
+        skip_unchanged: bool = True,
     ) -> SyncResult:
         """
         Sync credit notes from Splynx.
 
         Credit notes are stored as invoices with type=CREDIT_NOTE.
+
+        Args:
+            date_from: Only sync credit notes after this date
+            date_to: Only sync credit notes before this date
+            created_by_user_id: User ID to record as creator
+            batch_size: Max number of records to sync (None = all)
+            skip_unchanged: Skip records that haven't changed (default True)
         """
         result = SyncResult(success=True, entity_type="credit_notes")
+        processed = 0
 
         # Ensure customer cache is loaded
         if not self._customer_cache:
@@ -1329,9 +1836,28 @@ class SplynxSyncService:
                 date_from=date_from,
                 date_to=date_to,
             ):
+                # Check batch limit
+                if batch_size and processed >= batch_size:
+                    result.message = f"Batch limit ({batch_size}) reached"
+                    break
+
                 try:
+                    savepoint = self.db.begin_nested()
                     self._sync_single_credit_note(splynx_cn, created_by_user_id, result)
+                    savepoint.commit()
+                    processed += 1
+
+                    # Commit + expunge periodically to prevent OOM
+                    if processed % 500 == 0:
+                        self.db.commit()
+                        self.db.expunge_all()
+                        logger.info("Progress: %d credit notes processed", processed)
+
                 except Exception as e:
+                    try:
+                        savepoint.rollback()
+                    except Exception:
+                        self.db.rollback()
                     result.errors.append(f"Credit Note {splynx_cn.number}: {str(e)}")
                     logger.exception("Error syncing credit note %s", splynx_cn.number)
 
@@ -1358,7 +1884,6 @@ class SplynxSyncService:
     ) -> None:
         """Sync a single credit note."""
         external_id = str(splynx_cn.id)
-        invoice_number = f"SPL-CN-{splynx_cn.id}"  # Use ID for max 30 chars
 
         # Compute hash for change detection
         data_hash = self._compute_hash(
@@ -1371,13 +1896,20 @@ class SplynxSyncService:
             }
         )
 
-        # Check via sync tracking first, fall back to invoice_number
+        # Check via sync tracking, splynx_id, or legacy number
         local_id = self._get_synced_entity(EntityType.CREDIT_NOTE, external_id)
         existing = None
         if local_id:
             existing = self.db.get(Invoice, local_id)
-        else:
-            existing = self._get_existing_invoice(invoice_number)
+        if not existing:
+            stmt = select(Invoice).where(
+                Invoice.organization_id == self.organization_id,
+                Invoice.splynx_id == str(splynx_cn.id),
+                Invoice.invoice_type == InvoiceType.CREDIT_NOTE,
+            )
+            existing = self.db.scalar(stmt)
+        if not existing:
+            existing = self._get_existing_invoice(f"SPL-CN-{splynx_cn.id}")
 
         # Get customer ID
         customer_id = self._get_or_create_customer_id(splynx_cn.customer_id)
@@ -1400,34 +1932,15 @@ class SplynxSyncService:
             existing.total_amount = splynx_cn.total
             existing.functional_currency_amount = splynx_cn.total
             existing.notes = splynx_cn.note
-            # Ensure credit note line reflects updated total
-            line = None
-            if hasattr(existing, "lines"):
-                try:
-                    existing_lines = list(existing.lines or [])
-                except Exception:
-                    existing_lines = []
-                if existing_lines:
-                    line = existing_lines[0]
-            if line:
-                line.description = f"Splynx Credit Note {splynx_cn.number}"
-                line.unit_price = splynx_cn.total
-                line.line_amount = splynx_cn.total
-                line.tax_amount = Decimal("0")
-            elif self.default_revenue_account_id:
-                line = InvoiceLine(
-                    invoice_id=existing.invoice_id,
-                    line_number=1,
-                    description=f"Splynx Credit Note {splynx_cn.number}",
-                    quantity=Decimal("1"),
-                    unit_price=splynx_cn.total,
-                    discount_percentage=Decimal("0"),
-                    discount_amount=Decimal("0"),
-                    line_amount=splynx_cn.total,
-                    tax_amount=Decimal("0"),
-                    revenue_account_id=self.default_revenue_account_id,
-                )
-                self.db.add(line)
+            existing.splynx_id = str(splynx_cn.id)
+            existing.splynx_number = splynx_cn.number
+            existing.last_synced_at = datetime.now(UTC)
+
+            # Replace lines with parsed items
+            self._replace_invoice_lines(
+                existing.invoice_id, splynx_cn, is_credit_note=True
+            )
+
             result.updated += 1
             # Record sync tracking
             self._record_sync(
@@ -1437,6 +1950,9 @@ class SplynxSyncService:
                 data_hash,
             )
         else:
+            # Generate own sequential credit note number
+            invoice_number = self._generate_credit_note_number(cn_date)
+
             # Create new credit note (as invoice with type=CREDIT_NOTE)
             # Note: amounts are stored positive; InvoiceType.CREDIT_NOTE
             # signals the AR subsystem to treat them as reductions.
@@ -1460,25 +1976,17 @@ class SplynxSyncService:
                 notes=splynx_cn.note,
                 internal_notes=f"Imported from Splynx. Original ID: {splynx_cn.id}",
                 created_by_user_id=created_by_user_id or SYSTEM_USER_ID,
+                splynx_id=str(splynx_cn.id),
+                splynx_number=splynx_cn.number,
+                last_synced_at=datetime.now(UTC),
             )
             self.db.add(invoice)
             self.db.flush()
 
-            # Add credit note line
-            if self.default_revenue_account_id:
-                line = InvoiceLine(
-                    invoice_id=invoice.invoice_id,
-                    line_number=1,
-                    description=f"Splynx Credit Note {splynx_cn.number}",
-                    quantity=Decimal("1"),
-                    unit_price=splynx_cn.total,
-                    discount_percentage=Decimal("0"),
-                    discount_amount=Decimal("0"),
-                    line_amount=splynx_cn.total,
-                    tax_amount=Decimal("0"),
-                    revenue_account_id=self.default_revenue_account_id,
-                )
-                self.db.add(line)
+            # Add credit note lines from Splynx items (or single fallback line)
+            self._create_invoice_lines(
+                invoice.invoice_id, splynx_cn, is_credit_note=True
+            )
 
             result.created += 1
             # Record sync tracking
@@ -1520,11 +2028,25 @@ class SplynxSyncService:
         )
 
         # Sync in dependency order
-        customers_result = self.sync_customers(date_from, date_to, created_by_user_id)
-        invoices_result = self.sync_invoices(date_from, date_to, created_by_user_id)
-        payments_result = self.sync_payments(date_from, date_to, created_by_user_id)
+        customers_result = self.sync_customers(
+            date_from=date_from,
+            date_to=date_to,
+            created_by_user_id=created_by_user_id,
+        )
+        invoices_result = self.sync_invoices(
+            date_from=date_from,
+            date_to=date_to,
+            created_by_user_id=created_by_user_id,
+        )
+        payments_result = self.sync_payments(
+            date_from=date_from,
+            date_to=date_to,
+            created_by_user_id=created_by_user_id,
+        )
         credit_notes_result = self.sync_credit_notes(
-            date_from, date_to, created_by_user_id
+            date_from=date_from,
+            date_to=date_to,
+            created_by_user_id=created_by_user_id,
         )
 
         duration = time.time() - start_time

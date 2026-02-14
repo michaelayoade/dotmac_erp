@@ -151,7 +151,23 @@ def test_post_payment_wht_requires_receivable_account():
     )
     customer = _make_customer(org_id)
     customer.customer_id = payment.customer_id
-    db.get.side_effect = [payment, customer, None]  # payment, customer, tax code (None)
+    mapped_bank_gl = SimpleNamespace(
+        account_id=payment.bank_account_id,
+        organization_id=org_id,
+    )
+
+    def _get(model, _id):
+        if model.__name__ == "CustomerPayment":
+            return payment
+        if model.__name__ == "Account":
+            return mapped_bank_gl
+        if model.__name__ == "Customer":
+            return customer
+        if model.__name__ == "TaxCode":
+            return None
+        return None
+
+    db.get.side_effect = _get
 
     with pytest.raises(HTTPException) as excinfo:
         CustomerPaymentService.post_payment(
@@ -184,7 +200,21 @@ def test_post_payment_success_without_wht():
     customer = _make_customer(org_id)
     customer.customer_id = payment.customer_id
 
-    db.get.side_effect = [payment, customer]
+    mapped_bank_gl = SimpleNamespace(
+        account_id=payment.bank_account_id,
+        organization_id=org_id,
+    )
+
+    def _get(model, _id):
+        if model.__name__ == "CustomerPayment":
+            return payment
+        if model.__name__ == "Account":
+            return mapped_bank_gl
+        if model.__name__ == "Customer":
+            return customer
+        return None
+
+    db.get.side_effect = _get
     db.query.return_value.filter.return_value.all.return_value = []
 
     journal = SimpleNamespace(journal_entry_id=uuid4())
@@ -219,6 +249,46 @@ def test_post_payment_success_without_wht():
 
     assert result.status == PaymentStatus.CLEARED
     assert result.journal_entry_id == journal.journal_entry_id
+
+
+def test_post_payment_rejects_unmapped_bank_account():
+    db = MagicMock()
+    org_id = uuid4()
+    payment = SimpleNamespace(
+        payment_id=uuid4(),
+        organization_id=org_id,
+        status=PaymentStatus.PENDING,
+        bank_account_id=uuid4(),
+        customer_id=uuid4(),
+        exchange_rate=Decimal("1.0"),
+        amount=Decimal("100.00"),
+        gross_amount=Decimal("100.00"),
+        wht_amount=Decimal("0"),
+        wht_code_id=None,
+        wht_certificate_number=None,
+        payment_date=date.today(),
+        reference=None,
+        payment_number="RCPT-2",
+        currency_code="NGN",
+        correlation_id="c2",
+    )
+
+    def _get(model, _id):
+        if model.__name__ == "CustomerPayment":
+            return payment
+        if model.__name__ in {"Account", "BankAccount"}:
+            return None
+        return None
+
+    db.get.side_effect = _get
+
+    with pytest.raises(HTTPException) as excinfo:
+        CustomerPaymentService.post_payment(
+            db, org_id, payment.payment_id, posted_by_user_id=uuid4()
+        )
+
+    assert excinfo.value.status_code == 400
+    assert "not mapped to a valid GL account" in excinfo.value.detail
 
 
 def test_void_and_bounce_reverse_allocations():

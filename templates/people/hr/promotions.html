@@ -1,4 +1,5 @@
 {% extends "people/base_people.html" %}
+{% from "components/macros.html" import compact_filters, filter_select_field %}
 
 {% block page_title %}Promotions{% endblock %}
 
@@ -38,6 +39,17 @@
         </div>
     </div>
 
+    {# Filters #}
+    {% call(filter_attrs) compact_filters(
+        base_url="/people/hr/promotions",
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search | default('', true),
+        search_placeholder="Search promotions..."
+    ) %}
+    {% endcall %}
+
+    <div id="results-container">
     {% if promotions %}
     <div class="card overflow-hidden">
         <div class="table-container">
@@ -123,5 +135,6 @@
         </div>
     </div>
     {% endif %}
+    </div>{# /results-container #}
 </div>
 {% endblock %}

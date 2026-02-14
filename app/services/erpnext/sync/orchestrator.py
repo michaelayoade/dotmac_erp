@@ -34,6 +34,7 @@ from .hr import (
     EmploymentTypeSyncService,
 )
 from .items import ItemCategorySyncService, ItemSyncService
+from .journal_entry import JournalEntrySyncService
 
 # Leave & Attendance sync services
 from .leave import (
@@ -42,9 +43,12 @@ from .leave import (
     LeaveTypeSyncService,
 )
 from .material_request import MaterialRequestSyncService
+from .payment_entry import PaymentEntrySyncService
 
 # Project & Support sync services
 from .projects import ProjectSyncService
+from .purchase_invoice import PurchaseInvoiceSyncService
+from .sales_invoice import SalesInvoiceSyncService
 from .stock_ledger import StockLedgerSyncService
 from .support import TicketSyncService
 from .tasks import TaskSyncService
@@ -132,6 +136,22 @@ SYNC_PHASES = [
         "name": "Phase 8: Inventory Transactions",
         "entities": ["stock_ledger_entries"],
     },
+    {
+        "name": "Phase 9: AR Transactions",
+        "entities": ["sales_invoices"],
+    },
+    {
+        "name": "Phase 10: AP Transactions",
+        "entities": ["purchase_invoices"],
+    },
+    {
+        "name": "Phase 11: Payments",
+        "entities": ["payment_entries"],
+    },
+    {
+        "name": "Phase 12: GL Journal Entries",
+        "entities": ["journal_entries"],
+    },
 ]
 
 # All supported entity types
@@ -170,6 +190,11 @@ SUPPORTED_ENTITIES = {
     "expense_claims": "Expense Claims",
     # Inventory Transactions
     "stock_ledger_entries": "Stock Ledger Entries",
+    # Financial Transactions
+    "sales_invoices": "Sales Invoices",
+    "purchase_invoices": "Purchase Invoices",
+    "payment_entries": "Payment Entries",
+    "journal_entries": "Journal Entries",
 }
 
 
@@ -249,6 +274,11 @@ class ERPNextSyncOrchestrator:
             "expense_claims": ExpenseClaimSyncService,
             # Inventory Transactions
             "stock_ledger_entries": StockLedgerSyncService,
+            # Financial Transactions (lazy imports to avoid circular deps)
+            "sales_invoices": SalesInvoiceSyncService,
+            "purchase_invoices": PurchaseInvoiceSyncService,
+            "payment_entries": PaymentEntrySyncService,
+            "journal_entries": JournalEntrySyncService,
         }
 
         service_class = services.get(entity_type)
@@ -379,6 +409,11 @@ class ERPNextSyncOrchestrator:
             "expense_claims": "Expense Claim",
             # Inventory Transactions
             "stock_ledger_entries": "Stock Ledger Entry",
+            # Financial Transactions
+            "sales_invoices": "Sales Invoice",
+            "purchase_invoices": "Purchase Invoice",
+            "payment_entries": "Payment Entry",
+            "journal_entries": "Journal Entry",
         }
 
         doctype = doctype_map.get(entity_type)
@@ -398,6 +433,10 @@ class ERPNextSyncOrchestrator:
             "timesheets",
             "material_requests",
             "stock_ledger_entries",
+            "sales_invoices",
+            "purchase_invoices",
+            "payment_entries",
+            "journal_entries",
         ]:
             filters["company"] = self.config.erpnext_company
 

@@ -543,6 +543,24 @@ def seed_scheduled_tasks(db: Session) -> None:
             "cron_month_of_year": "*",
             "enabled": False,  # Disabled - use master task instead
         },
+        {
+            "name": "Splynx: Incremental Sync",
+            "task_name": "app.tasks.splynx.run_scheduled_splynx_sync",
+            "schedule_type": ScheduleType.interval,
+            "interval_seconds": 1800,  # Every 30 minutes
+            "enabled": True,
+            "args_json": [],
+            "kwargs_json": {},
+        },
+        {
+            "name": "Finance: Paystack Sync",
+            "task_name": "app.tasks.finance.sync_paystack_transactions",
+            "schedule_type": ScheduleType.interval,
+            "interval_seconds": 1800,  # Every 30 minutes
+            "enabled": True,
+            "args_json": [],
+            "kwargs_json": {"days_back": 1},
+        },
     ]
 
     for task_def in default_tasks:

@@ -167,7 +167,13 @@
                  :class="sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-4'">
                 <a href="/admin" class="flex items-center gap-3" x-show="!sidebarCollapsed" x-cloak>
                     {% if brand.logo_url %}
-                    <img src="{{ brand.logo_url }}" alt="{{ brand.name }} logo" class="h-10 w-10 rounded-xl object-contain bg-white/10 p-1">
+                    <img src="{{ brand.logo_url }}" alt="{{ brand.name }} logo"
+                         class="h-10 w-10 rounded-xl object-contain bg-white/10 p-1"
+                         loading="lazy"
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div class="hidden h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent-500 to-accent-600 text-sm font-bold text-white shadow-lg">
+                        {{ brand_mark }}
+                    </div>
                     {% else %}
                     <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent-500 to-accent-600 text-sm font-bold text-white shadow-lg">
                         {{ brand_mark }}
@@ -179,7 +185,11 @@
                         class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent-500 to-accent-600 text-sm font-bold text-white shadow-lg hover:opacity-90 transition-opacity"
                         aria-label="Expand sidebar" title="Expand sidebar">
                     {% if brand.logo_url %}
-                    <img src="{{ brand.logo_url }}" alt="{{ brand.name }} logo" class="h-10 w-10 rounded-xl object-contain">
+                    <img src="{{ brand.logo_url }}" alt="{{ brand.name }} logo"
+                         class="h-10 w-10 rounded-xl object-contain"
+                         loading="lazy"
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
+                    <span class="hidden">{{ brand_mark }}</span>
                     {% else %}
                     {{ brand_mark }}
                     {% endif %}
@@ -305,6 +315,7 @@
 
         <!-- Main Content -->
         <main class="app-main">
+            {% set back_fallback_url %}{% block back_fallback %}/admin{% endblock %}{% endset %}
             <!-- Top Header -->
             <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
                 <div class="app-header flex h-16 items-center justify-between">
@@ -318,6 +329,23 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
                             </svg>
                         </button>
+                        {% if (back_fallback_url | trim) %}
+                        <button type="button"
+                                @click="
+                                    if (document.referrer && document.referrer.startsWith(window.location.origin)) {
+                                        window.history.back();
+                                    } else {
+                                        window.location.href='{{ back_fallback_url | trim }}';
+                                    }
+                                "
+                                class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white/60 px-2 py-1.5 text-sm font-medium text-slate-600 hover:border-slate-400 hover:bg-white dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300 dark:hover:border-slate-500 dark:hover:bg-slate-800"
+                                aria-label="Go back">
+                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+                            </svg>
+                            <span class="hidden sm:inline">Back</span>
+                        </button>
+                        {% endif %}
                         <div>
                             <h1 class="text-lg font-semibold text-slate-900 dark:text-white font-display">{% block page_title %}Dashboard{% endblock %}</h1>
                             <p class="text-sm text-slate-500 dark:text-slate-400">{% block page_subtitle %}Admin control panel{% endblock %}</p>

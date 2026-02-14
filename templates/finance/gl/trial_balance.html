@@ -1,4 +1,5 @@
 {% extends "finance/base_finance.html" %}
+{% from "components/macros.html" import compact_filters, stats_card %}
 
 {% block page_title %}Trial Balance{% endblock %}
 
@@ -12,30 +13,35 @@
 
 {% block content %}
 <div class="space-y-6">
-    <!-- Filters -->
-    <div class="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-800/50">
-        <form method="get" class="flex flex-wrap items-center gap-4">
-            <div class="flex items-center gap-3">
-                <label for="as_of_date" class="text-sm font-medium text-slate-600 dark:text-slate-300">As of</label>
-                <input id="as_of_date" type="date" name="as_of_date" value="{{ as_of_date | default('', true) }}"
-                       class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
-            </div>
-            <button type="submit"
-                    class="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600">
-                Run Report
-            </button>
-        </form>
+    {% set zero_amount = ((presentation_currency_code or default_currency_code) ~ ' 0.00') if (presentation_currency_code or default_currency_code) else '0.00' %}
+    <div class="grid gap-4 sm:grid-cols-3">
+        {{ stats_card("As Of", as_of_date | default('', true), icon="calendar", color="slate") }}
+        {{ stats_card("Total Debits", total_debit | default(zero_amount), icon="arrow-up", color="amber") }}
+        {{ stats_card("Total Credits", total_credit | default(zero_amount), icon="arrow-down", color="teal") }}
     </div>
 
+    <!-- Filters -->
+    {% call(filter_attrs) compact_filters(
+        base_url="/finance/gl/trial-balance",
+        active_filters=active_filters | default([])
+    ) %}
+        <div>
+            <label for="as_of_date" class="form-label text-xs">As Of</label>
+            <input id="as_of_date" type="date" name="as_of_date" value="{{ as_of_date | default('', true) }}"
+                   class="form-input w-full" {{ filter_attrs }}>
+        </div>
+    {% endcall %}
+
+    <div id="results-container">
     <!-- Summary -->
     <div class="grid gap-4 sm:grid-cols-2">
         <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-800/50">
             <p class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Total Debits</p>
-            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ total_debit | default("$0.00") }}</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ total_debit | default(zero_amount) }}</p>
         </div>
         <div class="rounded-xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-800/50">
             <p class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Total Credits</p>
-            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ total_credit | default("$0.00") }}</p>
+            <p class="mt-2 text-2xl font-semibold text-slate-900 dark:text-white">{{ total_credit | default(zero_amount) }}</p>
         </div>
     </div>
 
@@ -64,10 +70,10 @@
                             {% endif %}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-slate-900 dark:text-white">
-                            {{ balance.debit | default("$0.00") }}
+                            {{ balance.debit | default(zero_amount) }}
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium text-slate-900 dark:text-white">
-                            {{ balance.credit | default("$0.00") }}
+                            {{ balance.credit | default(zero_amount) }}
                         </td>
                     </tr>
                     {% else %}
@@ -84,12 +90,13 @@
                 <tfoot class="border-t border-slate-200 dark:border-slate-700">
                     <tr class="bg-slate-50 dark:bg-slate-800/70">
                         <td class="px-6 py-4 text-sm font-semibold text-slate-700 dark:text-slate-200" colspan="2">Totals</td>
-                        <td class="px-6 py-4 text-right text-sm font-semibold text-slate-900 dark:text-white">{{ total_debit | default("$0.00") }}</td>
-                        <td class="px-6 py-4 text-right text-sm font-semibold text-slate-900 dark:text-white">{{ total_credit | default("$0.00") }}</td>
+                        <td class="px-6 py-4 text-right text-sm font-semibold text-slate-900 dark:text-white">{{ total_debit | default(zero_amount) }}</td>
+                        <td class="px-6 py-4 text-right text-sm font-semibold text-slate-900 dark:text-white">{{ total_credit | default(zero_amount) }}</td>
                     </tr>
                 </tfoot>
             </table>
         </div>
     </div>
+    </div>{# /results-container #}
 </div>
 {% endblock %}

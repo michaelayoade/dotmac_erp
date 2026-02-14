@@ -67,8 +67,16 @@ logs/
 static/avatars/*
 !static/avatars/.gitkeep
 uploads/
+# Sample/test data files
 Employee.csv
+Bank Names.csv
 Test sheet - Sheet1 (3).csv
+test_statement_*.csv
+test_statement_*.xls
+test_statement_*.xlsx
+
+# Screenshots / audit artifacts
+*.png
 
 # OS
 .DS_Store

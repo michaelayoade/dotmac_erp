@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import status_badge, empty_state, pagination, live_search %}
+{% from "components/macros.html" import status_badge, empty_state, pagination, compact_filters %}
 
 {% block page_title %}Transfers{% endblock %}
 
@@ -71,28 +71,27 @@
         </div>
     </div>
 
-    {# Search & Filters #}
-    {{ live_search(
-        search=search,
-        filters=[
-            {
-                "name": "status",
-                "label": "All Statuses",
-                "value": status_filter,
-                "options": [
-                    {"value": "PENDING", "label": "Pending"},
-                    {"value": "PROCESSING", "label": "Processing"},
-                    {"value": "COMPLETED", "label": "Completed"},
-                    {"value": "FAILED", "label": "Failed"},
-                    {"value": "REVERSED", "label": "Reversed"},
-                    {"value": "ABANDONED", "label": "Abandoned"},
-                    {"value": "EXPIRED", "label": "Expired"}
-                ]
-            }
-        ],
+    {% call(filter_attrs) compact_filters(
         base_url="/finance/payments/transfers",
-        placeholder="Search by reference, recipient, account..."
-    ) }}
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search | default('', true),
+        search_placeholder="Search by reference, recipient, account..."
+    ) %}
+        <div>
+            <label class="form-label text-xs">Status</label>
+            <select name="status" class="form-select w-full" {{ filter_attrs }}>
+                <option value="">All Statuses</option>
+                <option value="PENDING" {{ 'selected' if status_filter == 'PENDING' else '' }}>Pending</option>
+                <option value="PROCESSING" {{ 'selected' if status_filter == 'PROCESSING' else '' }}>Processing</option>
+                <option value="COMPLETED" {{ 'selected' if status_filter == 'COMPLETED' else '' }}>Completed</option>
+                <option value="FAILED" {{ 'selected' if status_filter == 'FAILED' else '' }}>Failed</option>
+                <option value="REVERSED" {{ 'selected' if status_filter == 'REVERSED' else '' }}>Reversed</option>
+                <option value="ABANDONED" {{ 'selected' if status_filter == 'ABANDONED' else '' }}>Abandoned</option>
+                <option value="EXPIRED" {{ 'selected' if status_filter == 'EXPIRED' else '' }}>Expired</option>
+            </select>
+        </div>
+    {% endcall %}
 
     <div id="results-container">
     <!-- Transfer List -->

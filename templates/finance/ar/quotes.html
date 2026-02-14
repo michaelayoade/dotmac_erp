@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card, compact_filters %}
+{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card, compact_filters, filter_select_field, filter_entity_select_field, action_buttons %}
 
 
 {% block page_title %}Quotes{% endblock %}
@@ -43,25 +43,11 @@
         base_url="/finance/quotes",
         active_filters=active_filters | default([]),
         date_range=true,
-        start_date=start_date | default('', true),
-        end_date=end_date | default('', true)
+        start_date=filter_start_date | default('', true),
+        end_date=filter_end_date | default('', true)
     ) %}
-    <div>
-            <select name="status" class="form-select w-full" {{ filter_attrs }}>
-                <option value="">All Statuses</option>
-                {% for s in statuses %}
-                <option value="{{ s }}" {{ 'selected' if filter_status == s else '' }}>{{ s | replace('_', ' ') | title }}</option>
-                {% endfor %}
-            </select>
-    </div>
-    <div>
-            <select name="customer_id" class="form-select w-full" {{ filter_attrs }}>
-                <option value="">All Customers</option>
-                {% for c in customers %}
-                <option value="{{ c.id }}" {{ 'selected' if filter_customer_id == c.id else '' }}>{{ c.name }}</option>
-                {% endfor %}
-            </select>
-    </div>
+    {{ filter_select_field("status", "Status", filter_status, statuses, filter_attrs, "All Statuses", true) }}
+    {{ filter_entity_select_field("customer_id", "Customer", filter_customer_id, customers, "id", "name", filter_attrs) }}
     {% endcall %}
 
     {# Quote List #}
@@ -72,8 +58,8 @@
             <table class="table">
                 <thead>
                     <tr>
-                        <th scope="col">Number</th>
                         <th scope="col">Date</th>
+                        <th scope="col">Number</th>
                         <th scope="col">Customer</th>
                         <th scope="col">Valid Until</th>
                         <th scope="col" class="text-right">Amount</th>
@@ -84,12 +70,12 @@
                 <tbody>
                     {% for q in quotes %}
                     <tr class="group">
+                        <td class="text-slate-600 dark:text-slate-400">{{ q.quote_date }}</td>
                         <td>
                             <a href="/finance/quotes/{{ q.quote_id }}" class="font-mono text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 transition-colors">
                                 {{ q.quote_number }}
                             </a>
                         </td>
-                        <td class="text-slate-600 dark:text-slate-400">{{ q.quote_date }}</td>
                         <td class="text-slate-900 dark:text-white">{{ q.customer_name }}</td>
                         <td class="{{ 'text-rose-600 dark:text-rose-400 font-medium' if q.is_expired else 'text-slate-600 dark:text-slate-400' }}">
                             {{ q.valid_until }}
@@ -100,25 +86,10 @@
                             {{ status_badge(q.status | lower | default('draft'), 'sm') }}
                         </td>
                         <td>
-                            <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <a href="/finance/quotes/{{ q.quote_id }}"
-                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
-                                   title="View" aria-label="View">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                                    </svg>
-                                </a>
-                                {% if q.status == 'DRAFT' %}
-                                <a href="/finance/quotes/{{ q.quote_id }}/edit"
-                                   class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300 transition-colors"
-                                   title="Edit" aria-label="Edit">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                                    </svg>
-                                </a>
-                                {% endif %}
-                            </div>
+                            {{ action_buttons(
+                                view_href="/finance/quotes/" ~ q.quote_id,
+                                edit_href="/finance/quotes/" ~ q.quote_id ~ "/edit" if q.status == "DRAFT" else none
+                            ) }}
                         </td>
                     </tr>
                     {% else %}

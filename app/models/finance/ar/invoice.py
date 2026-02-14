@@ -239,6 +239,20 @@ class Invoice(Base, VersionedMixin):
     )
     correlation_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
+    # External system IDs for sync/dedup
+    erpnext_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
+    )
+    splynx_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, index=True
+    )
+    splynx_number: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, index=True
+    )
+    last_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

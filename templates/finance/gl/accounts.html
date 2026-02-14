@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import live_search, pagination, status_badge, empty_state, action_buttons, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, bulk_icon_activate, bulk_icon_deactivate %}
+{% from "components/macros.html" import compact_filters, pagination, status_badge, empty_state, action_buttons, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, bulk_icon_activate, bulk_icon_deactivate, stats_card, filter_select_field, list_header_actions %}
 
 {% block page_title %}Chart of Accounts{% endblock %}
 
@@ -12,54 +12,41 @@
 {% endblock %}
 
 {% block header_actions %}
-<div class="flex items-center gap-2">
-    <button onclick="exportAll('/finance/gl/accounts/export')" class="btn btn-secondary">
-        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-        </svg>
-        Export
-    </button>
-    <a href="/finance/gl/accounts/new" class="btn btn-primary">
-        <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-        </svg>
-        New Account
-    </a>
-</div>
+{{ list_header_actions(
+    export_url="/finance/gl/accounts/export",
+    new_url="/finance/gl/accounts/new",
+    new_label="New Account"
+) }}
 {% endblock %}
 
 {% block content %}
 <div class="space-y-6">
-    {# Search with Auto-suggest and Filters #}
-    {{ live_search(
-        search=search,
-        entity_type="accounts",
-        filters=[
-            {
-                "name": "category",
-                "label": "All Categories",
-                "value": category,
-                "options": [
-                    {"value": "ASSET", "label": "Assets"},
-                    {"value": "LIABILITY", "label": "Liabilities"},
-                    {"value": "EQUITY", "label": "Equity"},
-                    {"value": "REVENUE", "label": "Revenue"},
-                    {"value": "EXPENSE", "label": "Expenses"}
-                ]
-            },
-            {
-                "name": "status",
-                "label": "All Status",
-                "value": status,
-                "options": [
-                    {"value": "active", "label": "Active"},
-                    {"value": "inactive", "label": "Inactive"}
-                ]
-            }
-        ],
+    {% set zero_amount = ((presentation_currency_code or default_currency_code) ~ ' 0.00') if (presentation_currency_code or default_currency_code) else '0.00' %}
+    <div class="grid gap-4 sm:grid-cols-3">
+        {{ stats_card("Total Accounts", total_count | default(0), icon="list", color="slate") }}
+        {{ stats_card("Active", active_count | default(0), icon="check-circle", color="emerald") }}
+        {{ stats_card("Inactive", inactive_count | default(0), icon="x-circle", color="amber") }}
+    </div>
+
+    {% call(filter_attrs) compact_filters(
         base_url="/finance/gl/accounts",
-        placeholder="Search accounts by code or name..."
-    ) }}
+        active_filters=active_filters | default([]),
+        show_search=true,
+        search=search | default('', true),
+        search_placeholder="Search accounts by code or name..."
+    ) %}
+        {{ filter_select_field("category", "Category", category, [
+            {"value": "ASSET", "label": "Assets"},
+            {"value": "LIABILITY", "label": "Liabilities"},
+            {"value": "EQUITY", "label": "Equity"},
+            {"value": "REVENUE", "label": "Revenue"},
+            {"value": "EXPENSE", "label": "Expenses"}
+        ], filter_attrs, "All Categories") }}
+        {{ filter_select_field("status", "Status", status, [
+            {"value": "active", "label": "Active"},
+            {"value": "inactive", "label": "Inactive"}
+        ], filter_attrs) }}
+    {% endcall %}
 
     <div id="results-container">
     {# Accounts Table with Bulk Selection #}
@@ -107,7 +94,7 @@
                                 </span>
                             </td>
                             <td class="hidden sm:table-cell text-slate-600 dark:text-slate-400">{{ account.normal_balance }}</td>
-                            <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ account.balance | default("₦0.00") }}</td>
+                            <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ account.balance | default(zero_amount) }}</td>
                             <td class="text-center">
                                 {{ status_badge('active' if account.is_active else 'inactive', 'sm') }}
                             </td>

@@ -7,7 +7,7 @@ Provides view-focused data and operations for AR sales order web routes.
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime
+from datetime import date
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -23,7 +23,8 @@ from app.models.inventory.item import Item
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
 from app.services.finance.ar.sales_order import sales_order_service
-from app.services.finance.common import format_currency, format_date
+from app.services.finance.ar.web.base import normalize_date_range_filters
+from app.services.finance.common import format_currency, format_date, parse_date
 from app.services.finance.platform.currency_context import get_currency_context
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
@@ -183,12 +184,8 @@ class SalesOrderWebService:
             except ValueError:
                 pass
 
-        parsed_start_date = (
-            datetime.strptime(start_date, "%Y-%m-%d").date() if start_date else None
-        )
-        parsed_end_date = (
-            datetime.strptime(end_date, "%Y-%m-%d").date() if end_date else None
-        )
+        parsed_start_date = parse_date(start_date)
+        parsed_end_date = parse_date(end_date)
 
         # Get orders from service
         orders = sales_order_service.list_orders(
@@ -564,6 +561,11 @@ class SalesOrderWebService:
         end_date: str | None,
     ) -> HTMLResponse:
         """Render sales order list page."""
+        start_date, end_date = normalize_date_range_filters(
+            start_date,
+            end_date,
+            request.query_params,
+        )
         context = base_context(request, auth, "Sales Orders", "sales-orders")
         context.update(
             self.list_context(

@@ -109,9 +109,40 @@ class AuditEvents(ListResponseMixin):
 
     @staticmethod
     def log_request(db: Session, request: Request, response: Response):
-        actor_type = request.headers.get("x-actor-type", AuditActorType.system.value)
-        actor_id = request.headers.get("x-actor-id")
-        request_id = request.headers.get("x-request-id")
+        request_state = getattr(request, "state", None)
+        state_actor_id = (
+            getattr(request_state, "actor_id", None) if request_state else None
+        )
+        state_actor_type = (
+            getattr(request_state, "actor_type", None) if request_state else None
+        )
+        state_request_id = (
+            getattr(request_state, "request_id", None) if request_state else None
+        )
+        state_organization_id = (
+            getattr(request_state, "organization_id", None) if request_state else None
+        )
+
+        actor_id = request.headers.get("x-actor-id") or state_actor_id
+        if actor_id is not None:
+            actor_id = str(actor_id)
+        actor_person_id = None
+        if actor_id:
+            try:
+                actor_person_id = coerce_uuid(actor_id, raise_http=False)
+            except (TypeError, ValueError):
+                actor_person_id = None
+
+        actor_type = request.headers.get("x-actor-type")
+        if not actor_type and state_actor_type:
+            actor_type = str(state_actor_type)
+        if not actor_type:
+            actor_type = (
+                AuditActorType.user.value if actor_id else AuditActorType.system.value
+            )
+
+        request_id = request.headers.get("x-request-id") or state_request_id
+        organization_id = coerce_uuid(state_organization_id, raise_http=False)
         entity_id = request.headers.get("x-entity-id")
         ip_address = request.client.host if request.client else None
         user_agent = request.headers.get("user-agent")
@@ -125,6 +156,8 @@ class AuditEvents(ListResponseMixin):
             query_params = {}
         payload = AuditEventCreate(
             actor_type=resolved_actor_type,
+            organization_id=organization_id,
+            actor_person_id=actor_person_id,
             actor_id=actor_id,
             action=request.method,
             entity_type=request.url.path,
