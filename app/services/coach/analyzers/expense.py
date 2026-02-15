@@ -51,6 +51,20 @@ class ExpenseApprovalAnalyzer:
     def __init__(self, db: Session) -> None:
         self.db = db
 
+    def _quick_check_from_store(self, organization_id: UUID) -> bool:
+        """Return True if MetricStore shows zero pending expense approvals."""
+        from app.services.coach.analyzers import metric_is_fresh
+
+        fresh, value = metric_is_fresh(
+            self.db, organization_id, "efficiency.pending_expense_approvals"
+        )
+        if fresh and value is not None and value <= 0:
+            logger.debug(
+                "Expense fast-path: MetricStore shows zero pending approvals, skipping"
+            )
+            return True
+        return False
+
     def pending_approvals_for_approver(
         self,
         organization_id: UUID,
@@ -208,6 +222,10 @@ class ExpenseApprovalAnalyzer:
                 ),
             )
         )
+
+        # Fast-path: if MetricStore says zero pending approvals, skip everything.
+        if self._quick_check_from_store(organization_id):
+            return 0
 
         # Org-wide: missing approver assignment for pending approvals.
         missing_cnt = int(

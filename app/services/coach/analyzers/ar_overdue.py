@@ -58,6 +58,20 @@ class AROverdueAnalyzer:
     def __init__(self, db: Session) -> None:
         self.db = db
 
+    def _quick_check_from_store(self, organization_id: UUID) -> bool:
+        """Return True if MetricStore shows zero overdue AR (nothing to report)."""
+        from app.services.coach.analyzers import metric_is_fresh
+
+        fresh, value = metric_is_fresh(
+            self.db, organization_id, "cash_flow.ar_overdue_total"
+        )
+        if fresh and value is not None and value <= 0:
+            logger.debug(
+                "AR fast-path: MetricStore shows zero overdue AR, skipping detail query"
+            )
+            return True
+        return False
+
     def overdue_summary(self, organization_id: UUID) -> OverdueReceivablesSummary:
         org = self.db.scalar(
             select(Organization).where(Organization.organization_id == organization_id)
@@ -155,6 +169,8 @@ class AROverdueAnalyzer:
         self,
         organization_id: UUID,
     ) -> CoachInsight | None:
+        if self._quick_check_from_store(organization_id):
+            return None
         summary = self.overdue_summary(organization_id)
         if summary.overdue_invoice_count <= 0:
             return None

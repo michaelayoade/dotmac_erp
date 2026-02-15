@@ -52,6 +52,20 @@ class BankingHealthAnalyzer:
     def __init__(self, db: Session) -> None:
         self.db = db
 
+    def _quick_check_from_store(self, organization_id: UUID) -> bool:
+        """Return True if MetricStore shows zero unreconciled accounts."""
+        from app.services.coach.analyzers import metric_is_fresh
+
+        fresh, value = metric_is_fresh(
+            self.db, organization_id, "efficiency.unreconciled_account_count"
+        )
+        if fresh and value is not None and value <= 0:
+            logger.debug(
+                "Banking fast-path: MetricStore shows zero stale accounts, skipping"
+            )
+            return True
+        return False
+
     def stale_bank_accounts(
         self,
         organization_id: UUID,
@@ -112,6 +126,8 @@ class BankingHealthAnalyzer:
         self,
         organization_id: UUID,
     ) -> CoachInsight | None:
+        if self._quick_check_from_store(organization_id):
+            return None
         stale = self.stale_bank_accounts(organization_id)
         if not stale:
             return None

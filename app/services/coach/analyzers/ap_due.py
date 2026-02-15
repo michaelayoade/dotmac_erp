@@ -181,6 +181,8 @@ class APDueAnalyzer:
     def generate_payables_due_insight(
         self, organization_id: UUID
     ) -> CoachInsight | None:
+        if self._quick_check_from_store(organization_id):
+            return None
         summary = self.due_summary(organization_id)
         if summary.due_7d_invoice_count <= 0 and summary.overdue_invoice_count <= 0:
             return None

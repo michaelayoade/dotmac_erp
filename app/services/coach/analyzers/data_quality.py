@@ -33,6 +33,20 @@ class DataQualityAnalyzer:
     def __init__(self, db: Session) -> None:
         self.db = db
 
+    def _quick_check_from_store(self, organization_id: UUID) -> bool:
+        """Return True if MetricStore shows zero active employees (nothing to check)."""
+        from app.services.coach.analyzers import metric_is_fresh
+
+        fresh, value = metric_is_fresh(
+            self.db, organization_id, "workforce.active_headcount"
+        )
+        if fresh and value is not None and value <= 0:
+            logger.debug(
+                "DataQuality fast-path: MetricStore shows zero active employees, skipping"
+            )
+            return True
+        return False
+
     def employee_profile_gaps(self, organization_id: UUID) -> EmployeeProfileGaps:
         org_id = organization_id
 
@@ -80,6 +94,8 @@ class DataQualityAnalyzer:
         self,
         organization_id: UUID,
     ) -> CoachInsight | None:
+        if self._quick_check_from_store(organization_id):
+            return None
         gaps = self.employee_profile_gaps(organization_id)
         if gaps.active_employees == 0:
             return None

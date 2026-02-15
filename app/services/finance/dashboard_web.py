@@ -102,6 +102,11 @@ class DashboardWebService:
             db, organization_id, year=selected_year
         )
 
+        # Pre-computed analytics snapshot (None when stale or unavailable).
+        from app.services.analytics.dashboard_metrics import DashboardMetricsService
+
+        metrics_snapshot = DashboardMetricsService(db).get_org_snapshot(organization_id)
+
         stats_view = {
             "total_revenue": _format_currency(stats.total_revenue, currency_prefix),
             "total_expenses": _format_currency(stats.total_expenses, currency_prefix),
@@ -186,6 +191,7 @@ class DashboardWebService:
             "selected_year": selected_year,
             "selected_year_label": str(selected_year) if selected_year else "All years",
             "subledger_reconciliation": subledger_recon_view,
+            "metrics_snapshot": metrics_snapshot,
         }
 
 
