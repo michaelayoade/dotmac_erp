@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import compact_filters, pagination, status_badge, empty_state, stats_card, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, filter_select_field, filter_entity_select_field, list_header_actions, action_buttons %}
+{% from "components/macros.html" import compact_filters, pagination, status_badge, empty_state, stats_card, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, filter_select_field, filter_entity_select_field, list_header_actions, action_buttons, sortable_th %}
 
 {% block page_title %}AR Receipts{% endblock %}
 
@@ -60,13 +60,13 @@
                     <thead>
                         <tr>
                             {{ bulk_select_header() }}
-                            <th scope="col">Receipt Date</th>
-                            <th scope="col">Receipt #</th>
-                            <th scope="col">Customer</th>
+                            {{ sortable_th("Receipt Date", "payment_date", sort, sort_dir) }}
+                            {{ sortable_th("Receipt #", "receipt_number", sort, sort_dir) }}
+                            {{ sortable_th("Customer", "customer_name", sort, sort_dir) }}
                             <th class="hidden sm:table-cell" scope="col">Method</th>
                             <th class="hidden sm:table-cell" scope="col">Reference</th>
-                            <th scope="col" class="text-right">Amount</th>
-                            <th scope="col" class="text-center">Status</th>
+                            {{ sortable_th("Amount", "amount", sort, sort_dir, class="text-right") }}
+                            {{ sortable_th("Status", "status", sort, sort_dir, class="text-center") }}
                             <th scope="col" class="text-right">Actions</th>
                         </tr>
                     </thead>
@@ -124,7 +124,7 @@
                 total_count=total_count | default(receipts | length if receipts else 0),
                 limit=limit | default(50),
                 search=search,
-                filters={"status": status, "customer_id": customer_id, "start_date": start_date, "end_date": end_date}
+                filters={"status": status, "customer_id": customer_id, "start_date": start_date, "end_date": end_date, "sort": sort, "sort_dir": sort_dir}
             ) }}
         </div>
 

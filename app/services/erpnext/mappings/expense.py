@@ -159,6 +159,12 @@ class ExpenseClaimMapping(DocTypeMapping):
                     required=False,
                     transformer=parse_decimal,
                 ),
+                FieldMapping(
+                    source="payment_reference",
+                    target="payment_reference",
+                    required=False,
+                    transformer=lambda v: clean_string(v, 100),
+                ),
                 # Purpose/remarks
                 FieldMapping(
                     source="remark",
@@ -212,6 +218,17 @@ class ExpenseClaimMapping(DocTypeMapping):
         approved = result.get("total_approved_amount")
         if approved:
             result["net_payable_amount"] = approved
+
+        # Some ERPNext versions expose paid date/reference only on full doc.
+        paid_on = parse_date(record.get("paid_on")) or parse_date(
+            record.get("paid_date")
+        )
+        if paid_on:
+            result["paid_on"] = paid_on
+        if not result.get("payment_reference"):
+            payment_ref = clean_string(record.get("payment_reference"), 100)
+            if payment_ref:
+                result["payment_reference"] = payment_ref
 
         # Clean up internal tracking field
         result.pop("_amount_reimbursed", None)

@@ -1135,8 +1135,9 @@ class TestSplynxPaymentMatching:
             )
 
         assert result.matched == 0
-        assert len(result.errors) == 1
-        assert "Line 7" in result.errors[0]
+        # Error in Splynx pass (pass 2), then retried in date+amount pass (pass 3)
+        assert len(result.errors) >= 1
+        assert all("Line 7" in e for e in result.errors)
 
 
 # ── Tests: Mixed pass 1 + pass 2 ─────────────────────────────────────

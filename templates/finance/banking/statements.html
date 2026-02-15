@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card, compact_filters, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_export, bulk_icon_delete, filter_select_field, filter_custom_select_field, action_buttons %}
+{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card, compact_filters, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_export, bulk_icon_delete, filter_select_field, filter_custom_select_field, action_buttons, sortable_th %}
 
 {% block page_title %}Bank Statements{% endblock %}
 
@@ -68,14 +68,14 @@
                 <thead>
                     <tr>
                         {{ bulk_select_header() }}
-                        <th scope="col">Statement Date</th>
+                        {{ sortable_th("Statement Date", "statement_date", sort, sort_dir) }}
                         <th scope="col">Statement #</th>
-                        <th scope="col">Bank Account</th>
+                        {{ sortable_th("Bank Account", "account_name", sort, sort_dir) }}
                         <th scope="col">Period</th>
                         <th scope="col" class="text-right">Opening</th>
                         <th scope="col" class="text-right">Closing</th>
                         <th scope="col" class="text-center">Lines</th>
-                        <th scope="col" class="text-center">Status</th>
+                        {{ sortable_th("Status", "status", sort, sort_dir, class="text-center") }}
                         <th scope="col" class="text-right">Actions</th>
                     </tr>
                 </thead>
@@ -136,7 +136,7 @@
             total_pages=total_pages | default(1),
             total_count=total_count | default(0),
             limit=limit | default(50),
-            filters={"account_id": account_id, "status": status, "start_date": start_date, "end_date": end_date}
+            filters={"account_id": account_id, "status": status, "start_date": start_date, "end_date": end_date, "sort": sort, "sort_dir": sort_dir}
         ) }}
     </div>
 

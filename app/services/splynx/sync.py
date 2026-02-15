@@ -50,10 +50,13 @@ class PaystackReconcileResult(TypedDict):
     matched_by_reference: int
     matched_by_date_amount: int
     matched_by_customer: int
+    matched_by_score_gap: int
+    matched_opening_balance: int
     ambiguous_matches: int
     unmatched_payments: int
     unmatched_statements: int
     total_matched_amount: Decimal
+    review_queue: list[dict[str, Any]]
     errors: list[str]
 
 
@@ -2085,10 +2088,11 @@ class SplynxSyncService:
         """
         Reconcile Splynx Paystack payments with bank statement lines.
 
-        Three-tier matching:
+        Four-tier matching:
         1. Exact match by Paystack reference (for payments with ref in comment)
-        2. Unique match by date + amount (when only one payment/line has that combo)
-        3. Customer-based match by date + amount (when customer has unique payment)
+        2. Unique match by amount + date window (exact date preferred)
+        3. Customer-based match by amount + date window
+        4. Score-gap disambiguation for remaining ambiguous candidates
 
         Args:
             dry_run: If True, don't commit changes, just return match stats
@@ -2107,10 +2111,13 @@ class SplynxSyncService:
             "matched_by_reference": 0,
             "matched_by_date_amount": 0,
             "matched_by_customer": 0,
+            "matched_by_score_gap": 0,
+            "matched_opening_balance": 0,
             "ambiguous_matches": 0,
             "unmatched_payments": 0,
             "unmatched_statements": 0,
             "total_matched_amount": Decimal("0"),
+            "review_queue": [],
             "errors": [],
         }
 
@@ -2132,21 +2139,23 @@ class SplynxSyncService:
         paystack_account_ids = [row.bank_account_id for row in paystack_accounts]
         logger.info("Found %d Paystack bank accounts", len(paystack_account_ids))
 
-        # Step 1: Match by reference
-        # Get payments with Paystack references
+        # Step 1: Match by reference token across payment/statement fields
         payments_with_refs = self.db.execute(
             text("""
                 SELECT
                     cp.payment_id,
                     cp.payment_date,
                     cp.amount,
-                    cp.description,
-                    LOWER(SUBSTRING(cp.description FROM '[0-9a-f]{12,14}')) as paystack_ref
+                    cp.reference,
+                    cp.description
                 FROM ar.customer_payment cp
                 WHERE cp.organization_id = :org_id
                   AND cp.correlation_id LIKE 'splynx-pmt-%'
                   AND cp.bank_account_id = ANY(:account_ids)
-                  AND cp.description ~ '[0-9a-f]{12,14}'
+                  AND (
+                    cp.description ~* '[0-9a-f]{12,14}'
+                    OR cp.reference ~* '[0-9a-f]{12,14}'
+                  )
             """),
             {"org_id": self.organization_id, "account_ids": paystack_account_ids},
         ).fetchall()
@@ -2160,7 +2169,8 @@ class SplynxSyncService:
             text("""
                 SELECT
                     bsl.line_id,
-                    LOWER(bsl.reference) as ref,
+                    bsl.reference,
+                    bsl.description,
                     bsl.amount,
                     bsl.transaction_date,
                     bsl.is_matched
@@ -2174,38 +2184,126 @@ class SplynxSyncService:
             {"org_id": self.organization_id, "account_ids": paystack_account_ids},
         ).fetchall()
 
-        ref_to_line = {row.ref: row for row in statement_refs if row.ref}
-        logger.info("Found %d unmatched statement lines", len(statement_refs))
-
         matched_payment_ids = set()
         matched_line_ids = set()
 
-        # Match by reference
-        for payment in payments_with_refs:
-            if payment.paystack_ref and payment.paystack_ref in ref_to_line:
-                line = ref_to_line[payment.paystack_ref]
-                if line.line_id not in matched_line_ids:
-                    matched_payment_ids.add(payment.payment_id)
-                    matched_line_ids.add(line.line_id)
-                    result["matched_by_reference"] += 1
-                    result["total_matched_amount"] += payment.amount
+        # Special-case: Opening balance carry-forwards are not Splynx payments.
+        # Mark them as reconciled so they don't block Paystack matching.
+        opening_balance_lines = [
+            row
+            for row in statement_refs
+            if (getattr(row, "reference", "") or "").lower().startswith("ob-")
+            or "opening balance" in ((getattr(row, "description", "") or "").lower())
+        ]
+        if opening_balance_lines:
+            logger.info(
+                "Found %d opening-balance lines (ref prefix 'ob-' or description match)",
+                len(opening_balance_lines),
+            )
+        for line in opening_balance_lines:
+            if line.line_id in matched_line_ids:
+                continue
+            matched_line_ids.add(line.line_id)
+            result["matched_opening_balance"] += 1
+            logger.debug(
+                "Opening balance line %s: ref=%s amount=%s",
+                line.line_id,
+                getattr(line, "reference", ""),
+                getattr(line, "amount", ""),
+            )
+            if not dry_run:
+                self.db.execute(
+                    text("""
+                        UPDATE banking.bank_statement_lines
+                        SET is_matched = true,
+                            matched_at = :now,
+                            notes = COALESCE(notes, '') || E'\n' || :note
+                        WHERE line_id = :line_id
+                    """),
+                    {
+                        "line_id": line.line_id,
+                        "now": datetime.now(tz=UTC),
+                        "note": (
+                            " [Marked matched: opening balance / carry-forward settlement "
+                            "(not a Splynx payment)]"
+                        ),
+                    },
+                )
 
-                    if not dry_run:
-                        # Update statement line
-                        self.db.execute(
-                            text("""
-                                UPDATE banking.bank_statement_lines
-                                SET is_matched = true,
-                                    matched_at = :now,
-                                    notes = COALESCE(notes, '') || E'\n' || :note
-                                WHERE line_id = :line_id
-                            """),
-                            {
-                                "line_id": line.line_id,
-                                "now": datetime.now(tz=UTC),
-                                "note": f" [Matched to Splynx payment {payment.payment_id}]",
-                            },
-                        )
+        token_pattern = re.compile(r"\b[0-9a-f]{12,14}\b", re.IGNORECASE)
+
+        def _extract_paystack_tokens(*values: str | None) -> set[str]:
+            tokens: set[str] = set()
+            for value in values:
+                if not value:
+                    continue
+                tokens.update(m.group(0).lower() for m in token_pattern.finditer(value))
+            return tokens
+
+        token_to_lines: dict[str, list[Any]] = defaultdict(list)
+        for row in statement_refs:
+            if row.line_id in matched_line_ids:
+                continue
+            for token in _extract_paystack_tokens(
+                getattr(row, "reference", None), getattr(row, "description", None)
+            ):
+                token_to_lines[token].append(row)
+
+        logger.info("Found %d unmatched statement lines", len(statement_refs))
+
+        # Match by reference token.
+        for payment in payments_with_refs:
+            payment_tokens = _extract_paystack_tokens(
+                getattr(payment, "reference", None),
+                getattr(payment, "description", None),
+            )
+            if not payment_tokens:
+                continue
+
+            candidate_lines: list[Any] = []
+            for token in payment_tokens:
+                candidate_lines.extend(token_to_lines.get(token, []))
+
+            # Dedupe by line_id and keep only currently unmatched lines.
+            deduped_candidates = {
+                line.line_id: line
+                for line in candidate_lines
+                if line.line_id not in matched_line_ids
+            }
+            if not deduped_candidates:
+                continue
+
+            amount_cents = int(payment.amount * 100)
+            amount_matched = [
+                line
+                for line in deduped_candidates.values()
+                if int(line.amount * 100) == amount_cents
+            ]
+            chosen_candidates = amount_matched or list(deduped_candidates.values())
+            if len(chosen_candidates) != 1:
+                continue
+
+            line = chosen_candidates[0]
+            matched_payment_ids.add(payment.payment_id)
+            matched_line_ids.add(line.line_id)
+            result["matched_by_reference"] += 1
+            result["total_matched_amount"] += payment.amount
+
+            if not dry_run:
+                self.db.execute(
+                    text("""
+                        UPDATE banking.bank_statement_lines
+                        SET is_matched = true,
+                            matched_at = :now,
+                            notes = COALESCE(notes, '') || E'\n' || :note
+                        WHERE line_id = :line_id
+                    """),
+                    {
+                        "line_id": line.line_id,
+                        "now": datetime.now(tz=UTC),
+                        "note": f" [Matched to Splynx payment {payment.payment_id} by paystack token]",
+                    },
+                )
 
         logger.info("Matched %d payments by reference", result["matched_by_reference"])
 
@@ -2217,7 +2315,9 @@ class SplynxSyncService:
                     cp.payment_id,
                     cp.customer_id,
                     cp.payment_date,
-                    cp.amount
+                    cp.amount,
+                    cp.reference,
+                    cp.description
                 FROM ar.customer_payment cp
                 WHERE cp.organization_id = :org_id
                   AND cp.correlation_id LIKE 'splynx-pmt-%'
@@ -2238,7 +2338,9 @@ class SplynxSyncService:
                 SELECT
                     bsl.line_id,
                     bsl.transaction_date,
-                    bsl.amount
+                    bsl.amount,
+                    bsl.reference,
+                    bsl.description
                 FROM banking.bank_statement_lines bsl
                 JOIN banking.bank_statements bs ON bsl.statement_id = bs.statement_id
                 WHERE bs.organization_id = :org_id
@@ -2255,18 +2357,59 @@ class SplynxSyncService:
             },
         ).fetchall()
 
-        # Build date+amount index for statement lines
-        # Key: (date, amount_cents) -> list of line_ids
-        line_index: dict[tuple[object, int], list[UUID]] = {}
+        # Build amount index for statement lines; date tolerance is applied at lookup time.
+        amount_index: dict[int, list[UUID]] = {}
         for line in unmatched_lines:
-            # Round to 2 decimals to handle precision differences
             amount_cents = int(line.amount * 100)
-            key = (line.transaction_date, amount_cents)
-            if key not in line_index:
-                line_index[key] = []
-            line_index[key].append(line.line_id)
+            if amount_cents not in amount_index:
+                amount_index[amount_cents] = []
+            amount_index[amount_cents].append(line.line_id)
+        line_meta_by_id = {line.line_id: line for line in unmatched_lines}
 
-        # Tier 2: Match payments with unique date+amount
+        DATE_WINDOW_DAYS_BEFORE = 3
+        DATE_WINDOW_DAYS_AFTER = 7
+
+        def _to_date(value: Any) -> date | None:
+            if value is None:
+                return None
+            if isinstance(value, datetime):
+                return value.date()
+            if isinstance(value, date):
+                return value
+            return None
+
+        def _candidate_lines_for_amount_date(
+            payment_date: Any, amount_cents: int
+        ) -> list[UUID]:
+            payment_day = _to_date(payment_date)
+            if payment_day is None:
+                return []
+
+            ranked: list[tuple[int, int, int, UUID]] = []
+            for line_id in amount_index.get(amount_cents, []):
+                if line_id in matched_line_ids:
+                    continue
+                line = line_meta_by_id.get(line_id)
+                if line is None:
+                    continue
+                line_day = _to_date(getattr(line, "transaction_date", None))
+                if line_day is None:
+                    continue
+                day_delta = (line_day - payment_day).days
+                if (
+                    day_delta < -DATE_WINDOW_DAYS_BEFORE
+                    or day_delta > DATE_WINDOW_DAYS_AFTER
+                ):
+                    continue
+                # Exact date first, then nearest date, then deterministic tie-break.
+                ranked.append(
+                    (0 if day_delta == 0 else 1, abs(day_delta), day_delta, line_id)
+                )
+
+            ranked.sort()
+            return [line_id for _, _, _, line_id in ranked]
+
+        # Tier 2: Match payments with unique amount+date-window
         ambiguous_payments = []  # Collect for tier 3
 
         for payment in unmatched_payments:
@@ -2274,47 +2417,110 @@ class SplynxSyncService:
                 continue
 
             amount_cents = int(payment.amount * 100)
-            key = (payment.payment_date, amount_cents)
+            available_lines = _candidate_lines_for_amount_date(
+                payment.payment_date, amount_cents
+            )
 
-            if key in line_index and line_index[key]:
-                available_lines = [
-                    lid for lid in line_index[key] if lid not in matched_line_ids
-                ]
+            if len(available_lines) == 1:
+                line_id = available_lines[0]
+                matched_payment_ids.add(payment.payment_id)
+                matched_line_ids.add(line_id)
+                result["matched_by_date_amount"] += 1
+                result["total_matched_amount"] += payment.amount
 
-                if len(available_lines) == 1:
-                    # Unique match
-                    line_id = available_lines[0]
-                    matched_payment_ids.add(payment.payment_id)
-                    matched_line_ids.add(line_id)
-                    result["matched_by_date_amount"] += 1
-                    result["total_matched_amount"] += payment.amount
-
-                    if not dry_run:
-                        self.db.execute(
-                            text("""
-                                UPDATE banking.bank_statement_lines
-                                SET is_matched = true,
-                                    matched_at = :now,
-                                    notes = COALESCE(notes, '') || E'\n' || :note
-                                WHERE line_id = :line_id
-                            """),
-                            {
-                                "line_id": line_id,
-                                "now": datetime.now(tz=UTC),
-                                "note": f" [Matched to Splynx payment {payment.payment_id} by date+amount]",
-                            },
-                        )
-                elif len(available_lines) > 1:
-                    # Multiple possible matches - save for tier 3
-                    ambiguous_payments.append(payment)
+                if not dry_run:
+                    line = line_meta_by_id.get(line_id)
+                    pday = _to_date(payment.payment_date)
+                    lday = _to_date(getattr(line, "transaction_date", None))
+                    day_delta = (
+                        (lday - pday).days
+                        if pday is not None and lday is not None
+                        else 0
+                    )
+                    self.db.execute(
+                        text("""
+                            UPDATE banking.bank_statement_lines
+                            SET is_matched = true,
+                                matched_at = :now,
+                                notes = COALESCE(notes, '') || E'\n' || :note
+                            WHERE line_id = :line_id
+                        """),
+                        {
+                            "line_id": line_id,
+                            "now": datetime.now(tz=UTC),
+                            "note": (
+                                f" [Matched to Splynx payment {payment.payment_id} "
+                                f"by amount+date-window (delta_days={day_delta})]"
+                            ),
+                        },
+                    )
+            elif len(available_lines) > 1:
+                # Multiple possible matches - save for tier 3/4
+                ambiguous_payments.append(payment)
 
         logger.info(
-            "Tier 2 complete: %d matched by date+amount, %d ambiguous for tier 3",
+            "Tier 2 complete: %d matched by amount+date-window, %d ambiguous for tier 3",
             result["matched_by_date_amount"],
             len(ambiguous_payments),
         )
 
-        # Tier 3: Customer-based matching for ambiguous payments
+        # Tier 2b: Resolve exact date+amount many-to-many buckets when counts match.
+        # If the count of unmatched payments equals the count of unmatched lines for
+        # a (date, amount) key, any pairing is financially equivalent; pair
+        # deterministically to clear ambiguity without relying on weak text signals.
+        ambiguous_by_key: dict[tuple[object, int], list[Any]] = defaultdict(list)
+        for payment in ambiguous_payments:
+            if payment.payment_id in matched_payment_ids:
+                continue
+            key = (payment.payment_date, int(payment.amount * 100))
+            ambiguous_by_key[key].append(payment)
+
+        line_ids_by_key: dict[tuple[object, int], list[UUID]] = defaultdict(list)
+        for line in unmatched_lines:
+            if line.line_id in matched_line_ids:
+                continue
+            key = (line.transaction_date, int(line.amount * 100))
+            line_ids_by_key[key].append(line.line_id)
+
+        for key, payments in ambiguous_by_key.items():
+            candidate_line_ids = [
+                lid
+                for lid in line_ids_by_key.get(key, [])
+                if lid not in matched_line_ids
+            ]
+            if not payments or not candidate_line_ids:
+                continue
+            if len(payments) != len(candidate_line_ids):
+                continue
+
+            sorted_payments = sorted(payments, key=lambda p: str(p.payment_id))
+            sorted_lines = sorted(candidate_line_ids, key=str)
+            for payment, line_id in zip(sorted_payments, sorted_lines, strict=False):
+                matched_payment_ids.add(payment.payment_id)
+                matched_line_ids.add(line_id)
+                result["matched_by_date_amount"] += 1
+                result["total_matched_amount"] += payment.amount
+
+                if not dry_run:
+                    self.db.execute(
+                        text("""
+                            UPDATE banking.bank_statement_lines
+                            SET is_matched = true,
+                                matched_at = :now,
+                                notes = COALESCE(notes, '') || E'\n' || :note
+                            WHERE line_id = :line_id
+                        """),
+                        {
+                            "line_id": line_id,
+                            "now": datetime.now(tz=UTC),
+                            "note": (
+                                f" [Matched to Splynx payment {payment.payment_id} "
+                                "by exact date+amount bucket]"
+                            ),
+                        },
+                    )
+
+        # Tier 3: Customer-based matching for remaining ambiguous payments
         # Group ambiguous payments by (customer_id, date, amount_cents)
         customer_payment_groups: dict[tuple[UUID, object, int], list[Any]] = (
             defaultdict(list)
@@ -2341,56 +2547,231 @@ class SplynxSyncService:
             if payment.payment_id in matched_payment_ids:
                 continue
 
-            # Check if there's an available bank line for this date+amount
-            key = (pay_date, amount_cents)
-            if key in line_index:
-                available_lines = [
-                    lid for lid in line_index[key] if lid not in matched_line_ids
-                ]
+            available_lines = _candidate_lines_for_amount_date(pay_date, amount_cents)
+            if len(available_lines) == 1:
+                # Take the unique available line for this customer's payment.
+                line_id = available_lines[0]
+                matched_payment_ids.add(payment.payment_id)
+                matched_line_ids.add(line_id)
+                result["matched_by_customer"] += 1
+                result["total_matched_amount"] += payment.amount
 
-                if available_lines:
-                    # Take the first available line for this customer's unique payment
-                    line_id = available_lines[0]
-                    matched_payment_ids.add(payment.payment_id)
-                    matched_line_ids.add(line_id)
-                    result["matched_by_customer"] += 1
-                    result["total_matched_amount"] += payment.amount
-
-                    if not dry_run:
-                        self.db.execute(
-                            text("""
-                                UPDATE banking.bank_statement_lines
-                                SET is_matched = true,
-                                    matched_at = :now,
-                                    notes = COALESCE(notes, '') || E'\n' || :note
-                                WHERE line_id = :line_id
-                            """),
-                            {
-                                "line_id": line_id,
-                                "now": datetime.now(tz=UTC),
-                                "note": f" [Matched to Splynx payment {payment.payment_id} by customer+date+amount]",
-                            },
-                        )
-                else:
-                    # No available lines for this date+amount
-                    result["ambiguous_matches"] += 1
+                if not dry_run:
+                    line = line_meta_by_id.get(line_id)
+                    pday = _to_date(payment.payment_date)
+                    lday = _to_date(getattr(line, "transaction_date", None))
+                    day_delta = (
+                        (lday - pday).days
+                        if pday is not None and lday is not None
+                        else 0
+                    )
+                    self.db.execute(
+                        text("""
+                            UPDATE banking.bank_statement_lines
+                            SET is_matched = true,
+                                matched_at = :now,
+                                notes = COALESCE(notes, '') || E'\n' || :note
+                            WHERE line_id = :line_id
+                        """),
+                        {
+                            "line_id": line_id,
+                            "now": datetime.now(tz=UTC),
+                            "note": (
+                                f" [Matched to Splynx payment {payment.payment_id} "
+                                f"by customer+amount+date-window (delta_days={day_delta})]"
+                            ),
+                        },
+                    )
             else:
                 result["ambiguous_matches"] += 1
 
-        # Count final unmatched
-        result["unmatched_payments"] = len(unmatched_payments) - (
-            result["matched_by_date_amount"] + result["matched_by_customer"]
+        # Tier 4: score-gap resolution for remaining ambiguous pairs.
+        # Auto-match only when best candidate is sufficiently stronger than runner-up.
+        unresolved_ambiguous: list[Any] = [
+            p for p in ambiguous_payments if p.payment_id not in matched_payment_ids
+        ]
+
+        def _normalize_text(value: str | None) -> str:
+            if not value:
+                return ""
+            return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+
+        def _extract_tokens(value: str | None) -> set[str]:
+            normalized = _normalize_text(value)
+            if not normalized:
+                return set()
+            return {tok for tok in normalized.split() if len(tok) >= 4}
+
+        proposals: list[dict[str, Any]] = []
+        for payment in unresolved_ambiguous:
+            amount_cents = int(payment.amount * 100)
+            available_lines = _candidate_lines_for_amount_date(
+                payment.payment_date, amount_cents
+            )
+            if not available_lines:
+                continue
+
+            payment_ref = _normalize_text(getattr(payment, "reference", None))
+            payment_desc = _normalize_text(getattr(payment, "description", None))
+            payment_tokens = _extract_tokens(payment_ref) | _extract_tokens(
+                payment_desc
+            )
+            scored_candidates: list[tuple[float, UUID]] = []
+            payment_day = _to_date(payment.payment_date)
+
+            for line_id in available_lines:
+                line = line_meta_by_id.get(line_id)
+                if not line:
+                    continue
+                line_ref = _normalize_text(getattr(line, "reference", None))
+                line_desc = _normalize_text(getattr(line, "description", None))
+                line_tokens = _extract_tokens(line_ref) | _extract_tokens(line_desc)
+                line_day = _to_date(getattr(line, "transaction_date", None))
+                day_delta = (
+                    (line_day - payment_day).days
+                    if payment_day is not None and line_day is not None
+                    else None
+                )
+
+                score = 20.0  # amount match by construction
+                if day_delta is not None:
+                    if day_delta == 0:
+                        score += 20
+                    elif abs(day_delta) <= 1:
+                        score += 14
+                    elif abs(day_delta) <= 3:
+                        score += 8
+                    else:
+                        score += 3
+                if payment_ref and line_ref and payment_ref == line_ref:
+                    score += 60
+                elif payment_ref and (
+                    payment_ref in line_desc or payment_ref in line_ref
+                ):
+                    score += 25
+
+                if line_ref and (line_ref in payment_desc or line_ref in payment_ref):
+                    score += 20
+
+                common_tokens = payment_tokens & line_tokens
+                if common_tokens:
+                    score += min(float(len(common_tokens) * 4), 10.0)
+                scored_candidates.append((min(score, 100.0), line_id))
+
+            if not scored_candidates:
+                continue
+            scored_candidates.sort(key=lambda x: x[0], reverse=True)
+            best_score, best_line_id = scored_candidates[0]
+            second_score = (
+                scored_candidates[1][0] if len(scored_candidates) > 1 else 0.0
+            )
+            proposals.append(
+                {
+                    "payment": payment,
+                    "best_line_id": best_line_id,
+                    "best_score": best_score,
+                    "second_score": second_score,
+                    "score_gap": best_score - second_score,
+                    "candidates": scored_candidates[:5],
+                }
+            )
+
+        proposals.sort(key=lambda p: (p["score_gap"], p["best_score"]), reverse=True)
+
+        used_lines_for_tier4: set[UUID] = set()
+        review_queue: list[dict[str, Any]] = []
+        MIN_SCORE = 60.0
+        MIN_GAP = 20.0
+        for item in proposals:
+            payment = item["payment"]
+            best_line_id: UUID = item["best_line_id"]
+            if (
+                payment.payment_id in matched_payment_ids
+                or best_line_id in used_lines_for_tier4
+            ):
+                continue
+
+            line = line_meta_by_id.get(best_line_id)
+            if line is None:
+                continue
+
+            if item["best_score"] >= MIN_SCORE and item["score_gap"] >= MIN_GAP:
+                matched_payment_ids.add(payment.payment_id)
+                matched_line_ids.add(best_line_id)
+                used_lines_for_tier4.add(best_line_id)
+                result["matched_by_score_gap"] += 1
+                result["total_matched_amount"] += payment.amount
+                if not dry_run:
+                    self.db.execute(
+                        text("""
+                            UPDATE banking.bank_statement_lines
+                            SET is_matched = true,
+                                matched_at = :now,
+                                notes = COALESCE(notes, '') || E'\n' || :note
+                            WHERE line_id = :line_id
+                        """),
+                        {
+                            "line_id": best_line_id,
+                            "now": datetime.now(tz=UTC),
+                            "note": (
+                                f" [Matched to Splynx payment {payment.payment_id} "
+                                f"by score-gap (score={item['best_score']:.1f}, gap={item['score_gap']:.1f})]"
+                            ),
+                        },
+                    )
+            else:
+                review_queue.append(
+                    {
+                        "payment_id": str(payment.payment_id),
+                        "payment_date": str(payment.payment_date),
+                        "amount": str(payment.amount),
+                        "payment_reference": getattr(payment, "reference", None),
+                        "payment_description": getattr(payment, "description", None),
+                        "best_score": round(float(item["best_score"]), 1),
+                        "score_gap": round(float(item["score_gap"]), 1),
+                        "candidates": [
+                            {
+                                "line_id": str(line_id),
+                                "score": round(float(score), 1),
+                                "reference": getattr(
+                                    line_meta_by_id.get(line_id), "reference", None
+                                ),
+                                "description": getattr(
+                                    line_meta_by_id.get(line_id), "description", None
+                                ),
+                            }
+                            for score, line_id in item["candidates"]
+                        ],
+                    }
+                )
+
+        # Count final unmatched (clamp to 0 — matched_line_ids may include
+        # opening-balance lines that were not in the original unmatched_lines list)
+        result["unmatched_payments"] = max(
+            0,
+            len(unmatched_payments)
+            - (
+                result["matched_by_date_amount"]
+                + result["matched_by_customer"]
+                + result["matched_by_score_gap"]
+            ),
         )
-        result["unmatched_statements"] = len(unmatched_lines) - len(matched_line_ids)
+        result["unmatched_statements"] = max(
+            0, len(unmatched_lines) - len(matched_line_ids)
+        )
+        result["review_queue"] = review_queue
+        result["ambiguous_matches"] = len(review_queue)
 
         if not dry_run:
             self.db.flush()
 
         logger.info(
-            "Reconciliation complete: %d by ref, %d by date+amount, %d by customer, %d ambiguous",
+            "Reconciliation complete: %d by ref, %d by date+amount, %d by customer, %d by score-gap, %d opening balance, %d ambiguous",
             result["matched_by_reference"],
             result["matched_by_date_amount"],
             result["matched_by_customer"],
+            result["matched_by_score_gap"],
+            result["matched_opening_balance"],
             result["ambiguous_matches"],
         )
 
@@ -2600,9 +2981,11 @@ class SplynxSyncService:
             else:
                 result["ambiguous_matches"] += 1
 
-        # Count final stats
-        result["unmatched_payments"] = len(payments) - len(matched_payment_ids)
-        result["unmatched_statements"] = len(statement_lines) - len(matched_line_ids)
+        # Count final stats (clamp to 0 to prevent negative counts)
+        result["unmatched_payments"] = max(0, len(payments) - len(matched_payment_ids))
+        result["unmatched_statements"] = max(
+            0, len(statement_lines) - len(matched_line_ids)
+        )
 
         if not dry_run:
             self.db.flush()

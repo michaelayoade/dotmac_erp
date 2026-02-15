@@ -4,6 +4,8 @@ Payment Entry Sync Service - ERPNext to DotMac ERP.
 Syncs ERPNext Payment Entries:
 - payment_type=Receive → ar.customer_payment
 - payment_type=Pay → ap.supplier_payment
+- payment_type=Pay + party_type=Employee + Expense Claim refs
+  → update expense.expense_claim paid metadata
 
 Handles dedup against Splynx-originated payments via splynx_id.
 """
@@ -76,7 +78,13 @@ class PaymentEntrySyncService(BaseSyncService[CustomerPayment]):
 
     def fetch_records(self, client: Any, since: datetime | None = None):
         """Fetch Payment Entries with references."""
-        filters: dict[str, Any] = {"docstatus": 1}  # Only submitted
+        # For matching OPEX outflows we only need *outgoing* payments.
+        # Receiving-side (AR) payments can be synced separately once Customer
+        # master data is clean, but they are not required for expense matching.
+        filters: dict[str, Any] = {
+            "docstatus": 1,  # Only submitted
+            "payment_type": "Pay",
+        }
 
         if since:
             for pe in client.get_modified_since(
@@ -229,6 +237,7 @@ class PaymentEntrySyncService(BaseSyncService[CustomerPayment]):
         data.pop("_source_modified", None)
         data.pop("_received_amount", None)
         data.pop("_reference_date", None)
+        data.pop("_custom_expense_claim", None)
 
         supplier_id = self._resolve_entity_id(supplier_source, "Supplier")
         if not supplier_id:
@@ -311,6 +320,82 @@ class PaymentEntrySyncService(BaseSyncService[CustomerPayment]):
             )
             self.db.add(allocation)
 
+    def _sync_employee_expense_payment(
+        self,
+        data: dict[str, Any],
+        source_name: str,
+    ) -> uuid.UUID | None:
+        """Apply employee reimbursement Payment Entry to synced Expense Claims.
+
+        ERPNext commonly records expense reimbursements as:
+        - Payment Entry.payment_type = "Pay"
+        - Payment Entry.party_type = "Employee"
+        - Payment Entry Reference.reference_doctype = "Expense Claim"
+
+        We use this to backfill ExpenseClaim.paid_on/payment_reference.
+        """
+        from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
+
+        refs = data.get("_references", []) or []
+        payment_date = data.get("payment_date")
+        # ACC-PAY-* source_name is usually the best external payment key.
+        payment_ref = source_name or data.get("reference")
+
+        claim_ids: list[uuid.UUID] = []
+
+        # Primary path: child-table references
+        candidates: list[str] = []
+        for ref_data in refs:
+            ref_doctype = ref_data.get("_reference_doctype", "")
+            ref_name = ref_data.get("_reference_source_name")
+            if ref_doctype == "Expense Claim" and ref_name:
+                candidates.append(str(ref_name))
+
+        # Fallback path: instance-specific custom fields / reference_no
+        # Some reimbursements do not populate the child "references" rows.
+        if not candidates:
+            for maybe in (
+                data.get("_custom_expense_claim"),
+                data.get("reference"),
+            ):
+                if isinstance(maybe, str) and maybe.startswith("HR-EXP-"):
+                    candidates.append(maybe)
+
+        for ref_name in candidates:
+            claim_id = self._resolve_entity_id(ref_name, "Expense Claim")
+            if not claim_id:
+                claim = self.db.scalar(
+                    select(ExpenseClaim).where(
+                        ExpenseClaim.organization_id == self.organization_id,
+                        ExpenseClaim.erpnext_id == ref_name,
+                    )
+                )
+                claim_id = claim.claim_id if claim else None
+
+            if not claim_id:
+                logger.warning(
+                    "Cannot apply employee payment %s: expense claim '%s' not found",
+                    source_name,
+                    ref_name,
+                )
+                continue
+
+            claim = self.db.get(ExpenseClaim, claim_id)
+            if not claim:
+                continue
+
+            claim.status = ExpenseClaimStatus.PAID
+            if payment_date is not None:
+                claim.paid_on = payment_date
+            if payment_ref:
+                claim.payment_reference = str(payment_ref)[:100]
+                claim.updated_by_id = self.user_id
+                claim_ids.append(claim_id)
+
+        if not claim_ids:
+            return None
+        return claim_ids[0]
+
     def _sync_single_record(
         self, record: dict[str, Any], result: SyncResult
     ) -> CustomerPayment | None:
@@ -341,9 +426,17 @@ class PaymentEntrySyncService(BaseSyncService[CustomerPayment]):
         party_type = data.get("_party_type")
         party_source = data.get("_party_source_name")
 
-        if payment_type == "Receive" and (
-            party_type != "Customer" or not party_source
-        ):
+        # Some ERPNext list endpoints can omit key fields; don't try to
+        # sync incomplete records.
+        if not payment_type:
+            result.skipped_count += 1
+            logger.warning(
+                "Skipping Payment Entry %s: missing payment_type",
+                source_name,
+            )
+            return None
+
+        if payment_type == "Receive" and (party_type != "Customer" or not party_source):
             # Skip unsupported AR payment-party combinations (e.g. Internal Transfer).
             result.skipped_count += 1
             logger.info(
@@ -355,10 +448,38 @@ class PaymentEntrySyncService(BaseSyncService[CustomerPayment]):
             )
             return None
 
-        if payment_type == "Pay" and (
-            party_type != "Supplier" or not party_source
-        ):
-            # Skip non-supplier AP payments (e.g. employee reimbursements).
+        if payment_type == "Pay" and (party_type != "Supplier" or not party_source):
+            # Handle employee reimbursements tied to Expense Claims.
+            if party_type == "Employee" and party_source:
+                sync_entity = self.get_sync_entity(source_name)
+                if not sync_entity:
+                    sync_entity = self.create_sync_entity(source_name)
+
+                if sync_entity.sync_status == SyncStatus.SYNCED:
+                    if not self.should_update(sync_entity, source_modified):
+                        result.skipped_count += 1
+                        return None
+
+                claim_id = self._sync_employee_expense_payment(data, source_name)
+                if claim_id is None:
+                    result.skipped_count += 1
+                    logger.info(
+                        "Skipping Payment Entry %s: no Expense Claim references",
+                        source_name,
+                    )
+                    return None
+
+                sync_entity.target_table = "expense.expense_claim"
+                sync_entity.source_modified = source_modified
+                sync_entity.mark_synced(claim_id)
+                result.synced_count += 1
+                logger.info(
+                    "Synced employee expense payment: %s -> claim %s",
+                    source_name,
+                    claim_id,
+                )
+                return None
+
             result.skipped_count += 1
             logger.info(
                 "Skipping Payment Entry %s: payment_type=%s party_type=%s party=%s",
@@ -370,6 +491,30 @@ class PaymentEntrySyncService(BaseSyncService[CustomerPayment]):
             return None
 
         if not self._is_ap_payment(data):
+            # AR payment — if Customer mapping is missing (or stale), skip rather
+            # than failing the whole run. We still want AP/Employee payments to
+            # sync even if AR master data is incomplete.
+            if payment_type == "Receive" and party_type == "Customer" and party_source:
+                from app.models.finance.ar.customer import Customer
+
+                customer_id = self._resolve_entity_id(party_source, "Customer")
+                if not customer_id:
+                    result.skipped_count += 1
+                    logger.warning(
+                        "Skipping AR Payment Entry %s: Customer '%s' not mapped",
+                        source_name,
+                        party_source,
+                    )
+                    return None
+                if not self.db.get(Customer, customer_id):
+                    result.skipped_count += 1
+                    logger.warning(
+                        "Skipping AR Payment Entry %s: mapped customer_id %s not found in ar.customer",
+                        source_name,
+                        customer_id,
+                    )
+                    return None
+
             # AR payment — delegate to the standard base class flow
             return super()._sync_single_record(record, result)
 
@@ -436,9 +581,7 @@ class PaymentEntrySyncService(BaseSyncService[CustomerPayment]):
         functional_amount = data.get("functional_currency_amount")
         if not functional_amount:
             exchange_rate = data.get("exchange_rate", Decimal("1"))
-            functional_amount = amount * (
-                exchange_rate or Decimal("1")
-            )
+            functional_amount = amount * (exchange_rate or Decimal("1"))
 
         payment_number = self._generate_payment_number(data.get("payment_date"))
 

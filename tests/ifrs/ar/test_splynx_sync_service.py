@@ -15,6 +15,7 @@ import uuid
 from datetime import date
 from decimal import Decimal
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock
 
 from app.models.finance.ar.customer_payment import CustomerPayment, PaymentMethod
@@ -940,16 +941,34 @@ class TestRepairPaymentInvoiceRelationships:
         svc._client.get_payments.return_value = iter(
             [_make_splynx_payment(amount=Decimal("100.00"), invoice_id=1001)]
         )
-        db.scalar.side_effect = [
-            local_payment,  # local payment
-            target_invoice,  # invoice by splynx_id
-            existing_alloc,  # existing allocation
-            Decimal("0"),  # recompute old invoice
-            Decimal("100.00"),  # recompute target invoice
-        ]
-        db.get.side_effect = lambda _model, invoice_id: (
-            old_invoice if invoice_id == old_invoice.invoice_id else target_invoice
-        )
+        # First 3 scalar calls are deterministic (main loop); the last 2 are
+        # recompute calls inside touched_invoice_ids iteration whose set order
+        # is non-deterministic. We track which invoice was last fetched via
+        # db.get so the scalar call returns the correct SUM.
+        _scalar_queue = iter([local_payment, target_invoice, existing_alloc])
+        _recompute_map = {
+            old_invoice.invoice_id: Decimal("0"),
+            target_invoice.invoice_id: Decimal("100.00"),
+        }
+        _last_get_id: list[Any] = []
+
+        def _orig_get_side_effect(_model: Any, inv_id: Any) -> Any:
+            return old_invoice if inv_id == old_invoice.invoice_id else target_invoice
+
+        def _get_side_effect(_model: Any, inv_id: Any) -> Any:
+            _last_get_id.append(inv_id)
+            return _orig_get_side_effect(_model, inv_id)
+
+        def _scalar_side_effect(_stmt: Any) -> Any:
+            try:
+                return next(_scalar_queue)
+            except StopIteration:
+                # Recompute phase — return SUM for the last db.get'd invoice
+                inv_id = _last_get_id[-1] if _last_get_id else None
+                return _recompute_map.get(inv_id, Decimal("0"))
+
+        db.scalar.side_effect = _scalar_side_effect
+        db.get.side_effect = _get_side_effect
 
         summary = svc.repair_payment_invoice_relationships()
 
@@ -989,6 +1008,397 @@ class TestRepairPaymentInvoiceRelationships:
         assert summary["fixed"] == 0
         assert summary["missing_local_invoice"] == 1
         db.add.assert_not_called()
+        db.flush.assert_called_once()
+
+
+class TestReconcilePaystackPaymentsScoreGap:
+    """Tests for tier-4 score-gap ambiguity resolution."""
+
+    @staticmethod
+    def _exec_result(*, rows: list[object] | None = None) -> MagicMock:
+        r = MagicMock()
+        r.fetchall.return_value = rows or []
+        return r
+
+    def test_score_gap_matches_ambiguous_pairs(self) -> None:
+        db = MagicMock()
+        svc = _make_service(db)
+
+        paystack_account = SimpleNamespace(bank_account_id=uuid.uuid4())
+        d = date(2026, 2, 14)
+        p1 = SimpleNamespace(
+            payment_id=uuid.uuid4(),
+            customer_id=uuid.uuid4(),
+            payment_date=d,
+            amount=Decimal("100.00"),
+            reference="ref-a-12345",
+            description="Payment ref-a-12345",
+        )
+        p2 = SimpleNamespace(
+            payment_id=uuid.uuid4(),
+            customer_id=p1.customer_id,
+            payment_date=d,
+            amount=Decimal("100.00"),
+            reference="ref-b-67890",
+            description="Payment ref-b-67890",
+        )
+        l1 = SimpleNamespace(
+            line_id=uuid.uuid4(),
+            transaction_date=date(2026, 2, 15),
+            amount=Decimal("100.00"),
+            reference="ref-a-12345",
+            description="Payment: ref-a-12345",
+        )
+        l2 = SimpleNamespace(
+            line_id=uuid.uuid4(),
+            transaction_date=date(2026, 2, 16),
+            amount=Decimal("100.00"),
+            reference="ref-b-67890",
+            description="Payment: ref-b-67890",
+        )
+
+        def _execute_side(
+            stmt: object, _params: dict[str, object] | None = None
+        ) -> MagicMock:
+            sql = str(stmt)
+            if "FROM banking.bank_accounts" in sql:
+                return self._exec_result(rows=[paystack_account])
+            if "FROM ar.customer_payment cp" in sql and "cp.customer_id" not in sql:
+                return self._exec_result(rows=[])  # payments_with_refs
+            if (
+                "FROM banking.bank_statement_lines bsl" in sql
+                and "bsl.is_matched\n                FROM" in sql
+            ):
+                return self._exec_result(rows=[])  # statement_refs
+            if (
+                "cp.payment_date" in sql
+                and "cp.amount" in sql
+                and "cp.reference" in sql
+            ):
+                return self._exec_result(rows=[p1, p2])  # unmatched_payments
+            if (
+                "bsl.transaction_date" in sql
+                and "bsl.amount" in sql
+                and "bsl.reference" in sql
+            ):
+                return self._exec_result(rows=[l1, l2])  # unmatched_lines
+            return self._exec_result()
+
+        db.execute.side_effect = _execute_side
+
+        result = svc.reconcile_paystack_payments(dry_run=False)
+
+        assert result["matched_by_score_gap"] == 2
+        assert result["ambiguous_matches"] == 0
+        assert result["unmatched_payments"] == 0
+        assert result["unmatched_statements"] == 0
+        assert result["review_queue"] == []
+        db.flush.assert_called_once()
+
+    def test_score_gap_leaves_review_queue_when_low_confidence(self) -> None:
+        db = MagicMock()
+        svc = _make_service(db)
+
+        paystack_account = SimpleNamespace(bank_account_id=uuid.uuid4())
+        d = date(2026, 2, 14)
+        p1 = SimpleNamespace(
+            payment_id=uuid.uuid4(),
+            customer_id=uuid.uuid4(),
+            payment_date=d,
+            amount=Decimal("100.00"),
+            reference=None,
+            description="generic payment",
+        )
+        p2 = SimpleNamespace(
+            payment_id=uuid.uuid4(),
+            customer_id=p1.customer_id,
+            payment_date=d,
+            amount=Decimal("100.00"),
+            reference=None,
+            description="generic payment",
+        )
+        l1 = SimpleNamespace(
+            line_id=uuid.uuid4(),
+            transaction_date=date(2026, 2, 15),
+            amount=Decimal("100.00"),
+            reference=None,
+            description="credit",
+        )
+        l2 = SimpleNamespace(
+            line_id=uuid.uuid4(),
+            transaction_date=date(2026, 2, 16),
+            amount=Decimal("100.00"),
+            reference=None,
+            description="credit",
+        )
+
+        def _execute_side(
+            stmt: object, _params: dict[str, object] | None = None
+        ) -> MagicMock:
+            sql = str(stmt)
+            if "FROM banking.bank_accounts" in sql:
+                return self._exec_result(rows=[paystack_account])
+            if "FROM ar.customer_payment cp" in sql and "cp.customer_id" not in sql:
+                return self._exec_result(rows=[])
+            if (
+                "FROM banking.bank_statement_lines bsl" in sql
+                and "bsl.is_matched\n                FROM" in sql
+            ):
+                return self._exec_result(rows=[])
+            if (
+                "cp.payment_date" in sql
+                and "cp.amount" in sql
+                and "cp.reference" in sql
+            ):
+                return self._exec_result(rows=[p1, p2])
+            if (
+                "bsl.transaction_date" in sql
+                and "bsl.amount" in sql
+                and "bsl.reference" in sql
+            ):
+                return self._exec_result(rows=[l1, l2])
+            return self._exec_result()
+
+        db.execute.side_effect = _execute_side
+
+        result = svc.reconcile_paystack_payments(dry_run=True)
+
+        assert result["matched_by_score_gap"] == 0
+        assert result["ambiguous_matches"] == 2
+        assert result["unmatched_payments"] == 2
+        assert result["unmatched_statements"] == 2
+        assert len(result["review_queue"]) == 2
+
+    def test_matches_unique_line_within_date_window(self) -> None:
+        db = MagicMock()
+        svc = _make_service(db)
+
+        paystack_account = SimpleNamespace(bank_account_id=uuid.uuid4())
+        payment_day = date(2026, 2, 14)
+        statement_day = date(2026, 2, 16)  # within +7 day tolerance
+
+        p1 = SimpleNamespace(
+            payment_id=uuid.uuid4(),
+            customer_id=uuid.uuid4(),
+            payment_date=payment_day,
+            amount=Decimal("250.00"),
+            reference=None,
+            description="collection",
+        )
+        l1 = SimpleNamespace(
+            line_id=uuid.uuid4(),
+            transaction_date=statement_day,
+            amount=Decimal("250.00"),
+            reference=None,
+            description="paystack credit",
+        )
+
+        def _execute_side(
+            stmt: object, _params: dict[str, object] | None = None
+        ) -> MagicMock:
+            sql = str(stmt)
+            if "FROM banking.bank_accounts" in sql:
+                return self._exec_result(rows=[paystack_account])
+            if "FROM ar.customer_payment cp" in sql and "cp.customer_id" not in sql:
+                return self._exec_result(rows=[])
+            if (
+                "FROM banking.bank_statement_lines bsl" in sql
+                and "bsl.is_matched\n                FROM" in sql
+            ):
+                return self._exec_result(rows=[])
+            if (
+                "cp.payment_date" in sql
+                and "cp.amount" in sql
+                and "cp.reference" in sql
+            ):
+                return self._exec_result(rows=[p1])
+            if (
+                "bsl.transaction_date" in sql
+                and "bsl.amount" in sql
+                and "bsl.reference" in sql
+            ):
+                return self._exec_result(rows=[l1])
+            return self._exec_result()
+
+        db.execute.side_effect = _execute_side
+
+        result = svc.reconcile_paystack_payments(dry_run=True)
+
+        assert result["matched_by_reference"] == 0
+        assert result["matched_by_date_amount"] == 1
+        assert result["matched_by_customer"] == 0
+        assert result["matched_by_score_gap"] == 0
+        assert result["ambiguous_matches"] == 0
+        assert result["unmatched_payments"] == 0
+        assert result["unmatched_statements"] == 0
+
+    def test_reference_match_uses_statement_description_token(self) -> None:
+        db = MagicMock()
+        svc = _make_service(db)
+
+        paystack_account = SimpleNamespace(bank_account_id=uuid.uuid4())
+        d = date(2026, 2, 14)
+        token = "698f511d277d1"
+        p1 = SimpleNamespace(
+            payment_id=uuid.uuid4(),
+            payment_date=d,
+            amount=Decimal("18812.50"),
+            reference="2026-11-00918",
+            description=f"Splynx payment via Paystack. {token}",
+        )
+        line = SimpleNamespace(
+            line_id=uuid.uuid4(),
+            reference=None,
+            description=f"PAYSTACK COLLECTION ref {token}",
+            amount=Decimal("18812.50"),
+            transaction_date=d,
+            is_matched=False,
+        )
+
+        def _execute_side(
+            stmt: object, _params: dict[str, object] | None = None
+        ) -> MagicMock:
+            sql = str(stmt)
+            if "FROM banking.bank_accounts" in sql:
+                return self._exec_result(rows=[paystack_account])
+            if "FROM ar.customer_payment cp" in sql and "cp.customer_id" not in sql:
+                return self._exec_result(rows=[p1])  # payments_with_refs
+            if (
+                "FROM banking.bank_statement_lines bsl" in sql
+                and "bsl.is_matched\n                FROM" in sql
+            ):
+                return self._exec_result(rows=[line])  # statement_refs
+            if (
+                "cp.payment_date" in sql
+                and "cp.amount" in sql
+                and "cp.reference" in sql
+            ):
+                return self._exec_result(rows=[])  # unmatched_payments after ref match
+            if (
+                "bsl.transaction_date" in sql
+                and "bsl.amount" in sql
+                and "bsl.reference" in sql
+            ):
+                return self._exec_result(rows=[line])
+            return self._exec_result()
+
+        db.execute.side_effect = _execute_side
+
+        result = svc.reconcile_paystack_payments(dry_run=True)
+
+        assert result["matched_by_reference"] == 1
+        assert result["matched_by_date_amount"] == 0
+        assert result["unmatched_statements"] == 0
+
+    def test_reference_match_uses_payment_reference_token(self) -> None:
+        db = MagicMock()
+        svc = _make_service(db)
+
+        paystack_account = SimpleNamespace(bank_account_id=uuid.uuid4())
+        d = date(2026, 2, 14)
+        token = "698f8d88c5793"
+        p1 = SimpleNamespace(
+            payment_id=uuid.uuid4(),
+            payment_date=d,
+            amount=Decimal("2000.00"),
+            reference=f"Reference: {token}",
+            description="Splynx payment via Paystack.",
+        )
+        line = SimpleNamespace(
+            line_id=uuid.uuid4(),
+            reference=token,
+            description="paystack inflow",
+            amount=Decimal("2000.00"),
+            transaction_date=d,
+            is_matched=False,
+        )
+
+        def _execute_side(
+            stmt: object, _params: dict[str, object] | None = None
+        ) -> MagicMock:
+            sql = str(stmt)
+            if "FROM banking.bank_accounts" in sql:
+                return self._exec_result(rows=[paystack_account])
+            if "FROM ar.customer_payment cp" in sql and "cp.customer_id" not in sql:
+                return self._exec_result(rows=[p1])  # payments_with_refs
+            if (
+                "FROM banking.bank_statement_lines bsl" in sql
+                and "bsl.is_matched\n                FROM" in sql
+            ):
+                return self._exec_result(rows=[line])  # statement_refs
+            if (
+                "cp.payment_date" in sql
+                and "cp.amount" in sql
+                and "cp.reference" in sql
+            ):
+                return self._exec_result(rows=[])
+            if (
+                "bsl.transaction_date" in sql
+                and "bsl.amount" in sql
+                and "bsl.reference" in sql
+            ):
+                return self._exec_result(rows=[line])
+            return self._exec_result()
+
+        db.execute.side_effect = _execute_side
+
+        result = svc.reconcile_paystack_payments(dry_run=True)
+
+        assert result["matched_by_reference"] == 1
+        assert result["matched_by_date_amount"] == 0
+        assert result["unmatched_statements"] == 0
+
+    def test_marks_opening_balance_as_matched(self) -> None:
+        db = MagicMock()
+        svc = _make_service(db)
+
+        paystack_account = SimpleNamespace(bank_account_id=uuid.uuid4())
+        line = SimpleNamespace(
+            line_id=uuid.uuid4(),
+            reference="OB-2021-12-31",
+            description="Opening Balance: Dec 31, 2021 collections",
+            amount=Decimal("442000.00"),
+            transaction_date=date(2022, 1, 1),
+            is_matched=False,
+        )
+
+        def _execute_side(
+            stmt: object, _params: dict[str, object] | None = None
+        ) -> MagicMock:
+            sql = str(stmt)
+            if "FROM banking.bank_accounts" in sql:
+                return self._exec_result(rows=[paystack_account])
+            if "FROM ar.customer_payment cp" in sql and "cp.customer_id" not in sql:
+                return self._exec_result(rows=[])  # payments_with_refs
+            if (
+                "FROM banking.bank_statement_lines bsl" in sql
+                and "bsl.is_matched\n                FROM" in sql
+            ):
+                return self._exec_result(rows=[line])  # statement_refs
+            if "UPDATE banking.bank_statement_lines" in sql:
+                return self._exec_result(rows=[])
+            if (
+                "cp.payment_date" in sql
+                and "cp.amount" in sql
+                and "cp.reference" in sql
+            ):
+                return self._exec_result(rows=[])  # unmatched_payments
+            if (
+                "bsl.transaction_date" in sql
+                and "bsl.amount" in sql
+                and "bsl.reference" in sql
+            ):
+                return self._exec_result(
+                    rows=[line]
+                )  # unmatched_lines includes OB line
+            return self._exec_result()
+
+        db.execute.side_effect = _execute_side
+
+        result = svc.reconcile_paystack_payments(dry_run=False)
+
+        assert result["matched_opening_balance"] == 1
+        assert result["unmatched_statements"] == 0
         db.flush.assert_called_once()
 
 

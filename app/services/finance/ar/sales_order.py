@@ -732,8 +732,12 @@ class SalesOrderService:
         end_date: date | None = None,
         limit: int = 100,
         offset: int = 0,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> list[SalesOrder]:
         """List sales orders with filters."""
+        from app.services.finance.common.sorting import apply_sort
+
         org_id = coerce_uuid(organization_id)
 
         query = db.query(SalesOrder).filter(SalesOrder.organization_id == org_id)
@@ -750,12 +754,17 @@ class SalesOrderService:
         if end_date:
             query = query.filter(SalesOrder.order_date <= end_date)
 
-        return (
-            query.order_by(SalesOrder.order_date.desc())
-            .offset(offset)
-            .limit(limit)
-            .all()
+        column_map = {
+            "order_date": SalesOrder.order_date,
+            "so_number": SalesOrder.so_number,
+            "total_amount": SalesOrder.total_amount,
+            "status": SalesOrder.status,
+        }
+        query = apply_sort(
+            query, sort, sort_dir, column_map, default=SalesOrder.order_date.desc()
         )
+
+        return query.offset(offset).limit(limit).all()
 
 
 sales_order_service = SalesOrderService()

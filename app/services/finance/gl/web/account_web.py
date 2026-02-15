@@ -21,6 +21,7 @@ from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 from app.services.audit_info import get_audit_service
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
+from app.services.finance.common.sorting import apply_sort
 from app.services.finance.gl.chart_of_accounts import chart_of_accounts_service
 from app.services.finance.gl.web.base import (
     account_detail_view,
@@ -142,6 +143,8 @@ class AccountWebService:
         status: str | None,
         page: int,
         limit: int = 50,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> dict:
         """Get context for account listing page."""
         logger.debug(
@@ -165,9 +168,15 @@ class AccountWebService:
         )
 
         total_count = query.with_entities(func.count(Account.account_id)).scalar() or 0
-        accounts = (
-            query.order_by(Account.account_code).limit(limit).offset(offset).all()
+        column_map = {
+            "account_code": Account.account_code,
+            "account_name": Account.account_name,
+            "is_active": Account.is_active,
+        }
+        query = apply_sort(
+            query, sort, sort_dir, column_map, default=Account.account_code.asc()
         )
+        accounts = query.limit(limit).offset(offset).all()
 
         audit_service = get_audit_service(db)
         creator_ids = [
@@ -238,7 +247,11 @@ class AccountWebService:
         )
         total_pages = max(1, (total_count + limit - 1) // limit)
         active_filters = build_active_filters(
-            params={"category": category, "status": status, "search": search},
+            params={
+                "category": category,
+                "status": status,
+                "search": search,
+            },
             labels={"category": "Category", "status": "Status", "search": "Search"},
             options={
                 "category": {
@@ -259,6 +272,8 @@ class AccountWebService:
             "search": search,
             "category": category,
             "status": status,
+            "sort": sort,
+            "sort_dir": sort_dir,
             "active_filters": active_filters,
             "active_count": active_count,
             "inactive_count": inactive_count,
@@ -474,6 +489,8 @@ class AccountWebService:
         category: str | None,
         status: str | None,
         page: int,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> HTMLResponse:
         """Render accounts list page."""
         context = base_context(request, auth, "Chart of Accounts", "gl", db=db)
@@ -485,6 +502,8 @@ class AccountWebService:
                 category=category,
                 status=status,
                 page=page,
+                sort=sort,
+                sort_dir=sort_dir,
             )
         )
         return templates.TemplateResponse(request, "finance/gl/accounts.html", context)

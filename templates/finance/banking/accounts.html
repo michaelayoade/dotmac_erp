@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import compact_filters, pagination, status_badge, empty_state, stats_card, action_buttons, filter_select_field %}
+{% from "components/macros.html" import compact_filters, pagination, status_badge, empty_state, stats_card, action_buttons, filter_select_field, sortable_th %}
 
 {% block page_title %}Bank Accounts{% endblock %}
 
@@ -54,13 +54,13 @@
             <table class="table" data-testid="bank-accounts-table">
                 <thead>
                     <tr>
-                        <th scope="col">Bank</th>
-                        <th scope="col">Account</th>
+                        {{ sortable_th("Bank", "bank_name", sort, sort_dir) }}
+                        {{ sortable_th("Account", "account_name", sort, sort_dir) }}
                         <th scope="col">Type</th>
                         <th scope="col">Currency</th>
                         <th scope="col" class="text-right">Last Statement</th>
                         <th scope="col">Last Reconciled</th>
-                        <th scope="col" class="text-center">Status</th>
+                        {{ sortable_th("Status", "status", sort, sort_dir, class="text-center") }}
                         <th scope="col" class="text-right">Actions</th>
                     </tr>
                 </thead>
@@ -129,7 +129,7 @@
             total_count=total_count | default(0),
             limit=limit | default(50),
             search=search,
-            filters={"status": status}
+            filters={"status": status, "sort": sort, "sort_dir": sort_dir}
         ) }}
     </div>
     </div>{# /results-container #}

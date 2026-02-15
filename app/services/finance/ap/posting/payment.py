@@ -70,11 +70,13 @@ def post_payment(
     postable_statuses = {
         APPaymentStatus.APPROVED,
         APPaymentStatus.SENT,
+        # Allow backfill/sync payments that already cleared but lack GL posting.
+        APPaymentStatus.CLEARED,
     }
     if payment.status not in postable_statuses:
         return APPostingResult(
             success=False,
-            message=f"Payment must be APPROVED or SENT to post (current: {payment.status.value})",
+            message=f"Payment must be APPROVED, SENT, or CLEARED to post (current: {payment.status.value})",
         )
 
     # Skip zero-amount payments — nothing meaningful to post to GL

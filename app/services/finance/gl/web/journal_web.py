@@ -21,6 +21,7 @@ from app.models.finance.gl.journal_entry import JournalEntry, JournalStatus, Jou
 from app.models.finance.gl.journal_entry_line import JournalEntryLine
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
+from app.services.finance.common.sorting import apply_sort
 from app.services.finance.gl.journal import JournalService
 from app.services.finance.gl.web.base import (
     format_currency,
@@ -53,6 +54,8 @@ class JournalWebService:
         end_date: str | None,
         page: int,
         limit: int = 50,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> dict:
         """Get context for journal listing page."""
         logger.debug(
@@ -77,12 +80,16 @@ class JournalWebService:
         total_count = (
             query.with_entities(func.count(JournalEntry.journal_entry_id)).scalar() or 0
         )
-        entries = (
-            query.order_by(JournalEntry.created_at.desc())
-            .limit(limit)
-            .offset(offset)
-            .all()
+        column_map = {
+            "entry_date": JournalEntry.entry_date,
+            "journal_number": JournalEntry.journal_number,
+            "total_debit": JournalEntry.total_debit,
+            "status": JournalEntry.status,
+        }
+        query = apply_sort(
+            query, sort, sort_dir, column_map, default=JournalEntry.created_at.desc()
         )
+        entries = query.limit(limit).offset(offset).all()
         stats_query = build_journal_query(
             db=db,
             organization_id=organization_id,
@@ -166,6 +173,8 @@ class JournalWebService:
             "status": status,
             "start_date": start_date,
             "end_date": end_date,
+            "sort": sort,
+            "sort_dir": sort_dir,
             "active_filters": active_filters,
             "stats_total": stats_total,
             "draft_count": draft_count,
@@ -441,6 +450,8 @@ class JournalWebService:
         start_date: str | None,
         end_date: str | None,
         page: int,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> HTMLResponse:
         """Render journal entries list page."""
         context = base_context(request, auth, "Journal Entries", "gl")
@@ -453,6 +464,8 @@ class JournalWebService:
                 start_date=start_date,
                 end_date=end_date,
                 page=page,
+                sort=sort,
+                sort_dir=sort_dir,
             )
         )
         return templates.TemplateResponse(request, "finance/gl/journals.html", context)

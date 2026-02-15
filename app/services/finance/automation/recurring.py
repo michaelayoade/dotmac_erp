@@ -4,16 +4,16 @@ Recurring Transaction Service.
 Handles recurring template management and transaction generation.
 """
 
-import builtins
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
 from dateutil.relativedelta import relativedelta
-from fastapi import HTTPException
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
@@ -26,8 +26,13 @@ from app.models.finance.automation import (
     RecurringStatus,
     RecurringTemplate,
 )
+from app.services.finance.common.numbering import SyncNumberingService
 
 logger = logging.getLogger(__name__)
+
+# Alias: RecurringService.list shadows builtin `list` in
+# PEP 563 string annotations, causing mypy valid-type errors.
+_list = list
 
 
 @dataclass
@@ -90,13 +95,13 @@ class RecurringService:
             return current_date + timedelta(days=14)
 
         elif frequency == RecurringFrequency.MONTHLY:
+            import calendar
+
             day_of_month = config.get("day_of_month", current_date.day)
             next_date = current_date + relativedelta(months=1)
-            # Handle day overflow (e.g., 31st in February)
-            try:
-                next_date = next_date.replace(day=min(day_of_month, 28))
-            except ValueError:
-                next_date = next_date.replace(day=28)
+            # Handle day overflow (e.g., 31st in February → cap to month max)
+            max_day = calendar.monthrange(next_date.year, next_date.month)[1]
+            next_date = next_date.replace(day=min(day_of_month, max_day))
             return next_date
 
         elif frequency == RecurringFrequency.QUARTERLY:
@@ -131,9 +136,8 @@ class RecurringService:
         ).scalar_one_or_none()
 
         if existing:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Template with name '{input_data.template_name}' already exists",
+            raise ValueError(
+                f"Template with name '{input_data.template_name}' already exists"
             )
 
         # Calculate first run date
@@ -187,10 +191,10 @@ class RecurringService:
 
         invoice = db.get(Invoice, invoice_id)
         if not invoice:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise ValueError("Invoice not found")
 
         if invoice.organization_id != organization_id:
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise PermissionError("Access denied")
 
         # Extract template data from invoice
         template_data = {
@@ -249,10 +253,10 @@ class RecurringService:
 
         bill = db.get(SupplierInvoice, bill_id)
         if not bill:
-            raise HTTPException(status_code=404, detail="Bill not found")
+            raise ValueError("Bill not found")
 
         if bill.organization_id != organization_id:
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise PermissionError("Access denied")
 
         template_data = {
             "supplier_id": str(bill.supplier_id),
@@ -310,10 +314,10 @@ class RecurringService:
 
         expense = db.get(ExpenseEntry, expense_id)
         if not expense:
-            raise HTTPException(status_code=404, detail="Expense not found")
+            raise ValueError("Expense not found")
 
         if expense.organization_id != organization_id:
-            raise HTTPException(status_code=403, detail="Access denied")
+            raise PermissionError("Access denied")
 
         template_data = {
             "description": expense.description,
@@ -369,7 +373,7 @@ class RecurringService:
         db: Session,
         template_id: UUID,
         limit: int = 20,
-    ) -> list[RecurringLog]:
+    ) -> _list[RecurringLog]:
         """Get recent logs for a recurring template."""
         query = (
             select(RecurringLog)
@@ -387,7 +391,7 @@ class RecurringService:
         status: RecurringStatus | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> list[RecurringTemplate]:
+    ) -> _list[RecurringTemplate]:
         """List recurring templates."""
         query = select(RecurringTemplate).where(
             RecurringTemplate.organization_id == organization_id
@@ -405,7 +409,7 @@ class RecurringService:
 
     def get_due_templates(
         self, db: Session, as_of_date: date | None = None
-    ) -> builtins.list[RecurringTemplate]:
+    ) -> _list[RecurringTemplate]:
         """Get all templates due for generation."""
         check_date = as_of_date or date.today()
 
@@ -431,7 +435,6 @@ class RecurringService:
             InvoiceStatus,
             InvoiceType,
         )
-        from app.services.finance.numbering import numbering_service
         from app.services.finance.tax.tax_calculation import (
             InvoiceLineTaxInput,
             LineCalculationResult,
@@ -444,8 +447,11 @@ class RecurringService:
             due_date = invoice_date + timedelta(days=template.days_before_due)
 
             # Get next number
-            invoice_number = numbering_service.get_next_number_sync(
-                db, template.organization_id, "INVOICE"
+            from app.models.finance.core_config import SequenceType
+
+            numbering = SyncNumberingService(db)
+            invoice_number = numbering.generate_next_number(
+                template.organization_id, SequenceType.INVOICE
             )
 
             # Calculate amounts from lines
@@ -601,13 +607,15 @@ class RecurringService:
     ) -> GenerationResult:
         """Generate an expense from a template."""
         from app.models.finance.exp import ExpenseEntry, ExpenseStatus, PaymentMethod
-        from app.services.finance.numbering import numbering_service
 
         try:
             data = template.template_data
 
-            expense_number = numbering_service.get_next_number_sync(
-                db, template.organization_id, "EXPENSE"
+            from app.models.finance.core_config import SequenceType
+
+            numbering = SyncNumberingService(db)
+            expense_number = numbering.generate_next_number(
+                template.organization_id, SequenceType.EXPENSE
             )
 
             expense = ExpenseEntry(
@@ -649,6 +657,312 @@ class RecurringService:
         except Exception as e:
             logger.exception(
                 "Failed to generate expense from template %s", template.template_id
+            )
+            return GenerationResult(
+                success=False,
+                error_message=str(e),
+            )
+
+    def generate_bill(
+        self,
+        db: Session,
+        template: RecurringTemplate,
+    ) -> GenerationResult:
+        """Generate a supplier invoice (bill) from a template."""
+        from app.models.finance.ap import (
+            SupplierInvoice,
+            SupplierInvoiceLine,
+            SupplierInvoiceLineTax,
+            SupplierInvoiceStatus,
+            SupplierInvoiceType,
+        )
+        from app.services.finance.tax.tax_calculation import (
+            InvoiceLineTaxInput,
+            LineCalculationResult,
+            TaxCalculationService,
+        )
+
+        try:
+            data = template.template_data
+            invoice_date = date.today()
+            due_date = invoice_date + timedelta(days=template.days_before_due)
+
+            from app.models.finance.core_config import SequenceType
+
+            numbering = SyncNumberingService(db)
+            invoice_number = numbering.generate_next_number(
+                template.organization_id, SequenceType.SUPPLIER_INVOICE
+            )
+
+            subtotal = Decimal("0")
+            tax_amount = Decimal("0")
+            lines_data = data.get("lines", [])
+
+            line_tax_results: list[
+                tuple[Decimal, list[UUID], LineCalculationResult | None]
+            ] = []
+            tax_inputs: list[InvoiceLineTaxInput] = []
+
+            for line_data in lines_data:
+                qty = Decimal(line_data.get("quantity", "1"))
+                price = Decimal(line_data.get("unit_price", "0"))
+                discount_amount = Decimal(line_data.get("discount_amount", "0"))
+                line_amount = qty * price - discount_amount
+                subtotal += line_amount
+
+                tax_code_ids = [
+                    UUID(tc_id) for tc_id in line_data.get("tax_code_ids", []) if tc_id
+                ]
+                legacy_tax_code_id = line_data.get("tax_code_id")
+                if legacy_tax_code_id and legacy_tax_code_id not in [
+                    str(t) for t in tax_code_ids
+                ]:
+                    tax_code_ids.append(UUID(legacy_tax_code_id))
+
+                tax_inputs.append(
+                    InvoiceLineTaxInput(
+                        line_id=None,
+                        line_amount=line_amount,
+                        tax_code_ids=tax_code_ids,
+                    )
+                )
+                line_tax_results.append((line_amount, tax_code_ids, None))
+
+            if tax_inputs:
+                invoice_tax = TaxCalculationService.calculate_invoice_taxes(
+                    db=db,
+                    organization_id=template.organization_id,
+                    lines=tax_inputs,
+                    transaction_date=invoice_date,
+                )
+                tax_amount = invoice_tax.total_tax
+                for idx, result in enumerate(invoice_tax.lines):
+                    la, tc_ids, _ = line_tax_results[idx]
+                    line_tax_results[idx] = (la, tc_ids, result)
+
+            total_amount = subtotal + tax_amount
+            exchange_rate = Decimal(data.get("exchange_rate", "1"))
+
+            bill = SupplierInvoice(
+                organization_id=template.organization_id,
+                supplier_id=UUID(data["supplier_id"]),
+                invoice_number=invoice_number,
+                invoice_type=SupplierInvoiceType.STANDARD,
+                invoice_date=invoice_date,
+                received_date=invoice_date,
+                due_date=due_date,
+                currency_code=data.get(
+                    "currency_code",
+                    settings.default_functional_currency_code,
+                ),
+                exchange_rate=exchange_rate,
+                subtotal=subtotal,
+                tax_amount=tax_amount,
+                total_amount=total_amount,
+                functional_currency_amount=total_amount * exchange_rate,
+                status=SupplierInvoiceStatus.DRAFT,
+                ap_control_account_id=UUID(data["ap_control_account_id"]),
+                created_by_user_id=template.created_by,
+            )
+            db.add(bill)
+            db.flush()
+
+            for idx, line_data in enumerate(lines_data, 1):
+                qty = Decimal(line_data.get("quantity", "1"))
+                price = Decimal(line_data.get("unit_price", "0"))
+                line_amount, tax_code_ids, tax_result = line_tax_results[idx - 1]
+                line_tax_total = tax_result.total_tax if tax_result else Decimal("0")
+                primary_tax_code_id = tax_code_ids[0] if tax_code_ids else None
+
+                line = SupplierInvoiceLine(
+                    invoice_id=bill.invoice_id,
+                    line_number=idx,
+                    description=line_data.get("description", ""),
+                    quantity=qty,
+                    unit_price=price,
+                    line_amount=line_amount,
+                    tax_code_id=primary_tax_code_id,
+                    tax_amount=line_tax_total,
+                    expense_account_id=UUID(
+                        line_data.get("expense_account_id") or line_data["account_id"]
+                    ),
+                    cost_center_id=UUID(line_data["cost_center_id"])
+                    if line_data.get("cost_center_id")
+                    else None,
+                    project_id=UUID(line_data["project_id"])
+                    if line_data.get("project_id")
+                    else None,
+                    segment_id=UUID(line_data["segment_id"])
+                    if line_data.get("segment_id")
+                    else None,
+                )
+                db.add(line)
+                db.flush()
+
+                if tax_result:
+                    for tax in tax_result.taxes:
+                        db.add(
+                            SupplierInvoiceLineTax(
+                                line_id=line.line_id,
+                                tax_code_id=tax.tax_code_id,
+                                base_amount=tax.base_amount,
+                                tax_rate=tax.tax_rate,
+                                tax_amount=tax.tax_amount,
+                                is_inclusive=tax.is_inclusive,
+                                sequence=tax.sequence,
+                                is_recoverable=tax.is_recoverable,
+                                recoverable_amount=tax.recoverable_amount,
+                            )
+                        )
+
+            db.flush()
+
+            return GenerationResult(
+                success=True,
+                entity_type="BILL",
+                entity_id=bill.invoice_id,
+                entity_number=invoice_number,
+            )
+
+        except Exception as e:
+            logger.exception(
+                "Failed to generate bill from template %s", template.template_id
+            )
+            return GenerationResult(
+                success=False,
+                error_message=str(e),
+            )
+
+    def generate_journal(
+        self,
+        db: Session,
+        template: RecurringTemplate,
+    ) -> GenerationResult:
+        """Generate a journal entry from a template."""
+        from app.models.finance.gl import (
+            JournalEntry,
+            JournalEntryLine,
+            JournalStatus,
+            JournalType,
+        )
+        from app.services.finance.gl.period_guard import PeriodGuardService
+
+        try:
+            data = template.template_data
+            entry_date = date.today()
+
+            # Find an open fiscal period and verify it is postable
+            period = PeriodGuardService.get_period_for_date(
+                db, template.organization_id, entry_date
+            )
+            if not period:
+                return GenerationResult(
+                    success=False,
+                    error_message="No fiscal period found for today's date",
+                )
+
+            if period.status not in PeriodGuardService.POSTABLE_STATUSES:
+                return GenerationResult(
+                    success=False,
+                    error_message=(
+                        f"Fiscal period {period.period_name} is {period.status.value}"
+                        " — cannot create journal in a closed period"
+                    ),
+                )
+
+            lines_data = data.get("lines", [])
+            if not lines_data:
+                return GenerationResult(
+                    success=False,
+                    error_message="Template has no journal lines",
+                )
+
+            # Validate debits == credits
+            total_debit = Decimal("0")
+            total_credit = Decimal("0")
+            for line_data in lines_data:
+                total_debit += Decimal(line_data.get("debit_amount", "0"))
+                total_credit += Decimal(line_data.get("credit_amount", "0"))
+
+            if total_debit != total_credit:
+                return GenerationResult(
+                    success=False,
+                    error_message=(
+                        f"Debits ({total_debit}) do not equal credits ({total_credit})"
+                    ),
+                )
+
+            from app.models.finance.core_config import SequenceType
+
+            numbering = SyncNumberingService(db)
+            journal_number = numbering.generate_next_number(
+                template.organization_id, SequenceType.JOURNAL
+            )
+
+            currency_code = data.get(
+                "currency_code",
+                settings.default_functional_currency_code,
+            )
+            exchange_rate = Decimal(data.get("exchange_rate", "1"))
+
+            journal = JournalEntry(
+                organization_id=template.organization_id,
+                journal_number=journal_number,
+                journal_type=JournalType.RECURRING,
+                entry_date=entry_date,
+                posting_date=entry_date,
+                fiscal_period_id=period.fiscal_period_id,
+                description=data.get("description", "Recurring journal entry"),
+                reference=data.get("reference"),
+                currency_code=currency_code,
+                exchange_rate=exchange_rate,
+                total_debit=total_debit,
+                total_credit=total_credit,
+                total_debit_functional=total_debit * exchange_rate,
+                total_credit_functional=total_credit * exchange_rate,
+                status=JournalStatus.DRAFT,
+                created_by_user_id=template.created_by,
+            )
+            db.add(journal)
+            db.flush()
+
+            for idx, line_data in enumerate(lines_data, 1):
+                debit_amt = Decimal(line_data.get("debit_amount", "0"))
+                credit_amt = Decimal(line_data.get("credit_amount", "0"))
+                line = JournalEntryLine(
+                    journal_entry_id=journal.journal_entry_id,
+                    line_number=idx,
+                    account_id=UUID(line_data["account_id"]),
+                    description=line_data.get("description"),
+                    debit_amount=debit_amt,
+                    credit_amount=credit_amt,
+                    debit_amount_functional=debit_amt * exchange_rate,
+                    credit_amount_functional=credit_amt * exchange_rate,
+                    cost_center_id=UUID(line_data["cost_center_id"])
+                    if line_data.get("cost_center_id")
+                    else None,
+                    project_id=UUID(line_data["project_id"])
+                    if line_data.get("project_id")
+                    else None,
+                    segment_id=UUID(line_data["segment_id"])
+                    if line_data.get("segment_id")
+                    else None,
+                )
+                db.add(line)
+
+            db.flush()
+
+            return GenerationResult(
+                success=True,
+                entity_type="JOURNAL",
+                entity_id=journal.journal_entry_id,
+                entity_number=journal_number,
+            )
+
+        except Exception as e:
+            logger.exception(
+                "Failed to generate journal from template %s",
+                template.template_id,
             )
             return GenerationResult(
                 success=False,
@@ -706,8 +1020,12 @@ class RecurringService:
         result: GenerationResult
         if template.entity_type == RecurringEntityType.INVOICE:
             result = self.generate_invoice(db, template)
+        elif template.entity_type == RecurringEntityType.BILL:
+            result = self.generate_bill(db, template)
         elif template.entity_type == RecurringEntityType.EXPENSE:
             result = self.generate_expense(db, template)
+        elif template.entity_type == RecurringEntityType.JOURNAL:
+            result = self.generate_journal(db, template)
         else:
             result = GenerationResult(
                 success=False,
@@ -731,7 +1049,7 @@ class RecurringService:
         if result.success:
             # Update template
             template.occurrences_count += 1
-            template.last_generated_at = datetime.utcnow()
+            template.last_generated_at = datetime.now(UTC)
             template.last_generated_id = result.entity_id
             template.next_run_date = self.calculate_next_run_date(
                 date.today(),
@@ -742,10 +1060,10 @@ class RecurringService:
         db.flush()
         return log
 
-    def run_due_templates(self, db: Session) -> builtins.list[RecurringLog]:
+    def run_due_templates(self, db: Session) -> _list[RecurringLog]:
         """Run all due templates and return logs."""
         templates = self.get_due_templates(db)
-        logs = []
+        logs: _list[RecurringLog] = []
 
         for template in templates:
             try:
@@ -769,10 +1087,10 @@ class RecurringService:
         """Pause a recurring template."""
         template = db.get(RecurringTemplate, template_id)
         if not template:
-            raise HTTPException(status_code=404, detail="Template not found")
+            raise ValueError("Template not found")
 
         if template.status != RecurringStatus.ACTIVE:
-            raise HTTPException(status_code=400, detail="Template is not active")
+            raise ValueError("Template is not active")
 
         template.status = RecurringStatus.PAUSED
         db.flush()
@@ -782,10 +1100,10 @@ class RecurringService:
         """Resume a paused recurring template."""
         template = db.get(RecurringTemplate, template_id)
         if not template:
-            raise HTTPException(status_code=404, detail="Template not found")
+            raise ValueError("Template not found")
 
         if template.status != RecurringStatus.PAUSED:
-            raise HTTPException(status_code=400, detail="Template is not paused")
+            raise ValueError("Template is not paused")
 
         template.status = RecurringStatus.ACTIVE
         # Recalculate next run date if in the past
@@ -802,7 +1120,7 @@ class RecurringService:
         """Cancel a recurring template."""
         template = db.get(RecurringTemplate, template_id)
         if not template:
-            raise HTTPException(status_code=404, detail="Template not found")
+            raise ValueError("Template not found")
 
         template.status = RecurringStatus.CANCELLED
         db.flush()

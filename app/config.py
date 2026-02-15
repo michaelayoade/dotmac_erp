@@ -159,5 +159,51 @@ class Settings:
     # Max retries for failed requests
     splynx_max_retries: int = int(os.getenv("SPLYNX_MAX_RETRIES", "3"))
 
+    # ==========================================================================
+    # Coach / Intelligence Engine (hosted Llama + DeepSeek)
+    # ==========================================================================
+    coach_enabled: bool = os.getenv("COACH_ENABLED", "false").lower() == "true"
+
+    # Backends are expected to expose an OpenAI-compatible Chat Completions API.
+    coach_llm_backends: str = os.getenv("COACH_LLM_BACKENDS", "llama,deepseek")
+    coach_llm_default_backend: str = os.getenv("COACH_LLM_DEFAULT_BACKEND", "deepseek")
+    coach_llm_fast_backend: str = os.getenv("COACH_LLM_FAST_BACKEND", "llama")
+    coach_llm_standard_backend: str = os.getenv(
+        "COACH_LLM_STANDARD_BACKEND", "deepseek"
+    )
+    coach_llm_deep_backend: str = os.getenv("COACH_LLM_DEEP_BACKEND", "deepseek")
+
+    # Llama backend
+    coach_llm_llama_base_url: str = os.getenv("COACH_LLM_LLAMA_BASE_URL", "")
+    coach_llm_llama_api_key: str = os.getenv("COACH_LLM_LLAMA_API_KEY", "")
+    coach_llm_llama_model_fast: str = os.getenv("COACH_LLM_LLAMA_MODEL_FAST", "")
+    coach_llm_llama_model_standard: str = os.getenv(
+        "COACH_LLM_LLAMA_MODEL_STANDARD", ""
+    )
+    coach_llm_llama_model_deep: str = os.getenv("COACH_LLM_LLAMA_MODEL_DEEP", "")
+
+    # DeepSeek backend
+    coach_llm_deepseek_base_url: str = os.getenv("COACH_LLM_DEEPSEEK_BASE_URL", "")
+    coach_llm_deepseek_api_key: str = os.getenv("COACH_LLM_DEEPSEEK_API_KEY", "")
+    coach_llm_deepseek_model_fast: str = os.getenv("COACH_LLM_DEEPSEEK_MODEL_FAST", "")
+    coach_llm_deepseek_model_standard: str = os.getenv(
+        "COACH_LLM_DEEPSEEK_MODEL_STANDARD", ""
+    )
+    coach_llm_deepseek_model_deep: str = os.getenv("COACH_LLM_DEEPSEEK_MODEL_DEEP", "")
+
+    # Reliability + safety
+    coach_llm_timeout_s: int = int(os.getenv("COACH_LLM_TIMEOUT_S", "30"))
+    coach_llm_max_retries: int = int(os.getenv("COACH_LLM_MAX_RETRIES", "2"))
+    coach_llm_max_output_tokens: int = int(
+        os.getenv("COACH_LLM_MAX_OUTPUT_TOKENS", "1200")
+    )
+
+    # Budgeting + caching
+    coach_monthly_token_budget: int = int(
+        os.getenv("COACH_MONTHLY_TOKEN_BUDGET", "500000")
+    )
+    coach_cache_ttl_hours: int = int(os.getenv("COACH_CACHE_TTL_HOURS", "24"))
+    coach_max_insights_per_run: int = int(os.getenv("COACH_MAX_INSIGHTS_PER_RUN", "20"))
+
 
 settings = Settings()

@@ -27,12 +27,22 @@ def quote_list(
     customer_id: str | None = None,
     start_date: str | None = None,
     end_date: str | None = None,
+    sort: str | None = None,
+    sort_dir: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
     """Quote list page."""
     return quote_web_service.list_response(
-        request, auth, db, status, customer_id, start_date, end_date
+        request,
+        auth,
+        db,
+        status,
+        customer_id,
+        start_date,
+        end_date,
+        sort,
+        sort_dir,
     )
 
 

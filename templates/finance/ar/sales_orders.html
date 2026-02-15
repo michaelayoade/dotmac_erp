@@ -1,6 +1,6 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import status_badge, compact_filters, filter_select_field, filter_entity_select_field %}
+{% from "components/macros.html" import status_badge, compact_filters, filter_select_field, filter_entity_select_field, sortable_th %}
 
 {% block page_title %}Sales Orders{% endblock %}
 
@@ -87,14 +87,14 @@
             <table class="table">
                 <thead>
                     <tr>
-                        <th scope="col">Date</th>
-                        <th scope="col">SO Number</th>
+                        {{ sortable_th("Date", "order_date", sort, sort_dir) }}
+                        {{ sortable_th("SO Number", "so_number", sort, sort_dir) }}
                         <th scope="col">Customer</th>
                         <th scope="col">PO #</th>
-                        <th scope="col" class="text-right">Amount</th>
+                        {{ sortable_th("Amount", "total_amount", sort, sort_dir, class="text-right") }}
                         <th scope="col">Fulfillment</th>
-                        <th scope="col">Status</th>
-                        <th scope="col"></th>
+                        {{ sortable_th("Status", "status", sort, sort_dir, class="text-center") }}
+                        <th scope="col" class="text-right">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -108,7 +108,7 @@
                         </td>
                         <td class="text-slate-900 dark:text-white">{{ so.customer_name }}</td>
                         <td class="text-slate-500">{{ so.customer_po }}</td>
-                        <td class="text-right font-mono text-slate-900 dark:text-white">{{ so.total_amount }}</td>
+                        <td class="text-right font-mono tabular-nums text-slate-900 dark:text-white">{{ so.total_amount }}</td>
                         <td>
                             {% if so.is_fully_invoiced %}
                             <span class="badge badge-success">Invoiced</span>

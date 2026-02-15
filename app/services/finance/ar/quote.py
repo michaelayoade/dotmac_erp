@@ -655,8 +655,12 @@ class QuoteService:
         end_date: date | None = None,
         limit: int = 100,
         offset: int = 0,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> list[Quote]:
         """List quotes with filters."""
+        from app.services.finance.common.sorting import apply_sort
+
         org_id = coerce_uuid(organization_id)
 
         query = db.query(Quote).filter(Quote.organization_id == org_id)
@@ -673,7 +677,18 @@ class QuoteService:
         if end_date:
             query = query.filter(Quote.quote_date <= end_date)
 
-        return query.order_by(Quote.quote_date.desc()).offset(offset).limit(limit).all()
+        column_map = {
+            "quote_date": Quote.quote_date,
+            "quote_number": Quote.quote_number,
+            "valid_until": Quote.valid_until,
+            "total_amount": Quote.total_amount,
+            "status": Quote.status,
+        }
+        query = apply_sort(
+            query, sort, sort_dir, column_map, default=Quote.quote_date.desc()
+        )
+
+        return query.offset(offset).limit(limit).all()
 
 
 quote_service = QuoteService()

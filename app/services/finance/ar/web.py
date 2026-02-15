@@ -58,6 +58,7 @@ from app.services.finance.common import (
     parse_enum_safe,
 )
 from app.services.finance.common.attachment import AttachmentInput, attachment_service
+from app.services.finance.common.sorting import apply_sort
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.finance.tax.tax_master import tax_code_service
 from app.templates import templates
@@ -537,6 +538,8 @@ class ARWebService:
         search: str | None,
         status: str | None,
         page: int,
+        sort: str | None = None,
+        sort_dir: str | None = None,
         limit: int = 50,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
@@ -563,9 +566,19 @@ class ARWebService:
         total_count = (
             query.with_entities(func.count(Customer.customer_id)).scalar() or 0
         )
-        customers = (
-            query.order_by(Customer.legal_name).limit(limit).offset(offset).all()
+        query = apply_sort(
+            query,
+            sort,
+            sort_dir,
+            {
+                "legal_name": Customer.legal_name,
+                "trading_name": Customer.trading_name,
+                "customer_code": Customer.customer_code,
+                "status": Customer.is_active,
+            },
+            default=Customer.legal_name.asc(),
         )
+        customers = query.limit(limit).offset(offset).all()
 
         open_statuses = [
             InvoiceStatus.POSTED,
@@ -608,11 +621,15 @@ class ARWebService:
 
         total_pages = max(1, (total_count + limit - 1) // limit)
 
-        active_filters = build_active_filters(params={"status": status})
+        active_filters = build_active_filters(
+            params={"status": status},
+        )
         return {
             "customers": customers_view,
             "search": search,
             "status": status,
+            "sort": sort,
+            "sort_dir": sort_dir,
             "page": page,
             "limit": limit,
             "offset": offset,
@@ -788,6 +805,8 @@ class ARWebService:
         start_date: str | None,
         end_date: str | None,
         page: int,
+        sort: str | None = None,
+        sort_dir: str | None = None,
         limit: int = 50,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
@@ -823,12 +842,21 @@ class ARWebService:
             )
 
         total_count = query.with_entities(func.count(Invoice.invoice_id)).scalar() or 0
-        invoices = (
-            query.order_by(Invoice.invoice_date.desc())
-            .limit(limit)
-            .offset(offset)
-            .all()
+        query = apply_sort(
+            query,
+            sort,
+            sort_dir,
+            {
+                "invoice_date": Invoice.invoice_date,
+                "invoice_number": Invoice.invoice_number,
+                "customer_name": Customer.legal_name,
+                "total_amount": Invoice.total_amount,
+                "due_date": Invoice.due_date,
+                "status": Invoice.status,
+            },
+            default=Invoice.invoice_date.desc(),
         )
+        invoices = query.limit(limit).offset(offset).all()
 
         open_statuses = [
             InvoiceStatus.POSTED,
@@ -928,6 +956,8 @@ class ARWebService:
             "status": status,
             "start_date": start_date,
             "end_date": end_date,
+            "sort": sort,
+            "sort_dir": sort_dir,
             "page": page,
             "limit": limit,
             "offset": offset,
@@ -1127,6 +1157,8 @@ class ARWebService:
         start_date: str | None,
         end_date: str | None,
         page: int,
+        sort: str | None = None,
+        sort_dir: str | None = None,
         limit: int = 50,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
@@ -1165,12 +1197,20 @@ class ARWebService:
         total_count = (
             query.with_entities(func.count(CustomerPayment.payment_id)).scalar() or 0
         )
-        receipts = (
-            query.order_by(CustomerPayment.payment_date.desc())
-            .limit(limit)
-            .offset(offset)
-            .all()
+        query = apply_sort(
+            query,
+            sort,
+            sort_dir,
+            {
+                "payment_date": CustomerPayment.payment_date,
+                "receipt_number": CustomerPayment.payment_number,
+                "customer_name": Customer.legal_name,
+                "amount": CustomerPayment.amount,
+                "status": CustomerPayment.status,
+            },
+            default=CustomerPayment.payment_date.desc(),
         )
+        receipts = query.limit(limit).offset(offset).all()
 
         receipts_view = []
         for payment, customer in receipts:
@@ -1216,6 +1256,8 @@ class ARWebService:
             "status": status,
             "start_date": start_date,
             "end_date": end_date,
+            "sort": sort,
+            "sort_dir": sort_dir,
             "page": page,
             "limit": limit,
             "offset": offset,
@@ -2178,6 +2220,8 @@ class ARWebService:
         search: str | None,
         status: str | None,
         page: int,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> HTMLResponse:
         context = base_context(request, auth, "Customers", "ar")
         context.update(
@@ -2187,6 +2231,8 @@ class ARWebService:
                 search=search,
                 status=status,
                 page=page,
+                sort=sort,
+                sort_dir=sort_dir,
             )
         )
         return templates.TemplateResponse(request, "finance/ar/customers.html", context)
@@ -2342,6 +2388,8 @@ class ARWebService:
         start_date: str | None,
         end_date: str | None,
         page: int,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> HTMLResponse:
         context = base_context(request, auth, "AR Invoices", "ar")
         context.update(
@@ -2354,6 +2402,8 @@ class ARWebService:
                 start_date=start_date,
                 end_date=end_date,
                 page=page,
+                sort=sort,
+                sort_dir=sort_dir,
             )
         )
         return templates.TemplateResponse(request, "finance/ar/invoices.html", context)
@@ -2727,6 +2777,8 @@ class ARWebService:
         start_date: str | None,
         end_date: str | None,
         page: int,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> HTMLResponse:
         context = base_context(request, auth, "AR Receipts", "ar")
         context.update(
@@ -2739,6 +2791,8 @@ class ARWebService:
                 start_date=start_date,
                 end_date=end_date,
                 page=page,
+                sort=sort,
+                sort_dir=sort_dir,
             )
         )
         return templates.TemplateResponse(request, "finance/ar/receipts.html", context)

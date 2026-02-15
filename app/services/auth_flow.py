@@ -979,17 +979,17 @@ class AuthFlow(ListResponseMixin):
             if reused:
                 rotated_at = _as_utc(reused.token_rotated_at)
                 now = _now()
-                if (
-                    allow_reuse_grace
-                    and (
+                if allow_reuse_grace and (
                     rotated_at is not None
-                    and now - rotated_at <= timedelta(seconds=_REFRESH_REUSE_GRACE_SECONDS)
-                    )
+                    and now - rotated_at
+                    <= timedelta(seconds=_REFRESH_REUSE_GRACE_SECONDS)
                 ):
                     # Grace window for concurrent refresh requests.
                     session = reused
                 else:
-                    logger.warning("Refresh token reuse detected: session=%s", reused.id)
+                    logger.warning(
+                        "Refresh token reuse detected: session=%s", reused.id
+                    )
                     reused.status = SessionStatus.revoked
                     reused.revoked_at = _now()
                     db.commit()

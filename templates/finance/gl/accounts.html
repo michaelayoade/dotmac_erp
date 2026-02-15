@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import compact_filters, pagination, status_badge, empty_state, action_buttons, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, bulk_icon_activate, bulk_icon_deactivate, stats_card, filter_select_field, list_header_actions %}
+{% from "components/macros.html" import compact_filters, pagination, status_badge, empty_state, action_buttons, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, bulk_icon_activate, bulk_icon_deactivate, stats_card, filter_select_field, list_header_actions, sortable_th %}
 
 {% block page_title %}Chart of Accounts{% endblock %}
 
@@ -57,12 +57,12 @@
                     <thead>
                         <tr>
                             {{ bulk_select_header() }}
-                            <th scope="col">Account Code</th>
-                            <th scope="col">Account Name</th>
+                            {{ sortable_th("Account Code", "account_code", sort, sort_dir) }}
+                            {{ sortable_th("Account Name", "account_name", sort, sort_dir) }}
                             <th class="hidden sm:table-cell" scope="col">Category</th>
                             <th class="hidden sm:table-cell" scope="col">Normal Balance</th>
                             <th scope="col" class="text-right">Balance</th>
-                            <th scope="col" class="text-center">Status</th>
+                            {{ sortable_th("Status", "is_active", sort, sort_dir, class="text-center") }}
                             <th class="hidden sm:table-cell" scope="col">Created</th>
                             <th scope="col" class="text-right">Actions</th>
                         </tr>
@@ -137,7 +137,7 @@
                 total_count=total_count | default(0),
                 limit=limit | default(50),
                 search=search,
-                filters={"category": category, "status": status}
+                filters={"category": category, "status": status, "sort": sort, "sort_dir": sort_dir}
             ) }}
         </div>
 

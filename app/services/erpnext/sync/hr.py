@@ -14,9 +14,10 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.finance.core_org.location import Location, LocationType
 from app.models.people.hr.department import Department
 from app.models.people.hr.designation import Designation
 from app.models.people.hr.employee import (
@@ -371,6 +372,7 @@ class EmployeeSyncService(BaseSyncService[Employee]):
         self._designation_sync_cache: dict[str, uuid.UUID] = {}
         self._employment_type_sync_cache: dict[str, uuid.UUID] = {}
         self._grade_sync_cache: dict[str, uuid.UUID] = {}
+        self._location_cache: dict[str, uuid.UUID | None] = {}
 
     def fetch_records(self, client: Any, since: datetime | None = None):
         if since:
@@ -521,6 +523,7 @@ class EmployeeSyncService(BaseSyncService[Employee]):
         type_source = data.pop("_employment_type_source_name", None)
         grade_source = data.pop("_grade_source_name", None)
         reports_source = data.pop("_reports_to_source_name", None)
+        assigned_location_source = data.pop("_assigned_location_source_name", None)
         data.pop("_cost_center_source_name", None)
         data.pop("_payroll_cost_center_source_name", None)
         data.pop("_preferred_email", None)
@@ -544,6 +547,10 @@ class EmployeeSyncService(BaseSyncService[Employee]):
             reports_source,
             "Employee",
             {},  # Don't cache manager lookups
+        )
+
+        assigned_location_id = self._resolve_or_create_location_id(
+            assigned_location_source
         )
 
         # Find or create person
@@ -610,6 +617,7 @@ class EmployeeSyncService(BaseSyncService[Employee]):
             employment_type_id=employment_type_id,
             grade_id=grade_id,
             reports_to_id=reports_to_id,
+            assigned_location_id=assigned_location_id,
             date_of_birth=data.get("date_of_birth"),
             date_of_joining=data.get("date_of_joining"),
             date_of_leaving=data.get("date_of_leaving"),
@@ -640,6 +648,7 @@ class EmployeeSyncService(BaseSyncService[Employee]):
         type_source = data.pop("_employment_type_source_name", None)
         grade_source = data.pop("_grade_source_name", None)
         reports_source = data.pop("_reports_to_source_name", None)
+        assigned_location_source = data.pop("_assigned_location_source_name", None)
         data.pop("_cost_center_source_name", None)
         data.pop("_payroll_cost_center_source_name", None)
         data.pop("_preferred_email", None)
@@ -668,13 +677,21 @@ class EmployeeSyncService(BaseSyncService[Employee]):
                 reports_source, "Employee", {}
             )
 
+        if assigned_location_source is not None:
+            entity.assigned_location_id = self._resolve_or_create_location_id(
+                assigned_location_source
+            )
+
         # Update fields
         entity.date_of_birth = data.get("date_of_birth") or entity.date_of_birth
         entity.date_of_joining = data.get("date_of_joining") or entity.date_of_joining
         entity.date_of_leaving = data.get("date_of_leaving")
         entity.bank_name = data.get("bank_name")
         entity.bank_account_number = data.get("bank_account_number")
-        entity.bank_branch_code = data.get("bank_branch_code")
+        # Only update if the mapping provided a bank branch code. ERPNext "branch"
+        # is HR branch and is mapped to assigned_location_id instead.
+        if "bank_branch_code" in data:
+            entity.bank_branch_code = data.get("bank_branch_code")
         entity.bank_account_name = data.get("bank_account_name")
 
         # Update status
@@ -730,6 +747,71 @@ class EmployeeSyncService(BaseSyncService[Employee]):
 
         # updated_by_id not set for synced records
         return entity
+
+    def _resolve_or_create_location_id(
+        self, branch_name: str | None
+    ) -> uuid.UUID | None:
+        """
+        Resolve ERPNext Employee.branch into core_org.location.location_id.
+
+        If a location with a matching name/code exists for the org, use it.
+        Otherwise, create a BRANCH location.
+        """
+        if not branch_name:
+            return None
+
+        branch_name = branch_name.strip()
+        if not branch_name:
+            return None
+
+        cache_key = branch_name.lower()
+        if cache_key in self._location_cache:
+            return self._location_cache[cache_key]
+
+        existing = self.db.scalar(
+            select(Location).where(
+                Location.organization_id == self.organization_id,
+                func.lower(Location.location_name) == branch_name.lower(),
+            )
+        )
+        if not existing:
+            existing = self.db.scalar(
+                select(Location).where(
+                    Location.organization_id == self.organization_id,
+                    func.lower(Location.location_code) == branch_name.lower(),
+                )
+            )
+        if existing:
+            self._location_cache[cache_key] = existing.location_id
+            return existing.location_id
+
+        # Create a location if it doesn't exist (safe: unique by org+code).
+        code_base = "".join(ch for ch in branch_name.upper() if ch.isalnum())
+        code_base = (code_base or "BRANCH")[:20]
+        code = code_base
+        for i in range(1, 100):
+            conflict = self.db.scalar(
+                select(Location.location_id).where(
+                    Location.organization_id == self.organization_id,
+                    Location.location_code == code,
+                )
+            )
+            if not conflict:
+                break
+            suffix = str(i)
+            code = (code_base[: max(1, 20 - len(suffix))] + suffix)[:20]
+
+        loc = Location(
+            organization_id=self.organization_id,
+            location_code=code,
+            location_name=branch_name[:100],
+            location_type=LocationType.BRANCH,
+            is_active=True,
+        )
+        self.db.add(loc)
+        self.db.flush()
+        self._location_cache[cache_key] = loc.location_id
+        return loc.location_id
 
     def get_entity_id(self, entity: Employee) -> uuid.UUID:
         return entity.employee_id

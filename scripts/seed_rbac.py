@@ -705,6 +705,20 @@ MODULE_PERMISSIONS = [
     ("tasks:complete", "Complete tasks"),
 ]
 
+# =============================================================================
+# Coach / Intelligence Engine Permissions
+# =============================================================================
+COACH_PERMISSIONS = [
+    ("coach:insights:read", "View insights for own role"),
+    ("coach:insights:read_team", "View team member insights (managers)"),
+    ("coach:insights:read_all", "View all org insights (directors, auditors)"),
+    ("coach:insights:feedback", "Submit feedback on insights"),
+    ("coach:reports:read", "View coaching reports for own role"),
+    ("coach:reports:read_all", "View all coaching reports"),
+    ("coach:chat:access", "Use interactive chat panel"),
+    ("coach:admin:manage", "Configure coaching settings, token budget"),
+]
+
 
 # =============================================================================
 # Combined Permission List
@@ -715,6 +729,7 @@ DEFAULT_PERMISSIONS = (
     + HR_PERMISSIONS
     + EXPENSE_PERMISSIONS
     + MODULE_PERMISSIONS
+    + COACH_PERMISSIONS
 )
 
 
@@ -784,6 +799,12 @@ ROLE_PERMISSIONS = {
     "auditor": [
         "audit:read",
         "audit:export",
+        # Coach - read-only org-wide
+        "coach:insights:read",
+        "coach:insights:read_all",
+        "coach:reports:read",
+        "coach:reports:read_all",
+        "coach:chat:access",
         "finance:access",
         "finance:dashboard",
         "gl:accounts:read",
@@ -858,6 +879,8 @@ ROLE_PERMISSIONS = {
         "settings:read",
         "settings:manage",
         "integrations:manage",
+        # Coach settings (no access to org insights by default)
+        "coach:admin:manage",
     ],
     # -------------------------------------------------------------------------
     # Finance Roles
@@ -865,6 +888,13 @@ ROLE_PERMISSIONS = {
     "finance_director": [
         "finance:access",
         "finance:dashboard",
+        # Coach (org-wide)
+        "coach:insights:read",
+        "coach:insights:read_all",
+        "coach:insights:feedback",
+        "coach:reports:read",
+        "coach:reports:read_all",
+        "coach:chat:access",
         # GL - full control
         "gl:accounts:read",
         "gl:accounts:create",
@@ -1149,6 +1179,11 @@ ROLE_PERMISSIONS = {
     "finance_manager": [
         "finance:access",
         "finance:dashboard",
+        # Coach (role-scoped)
+        "coach:insights:read",
+        "coach:insights:feedback",
+        "coach:reports:read",
+        "coach:chat:access",
         # GL
         "gl:accounts:read",
         "gl:accounts:create",
@@ -1398,6 +1433,11 @@ ROLE_PERMISSIONS = {
     "senior_accountant": [
         "finance:access",
         "finance:dashboard",
+        # Coach
+        "coach:insights:read",
+        "coach:insights:feedback",
+        "coach:reports:read",
+        "coach:chat:access",
         "gl:accounts:read",
         "gl:journals:read",
         "gl:journals:create",
@@ -1601,6 +1641,11 @@ ROLE_PERMISSIONS = {
     "ap_clerk": [
         "finance:access",
         "finance:dashboard",
+        # Coach
+        "coach:insights:read",
+        "coach:insights:feedback",
+        "coach:reports:read",
+        "coach:chat:access",
         "ap:suppliers:read",
         "ap:suppliers:create",
         "ap:suppliers:update",
@@ -1619,6 +1664,11 @@ ROLE_PERMISSIONS = {
     "ar_clerk": [
         "finance:access",
         "finance:dashboard",
+        # Coach
+        "coach:insights:read",
+        "coach:insights:feedback",
+        "coach:reports:read",
+        "coach:chat:access",
         "ar:customers:read",
         "ar:customers:create",
         "ar:customers:update",
@@ -1640,6 +1690,11 @@ ROLE_PERMISSIONS = {
     "inventory_manager": [
         "finance:access",
         "finance:dashboard",
+        # Coach
+        "coach:insights:read",
+        "coach:insights:feedback",
+        "coach:reports:read",
+        "coach:chat:access",
         "inventory:access",
         "inventory:dashboard",
         "inventory:items:read",
@@ -1681,6 +1736,11 @@ ROLE_PERMISSIONS = {
     "tax_specialist": [
         "finance:access",
         "finance:dashboard",
+        # Coach
+        "coach:insights:read",
+        "coach:insights:feedback",
+        "coach:reports:read",
+        "coach:chat:access",
         # Tax jurisdictions and codes
         "tax:jurisdictions:read",
         "tax:jurisdictions:create",
@@ -1730,6 +1790,13 @@ ROLE_PERMISSIONS = {
     "hr_director": [
         "hr:access",
         "hr:dashboard",
+        # Coach (org-wide people insights)
+        "coach:insights:read",
+        "coach:insights:read_all",
+        "coach:insights:feedback",
+        "coach:reports:read",
+        "coach:reports:read_all",
+        "coach:chat:access",
         # Full employee management
         "hr:employees:read",
         "hr:employees:read_sensitive",
@@ -1870,6 +1937,12 @@ ROLE_PERMISSIONS = {
     "hr_manager": [
         "hr:access",
         "hr:dashboard",
+        # Coach (team-scoped people insights)
+        "coach:insights:read",
+        "coach:insights:read_team",
+        "coach:insights:feedback",
+        "coach:reports:read",
+        "coach:chat:access",
         "hr:employees:read",
         "hr:employees:read_sensitive",
         "hr:employees:create",
@@ -2028,6 +2101,11 @@ ROLE_PERMISSIONS = {
     "payroll_manager": [
         "hr:access",
         "hr:dashboard",
+        # Coach
+        "coach:insights:read",
+        "coach:insights:feedback",
+        "coach:reports:read",
+        "coach:chat:access",
         "hr:employees:read",
         "hr:employees:read_sensitive",
         "payroll:components:read",
@@ -2057,6 +2135,11 @@ ROLE_PERMISSIONS = {
     "payroll_officer": [
         "hr:access",
         "hr:dashboard",
+        # Coach
+        "coach:insights:read",
+        "coach:insights:feedback",
+        "coach:reports:read",
+        "coach:chat:access",
         "hr:employees:read",
         "payroll:components:read",
         "payroll:structures:read",
@@ -2075,6 +2158,11 @@ ROLE_PERMISSIONS = {
     "recruiter": [
         "hr:access",
         "hr:dashboard",
+        # Coach
+        "coach:insights:read",
+        "coach:insights:feedback",
+        "coach:reports:read",
+        "coach:chat:access",
         "hr:employees:read",
         "hr:departments:read",
         "hr:designations:read",
@@ -2095,6 +2183,11 @@ ROLE_PERMISSIONS = {
     "training_manager": [
         "hr:access",
         "hr:dashboard",
+        # Coach
+        "coach:insights:read",
+        "coach:insights:feedback",
+        "coach:reports:read",
+        "coach:chat:access",
         "hr:employees:read",
         "training:programs:read",
         "training:programs:create",
@@ -2115,6 +2208,12 @@ ROLE_PERMISSIONS = {
     "expense_admin": [
         "expense:access",
         "expense:dashboard",
+        # Coach
+        "coach:insights:read",
+        "coach:insights:feedback",
+        "coach:reports:read",
+        "coach:chat:access",
+        "coach:admin:manage",
         "expense:claims:read",
         "expense:claims:create",
         "expense:claims:update",
@@ -2148,6 +2247,11 @@ ROLE_PERMISSIONS = {
     "expense_approver": [
         "expense:access",
         "expense:dashboard",
+        # Coach
+        "coach:insights:read",
+        "coach:insights:feedback",
+        "coach:reports:read",
+        "coach:chat:access",
         "expense:claims:read",
         "expense:claims:read_team",
         "expense:claims:approve:tier2",
@@ -2192,6 +2296,11 @@ ROLE_PERMISSIONS = {
         "projects:dashboard",
         "settings:access",
         "settings:dashboard",
+        # Coach
+        "coach:insights:read",
+        "coach:insights:feedback",
+        "coach:reports:read",
+        "coach:chat:access",
         "support:tickets:read",
         "support:tickets:create",
         "support:tickets:update",
@@ -2209,6 +2318,11 @@ ROLE_PERMISSIONS = {
     "support_agent": [
         "support:access",
         "support:dashboard",
+        # Coach
+        "coach:insights:read",
+        "coach:insights:feedback",
+        "coach:reports:read",
+        "coach:chat:access",
         "projects:access",
         "support:tickets:read",
         "support:tickets:create",
@@ -2224,6 +2338,12 @@ ROLE_PERMISSIONS = {
     # Cross-Functional Roles
     # -------------------------------------------------------------------------
     "department_manager": [
+        # Coach (team-scoped)
+        "coach:insights:read",
+        "coach:insights:read_team",
+        "coach:insights:feedback",
+        "coach:reports:read",
+        "coach:chat:access",
         # Team management permissions
         "hr:employees:read",
         "leave:applications:read_team",
@@ -2244,6 +2364,11 @@ ROLE_PERMISSIONS = {
         "tasks:assign",
     ],
     "employee": [
+        # Coach (self-only)
+        "coach:insights:read",
+        "coach:insights:feedback",
+        "coach:reports:read",
+        "coach:chat:access",
         # Self-service permissions
         "selfservice:profile:read",
         "selfservice:profile:update",

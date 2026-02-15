@@ -166,6 +166,8 @@ class SalesOrderWebService:
         customer_id: str | None = None,
         start_date: str | None = None,
         end_date: str | None = None,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> dict:
         """Get context for sales order listing page."""
         logger.debug(
@@ -195,6 +197,8 @@ class SalesOrderWebService:
             status=status_filter,
             start_date=parsed_start_date,
             end_date=parsed_end_date,
+            sort=sort,
+            sort_dir=sort_dir,
         )
 
         # Format for template
@@ -265,6 +269,8 @@ class SalesOrderWebService:
             "statuses": [s.value for s in SOStatus],
             "customers": customer_options,
             "active_filters": active_filters,
+            "sort": sort or "",
+            "sort_dir": sort_dir or "desc",
         }
 
     @staticmethod
@@ -559,6 +565,8 @@ class SalesOrderWebService:
         customer_id: str | None,
         start_date: str | None,
         end_date: str | None,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> HTMLResponse:
         """Render sales order list page."""
         start_date, end_date = normalize_date_range_filters(
@@ -575,6 +583,8 @@ class SalesOrderWebService:
                 customer_id=customer_id,
                 start_date=start_date,
                 end_date=end_date,
+                sort=sort,
+                sort_dir=sort_dir,
             )
         )
         return templates.TemplateResponse(

@@ -1277,7 +1277,9 @@ def test_get_scored_candidates_line_not_found() -> None:
     db.get.return_value = None
 
     result = svc.get_scored_candidates_for_line(db, uuid4(), uuid4(), uuid4())
-    assert result == {"candidates": [], "source_types": []}
+    assert result["candidates"] == []
+    assert result["source_types"] == []
+    assert result["total"] == 0
 
 
 def test_get_scored_candidates_statement_not_found() -> None:
@@ -1293,7 +1295,9 @@ def test_get_scored_candidates_statement_not_found() -> None:
     db.get.side_effect = [stmt_line, statement]
 
     result = svc.get_scored_candidates_for_line(db, org_id, uuid4(), stmt_line.line_id)
-    assert result == {"candidates": [], "source_types": []}
+    assert result["candidates"] == []
+    assert result["source_types"] == []
+    assert result["total"] == 0
 
 
 def test_get_scored_candidates_no_gl_account() -> None:
@@ -1314,7 +1318,9 @@ def test_get_scored_candidates_no_gl_account() -> None:
     result = svc.get_scored_candidates_for_line(
         db, org_id, statement.organization_id, stmt_line.line_id
     )
-    assert result == {"candidates": [], "source_types": []}
+    assert result["candidates"] == []
+    assert result["source_types"] == []
+    assert result["total"] == 0
 
 
 def test_get_scored_candidates_returns_sorted_by_score() -> None:

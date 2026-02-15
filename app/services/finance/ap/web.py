@@ -11,6 +11,7 @@ import logging
 from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, Request, UploadFile
@@ -66,6 +67,7 @@ from app.services.finance.common import (
     parse_enum_safe,
 )
 from app.services.finance.common.attachment import AttachmentInput, attachment_service
+from app.services.finance.common.sorting import apply_sort
 from app.services.finance.platform.currency_context import get_currency_context
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
@@ -450,6 +452,8 @@ class APWebService:
         status: str | None,
         page: int,
         limit: int = 50,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
@@ -475,9 +479,20 @@ class APWebService:
         total_count = (
             query.with_entities(func.count(Supplier.supplier_id)).scalar() or 0
         )
-        suppliers = (
-            query.order_by(Supplier.legal_name).limit(limit).offset(offset).all()
+        supplier_sort_map: dict[str, Any] = {
+            "legal_name": Supplier.legal_name,
+            "trading_name": Supplier.trading_name,
+            "supplier_code": Supplier.supplier_code,
+            "status": Supplier.status,
+        }
+        query = apply_sort(
+            query,
+            sort,
+            sort_dir,
+            supplier_sort_map,
+            default=Supplier.legal_name.asc(),
         )
+        suppliers = query.limit(limit).offset(offset).all()
 
         open_statuses = [
             SupplierInvoiceStatus.POSTED,
@@ -554,11 +569,15 @@ class APWebService:
             or 0
         )
 
-        active_filters = build_active_filters(params={"status": status})
+        active_filters = build_active_filters(
+            params={"status": status},
+        )
         return {
             "suppliers": suppliers_view,
             "search": search,
             "status": status,
+            "sort": sort,
+            "sort_dir": sort_dir,
             "page": page,
             "limit": limit,
             "per_page": limit,
@@ -706,6 +725,8 @@ class APWebService:
         end_date: str | None,
         page: int,
         limit: int = 50,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
@@ -744,12 +765,22 @@ class APWebService:
         total_count = (
             query.with_entities(func.count(SupplierInvoice.invoice_id)).scalar() or 0
         )
-        invoices = (
-            query.order_by(SupplierInvoice.invoice_date.desc())
-            .limit(limit)
-            .offset(offset)
-            .all()
+        invoice_sort_map: dict[str, Any] = {
+            "invoice_date": SupplierInvoice.invoice_date,
+            "invoice_number": SupplierInvoice.invoice_number,
+            "supplier_name": Supplier.legal_name,
+            "total_amount": SupplierInvoice.total_amount,
+            "due_date": SupplierInvoice.due_date,
+            "status": SupplierInvoice.status,
+        }
+        query = apply_sort(
+            query,
+            sort,
+            sort_dir,
+            invoice_sort_map,
+            default=SupplierInvoice.invoice_date.desc(),
         )
+        invoices = query.limit(limit).offset(offset).all()
 
         open_statuses = [
             SupplierInvoiceStatus.POSTED,
@@ -858,6 +889,8 @@ class APWebService:
             "status": status,
             "start_date": start_date,
             "end_date": end_date,
+            "sort": sort,
+            "sort_dir": sort_dir,
             "page": page,
             "limit": limit,
             "offset": offset,
@@ -1094,6 +1127,8 @@ class APWebService:
         end_date: str | None,
         page: int,
         limit: int = 50,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
@@ -1130,12 +1165,22 @@ class APWebService:
         total_count = (
             query.with_entities(func.count(SupplierPayment.payment_id)).scalar() or 0
         )
-        payments = (
-            query.order_by(SupplierPayment.payment_date.desc())
-            .limit(limit)
-            .offset(offset)
-            .all()
+
+        column_map = {
+            "payment_date": SupplierPayment.payment_date,
+            "payment_number": SupplierPayment.payment_number,
+            "amount": SupplierPayment.amount,
+            "status": SupplierPayment.status,
+        }
+        query = apply_sort(
+            query,
+            sort,
+            sort_dir,
+            column_map,
+            default=SupplierPayment.payment_date.desc(),
         )
+
+        payments = query.limit(limit).offset(offset).all()
 
         payments_view = []
         for payment, supplier in payments:
@@ -1186,6 +1231,8 @@ class APWebService:
             "status": status,
             "start_date": start_date,
             "end_date": end_date,
+            "sort": sort,
+            "sort_dir": sort_dir,
             "page": page,
             "limit": limit,
             "offset": offset,
@@ -2326,11 +2373,13 @@ class APWebService:
         self,
         request: Request,
         auth: WebAuthContext,
+        db: Session,
         search: str | None,
         status: str | None,
         page: int,
         limit: int,
-        db: Session,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> HTMLResponse:
         context = base_context(request, auth, "Suppliers", "ap")
         context.update(
@@ -2341,6 +2390,8 @@ class APWebService:
                 status=status,
                 page=page,
                 limit=limit,
+                sort=sort,
+                sort_dir=sort_dir,
             )
         )
         return templates.TemplateResponse(request, "finance/ap/suppliers.html", context)
@@ -2500,6 +2551,8 @@ class APWebService:
         end_date: str | None,
         page: int,
         db: Session,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> HTMLResponse:
         context = base_context(request, auth, "AP Invoices", "ap")
         context.update(
@@ -2512,6 +2565,8 @@ class APWebService:
                 start_date=start_date,
                 end_date=end_date,
                 page=page,
+                sort=sort,
+                sort_dir=sort_dir,
             )
         )
         return templates.TemplateResponse(request, "finance/ap/invoices.html", context)
@@ -2862,6 +2917,8 @@ class APWebService:
         end_date: str | None,
         page: int,
         db: Session,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> HTMLResponse:
         context = base_context(request, auth, "AP Payments", "ap")
         context.update(
@@ -2874,6 +2931,8 @@ class APWebService:
                 start_date=start_date,
                 end_date=end_date,
                 page=page,
+                sort=sort,
+                sort_dir=sort_dir,
             )
         )
         return templates.TemplateResponse(request, "finance/ap/payments.html", context)

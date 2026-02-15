@@ -256,6 +256,8 @@ class ExpenseClaimSyncService(BaseSyncService[ExpenseClaim]):
             net_payable_amount=data.get("net_payable_amount"),
             currency_code=data.get("currency_code", "NGN")[:3],
             status=status,
+            payment_reference=data.get("payment_reference"),
+            paid_on=data.get("paid_on"),
             # created_by_id not set for synced records
         )
 
@@ -284,7 +286,10 @@ class ExpenseClaimSyncService(BaseSyncService[ExpenseClaim]):
         if total_claimed is not None:
             entity.total_claimed_amount = total_claimed
 
-        if "total_approved_amount" in data and data.get("total_approved_amount") is not None:
+        if (
+            "total_approved_amount" in data
+            and data.get("total_approved_amount") is not None
+        ):
             entity.total_approved_amount = data.get("total_approved_amount")
         if "net_payable_amount" in data and data.get("net_payable_amount") is not None:
             entity.net_payable_amount = data.get("net_payable_amount")
@@ -295,6 +300,11 @@ class ExpenseClaimSyncService(BaseSyncService[ExpenseClaim]):
             entity.status = ExpenseClaimStatus(status_str)
         except ValueError:
             pass
+
+        if data.get("payment_reference") is not None:
+            entity.payment_reference = data.get("payment_reference")
+        if data.get("paid_on") is not None:
+            entity.paid_on = data.get("paid_on")
 
         entity.updated_by_id = self.user_id
 

@@ -51,6 +51,7 @@ from app.services.finance.banking.payment_metadata import (
     resolve_payment_metadata,
     resolve_payment_metadata_batch,
 )
+from app.services.finance.common.sorting import apply_sort
 from app.services.finance.platform.currency_context import get_currency_context
 from app.services.formatters import format_currency as _base_format_currency
 from app.services.formatters import format_date as _format_date
@@ -432,6 +433,8 @@ class BankingWebService:
         status: str | None,
         page: int,
         limit: int = 50,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
@@ -455,12 +458,20 @@ class BankingWebService:
         total_count = (
             query.with_entities(func.count(BankAccount.bank_account_id)).scalar() or 0
         )
-        accounts = (
-            query.order_by(BankAccount.bank_name, BankAccount.account_name)
-            .limit(limit)
-            .offset(offset)
-            .all()
+        account_sort_map: dict[str, Any] = {
+            "bank_name": BankAccount.bank_name,
+            "account_name": BankAccount.account_name,
+            "account_number": BankAccount.account_number,
+            "status": BankAccount.status,
+        }
+        query = apply_sort(
+            query,
+            sort,
+            sort_dir,
+            account_sort_map,
+            default=[BankAccount.bank_name.asc(), BankAccount.account_name.asc()],
         )
+        accounts = query.limit(limit).offset(offset).all()
 
         active_count = (
             query.filter(BankAccount.status == BankAccountStatus.active)
@@ -489,6 +500,8 @@ class BankingWebService:
             "accounts": [_account_view(account) for account in accounts],
             "search": search,
             "status": status,
+            "sort": sort,
+            "sort_dir": sort_dir,
             "page": page,
             "limit": limit,
             "offset": offset,
@@ -583,6 +596,8 @@ class BankingWebService:
         end_date: str | None,
         page: int,
         limit: int = 50,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
@@ -591,7 +606,14 @@ class BankingWebService:
         from_date = _parse_date(start_date)
         to_date = _parse_date(end_date)
 
-        query = db.query(BankStatement).filter(BankStatement.organization_id == org_id)
+        query = (
+            db.query(BankStatement)
+            .join(
+                BankAccount,
+                BankStatement.bank_account_id == BankAccount.bank_account_id,
+            )
+            .filter(BankStatement.organization_id == org_id)
+        )
 
         if account_id:
             query = query.filter(
@@ -607,12 +629,19 @@ class BankingWebService:
         total_count = (
             query.with_entities(func.count(BankStatement.statement_id)).scalar() or 0
         )
-        statements = (
-            query.order_by(BankStatement.statement_date.desc())
-            .limit(limit)
-            .offset(offset)
-            .all()
+        statement_sort_map: dict[str, Any] = {
+            "statement_date": BankStatement.statement_date,
+            "account_name": BankAccount.account_name,
+            "status": BankStatement.status,
+        }
+        query = apply_sort(
+            query,
+            sort,
+            sort_dir,
+            statement_sort_map,
+            default=BankStatement.statement_date.desc(),
         )
+        statements = query.limit(limit).offset(offset).all()
 
         accounts = (
             db.query(BankAccount)
@@ -643,6 +672,8 @@ class BankingWebService:
             "accounts": account_views,
             "account_id": account_id,
             "status": status,
+            "sort": sort,
+            "sort_dir": sort_dir,
             "start_date": start_date,
             "end_date": end_date,
             "page": page,
@@ -1975,6 +2006,8 @@ class BankingWebService:
         search: str | None,
         status: str | None,
         page: int,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> HTMLResponse:
         context = base_context(request, auth, "Bank Accounts", "banking", db=db)
         context.update(
@@ -1984,6 +2017,8 @@ class BankingWebService:
                 search=search,
                 status=status,
                 page=page,
+                sort=sort,
+                sort_dir=sort_dir,
             )
         )
         return templates.TemplateResponse(
@@ -2050,6 +2085,8 @@ class BankingWebService:
         start_date: str | None,
         end_date: str | None,
         page: int,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> HTMLResponse:
         context = base_context(request, auth, "Bank Statements", "banking", db=db)
         context.update(
@@ -2061,6 +2098,8 @@ class BankingWebService:
                 start_date=start_date,
                 end_date=end_date,
                 page=page,
+                sort=sort,
+                sort_dir=sort_dir,
             )
         )
         return templates.TemplateResponse(
@@ -3230,8 +3269,20 @@ class BankingWebService:
         db: Session,
         statement_id: str,
         line_id: str,
+        *,
+        date_from: str | None = None,
+        date_to: str | None = None,
+        source_type: str | None = None,
+        search: str | None = None,
+        direction: str | None = None,
+        hide_matched: bool = False,
+        sort: str = "relevance",
+        page: int = 1,
+        per_page: int = 25,
     ) -> Response:
         """Return scored GL candidates for a specific statement line (JSON)."""
+        from datetime import date as date_type
+
         from app.services.finance.banking.bank_reconciliation import (
             BankReconciliationService,
         )
@@ -3240,12 +3291,35 @@ class BankingWebService:
         if org_id is None:
             raise HTTPException(status_code=401, detail="Authentication required")
 
+        # Parse date strings to date objects
+        parsed_date_from: date_type | None = None
+        parsed_date_to: date_type | None = None
+        if date_from:
+            try:
+                parsed_date_from = date_type.fromisoformat(date_from)
+            except ValueError:
+                pass
+        if date_to:
+            try:
+                parsed_date_to = date_type.fromisoformat(date_to)
+            except ValueError:
+                pass
+
         svc = BankReconciliationService()
         result = svc.get_scored_candidates_for_line(
             db=db,
             organization_id=org_id,
             statement_id=UUID(statement_id),
             statement_line_id=UUID(line_id),
+            date_from=parsed_date_from,
+            date_to=parsed_date_to,
+            source_type=source_type or None,
+            search=search or None,
+            direction=direction or None,
+            hide_matched=hide_matched,
+            sort=sort,
+            page=max(1, page),
+            per_page=max(1, min(per_page, 100)),
         )
 
         return JSONResponse(content=result, status_code=200)

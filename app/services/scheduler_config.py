@@ -128,6 +128,26 @@ def get_celery_config() -> dict:
 def _builtin_beat_schedule() -> dict[str, dict]:
     """Built-in scheduled tasks that always run, independent of DB config."""
     return {
+        "coach-daily-data-quality": {
+            "task": "app.tasks.coach.generate_daily_data_quality_insights",
+            "schedule": crontab(hour=6, minute=0),  # Daily at 6 AM
+        },
+        "coach-daily-banking-health": {
+            "task": "app.tasks.coach.generate_daily_banking_health_insights",
+            "schedule": crontab(hour=6, minute=10),  # Daily at 6:10 AM
+        },
+        "coach-daily-expense-approvals": {
+            "task": "app.tasks.coach.generate_daily_expense_approval_insights",
+            "schedule": crontab(hour=6, minute=20),  # Daily at 6:20 AM
+        },
+        "coach-daily-ar-overdue": {
+            "task": "app.tasks.coach.generate_daily_ar_overdue_insights",
+            "schedule": crontab(hour=6, minute=30),  # Daily at 6:30 AM
+        },
+        "coach-daily-ap-due": {
+            "task": "app.tasks.coach.generate_daily_ap_due_insights",
+            "schedule": crontab(hour=6, minute=40),  # Daily at 6:40 AM
+        },
         "expense-approval-reminders": {
             "task": "app.tasks.expense.process_expense_approval_reminders",
             "schedule": crontab(hour=8, minute=0),  # Daily at 8 AM
@@ -155,6 +175,10 @@ def _builtin_beat_schedule() -> dict[str, dict]:
         "splynx-incremental-sync": {
             "task": "app.tasks.splynx.run_splynx_incremental_sync",
             "schedule": crontab(minute="*/30"),  # Every 30 minutes
+        },
+        "recurring-templates": {
+            "task": "app.tasks.automation.process_recurring_templates",
+            "schedule": crontab(hour="*/6", minute=5),  # Every 6 hours at :05
         },
         "splynx-daily-reconciliation": {
             "task": "app.tasks.splynx.run_splynx_daily_reconciliation",

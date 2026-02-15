@@ -134,41 +134,48 @@
         get matchPct() {
             return this.statTotalLines ? Math.round(this.statMatchedLines / this.statTotalLines * 100) : 0;
         },
-        get filteredCandidates() {
-            let results = this.glCandidates;
-            const q = this.matchSearch.toLowerCase().trim();
-            if (q) {
-                results = results.filter(c =>
-                    (c.description || "").toLowerCase().includes(q)
-                    || (c.reference || "").toLowerCase().includes(q)
-                    || (c.counterparty_name || "").toLowerCase().includes(q)
-                    || (c.payment_number || "").toLowerCase().includes(q)
-                    || (c.amount_display || "").includes(q)
-                );
-            }
-            if (this.matchDateFrom) {
-                results = results.filter(c => c.entry_date >= this.matchDateFrom);
-            }
-            if (this.matchDateTo) {
-                results = results.filter(c => c.entry_date <= this.matchDateTo);
-            }
-            if (this.matchSourceType) {
-                results = results.filter(c => c.source_type === this.matchSourceType);
-            }
-            if (this.matchAmountDir === "debit") {
-                results = results.filter(c => c.amount > 0);
-            } else if (this.matchAmountDir === "credit") {
-                results = results.filter(c => c.amount < 0);
-            }
-            /* Sort */
-            if (this.matchSort === "amount" && this.matchLineId) {
-                const bankAmt = Math.abs(this.lineAmounts[this.matchLineId] || 0);
-                results = [...results].sort((a, b) => Math.abs(Math.abs(a.amount) - bankAmt) - Math.abs(Math.abs(b.amount) - bankAmt));
-            } else if (this.matchSort === "date") {
-                results = [...results].sort((a, b) => (b.entry_date || "").localeCompare(a.entry_date || ""));
-            }
-            /* "relevance" uses server order (already sorted by score DESC) */
-            return results;
+        /* Pagination state */
+        glPage: 1,
+        glPerPage: 25,
+        glTotal: 0,
+        glTotalPages: 0,
+        hideMatched: false,
+        _fetchTimer: null,
+        fetchCandidates(resetPage) {
+            if (resetPage) this.glPage = 1;
+            this.glLoading = true;
+            const params = new URLSearchParams();
+            if (this.matchSearch) params.set("search", this.matchSearch);
+            if (this.matchDateFrom) params.set("date_from", this.matchDateFrom);
+            if (this.matchDateTo) params.set("date_to", this.matchDateTo);
+            if (this.matchSourceType) params.set("source_type", this.matchSourceType);
+            if (this.matchAmountDir) params.set("direction", this.matchAmountDir);
+            if (this.hideMatched) params.set("hide_matched", "true");
+            params.set("sort", this.matchSort);
+            params.set("page", String(this.glPage));
+            params.set("per_page", String(this.glPerPage));
+            const qs = params.toString();
+            const url = "/finance/banking/statements/{{ statement.statement_id }}/lines/" + this.matchLineId + "/candidates" + (qs ? "?" + qs : "");
+            fetch(url)
+                .then(r => r.json())
+                .then(data => {
+                    this.glCandidates = data.candidates || [];
+                    this.glSourceTypes = data.source_types || [];
+                    this.glTotal = data.total || 0;
+                    this.glPage = data.page || 1;
+                    this.glTotalPages = data.total_pages || 0;
+                    this.glLoading = false;
+                })
+                .catch(() => { window.showToast("Failed to load GL candidates", "error"); this.glLoading = false; });
+        },
+        debouncedFetch() {
+            clearTimeout(this._fetchTimer);
+            this._fetchTimer = setTimeout(() => this.fetchCandidates(true), 300);
+        },
+        goToPage(p) {
+            if (p < 1 || p > this.glTotalPages || p === this.glPage) return;
+            this.glPage = p;
+            this.fetchCandidates(false);
         },
         get currentLineDetail() {
             if (!this.matchLineId) return null;
@@ -182,6 +189,9 @@
             this.matchSourceType = "";
             this.matchAmountDir = "";
             this.matchSort = "relevance";
+            this.hideMatched = false;
+            this.glPage = 1;
+            this.glPerPage = 25;
             this.multiMatchMode = false;
             this.selectedCandidates = [];
             this.createJournalMode = false;
@@ -189,17 +199,11 @@
             this.createJournalDesc = "";
             this.matchModal = true;
             /* Lazy-load scored candidates for this specific line */
-            this.glLoading = true;
             this.glCandidates = [];
             this.glSourceTypes = [];
-            fetch("/finance/banking/statements/{{ statement.statement_id }}/lines/" + lineId + "/candidates")
-                .then(r => r.json())
-                .then(data => {
-                    this.glCandidates = data.candidates || [];
-                    this.glSourceTypes = data.source_types || [];
-                    this.glLoading = false;
-                })
-                .catch(() => { this.glLoading = false; });
+            this.glTotal = 0;
+            this.glTotalPages = 0;
+            this.fetchCandidates(false);
         },
         resetFilters() {
             this.matchSearch = "";
@@ -208,6 +212,8 @@
             this.matchSourceType = "";
             this.matchAmountDir = "";
             this.matchSort = "relevance";
+            this.hideMatched = false;
+            this.fetchCandidates(true);
         },
         _checkAmountMismatch(candidateAmount) {
             const bankAmt = this.lineAmounts[this.matchLineId];
@@ -1062,22 +1068,22 @@
                     <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                     </svg>
-                    <input x-model="matchSearch" type="text" placeholder="Search by description, reference, counterparty, or amount..."
+                    <input x-model="matchSearch" @input="debouncedFetch()" type="text" placeholder="Search by description, reference, counterparty, or amount..."
                            class="form-input pl-9 w-full text-sm" autofocus>
                 </div>
                 {# Filter row #}
                 <div class="flex flex-wrap items-end gap-3">
                     <div class="flex-1 min-w-[120px]">
                         <label class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">From</label>
-                        <input x-model="matchDateFrom" type="date" class="form-input text-sm mt-1 w-full">
+                        <input x-model="matchDateFrom" @change="fetchCandidates(true)" type="date" class="form-input text-sm mt-1 w-full">
                     </div>
                     <div class="flex-1 min-w-[120px]">
                         <label class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">To</label>
-                        <input x-model="matchDateTo" type="date" class="form-input text-sm mt-1 w-full">
+                        <input x-model="matchDateTo" @change="fetchCandidates(true)" type="date" class="form-input text-sm mt-1 w-full">
                     </div>
                     <div class="flex-1 min-w-[130px]">
                         <label class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Source Type</label>
-                        <select x-model="matchSourceType" class="form-select text-sm mt-1 w-full">
+                        <select x-model="matchSourceType" @change="fetchCandidates(true)" class="form-select text-sm mt-1 w-full">
                             <option value="">All Types</option>
                             <template x-for="st in glSourceTypes" :key="st">
                                 <option :value="st" x-text="st.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())"></option>
@@ -1086,7 +1092,7 @@
                     </div>
                     <div class="flex-1 min-w-[120px]">
                         <label class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Direction</label>
-                        <select x-model="matchAmountDir" class="form-select text-sm mt-1 w-full">
+                        <select x-model="matchAmountDir" @change="fetchCandidates(true)" class="form-select text-sm mt-1 w-full">
                             <option value="">All</option>
                             <option value="debit">Debits (In)</option>
                             <option value="credit">Credits (Out)</option>
@@ -1094,20 +1100,20 @@
                     </div>
                     <div class="flex-shrink-0 flex items-end gap-1">
                         <div class="flex rounded-lg border border-slate-200 dark:border-slate-700 mt-1 overflow-hidden">
-                            <button @click="matchSort = 'relevance'"
+                            <button @click="matchSort = 'relevance'; fetchCandidates(true)"
                                 class="px-2 py-1.5 text-xs font-medium transition-colors"
                                 :class="matchSort === 'relevance' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'"
                                 title="Sort by match score">
                                 <svg class="h-3.5 w-3.5 inline mr-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
                                 Score
                             </button>
-                            <button @click="matchSort = 'amount'"
+                            <button @click="matchSort = 'amount'; fetchCandidates(true)"
                                 class="px-2 py-1.5 text-xs font-medium transition-colors border-l border-slate-200 dark:border-slate-700"
                                 :class="matchSort === 'amount' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'"
                                 title="Sort by closest amount">
                                 Amount
                             </button>
-                            <button @click="matchSort = 'date'"
+                            <button @click="matchSort = 'date'; fetchCandidates(true)"
                                 class="px-2 py-1.5 text-xs font-medium transition-colors border-l border-slate-200 dark:border-slate-700"
                                 :class="matchSort === 'date' ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'"
                                 title="Sort by date (newest first)">
@@ -1117,6 +1123,30 @@
                         <button @click="resetFilters()" class="btn btn-ghost btn-sm text-xs mt-1" title="Clear all filters">
                             Clear
                         </button>
+                    </div>
+                </div>
+                {# Bottom row: hide matched toggle + per-page selector + results count #}
+                <div class="flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-4">
+                        <label class="inline-flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" x-model="hideMatched" @change="fetchCandidates(true)"
+                                   class="rounded border-slate-300 dark:border-slate-600 text-blue-600 focus:ring-blue-500 h-4 w-4">
+                            <span class="text-xs text-slate-600 dark:text-slate-400">Hide already matched</span>
+                        </label>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="text-xs text-slate-500 dark:text-slate-400" x-show="glTotal > 0"
+                              x-text="glTotal + ' result' + (glTotal !== 1 ? 's' : '')"></span>
+                        <div class="flex items-center gap-1.5">
+                            <label class="text-xs text-slate-500 dark:text-slate-400">Per page</label>
+                            <select x-model.number="glPerPage" @change="fetchCandidates(true)"
+                                    class="form-select text-xs py-1 pl-2 pr-6 w-auto">
+                                <option value="10">10</option>
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1146,12 +1176,13 @@
                         </p>
                     </div>
                 </template>
-                <template x-if="!glLoading && glCandidates.length > 0 && filteredCandidates.length === 0">
+                <template x-if="!glLoading && glTotal === 0 && glCandidates.length === 0">
                     <p class="text-sm text-slate-500 dark:text-slate-400 py-8 text-center">
                         No transactions match your filters. <button @click="resetFilters()" class="text-blue-600 dark:text-blue-400 hover:underline">Clear filters</button>
                     </p>
                 </template>
-                <template x-if="!glLoading && filteredCandidates.length > 0">
+                <template x-if="!glLoading && glCandidates.length > 0">
+                    <div>
                     <table class="table w-full">
                         <thead>
                             <tr>
@@ -1166,7 +1197,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <template x-for="candidate in filteredCandidates" :key="candidate.journal_line_id">
+                            <template x-for="candidate in glCandidates" :key="candidate.journal_line_id">
                                 <tr class="group hover:bg-slate-50 dark:hover:bg-slate-800/50"
                                     :class="isCandidateSelected(candidate.journal_line_id) ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''">
                                     {# Checkbox column for multi-match #}
@@ -1246,6 +1277,40 @@
                             </template>
                         </tbody>
                     </table>
+                    {# Pagination controls #}
+                    <template x-if="glTotalPages > 1">
+                        <div class="flex items-center justify-between pt-3 border-t border-slate-100 dark:border-slate-800 mt-3">
+                            <p class="text-xs text-slate-500 dark:text-slate-400">
+                                Showing <span class="font-medium" x-text="((glPage - 1) * glPerPage) + 1"></span>–<span class="font-medium" x-text="Math.min(glPage * glPerPage, glTotal)"></span> of <span class="font-medium" x-text="glTotal"></span>
+                            </p>
+                            <div class="flex items-center gap-1">
+                                <button @click="goToPage(1)" :disabled="glPage <= 1"
+                                        class="px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                                        aria-label="First page">
+                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
+                                </button>
+                                <button @click="goToPage(glPage - 1)" :disabled="glPage <= 1"
+                                        class="px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                                        aria-label="Previous page">
+                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                                </button>
+                                <span class="px-2 py-1 text-xs font-medium text-slate-700 dark:text-slate-300">
+                                    Page <span x-text="glPage"></span> of <span x-text="glTotalPages"></span>
+                                </span>
+                                <button @click="goToPage(glPage + 1)" :disabled="glPage >= glTotalPages"
+                                        class="px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                                        aria-label="Next page">
+                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                </button>
+                                <button @click="goToPage(glTotalPages)" :disabled="glPage >= glTotalPages"
+                                        class="px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                                        aria-label="Last page">
+                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"/></svg>
+                                </button>
+                            </div>
+                        </div>
+                    </template>
+                    </div>
                 </template>
             </div>
             {# Multi-match running total bar #}
@@ -1343,12 +1408,8 @@
             {# Footer #}
             <div class="px-6 py-3 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                    <span class="text-xs text-slate-500 dark:text-slate-400">
-                        Showing <span class="font-mono tabular-nums font-medium" x-text="filteredCandidates.length"></span>
-                        <template x-if="filteredCandidates.length !== glCandidates.length">
-                            <span> of <span class="font-mono tabular-nums" x-text="glCandidates.length"></span></span>
-                        </template>
-                        transactions
+                    <span class="text-xs text-slate-500 dark:text-slate-400" x-show="glTotal > 0">
+                        <span class="font-mono tabular-nums font-medium" x-text="glTotal"></span> transactions found
                     </span>
                 </div>
                 <div class="flex items-center gap-2">

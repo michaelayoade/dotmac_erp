@@ -26,6 +26,8 @@ def list_suppliers(
     status: str | None = None,
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=50, ge=10, le=500),
+    sort: str | None = None,
+    sort_dir: str | None = None,
     db: Session = Depends(get_db),
 ):
     """Suppliers list page."""
@@ -37,6 +39,8 @@ def list_suppliers(
         status,
         page,
         limit,
+        sort,
+        sort_dir,
     )
 
 
@@ -171,6 +175,8 @@ def list_invoices(
     start_date: str | None = None,
     end_date: str | None = None,
     page: int = Query(default=1, ge=1),
+    sort: str | None = None,
+    sort_dir: str | None = None,
     db: Session = Depends(get_db),
 ):
     """AP invoices list page."""
@@ -184,6 +190,8 @@ def list_invoices(
         end_date,
         page,
         db,
+        sort,
+        sort_dir,
     )
 
 
@@ -371,6 +379,8 @@ def list_payments(
     start_date: str | None = None,
     end_date: str | None = None,
     page: int = Query(default=1, ge=1),
+    sort: str | None = None,
+    sort_dir: str | None = None,
     db: Session = Depends(get_db),
 ):
     """AP payments list page."""
@@ -384,6 +394,8 @@ def list_payments(
         end_date,
         page,
         db,
+        sort,
+        sort_dir,
     )
 
 

@@ -246,6 +246,29 @@ class MockSettings:
     sso_enabled = False
     sso_jwt_secret = None
     sso_cookie_domain = None
+    # Coach / Intelligence Engine
+    coach_enabled = False
+    coach_llm_backends = "llama,deepseek"
+    coach_llm_default_backend = "deepseek"
+    coach_llm_fast_backend = "llama"
+    coach_llm_standard_backend = "deepseek"
+    coach_llm_deep_backend = "deepseek"
+    coach_llm_llama_base_url = ""
+    coach_llm_llama_api_key = ""
+    coach_llm_llama_model_fast = ""
+    coach_llm_llama_model_standard = ""
+    coach_llm_llama_model_deep = ""
+    coach_llm_deepseek_base_url = ""
+    coach_llm_deepseek_api_key = ""
+    coach_llm_deepseek_model_fast = ""
+    coach_llm_deepseek_model_standard = ""
+    coach_llm_deepseek_model_deep = ""
+    coach_llm_timeout_s = 30
+    coach_llm_max_retries = 2
+    coach_llm_max_output_tokens = 1200
+    coach_monthly_token_budget = 500_000
+    coach_cache_ttl_hours = 24
+    coach_max_insights_per_run = 20
 
 
 mock_config_module.settings = MockSettings()
@@ -275,6 +298,8 @@ from app.models.auth import (  # noqa: E402
 from app.models.auth import (  # noqa: E402
     Session as AuthSession,
 )
+from app.models.coach.insight import CoachInsight  # noqa: E402
+from app.models.coach.report import CoachReport  # noqa: E402
 from app.models.domain_settings import (  # noqa: E402
     DomainSetting,
     DomainSettingHistory,
@@ -308,6 +333,8 @@ SQLITE_COMPATIBLE_TABLES = [
     Permission.__table__,
     RolePermission.__table__,
     PersonRole.__table__,
+    CoachInsight.__table__,
+    CoachReport.__table__,
     AuditEvent.__table__,
     DomainSetting.__table__,
     DomainSettingHistory.__table__,

@@ -1448,31 +1448,54 @@ class BankReconciliationService:
         organization_id: UUID,
         statement_id: UUID,
         statement_line_id: UUID,
-        max_results: int = 500,
+        *,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        source_type: str | None = None,
+        search: str | None = None,
+        direction: str | None = None,
+        hide_matched: bool = False,
+        sort: str = "relevance",
+        page: int = 1,
+        per_page: int = 25,
     ) -> dict:
         """Return GL candidates scored against a specific bank statement line.
 
         Scores each candidate using ``_calculate_match_score()`` for the
         given bank line, then returns them sorted by score DESC.
 
+        Supports server-side filtering, sorting, and pagination.
+
         Returns dict with keys:
-            candidates: list of dicts (same shape as get_gl_candidates_for_statement
-                        plus ``match_score``)
+            candidates: list of dicts (paginated)
             source_types: sorted list of distinct source_document_type values
+            total: total number of matching candidates (before pagination)
+            page: current page number
+            per_page: items per page
+            total_pages: total number of pages
         """
         from datetime import timedelta
 
+        empty_result: dict = {
+            "candidates": [],
+            "source_types": [],
+            "total": 0,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": 0,
+        }
+
         stmt_line = db.get(BankStatementLine, statement_line_id)
         if not stmt_line:
-            return {"candidates": [], "source_types": []}
+            return empty_result
 
         statement = db.get(BankStatement, statement_id)
         if not statement or statement.organization_id != organization_id:
-            return {"candidates": [], "source_types": []}
+            return empty_result
 
         bank_account = statement.bank_account
         if not bank_account or not bank_account.gl_account_id:
-            return {"candidates": [], "source_types": []}
+            return empty_result
 
         # Include GL accounts from sibling bank accounts (same bank_name)
         # so we also surface customer payment entries posted to related
@@ -1493,33 +1516,42 @@ class BankReconciliationService:
         # Get GL line IDs already matched (scoped to this org)
         matched_gl_ids = self._get_matched_gl_ids(db, organization_id)
 
-        # Widen date range for scoring (no hard filter — score handles proximity)
-        date_buffer = timedelta(days=30)
-        period_start = statement.period_start - date_buffer
-        period_end = statement.period_end + date_buffer
+        # Date range: use explicit filters if provided, otherwise widen
+        # around the statement period for broader candidate discovery.
+        if date_from or date_to:
+            period_start = date_from or statement.period_start
+            period_end = date_to or statement.period_end
+        else:
+            date_buffer = timedelta(days=30)
+            period_start = statement.period_start - date_buffer
+            period_end = statement.period_end + date_buffer
+
+        # Build base query conditions
+        conditions = [
+            JournalEntry.organization_id == organization_id,
+            JournalEntryLine.account_id.in_(all_bank_gl_ids),
+            JournalEntry.status == JournalStatus.POSTED,
+            JournalEntry.entry_date >= period_start,
+            JournalEntry.entry_date <= period_end,
+        ]
+
+        # Source type filter (applied at SQL level)
+        if source_type:
+            conditions.append(JournalEntry.source_document_type == source_type)
 
         gl_lines: _list[JournalEntryLine] = _list(
             db.execute(
                 select(JournalEntryLine)
                 .join(JournalEntry)
-                .where(
-                    and_(
-                        JournalEntry.organization_id == organization_id,
-                        JournalEntryLine.account_id.in_(all_bank_gl_ids),
-                        JournalEntry.status == JournalStatus.POSTED,
-                        JournalEntry.entry_date >= period_start,
-                        JournalEntry.entry_date <= period_end,
-                    )
-                )
+                .where(and_(*conditions))
                 .order_by(JournalEntry.entry_date.desc())
-                .limit(max_results)
             )
             .scalars()
             .all()
         )
 
         if not gl_lines:
-            return {"candidates": [], "source_types": []}
+            return empty_result
 
         gl_metadata = self._resolve_gl_metadata(db, gl_lines)
 
@@ -1543,6 +1575,33 @@ class BankReconciliationService:
             if src_type:
                 source_types.add(src_type)
 
+            is_matched = gl_line.line_id in matched_gl_ids
+
+            # Apply post-query filters that cannot be done in SQL
+            if hide_matched and is_matched:
+                continue
+
+            if direction == "debit" and amount <= 0:
+                continue
+            if direction == "credit" and amount >= 0:
+                continue
+
+            description = getattr(entry, "description", "") or gl_line.description or ""
+            reference = getattr(entry, "reference", "") or ""
+            counterparty_name = meta.counterparty_name if meta else ""
+            payment_number = meta.payment_number if meta else ""
+
+            # Text search filter (case-insensitive, matches description,
+            # reference, counterparty, payment number, or amount)
+            if search:
+                q = search.lower()
+                searchable = (
+                    f"{description} {reference} {counterparty_name} "
+                    f"{payment_number} {amount:,.2f}"
+                ).lower()
+                if q not in searchable:
+                    continue
+
             entry_id = getattr(entry, "entry_id", None) if entry else None
             source_url = _build_source_url(src_type, source_doc_id, entry_id)
 
@@ -1550,8 +1609,6 @@ class BankReconciliationService:
             score = self._calculate_match_score(
                 stmt_line, gl_line, db=db, gl_metadata=gl_metadata
             )
-
-            is_matched = gl_line.line_id in matched_gl_ids
 
             scored.append(
                 (
@@ -1562,12 +1619,8 @@ class BankReconciliationService:
                         "entry_date_display": (
                             entry.entry_date.strftime("%d %b %Y") if entry else ""
                         ),
-                        "description": (
-                            getattr(entry, "description", "")
-                            or gl_line.description
-                            or ""
-                        ),
-                        "reference": getattr(entry, "reference", "") or "",
+                        "description": description,
+                        "reference": reference,
                         "amount": float(amount),
                         "amount_display": f"{amount:,.2f}",
                         "source_type": src_type,
@@ -1576,8 +1629,8 @@ class BankReconciliationService:
                             if src_type
                             else "Journal"
                         ),
-                        "counterparty_name": meta.counterparty_name if meta else "",
-                        "payment_number": meta.payment_number if meta else "",
+                        "counterparty_name": counterparty_name,
+                        "payment_number": payment_number,
                         "source_url": source_url,
                         "is_already_matched": is_matched,
                         "match_score": round(score, 1),
@@ -1585,13 +1638,31 @@ class BankReconciliationService:
                 )
             )
 
-        # Sort by score DESC
-        scored.sort(key=lambda x: x[0], reverse=True)
-        candidates = [item[1] for item in scored]
+        # Sort
+        if sort == "amount" and stmt_line:
+            bank_amt = abs(float(stmt_line.amount or 0))
+            scored.sort(key=lambda x: abs(abs(x[1]["amount"]) - bank_amt))
+        elif sort == "date":
+            scored.sort(key=lambda x: x[1]["entry_date"], reverse=True)
+        else:
+            # Default: score DESC
+            scored.sort(key=lambda x: x[0], reverse=True)
+
+        total = len(scored)
+        total_pages = max(1, (total + per_page - 1) // per_page)
+        page = max(1, min(page, total_pages))
+        start = (page - 1) * per_page
+        end = start + per_page
+
+        candidates = [item[1] for item in scored[start:end]]
 
         return {
             "candidates": candidates,
             "source_types": sorted(source_types),
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": total_pages,
         }
 
     def multi_match_statement_line(

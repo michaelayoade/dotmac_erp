@@ -19,6 +19,7 @@ from app.api.audit import router as audit_router
 from app.api.auth import router as auth_router
 from app.api.auth_flow import router as auth_flow_router
 from app.api.careers import router as careers_api_router
+from app.api.coach import router as coach_router
 from app.api.crm import router as crm_router
 from app.api.crm import webhook_router as crm_webhook_router
 from app.api.deps import require_role, require_tenant_auth
@@ -72,6 +73,7 @@ from app.web.admin_sync import router as admin_sync_router
 from app.web.auth import router as auth_web_router
 from app.web.careers import router as careers_web_router
 from app.web.careers import short_router as careers_short_web_router
+from app.web.coach import router as coach_web_router
 from app.web.csrf import csrf_middleware
 from app.web.finance import automation_router as automation_web_router
 from app.web.finance import expense_router as expense_web_router
@@ -384,6 +386,7 @@ _include_api_router(auth_flow_router)
 _include_api_router(rbac_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(me_router)
 _include_api_router(workflow_tasks_router, dependencies=[Depends(require_tenant_auth)])
+_include_api_router(coach_router, dependencies=[Depends(require_tenant_auth)])
 app.include_router(
     people_router,
     prefix="/api/v1",
@@ -482,6 +485,7 @@ app.include_router(procurement_web_router)  # /procurement/* web routes
 app.include_router(support_web_router)  # /support/* web routes
 app.include_router(projects_web_router)  # /projects/* web routes
 app.include_router(module_settings_web_router)  # /settings/* web routes
+app.include_router(coach_web_router)  # /coach/* web routes
 
 # Standalone module API routes
 _include_api_router(fa_api_router, dependencies=[Depends(require_tenant_auth)])

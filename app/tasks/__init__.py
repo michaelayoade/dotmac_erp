@@ -2,9 +2,17 @@
 from app.tasks.audit import log_audit_event
 from app.tasks.automation import (
     execute_workflow_action,
+    process_recurring_templates,
     process_scheduled_workflow_rules,
 )
 from app.tasks.banking import auto_match_unreconciled_statements
+from app.tasks.coach import (
+    generate_daily_ap_due_insights,
+    generate_daily_ar_overdue_insights,
+    generate_daily_banking_health_insights,
+    generate_daily_data_quality_insights,
+    generate_daily_expense_approval_insights,
+)
 from app.tasks.email import send_email_async
 from app.tasks.expense import (
     calculate_expense_analytics,
@@ -105,9 +113,16 @@ __all__ = [
     "send_email_async",
     # Automation tasks
     "execute_workflow_action",
+    "process_recurring_templates",
     "process_scheduled_workflow_rules",
     # Finance tasks
     "sync_paystack_transactions",
     # Banking tasks
     "auto_match_unreconciled_statements",
+    # Coach tasks
+    "generate_daily_ap_due_insights",
+    "generate_daily_ar_overdue_insights",
+    "generate_daily_banking_health_insights",
+    "generate_daily_data_quality_insights",
+    "generate_daily_expense_approval_insights",
 ]

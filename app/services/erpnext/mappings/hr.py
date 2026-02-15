@@ -490,10 +490,12 @@ class EmployeeMapping(DocTypeMapping):
                     transformer=lambda v: clean_string(v, 30),
                 ),
                 FieldMapping(
-                    source="branch",  # ERPNext bank branch field
-                    target="bank_branch_code",
+                    # ERPNext "branch" on Employee is the HR branch (company branch),
+                    # not bank sort code. Map it for Employee.assigned_location_id resolution.
+                    source="branch",
+                    target="_assigned_location_source_name",
                     required=False,
-                    transformer=lambda v: clean_string(v, 20),
+                    transformer=lambda v: clean_string(v, 100),
                 ),
                 FieldMapping(
                     source="custom_name_on_account",  # ERPNext account holder name

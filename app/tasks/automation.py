@@ -4,7 +4,10 @@ Automation Background Tasks — Celery tasks for workflow rule execution.
 Handles:
 - Async workflow action execution (dispatched from WorkflowService)
 - Scheduled workflow rule evaluation
+- Recurring template processing (invoices, bills, journals, expenses)
 """
+
+from __future__ import annotations
 
 import logging
 from typing import Any
@@ -88,6 +91,40 @@ def execute_workflow_action(
                 logger.error("Max retries exceeded for rule %s", rule_id)
 
     return result
+
+
+@shared_task
+def process_recurring_templates() -> dict[str, Any]:
+    """Process all due recurring templates (invoices, bills, journals, expenses).
+
+    Returns:
+        Dict with processing statistics.
+    """
+    logger.info("Processing recurring templates")
+
+    with SessionLocal() as db:
+        from app.services.finance.automation.recurring import recurring_service
+
+        try:
+            logs: list[Any] = recurring_service.run_due_templates(db)
+            db.commit()
+        except Exception:
+            logger.exception("Recurring template processing failed")
+            db.rollback()
+            return {"processed": 0, "succeeded": 0, "failed": 0, "error": True}
+
+        # Extract counts inside session before ORM objects become detached
+        total: int = len(logs)
+        succeeded: int = sum(1 for log in logs if log.status.value == "SUCCESS")
+        failed: int = sum(1 for log in logs if log.status.value == "FAILED")
+
+    logger.info(
+        "Recurring templates: processed=%d, succeeded=%d, failed=%d",
+        total,
+        succeeded,
+        failed,
+    )
+    return {"processed": total, "succeeded": succeeded, "failed": failed}
 
 
 @shared_task

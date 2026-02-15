@@ -20,12 +20,14 @@ def list_customers(
     search: str | None = None,
     status: str | None = None,
     page: int = Query(default=1, ge=1),
+    sort: str | None = None,
+    sort_dir: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
     """Customers list page."""
     return ar_web_service.list_customers_response(
-        request, auth, db, search, status, page
+        request, auth, db, search, status, page, sort, sort_dir
     )
 
 
@@ -159,6 +161,8 @@ def list_invoices(
     start_date: str | None = None,
     end_date: str | None = None,
     page: int = Query(default=1, ge=1),
+    sort: str | None = None,
+    sort_dir: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -173,6 +177,8 @@ def list_invoices(
         start_date,
         end_date,
         page,
+        sort,
+        sort_dir,
     )
 
 
@@ -366,6 +372,8 @@ def list_receipts(
     start_date: str | None = None,
     end_date: str | None = None,
     page: int = Query(default=1, ge=1),
+    sort: str | None = None,
+    sort_dir: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -380,6 +388,8 @@ def list_receipts(
         start_date,
         end_date,
         page,
+        sort,
+        sort_dir,
     )
 
 

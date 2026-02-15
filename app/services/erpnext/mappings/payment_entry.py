@@ -120,6 +120,13 @@ class PaymentEntryMapping(DocTypeMapping):
                     source="custom_splynx_id",
                     target="_splynx_id",
                 ),
+                # Dotmac ERPNext customization: some employee reimbursements
+                # don't populate the child "references" table, but do store
+                # the expense claim in this custom field.
+                FieldMapping(
+                    source="custom_expense_claim",
+                    target="_custom_expense_claim",
+                ),
             ],
         )
 

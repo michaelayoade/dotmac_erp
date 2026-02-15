@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import compact_filters, pagination, status_badge, empty_state, stats_card, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, bulk_icon_activate, bulk_icon_deactivate, filter_select_field, list_header_actions, action_buttons %}
+{% from "components/macros.html" import compact_filters, pagination, status_badge, empty_state, stats_card, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, bulk_icon_activate, bulk_icon_deactivate, filter_select_field, list_header_actions, action_buttons, sortable_th %}
 
 {% block page_title %}Suppliers{% endblock %}
 
@@ -54,12 +54,12 @@
                     <thead>
                         <tr>
                             {{ bulk_select_header() }}
-                            <th scope="col">Supplier Code</th>
-                            <th scope="col">Supplier Name</th>
+                            {{ sortable_th("Supplier Code", "supplier_code", sort, sort_dir) }}
+                            {{ sortable_th("Supplier Name", "legal_name", sort, sort_dir) }}
                             <th class="hidden sm:table-cell" scope="col">Tax ID</th>
                             <th class="hidden sm:table-cell" scope="col">Payment Terms</th>
                             <th scope="col" class="text-right">Balance</th>
-                            <th scope="col" class="text-center">Status</th>
+                            {{ sortable_th("Status", "status", sort, sort_dir, class="text-center") }}
                             <th class="hidden sm:table-cell" scope="col">Created</th>
                             <th scope="col" class="text-right">Actions</th>
                         </tr>
@@ -149,7 +149,7 @@
                 total_count=total_count,
                 limit=limit,
                 search=search,
-                filters={"status": status}
+                filters={"status": status, "sort": sort, "sort_dir": sort_dir}
             ) }}
         </div>
 

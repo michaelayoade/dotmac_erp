@@ -13,6 +13,10 @@
 {% set status_upper = status|upper %}
 {% set status_clean = status_upper|replace('_', ' ') %}
 {% set badge_classes = {
+  'URGENT': 'badge-overdue',
+  'WARNING': 'badge-overdue',
+  'ATTENTION': 'badge-pending',
+  'INFO': 'badge-approved',
   'DRAFT': 'badge-draft',
   'PENDING': 'badge-pending',
   'PENDING REVIEW': 'badge-pending',
@@ -1003,6 +1007,36 @@ if (typeof window.searchAutosuggest === 'undefined') {
   <label class="form-label text-xs">{{ label }}</label>
   <input type="date" name="{{ name }}" value="{{ value if value else '' }}" class="form-input w-full" {{ attrs | safe }}>
 </div>
+{% endmacro %}
+
+
+{# ============================================
+   SORTABLE TABLE HEADER
+   Clickable <th> that integrates with compact_filters / live_search.
+   Renders a column header with sort-direction arrows.
+
+   Usage:
+     {{ sortable_th("Invoice Date", "invoice_date", sort, sort_dir) }}
+     {{ sortable_th("Amount", "total_amount", sort, sort_dir, class="text-right") }}
+
+   sort / sort_dir come from the template context (set by the route handler).
+   JS in table-sort.js handles click → hidden-input update → HTMX trigger.
+   ============================================ #}
+{% macro sortable_th(label, column, current_sort="", current_dir="desc", class="", extra_attrs="") %}
+{% set is_active = (current_sort == column) %}
+{% set arrow_up   = "opacity-100" if (is_active and current_dir == "asc") else "opacity-30" %}
+{% set arrow_down = "opacity-100" if (is_active and current_dir == "desc") else "opacity-30" %}
+{% set aria_sort_val = ("ascending" if current_dir == "asc" else "descending") if is_active else "none" %}
+<th scope="col" data-sort-column="{{ column }}" aria-sort="{{ aria_sort_val }}"
+    class="cursor-pointer select-none hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors {{ class }}" {{ extra_attrs }}>
+  <span class="inline-flex items-center gap-1">
+    {{ label }}
+    <span class="inline-flex flex-col -space-y-1 text-xs leading-none text-slate-400 dark:text-slate-500" aria-hidden="true">
+      <span class="{{ arrow_up }}">▲</span>
+      <span class="{{ arrow_down }}">▼</span>
+    </span>
+  </span>
+</th>
 {% endmacro %}
 
 

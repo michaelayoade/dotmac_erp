@@ -20,12 +20,14 @@ def list_bank_accounts(
     search: str | None = None,
     status: str | None = None,
     page: int = Query(default=1, ge=1),
+    sort: str | None = None,
+    sort_dir: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
     """Bank accounts list page."""
     return banking_web_service.list_accounts_response(
-        request, auth, db, search, status, page
+        request, auth, db, search, status, page, sort, sort_dir
     )
 
 
@@ -92,6 +94,8 @@ def list_statements(
     start_date: str | None = None,
     end_date: str | None = None,
     page: int = Query(default=1, ge=1),
+    sort: str | None = None,
+    sort_dir: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
@@ -105,6 +109,8 @@ def list_statements(
         start_date,
         end_date,
         page,
+        sort,
+        sort_dir,
     )
 
 
@@ -328,12 +334,34 @@ def scored_candidates(
     request: Request,
     statement_id: str,
     line_id: str,
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+    source_type: str | None = Query(None),
+    search: str | None = Query(None),
+    direction: str | None = Query(None),
+    hide_matched: bool = Query(False),
+    sort: str = Query("relevance"),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(25, ge=1, le=100),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
     """Return scored GL candidates for a specific bank statement line."""
     return banking_web_service.scored_candidates_response(
-        request, auth, db, statement_id, line_id
+        request,
+        auth,
+        db,
+        statement_id,
+        line_id,
+        date_from=date_from,
+        date_to=date_to,
+        source_type=source_type,
+        search=search,
+        direction=direction,
+        hide_matched=hide_matched,
+        sort=sort,
+        page=page,
+        per_page=per_page,
     )
 
 
