@@ -1,4 +1,5 @@
 # Finance Models - 111 tables across 16 schemas
+import app.models.analytics as analytics  # noqa: F401
 import app.models.coach as coach  # noqa: F401
 import app.models.finance as finance  # noqa: F401
 

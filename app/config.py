@@ -160,6 +160,11 @@ class Settings:
     splynx_max_retries: int = int(os.getenv("SPLYNX_MAX_RETRIES", "3"))
 
     # ==========================================================================
+    # Analytics (pre-computed metric snapshots)
+    # ==========================================================================
+    analytics_enabled: bool = os.getenv("ANALYTICS_ENABLED", "false").lower() == "true"
+
+    # ==========================================================================
     # Coach / Intelligence Engine (hosted Llama + DeepSeek)
     # ==========================================================================
     coach_enabled: bool = os.getenv("COACH_ENABLED", "false").lower() == "true"

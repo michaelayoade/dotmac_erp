@@ -128,6 +128,14 @@ def get_celery_config() -> dict:
 def _builtin_beat_schedule() -> dict[str, dict]:
     """Built-in scheduled tasks that always run, independent of DB config."""
     return {
+        "analytics-cash-flow": {
+            "task": "app.tasks.analytics.refresh_cash_flow_metrics",
+            "schedule": crontab(hour=5, minute=0),  # 5:00 AM — before coach tasks
+        },
+        "analytics-efficiency": {
+            "task": "app.tasks.analytics.refresh_efficiency_metrics",
+            "schedule": crontab(hour=5, minute=10),  # 5:10 AM
+        },
         "coach-daily-data-quality": {
             "task": "app.tasks.coach.generate_daily_data_quality_insights",
             "schedule": crontab(hour=6, minute=0),  # Daily at 6 AM

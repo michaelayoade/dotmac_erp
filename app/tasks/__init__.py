@@ -1,4 +1,8 @@
 # Register additional task modules used via .delay()
+from app.tasks.analytics import (
+    refresh_cash_flow_metrics,
+    refresh_efficiency_metrics,
+)
 from app.tasks.audit import log_audit_event
 from app.tasks.automation import (
     execute_workflow_action,
@@ -119,6 +123,9 @@ __all__ = [
     "sync_paystack_transactions",
     # Banking tasks
     "auto_match_unreconciled_statements",
+    # Analytics tasks
+    "refresh_cash_flow_metrics",
+    "refresh_efficiency_metrics",
     # Coach tasks
     "generate_daily_ap_due_insights",
     "generate_daily_ar_overdue_insights",

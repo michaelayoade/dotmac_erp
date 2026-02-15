@@ -288,6 +288,7 @@ os.environ.setdefault("PYTEST_CURRENT_TEST", "1")
 
 # Now import the models - they'll use our mocked db module
 
+from app.models.analytics.org_metric_snapshot import OrgMetricSnapshot  # noqa: E402
 from app.models.audit import AuditActorType, AuditEvent  # noqa: E402
 from app.models.auth import (  # noqa: E402
     ApiKey,
@@ -335,6 +336,7 @@ SQLITE_COMPATIBLE_TABLES = [
     PersonRole.__table__,
     CoachInsight.__table__,
     CoachReport.__table__,
+    OrgMetricSnapshot.__table__,
     AuditEvent.__table__,
     DomainSetting.__table__,
     DomainSettingHistory.__table__,
