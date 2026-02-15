@@ -18,8 +18,14 @@ from app.tasks.coach import (
     generate_daily_ap_due_insights,
     generate_daily_ar_overdue_insights,
     generate_daily_banking_health_insights,
+    generate_daily_cash_flow_insights,
+    generate_daily_compliance_insights,
     generate_daily_data_quality_insights,
     generate_daily_expense_approval_insights,
+    generate_daily_revenue_insights,
+    generate_daily_supply_chain_insights,
+    generate_daily_workforce_insights,
+    generate_weekly_finance_report,
 )
 from app.tasks.email import send_email_async
 from app.tasks.expense import (
@@ -138,6 +144,12 @@ __all__ = [
     "generate_daily_ap_due_insights",
     "generate_daily_ar_overdue_insights",
     "generate_daily_banking_health_insights",
+    "generate_daily_cash_flow_insights",
+    "generate_daily_compliance_insights",
     "generate_daily_data_quality_insights",
     "generate_daily_expense_approval_insights",
+    "generate_daily_revenue_insights",
+    "generate_daily_supply_chain_insights",
+    "generate_daily_workforce_insights",
+    "generate_weekly_finance_report",
 ]

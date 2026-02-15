@@ -172,6 +172,30 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "task": "app.tasks.coach.generate_daily_ap_due_insights",
             "schedule": crontab(hour=6, minute=40),  # Daily at 6:40 AM
         },
+        "coach-daily-cash-flow": {
+            "task": "app.tasks.coach.generate_daily_cash_flow_insights",
+            "schedule": crontab(hour=6, minute=45),  # Daily at 6:45 AM
+        },
+        "coach-daily-compliance": {
+            "task": "app.tasks.coach.generate_daily_compliance_insights",
+            "schedule": crontab(hour=6, minute=50),  # Daily at 6:50 AM
+        },
+        "coach-daily-workforce": {
+            "task": "app.tasks.coach.generate_daily_workforce_insights",
+            "schedule": crontab(hour=6, minute=55),  # Daily at 6:55 AM
+        },
+        "coach-daily-supply-chain": {
+            "task": "app.tasks.coach.generate_daily_supply_chain_insights",
+            "schedule": crontab(hour=7, minute=0),  # Daily at 7:00 AM
+        },
+        "coach-daily-revenue": {
+            "task": "app.tasks.coach.generate_daily_revenue_insights",
+            "schedule": crontab(hour=7, minute=5),  # Daily at 7:05 AM
+        },
+        "coach-weekly-finance-report": {
+            "task": "app.tasks.coach.generate_weekly_finance_report",
+            "schedule": crontab(hour=7, minute=30, day_of_week=1),  # Monday 7:30 AM
+        },
         "expense-approval-reminders": {
             "task": "app.tasks.expense.process_expense_approval_reminders",
             "schedule": crontab(hour=8, minute=0),  # Daily at 8 AM
