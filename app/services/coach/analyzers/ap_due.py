@@ -60,6 +60,20 @@ class APDueAnalyzer:
         )
         return org.functional_currency_code if org else "NGN"
 
+    def _quick_check_from_store(self, organization_id: UUID) -> bool:
+        """Return True if MetricStore says AP due 7d total is zero (nothing to report)."""
+        from app.services.coach.analyzers import metric_is_fresh
+
+        fresh, value = metric_is_fresh(
+            self.db, organization_id, "cash_flow.ap_due_7d_total"
+        )
+        if fresh and value is not None and value <= 0:
+            logger.debug(
+                "AP fast-path: MetricStore shows zero AP due, skipping detail query"
+            )
+            return True
+        return False
+
     def due_summary(self, organization_id: UUID) -> PayablesDueSummary:
         currency_code = self._currency_code(organization_id)
         today = date.today()

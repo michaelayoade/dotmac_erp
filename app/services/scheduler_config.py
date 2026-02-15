@@ -136,6 +136,22 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "task": "app.tasks.analytics.refresh_efficiency_metrics",
             "schedule": crontab(hour=5, minute=10),  # 5:10 AM
         },
+        "analytics-revenue": {
+            "task": "app.tasks.analytics.refresh_revenue_metrics",
+            "schedule": crontab(hour=5, minute=20),  # 5:20 AM
+        },
+        "analytics-workforce": {
+            "task": "app.tasks.analytics.refresh_workforce_metrics",
+            "schedule": crontab(hour=5, minute=30),  # 5:30 AM
+        },
+        "analytics-supply-chain": {
+            "task": "app.tasks.analytics.refresh_supply_chain_metrics",
+            "schedule": crontab(hour=5, minute=40),  # 5:40 AM
+        },
+        "analytics-compliance": {
+            "task": "app.tasks.analytics.refresh_compliance_metrics",
+            "schedule": crontab(hour=5, minute=50),  # 5:50 AM
+        },
         "coach-daily-data-quality": {
             "task": "app.tasks.coach.generate_daily_data_quality_insights",
             "schedule": crontab(hour=6, minute=0),  # Daily at 6 AM
