@@ -366,6 +366,17 @@ def generate_daily_revenue_insights(organization_id: str | None = None) -> dict:
 
 
 @shared_task
+def generate_daily_efficiency_insights(organization_id: str | None = None) -> dict:
+    """Generate deterministic operational efficiency insights (period close, leave backlog, workflow health)."""
+    return _run_org_analyzer(
+        "app.services.coach.analyzers.efficiency",
+        "EfficiencyAnalyzer",
+        "efficiency",
+        organization_id,
+    )
+
+
+@shared_task
 def generate_weekly_finance_report(organization_id: str | None = None) -> dict:
     """Generate weekly finance digest report for each organization."""
     if not app_settings.coach_enabled:

@@ -1,0 +1,111 @@
+{% extends "coach/base_coach.html" %}
+{% from "components/macros.html" import topbar, stats_card, empty_state, icon_svg, status_badge %}
+
+{% block content %}
+{% call(breadcrumbs, actions) topbar("Coach Dashboard", accent="teal") %}
+  {% call(bc) breadcrumbs %}
+    {{ bc("Coach") }}
+  {% endcall %}
+{% endcall %}
+
+{# ── Stat cards ──────────────────────────────────────────────── #}
+<div class="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+  {{ stats_card(
+      label="Total Insights",
+      value=total_insights,
+      icon="chart",
+      color="teal",
+      href="/coach/insights"
+  ) }}
+  {{ stats_card(
+      label="Warnings",
+      value=warning_count,
+      icon="warning",
+      color="rose",
+      href="/coach/insights?category=&include_expired=false"
+  ) }}
+  {{ stats_card(
+      label="Needs Attention",
+      value=attention_count,
+      icon="clock",
+      color="amber",
+      href="/coach/insights"
+  ) }}
+  {{ stats_card(
+      label="Informational",
+      value=info_count,
+      icon="check-circle",
+      color="emerald",
+      href="/coach/insights"
+  ) }}
+</div>
+
+{# ── Category breakdown ──────────────────────────────────────── #}
+{% if category_counts %}
+<div class="mt-8">
+  <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Insights by Domain</h2>
+  <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {% for cat, count in category_counts.items() | sort(attribute='1', reverse=true) %}
+    <a href="/coach/insights?category={{ cat | lower }}"
+       class="card card-hover p-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-50 text-teal-700 dark:bg-teal-900/20 dark:text-teal-400">
+          {{ icon_svg("chart") }}
+        </div>
+        <span class="text-sm font-medium text-slate-900 dark:text-white">{{ cat | replace('_', ' ') | title }}</span>
+      </div>
+      <span class="text-sm font-mono tabular-nums font-semibold text-slate-700 dark:text-slate-200">{{ count }}</span>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{# ── Top insights ────────────────────────────────────────────── #}
+<div class="mt-8">
+  <div class="flex items-center justify-between">
+    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">Top Insights</h2>
+    <a href="/coach/insights" class="btn btn-secondary">View all</a>
+  </div>
+
+  <div class="mt-4 space-y-4">
+    {% if top_insights %}
+      {% for insight in top_insights %}
+        {% include "coach/_insight_card.html" %}
+      {% endfor %}
+    {% else %}
+      {{ empty_state(
+          "No insights yet",
+          "If Coach is enabled, daily insights will appear after scheduled tasks run.",
+          icon="chart"
+      ) }}
+    {% endif %}
+  </div>
+</div>
+
+{# ── Quick links ─────────────────────────────────────────────── #}
+<div class="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-4 pb-8">
+  <a href="/coach/insights" class="card card-hover p-5">
+    <div class="flex items-center gap-3">
+      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-50 text-teal-700 dark:bg-teal-900/20 dark:text-teal-400">
+        {{ icon_svg("document") }}
+      </div>
+      <div>
+        <p class="text-sm font-semibold text-slate-900 dark:text-white">All Insights</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400">Browse and filter all coaching insights</p>
+      </div>
+    </div>
+  </a>
+  <a href="/coach/reports" class="card card-hover p-5">
+    <div class="flex items-center gap-3">
+      <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+        {{ icon_svg("chart") }}
+      </div>
+      <div>
+        <p class="text-sm font-semibold text-slate-900 dark:text-white">Weekly Reports</p>
+        <p class="text-xs text-slate-500 dark:text-slate-400">Aggregated coaching digests</p>
+      </div>
+    </div>
+  </a>
+</div>
+{% endblock %}

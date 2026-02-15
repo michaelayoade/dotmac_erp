@@ -2838,6 +2838,21 @@ class AdminWebService:
         if isinstance(auth_or_redirect, RedirectResponse):
             return auth_or_redirect
         context = self.dashboard_context(db)
+
+        # Coach insight cards for Admin dashboards
+        try:
+            from app.services.coach.coach_service import CoachService
+
+            coach_svc = CoachService(db)
+            if coach_svc.is_enabled():
+                context["coach_insights"] = coach_svc.top_insights_for_module(
+                    auth.organization_id, ["DATA_QUALITY", "COMPLIANCE"]
+                )
+            else:
+                context["coach_insights"] = []
+        except Exception:
+            context["coach_insights"] = []
+
         return self._render_admin_template(
             request,
             db,

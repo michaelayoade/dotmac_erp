@@ -43,4 +43,27 @@ def ifrs_dashboard(
     context.update(
         dashboard_web_service.dashboard_context(db, auth.organization_id, year=year)
     )
+
+    # Coach insight cards for finance dashboards
+    try:
+        from app.services.coach.coach_service import CoachService
+
+        coach_svc = CoachService(db)
+        if coach_svc.is_enabled():
+            context["coach_insights"] = coach_svc.top_insights_for_module(
+                auth.organization_id,
+                [
+                    "CASH_FLOW",
+                    "AR_OVERDUE",
+                    "AP_DUE",
+                    "COMPLIANCE",
+                    "EFFICIENCY",
+                    "REVENUE",
+                ],
+            )
+        else:
+            context["coach_insights"] = []
+    except Exception:
+        context["coach_insights"] = []
+
     return templates.TemplateResponse(request, "finance/dashboard.html", context)

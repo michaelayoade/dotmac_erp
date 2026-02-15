@@ -192,6 +192,10 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "task": "app.tasks.coach.generate_daily_revenue_insights",
             "schedule": crontab(hour=7, minute=5),  # Daily at 7:05 AM
         },
+        "coach-daily-efficiency": {
+            "task": "app.tasks.coach.generate_daily_efficiency_insights",
+            "schedule": crontab(hour=7, minute=10),  # Daily at 7:10 AM
+        },
         "coach-weekly-finance-report": {
             "task": "app.tasks.coach.generate_weekly_finance_report",
             "schedule": crontab(hour=7, minute=30, day_of_week=1),  # Monday 7:30 AM

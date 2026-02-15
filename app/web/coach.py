@@ -1,7 +1,7 @@
 """
 Coach Web Routes.
 
-Phase 1 UI: insights list page + feedback submission.
+Dashboard, insights list, reports, and feedback.
 """
 
 from __future__ import annotations
@@ -18,6 +18,40 @@ from app.web.deps import WebAuthContext, base_context, get_db, require_web_permi
 router = APIRouter(prefix="/coach", tags=["coach-web"])
 
 
+def _build_scope(svc: CoachService, auth: WebAuthContext):
+    """Build insight visibility scope from the current user."""
+    return svc.build_scope_for_user(
+        auth.organization_id,
+        auth.person_id,
+        auth.employee_id,
+        set(auth.roles),
+    )
+
+
+# ── Dashboard ─────────────────────────────────────────────────────────
+
+
+@router.get("/", response_class=HTMLResponse)
+def dashboard(
+    request: Request,
+    auth: WebAuthContext = Depends(require_web_permission("coach:insights:read")),
+    db: Session = Depends(get_db),
+):
+    context = base_context(request, auth, "Coach Dashboard", "coach", db=db)
+    svc = CoachService(db)
+
+    if not svc.is_enabled():
+        context.update(svc._empty_dashboard())
+        return templates.TemplateResponse(request, "coach/dashboard.html", context)
+
+    scope = _build_scope(svc, auth)
+    context.update(svc.dashboard_context(auth.organization_id, scope))
+    return templates.TemplateResponse(request, "coach/dashboard.html", context)
+
+
+# ── Insights ──────────────────────────────────────────────────────────
+
+
 @router.get("/insights", response_class=HTMLResponse)
 def insights_list(
     request: Request,
@@ -26,6 +60,7 @@ def insights_list(
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
     include_expired: bool = Query(False),
+    category: str = Query(""),
 ):
     context = base_context(request, auth, "Coach Insights", "coach", db=db)
     svc = CoachService(db)
@@ -34,12 +69,7 @@ def insights_list(
         context.update({"items": [], "total": 0, "page": page, "per_page": per_page})
         return templates.TemplateResponse(request, "coach/insights.html", context)
 
-    scope = svc.build_scope_for_user(
-        auth.organization_id,
-        auth.person_id,
-        auth.employee_id,
-        set(auth.roles),
-    )
+    scope = _build_scope(svc, auth)
     items, total = svc.list_insights(
         auth.organization_id,
         scope,
@@ -47,6 +77,12 @@ def insights_list(
         per_page=per_page,
         include_expired=include_expired,
     )
+
+    # Client-side category filter
+    if category:
+        items = [i for i in items if i.category == category.upper()]
+        total = len(items)
+
     context.update(
         {
             "items": items,
@@ -54,24 +90,52 @@ def insights_list(
             "page": page,
             "per_page": per_page,
             "include_expired": include_expired,
+            "category": category,
         }
     )
     return templates.TemplateResponse(request, "coach/insights.html", context)
 
 
-@router.get(
-    "/reports",
-    response_class=HTMLResponse,
-    dependencies=[Depends(require_web_permission("coach:reports:read"))],
-)
-def reports_placeholder(
+# ── Reports ───────────────────────────────────────────────────────────
+
+
+@router.get("/reports", response_class=HTMLResponse)
+def reports_list(
     request: Request,
-    auth: WebAuthContext = Depends(require_web_permission("coach:insights:read")),
+    auth: WebAuthContext = Depends(require_web_permission("coach:reports:read")),
+    db: Session = Depends(get_db),
+    page: int = Query(1, ge=1),
+):
+    context = base_context(request, auth, "Coach Reports", "coach", db=db)
+    svc = CoachService(db)
+
+    if not svc.is_enabled():
+        context.update({"reports": [], "total": 0, "page": page})
+        return templates.TemplateResponse(request, "coach/reports.html", context)
+
+    reports, total = svc.list_reports(auth.organization_id, page=page)
+    context.update({"reports": reports, "total": total, "page": page})
+    return templates.TemplateResponse(request, "coach/reports.html", context)
+
+
+@router.get("/reports/{report_id}", response_class=HTMLResponse)
+def report_detail(
+    request: Request,
+    report_id: str,
+    auth: WebAuthContext = Depends(require_web_permission("coach:reports:read")),
     db: Session = Depends(get_db),
 ):
-    # Phase 1: UI placeholder. We store CoachReport in DB, but don't expose it yet.
-    context = base_context(request, auth, "Coach Reports", "coach", db=db)
-    return templates.TemplateResponse(request, "coach/report.html", context)
+    context = base_context(request, auth, "Coach Report", "coach", db=db)
+    svc = CoachService(db)
+    report = svc.get_report(auth.organization_id, coerce_uuid(report_id))
+    if not report:
+        context.update({"report": None})
+    else:
+        context.update({"report": report})
+    return templates.TemplateResponse(request, "coach/report_detail.html", context)
+
+
+# ── Feedback ──────────────────────────────────────────────────────────
 
 
 @router.post(

@@ -69,6 +69,21 @@ class PeopleDashboardService:
             "alerts": alerts,
         }
 
+        # Coach insight cards for People dashboards
+        try:
+            from app.services.coach.coach_service import CoachService
+
+            coach_svc = CoachService(db)
+            if coach_svc.is_enabled():
+                context["coach_insights"] = coach_svc.top_insights_for_module(
+                    org_id,
+                    ["WORKFORCE", "EFFICIENCY", "DATA_QUALITY"],
+                )
+            else:
+                context["coach_insights"] = []
+        except Exception:
+            context["coach_insights"] = []
+
         return templates.TemplateResponse(request, "people/dashboard.html", context)
 
     def _get_dashboard_stats(self, db: Session, org_id: UUID) -> dict[str, Any]:

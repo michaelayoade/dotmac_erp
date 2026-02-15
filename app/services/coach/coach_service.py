@@ -95,6 +95,141 @@ class CoachService:
             audiences=audiences,
         )
 
+    def dashboard_context(
+        self,
+        organization_id: UUID,
+        scope: CoachInsightScope,
+    ) -> dict:
+        """Build context dict for the Coach Dashboard page."""
+        org_id = coerce_uuid(organization_id)
+
+        # Base query: valid, non-expired insights visible to this user
+        base = select(CoachInsight).where(
+            CoachInsight.organization_id == org_id,
+            CoachInsight.valid_until >= date.today(),
+        )
+        if scope.audiences is not None:
+            if not scope.audiences:
+                return self._empty_dashboard()
+            base = base.where(CoachInsight.audience.in_(sorted(scope.audiences)))
+        base = base.where(self._scope_predicate(scope))
+
+        # Severity counts
+        severity_stmt = select(
+            CoachInsight.severity,
+            func.count().label("cnt"),
+        ).where(
+            CoachInsight.organization_id == org_id,
+            CoachInsight.valid_until >= date.today(),
+        )
+        if scope.audiences is not None and scope.audiences:
+            severity_stmt = severity_stmt.where(
+                CoachInsight.audience.in_(sorted(scope.audiences))
+            )
+        severity_stmt = severity_stmt.where(self._scope_predicate(scope))
+        severity_stmt = severity_stmt.group_by(CoachInsight.severity)
+        severity_rows = self.db.execute(severity_stmt).all()
+        severity_counts: dict[str, int] = {
+            r.severity: int(r.cnt) for r in severity_rows
+        }
+
+        # Category counts
+        cat_stmt = select(
+            CoachInsight.category,
+            func.count().label("cnt"),
+        ).where(
+            CoachInsight.organization_id == org_id,
+            CoachInsight.valid_until >= date.today(),
+        )
+        if scope.audiences is not None and scope.audiences:
+            cat_stmt = cat_stmt.where(
+                CoachInsight.audience.in_(sorted(scope.audiences))
+            )
+        cat_stmt = cat_stmt.where(self._scope_predicate(scope))
+        cat_stmt = cat_stmt.group_by(CoachInsight.category)
+        cat_rows = self.db.execute(cat_stmt).all()
+        category_counts: dict[str, int] = {r.category: int(r.cnt) for r in cat_rows}
+
+        # Top 5 insights by severity
+        top_stmt = self._apply_ordering(base).limit(5)
+        top_insights = list(self.db.scalars(top_stmt).all())
+
+        total = sum(severity_counts.values())
+
+        return {
+            "total_insights": total,
+            "severity_counts": severity_counts,
+            "category_counts": category_counts,
+            "top_insights": top_insights,
+            "warning_count": severity_counts.get("WARNING", 0)
+            + severity_counts.get("URGENT", 0),
+            "attention_count": severity_counts.get("ATTENTION", 0),
+            "info_count": severity_counts.get("INFO", 0),
+        }
+
+    def _empty_dashboard(self) -> dict:
+        return {
+            "total_insights": 0,
+            "severity_counts": {},
+            "category_counts": {},
+            "top_insights": [],
+            "warning_count": 0,
+            "attention_count": 0,
+            "info_count": 0,
+        }
+
+    def list_reports(
+        self,
+        organization_id: UUID,
+        page: int = 1,
+        per_page: int = 20,
+    ) -> tuple[list, int]:
+        """List coaching reports for the organization."""
+        from app.models.coach.report import CoachReport
+
+        org_id = coerce_uuid(organization_id)
+        stmt = (
+            select(CoachReport)
+            .where(CoachReport.organization_id == org_id)
+            .order_by(CoachReport.created_at.desc())
+        )
+        total = self.db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+        offset = (page - 1) * per_page
+        items = list(self.db.scalars(stmt.limit(per_page).offset(offset)).all())
+        return items, int(total)
+
+    def get_report(
+        self,
+        organization_id: UUID,
+        report_id: UUID,
+    ) -> object | None:
+        """Get a single report by ID, with org filtering."""
+        from app.models.coach.report import CoachReport
+
+        org_id = coerce_uuid(organization_id)
+        rid = coerce_uuid(report_id)
+        report = self.db.get(CoachReport, rid)
+        if report and report.organization_id == org_id:
+            return report
+        return None
+
+    def top_insights_for_module(
+        self,
+        organization_id: UUID,
+        categories: list[str],
+        limit: int = 3,
+    ) -> list[CoachInsight]:
+        """Return top N insights for given categories (for dashboard embedding)."""
+        org_id = coerce_uuid(organization_id)
+        stmt = select(CoachInsight).where(
+            CoachInsight.organization_id == org_id,
+            CoachInsight.valid_until >= date.today(),
+            CoachInsight.category.in_(categories),
+            CoachInsight.target_employee_id.is_(None),
+        )
+        stmt = self._apply_ordering(stmt).limit(limit)
+        return list(self.db.scalars(stmt).all())
+
     def list_insights(
         self,
         organization_id: UUID,

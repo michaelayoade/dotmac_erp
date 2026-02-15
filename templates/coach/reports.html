@@ -1,0 +1,44 @@
+{% extends "coach/base_coach.html" %}
+{% from "components/macros.html" import topbar, empty_state, status_badge %}
+
+{% block content %}
+{% call(breadcrumbs, actions) topbar("Coach Reports", accent="teal") %}
+  {% call(bc) breadcrumbs %}
+    {{ bc("Coach", "/coach/") }}
+    {{ bc("Reports") }}
+  {% endcall %}
+{% endcall %}
+
+<div class="mt-6 text-sm text-slate-600 dark:text-slate-300">
+  Showing {{ reports|length }} of {{ total }} report(s)
+</div>
+
+<div class="mt-4 space-y-4">
+  {% if reports %}
+    {% for report in reports %}
+    <a href="/coach/reports/{{ report.report_id }}" class="card card-hover p-5 block">
+      <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0">
+          <p class="text-sm font-semibold text-slate-900 dark:text-white">{{ report.title }}</p>
+          <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+            {{ status_badge(report.report_type) }}
+            <span class="font-mono">{{ report.audience | replace('_', ' ') | title }}</span>
+            <span>{{ report.period_start.strftime('%d %b %Y') }} &ndash; {{ report.period_end.strftime('%d %b %Y') }}</span>
+          </div>
+          <p class="mt-3 text-sm text-slate-600 dark:text-slate-300 line-clamp-2">{{ report.executive_summary[:200] }}{% if report.executive_summary|length > 200 %}&hellip;{% endif %}</p>
+        </div>
+        <div class="shrink-0 text-xs text-slate-400 dark:text-slate-500">
+          {{ report.created_at.strftime('%d %b %Y') }}
+        </div>
+      </div>
+    </a>
+    {% endfor %}
+  {% else %}
+    {{ empty_state(
+        "No reports yet",
+        "Weekly coaching reports are generated every Monday. Check back after the first weekly run.",
+        icon="chart"
+    ) }}
+  {% endif %}
+</div>
+{% endblock %}

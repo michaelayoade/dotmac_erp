@@ -86,6 +86,20 @@ class ExpenseDashboardService:
             "presentation_currency_code": currency,
         }
 
+        # Coach insight cards for Expense dashboards
+        try:
+            from app.services.coach.coach_service import CoachService
+
+            coach_svc = CoachService(db)
+            if coach_svc.is_enabled():
+                context["coach_insights"] = coach_svc.top_insights_for_module(
+                    org_id, ["EFFICIENCY", "COMPLIANCE"]
+                )
+            else:
+                context["coach_insights"] = []
+        except Exception:
+            context["coach_insights"] = []
+
         return templates.TemplateResponse(request, "expense/dashboard.html", context)
 
     def claims_dashboard_response(
