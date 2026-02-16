@@ -163,6 +163,7 @@ Unified ERP for finance, HR, and operations. Multi-tenant business software buil
 - `docs/architecture.md`
 - `docs/deployment.md`
 - `docs/troubleshooting.md`
+- `docs/STARTERS.md`
 
 ### Prerequisites
 
