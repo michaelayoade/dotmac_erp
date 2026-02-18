@@ -210,7 +210,6 @@ def execute_matches(
         return set()
 
     for i, (payment, line, method) in enumerate(matches):
-        payment_id = payment[0]
         correlation_id = payment[4]
         org_id = payment[5]
         line_id = line[0]

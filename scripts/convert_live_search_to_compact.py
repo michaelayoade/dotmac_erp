@@ -48,7 +48,7 @@ def fix_import(content: str) -> str:
         for p in parts:
             if p not in new_parts:
                 new_parts.append(p)
-        return '{%% from "components/macros.html" import %s %%}' % ", ".join(new_parts)
+        return '{%% from "components/macros.html" import %s %%}' % ", ".join(new_parts)  # noqa: UP031
 
     return re.sub(pattern, replacer, content)
 

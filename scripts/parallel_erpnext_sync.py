@@ -271,8 +271,6 @@ def sync_sales_invoices(
     # Phase 2: Filter out already synced
     already_synced = _get_already_synced(db, org_id, "Sales Invoice")
     names_to_fetch = [d["name"] for d in docs_list if d["name"] not in already_synced]
-    # Keep the list data for later (for records we already have header data for)
-    header_data = {d["name"]: d for d in docs_list}
     logger.info(
         "  %d already synced, %d to fetch", len(already_synced), len(names_to_fetch)
     )
