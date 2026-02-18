@@ -3,17 +3,18 @@
 Provides services for Subscriptions and SubscriptionAddOns.
 """
 
+import logging
 from calendar import monthrange
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.catalog import (
     BillingCycle,
+    BillingMode,
     CatalogOffer,
     ContractTerm,
-    BillingMode,
     OfferPrice,
     OfferVersionPrice,
     PriceType,
@@ -22,18 +23,20 @@ from app.models.catalog import (
     SubscriptionStatus,
 )
 from app.models.domain_settings import SettingDomain
-from app.services.common import apply_ordering, apply_pagination, validate_enum
-from app.services.response import ListResponseMixin
-from app.services import settings_spec
-from app.services.events import emit_event
-from app.services.events.types import EventType
-from app.validators import catalog as catalog_validators
 from app.schemas.catalog import (
     SubscriptionAddOnCreate,
     SubscriptionAddOnUpdate,
     SubscriptionCreate,
     SubscriptionUpdate,
 )
+from app.services import settings_spec
+from app.services.common import apply_ordering, apply_pagination, validate_enum
+from app.services.events import emit_event
+from app.services.events.types import EventType
+from app.services.response import ListResponseMixin
+from app.validators import catalog as catalog_validators
+
+logger = logging.getLogger(__name__)
 
 
 def _add_months(value: datetime, months: int) -> datetime:
@@ -69,7 +72,9 @@ def _resolve_billing_cycle(
     if price and price.billing_cycle:
         return price.billing_cycle
     offer = db.get(CatalogOffer, offer_id)
-    return offer.billing_cycle if offer and offer.billing_cycle else BillingCycle.monthly
+    return (
+        offer.billing_cycle if offer and offer.billing_cycle else BillingCycle.monthly
+    )
 
 
 def _compute_next_billing_at(start_at: datetime, cycle: BillingCycle) -> datetime:
@@ -125,6 +130,7 @@ def _generate_proration_if_enabled(
     except Exception as exc:
         # Log but don't fail the activation
         import logging
+
         logging.getLogger(__name__).warning(
             f"Failed to generate prorated invoice for subscription {subscription.id}: {exc}"
         )
@@ -134,9 +140,11 @@ def _sync_credentials_to_radius(db: Session, account_id) -> None:
     """Sync all account credentials to RADIUS on subscription activation."""
     try:
         from app.services.radius import sync_account_credentials_to_radius
+
         sync_account_credentials_to_radius(db, account_id)
     except Exception as exc:
         import logging
+
         logging.getLogger(__name__).warning(
             f"Failed to sync credentials to RADIUS for account {account_id}: {exc}"
         )
@@ -187,9 +195,9 @@ def _emit_subscription_status_event(
 
 def _create_service_order_for_subscription(db: Session, subscription: Subscription):
     """Create a service order for a new subscription that needs provisioning."""
-    from app.services import provisioning as provisioning_service
-    from app.schemas.provisioning import ServiceOrderCreate
     from app.models.provisioning import ServiceOrderStatus
+    from app.schemas.provisioning import ServiceOrderCreate
+    from app.services import provisioning as provisioning_service
 
     # Get the subscriber account to find the contact
     account = subscription.account
@@ -215,7 +223,9 @@ def _create_service_order_for_subscription(db: Session, subscription: Subscripti
         provisioning_service.service_orders.create(db, payload)
     except Exception:
         # Don't fail subscription creation if service order creation fails
-        pass
+        logging.getLogger(__name__).exception(  # noqa: S110
+            "Failed to create service order for subscription"
+        )
 
 
 class Subscriptions(ListResponseMixin):
@@ -229,7 +239,7 @@ class Subscriptions(ListResponseMixin):
             str(payload.service_address_id) if payload.service_address_id else None,
         )
         catalog_validators.validate_offer_active(db, str(payload.offer_id))
-        reference_at = payload.start_at or datetime.now(timezone.utc)
+        reference_at = payload.start_at or datetime.now(UTC)
         if payload.offer_version_id:
             catalog_validators.validate_offer_version_active(
                 db,
@@ -268,15 +278,26 @@ class Subscriptions(ListResponseMixin):
         if "billing_mode" not in fields_set:
             offer = db.get(CatalogOffer, str(payload.offer_id))
             data["billing_mode"] = (
-                offer.billing_mode if offer and offer.billing_mode else BillingMode.prepaid
+                offer.billing_mode
+                if offer and offer.billing_mode
+                else BillingMode.prepaid
             )
-        if "start_at" not in fields_set and data.get("status") == SubscriptionStatus.active:
-            data["start_at"] = datetime.now(timezone.utc)
+        if (
+            "start_at" not in fields_set
+            and data.get("status") == SubscriptionStatus.active
+        ):
+            data["start_at"] = datetime.now(UTC)
         start_at = data.get("start_at")
-        if "next_billing_at" not in fields_set and start_at and data.get("status") == SubscriptionStatus.active:
+        if (
+            "next_billing_at" not in fields_set
+            and start_at
+            and data.get("status") == SubscriptionStatus.active
+        ):
             offer_version_id = data.get("offer_version_id")
             cycle = _resolve_billing_cycle(
-                db, str(data["offer_id"]), str(offer_version_id) if offer_version_id else None
+                db,
+                str(data["offer_id"]),
+                str(offer_version_id) if offer_version_id else None,
             )
             data["next_billing_at"] = _compute_next_billing_at(start_at, cycle)
         if "end_at" not in fields_set and start_at and data.get("contract_term"):
@@ -313,7 +334,9 @@ class Subscriptions(ListResponseMixin):
                 EventType.subscription_activated,
                 {
                     "subscription_id": str(subscription.id),
-                    "offer_name": subscription.offer.name if subscription.offer else None,
+                    "offer_name": subscription.offer.name
+                    if subscription.offer
+                    else None,
                     "from_status": None,
                     "to_status": "active",
                 },
@@ -330,7 +353,9 @@ class Subscriptions(ListResponseMixin):
             subscription_id,
             options=[
                 selectinload(Subscription.offer),
-                selectinload(Subscription.add_ons).selectinload(SubscriptionAddOn.add_on),
+                selectinload(Subscription.add_ons).selectinload(
+                    SubscriptionAddOn.add_on
+                ),
             ],
         )
         if not subscription:
@@ -358,7 +383,8 @@ class Subscriptions(ListResponseMixin):
             query = query.filter(Subscription.offer_id == offer_id)
         if status:
             query = query.filter(
-                Subscription.status == validate_enum(status, SubscriptionStatus, "status")
+                Subscription.status
+                == validate_enum(status, SubscriptionStatus, "status")
             )
         query = apply_ordering(
             query,
@@ -400,7 +426,7 @@ class Subscriptions(ListResponseMixin):
         end_at = data.get("end_at", subscription.end_at)
         next_billing_at = data.get("next_billing_at", subscription.next_billing_at)
         canceled_at = data.get("canceled_at", subscription.canceled_at)
-        reference_at = start_at or datetime.now(timezone.utc)
+        reference_at = start_at or datetime.now(UTC)
         if offer_version_id:
             catalog_validators.validate_offer_version_active(
                 db,
@@ -419,9 +445,13 @@ class Subscriptions(ListResponseMixin):
             db, account_id, status, subscription_id
         )
         if status == SubscriptionStatus.active and not start_at:
-            start_at = datetime.now(timezone.utc)
+            start_at = datetime.now(UTC)
             data["start_at"] = start_at
-        if status == SubscriptionStatus.active and start_at and "next_billing_at" not in data:
+        if (
+            status == SubscriptionStatus.active
+            and start_at
+            and "next_billing_at" not in data
+        ):
             cycle = _resolve_billing_cycle(
                 db, offer_id, str(offer_version_id) if offer_version_id else None
             )
@@ -473,7 +503,7 @@ class Subscriptions(ListResponseMixin):
         Returns:
             Summary dict with counts
         """
-        run_at = run_at or datetime.now(timezone.utc)
+        run_at = run_at or datetime.now(UTC)
 
         # Find subscriptions that should be expired
         subscriptions_to_expire = (
@@ -500,11 +530,17 @@ class Subscriptions(ListResponseMixin):
                     EventType.subscription_expired,
                     {
                         "subscription_id": str(subscription.id),
-                        "offer_name": subscription.offer.name if subscription.offer else None,
-                        "from_status": previous_status.value if previous_status else None,
+                        "offer_name": subscription.offer.name
+                        if subscription.offer
+                        else None,
+                        "from_status": previous_status.value
+                        if previous_status
+                        else None,
                         "to_status": "expired",
                         "reason": "contract_end",
-                        "end_at": subscription.end_at.isoformat() if subscription.end_at else None,
+                        "end_at": subscription.end_at.isoformat()
+                        if subscription.end_at
+                        else None,
                     },
                     subscription_id=subscription.id,
                     account_id=subscription.account_id,
@@ -583,7 +619,9 @@ class SubscriptionAddOns(ListResponseMixin):
         if not subscription_add_on:
             raise HTTPException(status_code=404, detail="Subscription add-on not found")
         data = payload.model_dump(exclude_unset=True)
-        subscription_id = data.get("subscription_id", subscription_add_on.subscription_id)
+        subscription_id = data.get(
+            "subscription_id", subscription_add_on.subscription_id
+        )
         add_on_id = data.get("add_on_id", subscription_add_on.add_on_id)
         quantity = data.get("quantity", subscription_add_on.quantity)
         catalog_validators.validate_subscription_add_on(

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from calendar import monthrange
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -25,11 +25,11 @@ from app.models.catalog import (
     Subscription,
     SubscriptionStatus,
 )
-from app.models.subscriber import Address, SubscriberAccount, AccountStatus
+from app.models.domain_settings import SettingDomain
+from app.models.subscriber import AccountStatus, Address, SubscriberAccount
+from app.services import settings_spec
 from app.services.billing import _recalculate_invoice_totals
 from app.services.common import round_money
-from app.models.domain_settings import SettingDomain
-from app.services import settings_spec
 from app.services.events import emit_event
 from app.services.events.types import EventType
 
@@ -48,8 +48,8 @@ def _as_utc(value: datetime | None) -> datetime | None:
     if value is None:
         return None
     if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value.astimezone(timezone.utc)
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def _period_end(start: datetime, cycle: BillingCycle) -> datetime:
@@ -139,9 +139,7 @@ def _activate_pending_subscription(
     if not subscription.start_at:
         subscription.start_at = run_at
 
-    logger.info(
-        f"Auto-activated subscription {subscription.id} (pending → active)"
-    )
+    logger.info(f"Auto-activated subscription {subscription.id} (pending → active)")
 
     # Emit activation event with auto_activated flag
     # This flag tells other handlers (like proration) to skip since billing already handled it
@@ -176,8 +174,12 @@ def _emit_invoice_created_event(
             "currency": invoice.currency,
             "subtotal": str(invoice.subtotal) if invoice.subtotal else "0.00",
             "total": str(invoice.total) if invoice.total else "0.00",
-            "billing_period_start": invoice.billing_period_start.isoformat() if invoice.billing_period_start else None,
-            "billing_period_end": invoice.billing_period_end.isoformat() if invoice.billing_period_end else None,
+            "billing_period_start": invoice.billing_period_start.isoformat()
+            if invoice.billing_period_start
+            else None,
+            "billing_period_end": invoice.billing_period_end.isoformat()
+            if invoice.billing_period_end
+            else None,
             "due_at": invoice.due_at.isoformat() if invoice.due_at else None,
             "billing_run_id": run_id,
         },
@@ -194,7 +196,7 @@ def _log_billing_run_audit(
     error: str | None = None,
 ) -> None:
     """Log billing run results to audit log."""
-    from app.models.audit import AuditEvent, AuditActorType
+    from app.models.audit import AuditActorType, AuditEvent
 
     run_id = None
     if run:
@@ -247,7 +249,7 @@ def run_invoice_cycle(
         include_pending: If True, also bill pending subscriptions ready for activation
         auto_activate_pending: If True, auto-activate pending subscriptions when billed
     """
-    run_at = _as_utc(run_at) or datetime.now(timezone.utc)
+    run_at = _as_utc(run_at) or datetime.now(UTC)
     due_days_raw = settings_spec.resolve_value(
         db, SettingDomain.billing, "invoice_due_days"
     )
@@ -268,7 +270,7 @@ def run_invoice_cycle(
         run_at=run_at,
         billing_cycle=billing_cycle.value if billing_cycle else None,
         status=BillingRunStatus.running,
-        started_at=datetime.now(timezone.utc),
+        started_at=datetime.now(UTC),
     )
     run_uuid = None
     if not dry_run:
@@ -338,7 +340,9 @@ def run_invoice_cycle(
             continue
         usage_start = max(period_start, start_at)
         usage_end = min(period_end, end_at) if end_at else period_end
-        line_amount = _prorated_amount(amount, period_start, period_end, usage_start, usage_end)
+        line_amount = _prorated_amount(
+            amount, period_start, period_end, usage_start, usage_end
+        )
         if line_amount <= Decimal("0.00"):
             summary["skipped"] += 1
             continue
@@ -357,7 +361,10 @@ def run_invoice_cycle(
         )
         if existing_line_for_period:
             # Ensure next_billing_at is consistent with existing invoice
-            if subscription.next_billing_at is None or subscription.next_billing_at < period_end:
+            if (
+                subscription.next_billing_at is None
+                or subscription.next_billing_at < period_end
+            ):
                 subscription.next_billing_at = period_end
             logger.debug(
                 f"Skipping subscription {subscription.id}: already billed for period "
@@ -421,7 +428,11 @@ def run_invoice_cycle(
             continue
 
         tax_rate_id = _resolve_tax_rate_id(db, subscription)
-        offer_name = subscription.offer.name if subscription.offer else f"Subscription {subscription.id}"
+        offer_name = (
+            subscription.offer.name
+            if subscription.offer
+            else f"Subscription {subscription.id}"
+        )
         description = f"{offer_name} ({period_start.date()} - {period_end.date()})"
         line = InvoiceLine(
             invoice_id=invoice.id,
@@ -462,7 +473,7 @@ def run_invoice_cycle(
         run_db = db.get(BillingRun, run_uuid) if run_uuid else None
         if run_db:
             run_db.status = BillingRunStatus.success
-            run_db.finished_at = datetime.now(timezone.utc)
+            run_db.finished_at = datetime.now(UTC)
             run_db.subscriptions_scanned = summary["subscriptions_scanned"]
             run_db.subscriptions_billed = summary["subscriptions_billed"]
             run_db.invoices_created = summary["invoices_created"]
@@ -487,7 +498,7 @@ def run_invoice_cycle(
         run_db = db.get(BillingRun, run_uuid) if run_uuid else None
         if run_db:
             run_db.status = BillingRunStatus.failed
-            run_db.finished_at = datetime.now(timezone.utc)
+            run_db.finished_at = datetime.now(UTC)
             run_db.error = error_msg
             db.commit()
 
@@ -496,7 +507,7 @@ def run_invoice_cycle(
             _log_billing_run_audit(db, run_db, summary, "failed", error_msg)
             db.commit()
         except Exception:
-            pass  # Don't fail if audit logging fails
+            logger.exception("Failed to log billing run audit")  # noqa: S110
 
         raise
 
@@ -519,12 +530,14 @@ def generate_prorated_invoice(
     Returns:
         The created invoice or None if no proration is needed
     """
-    activation_date = _as_utc(activation_date) or datetime.now(timezone.utc)
+    activation_date = _as_utc(activation_date) or datetime.now(UTC)
 
     # Get price info
     amount, currency, cycle = _resolve_price(db, subscription)
     if amount is None:
-        logger.warning(f"No price found for subscription {subscription.id}, skipping proration")
+        logger.warning(
+            f"No price found for subscription {subscription.id}, skipping proration"
+        )
         return None
 
     effective_cycle = cycle or BillingCycle.monthly
@@ -541,7 +554,11 @@ def generate_prorated_invoice(
         return None
 
     # For annual billing, if activation is on Jan 1st, no proration needed
-    if effective_cycle == BillingCycle.annual and activation_date.month == 1 and activation_date.day == 1:
+    if (
+        effective_cycle == BillingCycle.annual
+        and activation_date.month == 1
+        and activation_date.day == 1
+    ):
         return None
 
     # Calculate prorated amount
@@ -592,8 +609,14 @@ def generate_prorated_invoice(
     db.flush()
 
     tax_rate_id = _resolve_tax_rate_id(db, subscription)
-    offer_name = subscription.offer.name if subscription.offer else f"Subscription {subscription.id}"
-    description = f"{offer_name} (Prorated: {activation_date.date()} - {period_end.date()})"
+    offer_name = (
+        subscription.offer.name
+        if subscription.offer
+        else f"Subscription {subscription.id}"
+    )
+    description = (
+        f"{offer_name} (Prorated: {activation_date.date()} - {period_end.date()})"
+    )
 
     line = InvoiceLine(
         invoice_id=invoice.id,
@@ -651,7 +674,8 @@ def run_invoice_cycle_with_retry(
         Summary dict of the billing run results
     """
     import time
-    from sqlalchemy.exc import OperationalError, IntegrityError
+
+    from sqlalchemy.exc import IntegrityError, OperationalError
 
     last_error = None
     for attempt in range(max_retries):
