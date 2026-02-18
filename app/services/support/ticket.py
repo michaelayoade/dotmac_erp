@@ -384,13 +384,11 @@ class TicketService:
             org_id = coerce_uuid(organization_id)
             old_category_name = None
             if ticket.category_id:
-                old_cat = (
-                    db.query(TicketCategory)
-                    .filter(
+                old_cat = db.scalar(
+                    select(TicketCategory).where(
                         TicketCategory.category_id == ticket.category_id,
                         TicketCategory.organization_id == org_id,
                     )
-                    .first()
                 )
                 if old_cat:
                     old_category_name = old_cat.category_name
@@ -400,13 +398,11 @@ class TicketService:
                 ticket.category_id = new_cat_id
                 new_category_name = None
                 if new_cat_id:
-                    new_cat = (
-                        db.query(TicketCategory)
-                        .filter(
+                    new_cat = db.scalar(
+                        select(TicketCategory).where(
                             TicketCategory.category_id == new_cat_id,
                             TicketCategory.organization_id == org_id,
                         )
-                        .first()
                     )
                     if new_cat:
                         new_category_name = new_cat.category_name
@@ -426,13 +422,11 @@ class TicketService:
             org_id = coerce_uuid(organization_id)
             old_team_name = None
             if ticket.team_id:
-                old_team = (
-                    db.query(SupportTeam)
-                    .filter(
+                old_team = db.scalar(
+                    select(SupportTeam).where(
                         SupportTeam.team_id == ticket.team_id,
                         SupportTeam.organization_id == org_id,
                     )
-                    .first()
                 )
                 if old_team:
                     old_team_name = old_team.team_name
@@ -442,13 +436,11 @@ class TicketService:
                 ticket.team_id = new_team_id
                 new_team_name = None
                 if new_team_id:
-                    new_team = (
-                        db.query(SupportTeam)
-                        .filter(
+                    new_team = db.scalar(
+                        select(SupportTeam).where(
                             SupportTeam.team_id == new_team_id,
                             SupportTeam.organization_id == org_id,
                         )
-                        .first()
                     )
                     if new_team:
                         new_team_name = new_team.team_name

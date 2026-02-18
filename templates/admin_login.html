@@ -272,6 +272,9 @@
 {% block scripts %}
 <script>
 function adminLoginForm() {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    const csrfHeaders = csrfToken ? { 'X-CSRF-Token': csrfToken } : {};
+
     return {
         username: '',
         password: '',
@@ -304,6 +307,7 @@ function adminLoginForm() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    ...csrfHeaders,
                 },
                 body: JSON.stringify({
                     username: this.username,
@@ -351,6 +355,7 @@ function adminLoginForm() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    ...csrfHeaders,
                 },
                 body: JSON.stringify({
                     mfa_token: this.mfaToken,

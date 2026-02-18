@@ -237,16 +237,21 @@ class CoachService:
         page: int = 1,
         per_page: int = 50,
         include_expired: bool = False,
+        category: str | None = None,
     ) -> tuple[list[CoachInsight], int]:
         if page < 1 or per_page < 1:
             raise ValueError("Invalid pagination parameters")
 
         org_id = coerce_uuid(organization_id)
+        normalized_category = self._normalize_category(category)
 
         stmt = select(CoachInsight).where(CoachInsight.organization_id == org_id)
 
         if not include_expired:
             stmt = stmt.where(CoachInsight.valid_until >= date.today())
+
+        if normalized_category:
+            stmt = stmt.where(CoachInsight.category == normalized_category)
 
         if scope.audiences is not None:
             if not scope.audiences:
@@ -263,6 +268,13 @@ class CoachService:
         offset = (page - 1) * per_page
         items = list(self.db.scalars(stmt.limit(per_page).offset(offset)).all())
         return items, int(total)
+
+    def _normalize_category(self, category: str | None) -> str | None:
+        """Normalize user-provided category query values for DB filtering."""
+        if not category:
+            return None
+        normalized = category.strip().replace("-", "_").upper()
+        return normalized or None
 
     def update_feedback(
         self,

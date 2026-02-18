@@ -13,13 +13,15 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus
+from app.models.finance.ar.invoice_line_tax import InvoiceLineTax
 from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
+from app.models.finance.tax.tax_code import TaxCode, TaxType
 from app.models.inventory.item import Item
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
@@ -242,9 +244,14 @@ class InvoiceWebService:
     def invoice_form_context(
         db: Session,
         organization_id: str,
+        customer_id: str | None = None,
     ) -> dict:
         """Get context for invoice create form."""
-        logger.debug("invoice_form_context: org=%s", organization_id)
+        logger.debug(
+            "invoice_form_context: org=%s customer_id=%s",
+            organization_id,
+            customer_id,
+        )
         org_id = coerce_uuid(organization_id)
         customers_list = [
             customer_option_view(customer)
@@ -279,15 +286,16 @@ class InvoiceWebService:
             )
         ]
 
-        items = (
-            db.query(Item)
-            .filter(
-                Item.organization_id == org_id,
-                Item.is_active.is_(True),
-                Item.is_saleable.is_(True),
-            )
-            .order_by(Item.item_code)
-            .all()
+        items = list(
+            db.scalars(
+                select(Item)
+                .where(
+                    Item.organization_id == org_id,
+                    Item.is_active.is_(True),
+                    Item.is_saleable.is_(True),
+                )
+                .order_by(Item.item_code)
+            ).all()
         )
         item_options = [
             {
@@ -303,7 +311,7 @@ class InvoiceWebService:
             for i in items
         ]
 
-        context = {
+        context: dict = {
             "customers_list": customers_list,
             "revenue_accounts": revenue_accounts,
             "tax_codes": tax_codes,
@@ -312,8 +320,16 @@ class InvoiceWebService:
             "projects": get_projects(db, org_id),
             "organization_id": str(organization_id),
             "user_id": "00000000-0000-0000-0000-000000000001",
+            "selected_customer_id": "",
+            "locked_customer": False,
         }
         context.update(get_currency_context(db, organization_id))
+
+        # Pre-select customer from query param
+        if customer_id:
+            context["selected_customer_id"] = customer_id
+            context["locked_customer"] = True
+
         return context
 
     @staticmethod
@@ -357,6 +373,80 @@ class InvoiceWebService:
             invoice_id=invoice.invoice_id,
         )
         lines_view = [invoice_line_view(line, invoice.currency_code) for line in lines]
+
+        # Enrich lines with tax metadata and VAT-per-line display values.
+        primary_tax_ids = {line.tax_code_id for line in lines if line.tax_code_id}
+        tax_map: dict[UUID, TaxCode] = {}
+        if primary_tax_ids:
+            tax_codes = list(
+                db.scalars(
+                    select(TaxCode).where(
+                        TaxCode.organization_id == org_id,
+                        TaxCode.tax_code_id.in_(primary_tax_ids),
+                    )
+                ).all()
+            )
+            tax_map = {tax.tax_code_id: tax for tax in tax_codes}
+
+        vat_by_line: dict[UUID, Decimal] = {}
+        vat_labels_by_line: dict[UUID, set[str]] = {}
+        line_ids = [line.line_id for line in lines]
+        if line_ids:
+            vat_taxes = db.execute(
+                select(InvoiceLineTax, TaxCode)
+                .join(TaxCode, TaxCode.tax_code_id == InvoiceLineTax.tax_code_id)
+                .where(
+                    InvoiceLineTax.line_id.in_(line_ids),
+                    TaxCode.organization_id == org_id,
+                    TaxCode.tax_type.in_([TaxType.VAT, TaxType.GST]),
+                )
+            ).all()
+            for line_tax, tax_code in vat_taxes:
+                vat_by_line[line_tax.line_id] = (
+                    vat_by_line.get(line_tax.line_id, Decimal("0"))
+                    + line_tax.tax_amount
+                )
+                rate_label = (
+                    f"{(line_tax.tax_rate * 100).quantize(Decimal('0.01'))}%"
+                    if line_tax.tax_rate < 1
+                    else f"{line_tax.tax_rate}%"
+                )
+                vat_labels_by_line.setdefault(line_tax.line_id, set()).add(
+                    f"{tax_code.tax_code} {rate_label}"
+                )
+
+        for idx, line in enumerate(lines):
+            line_view = lines_view[idx]
+            tax = tax_map.get(line.tax_code_id) if line.tax_code_id else None
+            if tax:
+                line_view["tax_code"] = tax.tax_code
+                line_view["tax_name"] = tax.tax_name
+                line_view["tax_type"] = tax.tax_type.value
+
+            vat_amount = vat_by_line.get(line.line_id, Decimal("0"))
+            if vat_amount == 0 and tax and tax.tax_type in {TaxType.VAT, TaxType.GST}:
+                vat_amount = line.tax_amount
+                rate_label = (
+                    f"{(tax.tax_rate * 100).quantize(Decimal('0.01'))}%"
+                    if tax.tax_rate < 1
+                    else f"{tax.tax_rate}%"
+                )
+                vat_labels_by_line.setdefault(line.line_id, set()).add(
+                    f"{tax.tax_code} {rate_label}"
+                )
+
+            if vat_amount > 0:
+                line_view["vat_amount_raw"] = float(vat_amount)
+                line_view["vat_amount"] = format_currency(
+                    vat_amount, invoice.currency_code
+                )
+                line_view["vat_label"] = ", ".join(
+                    sorted(vat_labels_by_line[line.line_id])
+                )
+            else:
+                line_view["vat_amount_raw"] = 0.0
+                line_view["vat_amount"] = None
+                line_view["vat_label"] = None
 
         # Get attachments
         attachments = attachment_service.list_for_entity(
@@ -462,10 +552,15 @@ class InvoiceWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
+        customer_id: str | None = None,
     ) -> HTMLResponse:
         """Render new invoice form."""
         context = base_context(request, auth, "New AR Invoice", "ar")
-        context.update(self.invoice_form_context(db, str(auth.organization_id)))
+        context.update(
+            self.invoice_form_context(
+                db, str(auth.organization_id), customer_id=customer_id
+            )
+        )
         return templates.TemplateResponse(
             request, "finance/ar/invoice_form.html", context
         )
@@ -577,6 +672,115 @@ class InvoiceWebService:
             url="/finance/ar/invoices?success=Record+deleted+successfully",
             status_code=303,
         )
+
+    # =====================================================================
+    # Invoice Status Transitions
+    # =====================================================================
+
+    def submit_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> RedirectResponse:
+        """Submit invoice for approval."""
+        try:
+            ar_invoice_service.submit_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(invoice_id),
+                submitted_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice_id}?success=Invoice+submitted+for+approval",
+                status_code=303,
+            )
+        except Exception as e:
+            logger.exception("Failed to submit invoice %s", invoice_id)
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def approve_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> RedirectResponse:
+        """Approve a submitted invoice."""
+        try:
+            ar_invoice_service.approve_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(invoice_id),
+                approved_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice_id}?success=Invoice+approved",
+                status_code=303,
+            )
+        except Exception as e:
+            logger.exception("Failed to approve invoice %s", invoice_id)
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def post_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> RedirectResponse:
+        """Post invoice to general ledger."""
+        try:
+            ar_invoice_service.post_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(invoice_id),
+                posted_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice_id}?success=Invoice+posted+to+ledger",
+                status_code=303,
+            )
+        except Exception as e:
+            logger.exception("Failed to post invoice %s", invoice_id)
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def void_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> RedirectResponse:
+        """Void an invoice."""
+        try:
+            ar_invoice_service.void_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(invoice_id),
+                voided_by_user_id=auth.user_id,
+                reason="Voided via web interface",
+            )
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice_id}?success=Invoice+voided",
+                status_code=303,
+            )
+        except Exception as e:
+            logger.exception("Failed to void invoice %s", invoice_id)
+            return RedirectResponse(
+                url=f"/finance/ar/invoices/{invoice_id}?error={str(e)}",
+                status_code=303,
+            )
 
     async def upload_invoice_attachment_response(
         self,

@@ -14,6 +14,7 @@ from urllib.parse import quote
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.people.hr.employee import Employee, EmployeeStatus
@@ -82,34 +83,37 @@ class SlipWebService:
         per_page = DEFAULT_PAGE_SIZE
         offset = (page - 1) * per_page
 
-        query = db.query(SalarySlip).filter(SalarySlip.organization_id == org_id)
+        query = select(SalarySlip).where(SalarySlip.organization_id == org_id)
 
         if search:
-            query = query.filter(
+            query = query.where(
                 SalarySlip.slip_number.ilike(f"%{search}%")
                 | SalarySlip.employee_name.ilike(f"%{search}%")
             )
 
         status_enum = parse_slip_status(status)
         if status_enum:
-            query = query.filter(SalarySlip.status == status_enum)
+            query = query.where(SalarySlip.status == status_enum)
 
-        total = query.count()
-        slips = (
-            query.order_by(SalarySlip.created_at.desc())
-            .offset(offset)
-            .limit(per_page)
-            .all()
-        )
+        total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+        slips = db.scalars(
+            query.order_by(SalarySlip.created_at.desc()).offset(offset).limit(per_page)
+        ).all()
         total_pages = (total + per_page - 1) // per_page
 
         # Get counts by status
         status_counts = {}
         for s in SalarySlipStatus:
             count = (
-                db.query(SalarySlip)
-                .filter(SalarySlip.organization_id == org_id, SalarySlip.status == s)
-                .count()
+                db.scalar(
+                    select(func.count())
+                    .select_from(SalarySlip)
+                    .where(
+                        SalarySlip.organization_id == org_id,
+                        SalarySlip.status == s,
+                    )
+                )
+                or 0
             )
             status_counts[s.value] = count
 
@@ -145,8 +149,8 @@ class SlipWebService:
         org_id = coerce_uuid(auth.organization_id)
 
         query = (
-            db.query(SalarySlip)
-            .filter(SalarySlip.organization_id == org_id)
+            select(SalarySlip)
+            .where(SalarySlip.organization_id == org_id)
             .options(
                 selectinload(SalarySlip.earnings).selectinload(
                     SalarySlipEarning.component
@@ -158,16 +162,16 @@ class SlipWebService:
         )
 
         if search:
-            query = query.filter(
+            query = query.where(
                 SalarySlip.slip_number.ilike(f"%{search}%")
                 | SalarySlip.employee_name.ilike(f"%{search}%")
             )
 
         status_enum = parse_slip_status(status)
         if status_enum:
-            query = query.filter(SalarySlip.status == status_enum)
+            query = query.where(SalarySlip.status == status_enum)
 
-        slips = query.order_by(SalarySlip.created_at.desc()).all()
+        slips = db.scalars(query.order_by(SalarySlip.created_at.desc())).all()
 
         headers = [
             "Slip #",
@@ -283,15 +287,14 @@ class SlipWebService:
         """Render new salary slip form."""
         org_id = coerce_uuid(auth.organization_id)
 
-        employees = (
-            db.query(Employee)
-            .filter(
+        employees = db.scalars(
+            select(Employee)
+            .where(
                 Employee.organization_id == org_id,
                 Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]),
             )
             .order_by(Employee.employee_code)
-            .all()
-        )
+        ).all()
 
         context = base_context(request, auth, "New Salary Slip", "payroll", db=db)
         context["request"] = request
@@ -336,15 +339,14 @@ class SlipWebService:
                 url=f"/people/payroll/slips/{slip_id}?saved=1", status_code=303
             )
 
-        employees = (
-            db.query(Employee)
-            .filter(
+        employees = db.scalars(
+            select(Employee)
+            .where(
                 Employee.organization_id == org_id,
                 Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]),
             )
             .order_by(Employee.employee_code)
-            .all()
-        )
+        ).all()
 
         context = base_context(request, auth, "Edit Salary Slip", "payroll", db=db)
         context["request"] = request
@@ -393,17 +395,16 @@ class SlipWebService:
         leave_without_pay = self._form_str(form, "leave_without_pay") or "0"
 
         if not employee_id or not start_date or not end_date:
-            employees = (
-                db.query(Employee)
-                .filter(
+            employees = db.scalars(
+                select(Employee)
+                .where(
                     Employee.organization_id == org_id,
                     Employee.status.in_(
                         [EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]
                     ),
                 )
                 .order_by(Employee.employee_code)
-                .all()
-            )
+            ).all()
             context = base_context(request, auth, "New Salary Slip", "payroll", db=db)
             context["request"] = request
             context.update(
@@ -453,17 +454,16 @@ class SlipWebService:
 
         except Exception as e:
             db.rollback()
-            employees = (
-                db.query(Employee)
-                .filter(
+            employees = db.scalars(
+                select(Employee)
+                .where(
                     Employee.organization_id == org_id,
                     Employee.status.in_(
                         [EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]
                     ),
                 )
                 .order_by(Employee.employee_code)
-                .all()
-            )
+            ).all()
 
             context = base_context(request, auth, "New Salary Slip", "payroll", db=db)
             context["request"] = request
@@ -512,17 +512,16 @@ class SlipWebService:
         leave_without_pay = self._form_str(form, "leave_without_pay") or "0"
 
         if not employee_id or not start_date or not end_date:
-            employees = (
-                db.query(Employee)
-                .filter(
+            employees = db.scalars(
+                select(Employee)
+                .where(
                     Employee.organization_id == org_id,
                     Employee.status.in_(
                         [EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]
                     ),
                 )
                 .order_by(Employee.employee_code)
-                .all()
-            )
+            ).all()
             context = base_context(request, auth, "Edit Salary Slip", "payroll", db=db)
             context["request"] = request
             context.update(
@@ -579,17 +578,16 @@ class SlipWebService:
 
         except Exception as e:
             db.rollback()
-            employees = (
-                db.query(Employee)
-                .filter(
+            employees = db.scalars(
+                select(Employee)
+                .where(
                     Employee.organization_id == org_id,
                     Employee.status.in_(
                         [EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]
                     ),
                 )
                 .order_by(Employee.employee_code)
-                .all()
-            )
+            ).all()
 
             context = base_context(request, auth, "Edit Salary Slip", "payroll", db=db)
             context["request"] = request
@@ -671,14 +669,12 @@ class SlipWebService:
             skip_deductions = is_contract or is_contract_structure
 
         if slip.employee_id:
-            tax_profile = (
-                db.query(EmployeeTaxProfile)
-                .filter(
+            tax_profile = db.scalar(
+                select(EmployeeTaxProfile).where(
                     EmployeeTaxProfile.organization_id == org_id,
                     EmployeeTaxProfile.employee_id == slip.employee_id,
                     EmployeeTaxProfile.effective_to.is_(None),
                 )
-                .first()
             )
 
             # Calculate PAYE breakdown if we have gross pay

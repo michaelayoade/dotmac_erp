@@ -90,6 +90,11 @@ def _make_service(db: MagicMock) -> SplynxSyncService:
     svc._generate_invoice_number = _fake_invoice_number  # type: ignore[assignment]
     svc._generate_payment_number = _fake_payment_number  # type: ignore[assignment]
     svc._generate_credit_note_number = _fake_cn_number  # type: ignore[assignment]
+    # Mark tax code as already resolved (None = no tax) to prevent the
+    # lazy property from calling _resolve_sales_tax() which would consume
+    # mock DB scalar() calls intended for other operations.
+    svc._sales_tax_code_resolved = True
+    svc._sales_tax_code = None
     return svc
 
 
@@ -1571,3 +1576,239 @@ class TestBatchSize:
 
         # Should stop after 2 processed (even if some were skipped)
         assert "Batch limit" in result.message or result.created + result.skipped <= 3
+
+
+# ---------------------------------------------------------------------------
+# Tax Extraction Tests
+# ---------------------------------------------------------------------------
+
+TAX_CODE_ID = uuid.uuid4()
+
+
+def _make_tax_code(
+    *,
+    tax_rate: Decimal = Decimal("0.075"),
+    is_inclusive: bool = True,
+) -> SimpleNamespace:
+    """Create a fake TaxCode-like object for tax extraction tests."""
+    return SimpleNamespace(
+        tax_code_id=TAX_CODE_ID,
+        tax_code="VAT-7.5",
+        tax_name="VAT 7.5%",
+        tax_rate=tax_rate,
+        is_inclusive=is_inclusive,
+        is_active=True,
+        applies_to_sales=True,
+    )
+
+
+class TestExtractTax:
+    """Tests for _extract_tax private method."""
+
+    def test_no_tax_code_returns_zero_tax(self) -> None:
+        """Without a sales tax code, tax should be zero."""
+        db = MagicMock()
+        svc = _make_service(db)
+        assert svc._sales_tax_code is None
+
+        subtotal, tax = svc._extract_tax(Decimal("18812.50"))
+        assert subtotal == Decimal("18812.50")
+        assert tax == Decimal("0")
+
+    def test_inclusive_vat_extraction(self) -> None:
+        """Inclusive VAT 7.5%: 18812.50 → subtotal=17500, tax=1312.50."""
+        db = MagicMock()
+        svc = _make_service(db)
+        svc._sales_tax_code = _make_tax_code()  # type: ignore[assignment]
+
+        subtotal, tax = svc._extract_tax(Decimal("18812.50"))
+        # 18812.50 * 0.075 / 1.075 = 1312.50
+        assert tax == Decimal("1312.50")
+        assert subtotal == Decimal("17500.00")
+        assert subtotal + tax == Decimal("18812.50")
+
+    def test_inclusive_vat_small_amount(self) -> None:
+        """Inclusive VAT on a small amount rounds correctly."""
+        db = MagicMock()
+        svc = _make_service(db)
+        svc._sales_tax_code = _make_tax_code()  # type: ignore[assignment]
+
+        subtotal, tax = svc._extract_tax(Decimal("107.50"))
+        # 107.50 * 0.075 / 1.075 = 7.50
+        assert tax == Decimal("7.50")
+        assert subtotal == Decimal("100.00")
+
+    def test_exclusive_vat_adds_tax(self) -> None:
+        """Exclusive VAT: tax is calculated on top of the total."""
+        db = MagicMock()
+        svc = _make_service(db)
+        svc._sales_tax_code = _make_tax_code(is_inclusive=False)  # type: ignore[assignment]
+
+        subtotal, tax = svc._extract_tax(Decimal("17500.00"))
+        # 17500 * 0.075 = 1312.50
+        assert subtotal == Decimal("17500.00")
+        assert tax == Decimal("1312.50")
+
+    def test_zero_rate_returns_zero_tax(self) -> None:
+        """Tax code with 0% rate should produce zero tax."""
+        db = MagicMock()
+        svc = _make_service(db)
+        svc._sales_tax_code = _make_tax_code(tax_rate=Decimal("0"))  # type: ignore[assignment]
+
+        subtotal, tax = svc._extract_tax(Decimal("18812.50"))
+        assert subtotal == Decimal("18812.50")
+        assert tax == Decimal("0")
+
+
+class TestInvoiceSyncWithTax:
+    """Tests that invoice sync correctly applies tax extraction."""
+
+    def test_new_invoice_with_inclusive_vat(self) -> None:
+        """New invoice with inclusive VAT splits subtotal and tax correctly."""
+        from app.models.finance.ar.invoice import Invoice as InvoiceModel
+        from app.models.finance.ar.invoice_line import InvoiceLine as InvoiceLineModel
+        from app.models.finance.ar.invoice_line_tax import (
+            InvoiceLineTax as LineTaxModel,
+        )
+
+        db = MagicMock()
+        db.scalar.return_value = None  # No existing invoice
+        svc = _make_service(db)
+        svc._sales_tax_code = _make_tax_code()  # type: ignore[assignment]
+        svc._customer_cache[500] = uuid.uuid4()
+
+        result = SyncResult(success=True, entity_type="invoices")
+        inv = _make_splynx_invoice(
+            total=Decimal("18812.50"), total_due=Decimal("18812.50")
+        )
+
+        svc._sync_single_invoice(inv, USER_ID, result)
+
+        assert result.created == 1
+
+        # Find Invoice, InvoiceLine, and InvoiceLineTax objects
+        invoice_obj = None
+        line_obj = None
+        line_tax_obj = None
+        for call in db.add.call_args_list:
+            obj = call[0][0]
+            if isinstance(obj, InvoiceModel):
+                invoice_obj = obj
+            elif isinstance(obj, InvoiceLineModel):
+                line_obj = obj
+            elif isinstance(obj, LineTaxModel):
+                line_tax_obj = obj
+
+        assert invoice_obj is not None
+        # total_amount remains the Splynx total
+        assert invoice_obj.total_amount == Decimal("18812.50")
+        # subtotal has VAT extracted
+        assert invoice_obj.subtotal == Decimal("17500.00")
+        # tax_amount is the extracted VAT
+        assert invoice_obj.tax_amount == Decimal("1312.50")
+
+        # Line should also have tax extracted
+        assert line_obj is not None
+        assert line_obj.tax_amount == Decimal("1312.50")
+        assert line_obj.tax_code_id == TAX_CODE_ID
+
+        # InvoiceLineTax audit record should be created
+        assert line_tax_obj is not None
+        assert line_tax_obj.tax_rate == Decimal("0.075")
+        assert line_tax_obj.tax_amount == Decimal("1312.50")
+        assert line_tax_obj.is_inclusive is True
+
+    def test_update_invoice_applies_tax(self) -> None:
+        """Updated invoice should recalculate subtotal and tax."""
+        db = MagicMock()
+        svc = _make_service(db)
+        svc._sales_tax_code = _make_tax_code()  # type: ignore[assignment]
+        svc._customer_cache[500] = uuid.uuid4()
+
+        existing = FakeInvoice(
+            total_amount=Decimal("18812.50"),
+            status=InvoiceStatus.POSTED,
+        )
+
+        sync_record_mock = MagicMock(
+            synced_at=None, sync_hash=None, external_updated_at=None
+        )
+        db.scalar.side_effect = [
+            "old-hash",
+            existing.invoice_id,
+            existing.invoice_id,
+            sync_record_mock,
+        ]
+        db.get.return_value = existing
+
+        result = SyncResult(success=True, entity_type="invoices")
+        inv = _make_splynx_invoice(total=Decimal("37625.00"), status="unpaid")
+
+        svc._sync_single_invoice(inv, USER_ID, result)
+
+        assert result.updated == 1
+        # total_amount is the Splynx total
+        assert existing.total_amount == Decimal("37625.00")
+        # subtotal = 37625 / 1.075 = 35000
+        assert existing.subtotal == Decimal("35000.00")
+        # tax = 37625 - 35000 = 2625
+        assert existing.tax_amount == Decimal("2625.00")
+
+    def test_credit_note_with_tax_extraction(self) -> None:
+        """Credit note should also have tax extracted from its total."""
+        from app.models.finance.ar.invoice import Invoice as InvoiceModel
+
+        db = MagicMock()
+        db.scalar.return_value = None
+        svc = _make_service(db)
+        svc._sales_tax_code = _make_tax_code()  # type: ignore[assignment]
+        svc._customer_cache[500] = uuid.uuid4()
+
+        result = SyncResult(success=True, entity_type="credit_notes")
+        cn = _make_splynx_credit_note(total=Decimal("5375.00"))
+
+        svc._sync_single_credit_note(cn, USER_ID, result)
+
+        assert result.created == 1
+
+        invoice_obj = None
+        for call in db.add.call_args_list:
+            obj = call[0][0]
+            if isinstance(obj, InvoiceModel):
+                invoice_obj = obj
+                break
+
+        assert invoice_obj is not None
+        assert invoice_obj.total_amount == Decimal("5375.00")
+        # subtotal = 5375 / 1.075 = 5000
+        assert invoice_obj.subtotal == Decimal("5000.00")
+        assert invoice_obj.tax_amount == Decimal("375.00")
+
+    def test_no_tax_code_preserves_legacy_behaviour(self) -> None:
+        """When no tax code is configured, behaviour matches legacy (zero tax)."""
+        from app.models.finance.ar.invoice import Invoice as InvoiceModel
+
+        db = MagicMock()
+        db.scalar.return_value = None
+        svc = _make_service(db)
+        assert svc._sales_tax_code is None  # Default from _make_service
+
+        svc._customer_cache[500] = uuid.uuid4()
+
+        result = SyncResult(success=True, entity_type="invoices")
+        inv = _make_splynx_invoice(total=Decimal("50000.00"))
+
+        svc._sync_single_invoice(inv, USER_ID, result)
+
+        assert result.created == 1
+        invoice_obj = None
+        for call in db.add.call_args_list:
+            obj = call[0][0]
+            if isinstance(obj, InvoiceModel):
+                invoice_obj = obj
+                break
+        assert invoice_obj is not None
+        # Legacy: subtotal = total, tax = 0
+        assert invoice_obj.subtotal == Decimal("50000.00")
+        assert invoice_obj.tax_amount == Decimal("0")
+        assert invoice_obj.total_amount == Decimal("50000.00")

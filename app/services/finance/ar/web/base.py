@@ -16,7 +16,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, load_only
 
 from app.models.finance.ar.customer import Customer, CustomerType
@@ -130,12 +130,14 @@ def receipt_status_label(status: PaymentStatus) -> str:
 def customer_option_view(customer: Customer) -> dict:
     """Transform customer to option/select view."""
     return {
-        "customer_id": customer.customer_id,
+        "customer_id": str(customer.customer_id),
         "customer_name": customer_display_name(customer),
         "customer_code": customer.customer_code,
         "currency_code": customer.currency_code,
         "payment_terms_days": customer.credit_terms_days,
-        "default_tax_code_id": customer.default_tax_code_id,
+        "default_tax_code_id": str(customer.default_tax_code_id)
+        if customer.default_tax_code_id
+        else None,
     }
 
 
@@ -241,6 +243,8 @@ def invoice_line_view(line: InvoiceLine, currency_code: str) -> dict:
         "unit_price": format_currency(line.unit_price, currency_code),
         "discount_amount": format_currency(line.discount_amount, currency_code),
         "tax_amount": format_currency(line.tax_amount, currency_code),
+        "tax_amount_raw": float(line.tax_amount),
+        "tax_code_id": line.tax_code_id,
         "line_amount": format_currency(line.line_amount, currency_code),
         "revenue_account_id": line.revenue_account_id,
         "item_id": line.item_id,
@@ -361,46 +365,48 @@ def get_accounts(
 ) -> list[Account]:
     """Get accounts filtered by IFRS category and optional subledger type."""
     query = (
-        db.query(Account)
+        select(Account)
         .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-        .filter(
+        .where(
             Account.organization_id == organization_id,
             Account.is_active.is_(True),
             AccountCategory.ifrs_category == ifrs_category,
         )
     )
     if subledger_type:
-        query = query.filter(Account.subledger_type == subledger_type)
-    return query.order_by(Account.account_code).all()
+        query = query.where(Account.subledger_type == subledger_type)
+    return list(db.scalars(query.order_by(Account.account_code)).all())
 
 
 def get_cost_centers(db: Session, organization_id: UUID) -> list[CostCenter]:
     """Get active cost centers for organization."""
-    return (
-        db.query(CostCenter)
-        .filter(
-            CostCenter.organization_id == organization_id,
-            CostCenter.is_active.is_(True),
-        )
-        .order_by(CostCenter.cost_center_code)
-        .all()
+    return list(
+        db.scalars(
+            select(CostCenter)
+            .where(
+                CostCenter.organization_id == organization_id,
+                CostCenter.is_active.is_(True),
+            )
+            .order_by(CostCenter.cost_center_code)
+        ).all()
     )
 
 
 def get_projects(db: Session, organization_id: UUID) -> list[Project]:
     """Get projects for organization."""
-    return (
-        db.query(Project)
-        .options(
-            load_only(
-                Project.project_id,
-                Project.project_code,
-                Project.project_name,
+    return list(
+        db.scalars(
+            select(Project)
+            .options(
+                load_only(
+                    Project.project_id,
+                    Project.project_code,
+                    Project.project_name,
+                )
             )
-        )
-        .filter(Project.organization_id == organization_id)
-        .order_by(Project.project_code)
-        .all()
+            .where(Project.organization_id == organization_id)
+            .order_by(Project.project_code)
+        ).all()
     )
 
 
@@ -431,14 +437,14 @@ def calculate_customer_balance_trends(
             next_month = month_start + relativedelta(months=1)
             as_of_date = next_month - timedelta(days=1)
 
-        balances = (
-            db.query(
+        balances = db.execute(
+            select(
                 Invoice.customer_id,
                 func.coalesce(
                     func.sum(Invoice.total_amount - Invoice.amount_paid), 0
                 ).label("balance"),
             )
-            .filter(
+            .where(
                 Invoice.organization_id == organization_id,
                 Invoice.customer_id.in_(customer_ids),
                 Invoice.invoice_date <= as_of_date,
@@ -452,8 +458,7 @@ def calculate_customer_balance_trends(
                 ),
             )
             .group_by(Invoice.customer_id)
-            .all()
-        )
+        ).all()
 
         balance_map = {row.customer_id: float(row.balance) for row in balances}
 

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.supplier import Supplier
@@ -135,23 +135,23 @@ class SearchSuggestionsService:
     ) -> tuple[list[SearchSuggestion], bool]:
         """Search customers by name or code."""
         q = query.lower()
-        base_query = (
-            db.query(Customer)
-            .filter(Customer.organization_id == org_id)
-            .filter(Customer.is_active == True)
-            .filter(
+        stmt = (
+            select(Customer)
+            .where(
+                Customer.organization_id == org_id,
+                Customer.is_active == True,
                 or_(
                     func.lower(Customer.legal_name).contains(q),
                     func.lower(Customer.trading_name).contains(q),
                     func.lower(Customer.customer_code).contains(q),
-                )
+                ),
             )
             .order_by(Customer.legal_name)
         )
 
-        # Check if there are more results
-        total = base_query.count()
-        customers = base_query.limit(limit).all()
+        customers = db.scalars(stmt.limit(limit + 1)).all()
+        has_more = len(customers) > limit
+        customers = customers[:limit]
 
         suggestions = [
             SearchSuggestion(
@@ -163,7 +163,7 @@ class SearchSuggestionsService:
             )
             for c in customers
         ]
-        return suggestions, total > limit
+        return suggestions, has_more
 
     @classmethod
     def _search_suppliers(
@@ -171,22 +171,23 @@ class SearchSuggestionsService:
     ) -> tuple[list[SearchSuggestion], bool]:
         """Search suppliers by name or code."""
         q = query.lower()
-        base_query = (
-            db.query(Supplier)
-            .filter(Supplier.organization_id == org_id)
-            .filter(Supplier.is_active == True)
-            .filter(
+        stmt = (
+            select(Supplier)
+            .where(
+                Supplier.organization_id == org_id,
+                Supplier.is_active == True,
                 or_(
                     func.lower(Supplier.legal_name).contains(q),
                     func.lower(Supplier.trading_name).contains(q),
                     func.lower(Supplier.supplier_code).contains(q),
-                )
+                ),
             )
             .order_by(Supplier.legal_name)
         )
 
-        total = base_query.count()
-        suppliers = base_query.limit(limit).all()
+        suppliers = db.scalars(stmt.limit(limit + 1)).all()
+        has_more = len(suppliers) > limit
+        suppliers = suppliers[:limit]
 
         suggestions = [
             SearchSuggestion(
@@ -198,7 +199,7 @@ class SearchSuggestionsService:
             )
             for s in suppliers
         ]
-        return suggestions, total > limit
+        return suggestions, has_more
 
     @classmethod
     def _search_accounts(
@@ -206,27 +207,26 @@ class SearchSuggestionsService:
     ) -> tuple[list[SearchSuggestion], bool]:
         """Search GL accounts by code or name."""
         q = query.lower()
-        base_query = (
-            db.query(Account)
-            .filter(Account.organization_id == org_id)
-            .filter(Account.is_active == True)
-            .filter(
+        stmt = (
+            select(Account)
+            .where(
+                Account.organization_id == org_id,
+                Account.is_active == True,
                 or_(
                     func.lower(Account.account_code).contains(q),
                     func.lower(Account.account_name).contains(q),
-                )
+                ),
             )
             .order_by(Account.account_code)
         )
 
         # Optional filter by account type
         if filters.get("account_type"):
-            base_query = base_query.filter(
-                Account.account_type == filters["account_type"]
-            )
+            stmt = stmt.where(Account.account_type == filters["account_type"])
 
-        total = base_query.count()
-        accounts = base_query.limit(limit).all()
+        accounts = db.scalars(stmt.limit(limit + 1)).all()
+        has_more = len(accounts) > limit
+        accounts = accounts[:limit]
 
         suggestions = [
             SearchSuggestion(
@@ -237,7 +237,7 @@ class SearchSuggestionsService:
             )
             for a in accounts
         ]
-        return suggestions, total > limit
+        return suggestions, has_more
 
     @classmethod
     def _search_items(
@@ -245,25 +245,26 @@ class SearchSuggestionsService:
     ) -> tuple[list[SearchSuggestion], bool]:
         """Search inventory items by code or name."""
         q = query.lower()
-        base_query = (
-            db.query(Item)
-            .filter(Item.organization_id == org_id)
-            .filter(Item.is_active == True)
-            .filter(
+        stmt = (
+            select(Item)
+            .where(
+                Item.organization_id == org_id,
+                Item.is_active == True,
                 or_(
                     func.lower(Item.item_code).contains(q),
                     func.lower(Item.item_name).contains(q),
-                )
+                ),
             )
             .order_by(Item.item_name)
         )
 
         # Optional filter by category
         if filters.get("category_id"):
-            base_query = base_query.filter(Item.category_id == filters["category_id"])
+            stmt = stmt.where(Item.category_id == filters["category_id"])
 
-        total = base_query.count()
-        items = base_query.limit(limit).all()
+        items = db.scalars(stmt.limit(limit + 1)).all()
+        has_more = len(items) > limit
+        items = items[:limit]
 
         suggestions = [
             SearchSuggestion(
@@ -275,7 +276,7 @@ class SearchSuggestionsService:
             )
             for i in items
         ]
-        return suggestions, total > limit
+        return suggestions, has_more
 
     @classmethod
     def _search_tax_codes(
@@ -283,25 +284,26 @@ class SearchSuggestionsService:
     ) -> tuple[list[SearchSuggestion], bool]:
         """Search tax codes by code or name."""
         q = query.lower()
-        base_query = (
-            db.query(TaxCode)
-            .filter(TaxCode.organization_id == org_id)
-            .filter(TaxCode.is_active == True)
-            .filter(
+        stmt = (
+            select(TaxCode)
+            .where(
+                TaxCode.organization_id == org_id,
+                TaxCode.is_active == True,
                 or_(
                     func.lower(TaxCode.tax_code).contains(q),
                     func.lower(TaxCode.tax_name).contains(q),
-                )
+                ),
             )
             .order_by(TaxCode.tax_code)
         )
 
         # Optional filter by tax type
         if filters.get("tax_type"):
-            base_query = base_query.filter(TaxCode.tax_type == filters["tax_type"])
+            stmt = stmt.where(TaxCode.tax_type == filters["tax_type"])
 
-        total = base_query.count()
-        codes = base_query.limit(limit).all()
+        codes = db.scalars(stmt.limit(limit + 1)).all()
+        has_more = len(codes) > limit
+        codes = codes[:limit]
 
         suggestions = [
             SearchSuggestion(
@@ -313,7 +315,7 @@ class SearchSuggestionsService:
             )
             for t in codes
         ]
-        return suggestions, total > limit
+        return suggestions, has_more
 
     @classmethod
     def _search_bank_accounts(
@@ -321,22 +323,23 @@ class SearchSuggestionsService:
     ) -> tuple[list[SearchSuggestion], bool]:
         """Search bank accounts by name or number."""
         q = query.lower()
-        base_query = (
-            db.query(BankAccount)
-            .filter(BankAccount.organization_id == org_id)
-            .filter(BankAccount.status == BankAccountStatus.active)
-            .filter(
+        stmt = (
+            select(BankAccount)
+            .where(
+                BankAccount.organization_id == org_id,
+                BankAccount.status == BankAccountStatus.active,
                 or_(
                     func.lower(BankAccount.account_name).contains(q),
                     func.lower(BankAccount.account_number).contains(q),
                     func.lower(BankAccount.bank_name).contains(q),
-                )
+                ),
             )
             .order_by(BankAccount.account_name)
         )
 
-        total = base_query.count()
-        accounts = base_query.limit(limit).all()
+        accounts = db.scalars(stmt.limit(limit + 1)).all()
+        has_more = len(accounts) > limit
+        accounts = accounts[:limit]
 
         suggestions = [
             SearchSuggestion(
@@ -349,7 +352,7 @@ class SearchSuggestionsService:
             )
             for a in accounts
         ]
-        return suggestions, total > limit
+        return suggestions, has_more
 
 
 # Singleton instance

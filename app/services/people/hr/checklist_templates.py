@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.hr.checklist_template import (
@@ -135,9 +135,11 @@ class ChecklistTemplateService:
                 setattr(template, key, value)
 
         if items is not None:
-            self.db.query(ChecklistTemplateItem).filter(
-                ChecklistTemplateItem.template_id == template_id
-            ).delete()
+            self.db.execute(
+                delete(ChecklistTemplateItem).where(
+                    ChecklistTemplateItem.template_id == template_id
+                )
+            )
             for idx, item in enumerate(items):
                 self.db.add(
                     ChecklistTemplateItem(
@@ -152,8 +154,10 @@ class ChecklistTemplateService:
 
     def delete_template(self, org_id: UUID, template_id: UUID) -> None:
         template = self.get_template(org_id, template_id)
-        self.db.query(ChecklistTemplateItem).filter(
-            ChecklistTemplateItem.template_id == template_id
-        ).delete()
+        self.db.execute(
+            delete(ChecklistTemplateItem).where(
+                ChecklistTemplateItem.template_id == template_id
+            )
+        )
         self.db.delete(template)
         self.db.flush()

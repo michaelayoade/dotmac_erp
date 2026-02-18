@@ -28,6 +28,17 @@ from app.tasks.coach import (
     generate_daily_workforce_insights,
     generate_weekly_finance_report,
 )
+from app.tasks.data_health import (
+    auto_post_approved_invoices,
+    cleanup_old_notifications,
+    cleanup_stale_drafts,
+    fix_unbalanced_posted_journals,
+    process_stuck_outbox_events,
+    rebuild_account_balances,
+    reconcile_invoice_statuses,
+    reconcile_payment_allocations,
+    run_data_health_check,
+)
 from app.tasks.email import send_email_async
 from app.tasks.expense import (
     calculate_expense_analytics,
@@ -52,6 +63,10 @@ from app.tasks.hr import (
     process_performance_review_reminders,
     process_probation_ending_notifications,
     process_work_anniversary_notifications,
+)
+from app.tasks.outbox_relay import (
+    cleanup_published_outbox_events,
+    relay_outbox_events,
 )
 from app.tasks.payroll import (
     process_payroll_entry_notifications,
@@ -156,4 +171,17 @@ __all__ = [
     "generate_daily_supply_chain_insights",
     "generate_daily_workforce_insights",
     "generate_weekly_finance_report",
+    # Data health tasks
+    "cleanup_old_notifications",
+    "process_stuck_outbox_events",
+    "reconcile_invoice_statuses",
+    "auto_post_approved_invoices",
+    "cleanup_stale_drafts",
+    "rebuild_account_balances",
+    "reconcile_payment_allocations",
+    "fix_unbalanced_posted_journals",
+    "run_data_health_check",
+    # Outbox relay tasks
+    "relay_outbox_events",
+    "cleanup_published_outbox_events",
 ]

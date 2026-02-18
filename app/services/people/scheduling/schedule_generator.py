@@ -152,22 +152,22 @@ class ScheduleGenerator:
                 if assignment.effective_to and current_date > assignment.effective_to:
                     continue
 
-                # Check if this weekday is in the pattern's work days
+                # Determine shift type based on rotation
+                shift_type_id = self._determine_shift_type(
+                    pattern, assignment, current_date, month_start
+                )
+
+                # Check if this weekday is in the applicable work days
                 weekday = current_date.weekday()
                 weekday_name = list(DAY_TO_WEEKDAY.keys())[weekday]
-
-                if weekday_name not in pattern.work_days:
+                work_days = self._get_work_days_for_shift(pattern, shift_type_id)
+                if weekday_name not in work_days:
                     continue
 
                 # Check if employee is on leave
                 if current_date in employee_leave:
                     skipped_on_leave += 1
                     continue
-
-                # Determine shift type based on rotation
-                shift_type_id = self._determine_shift_type(
-                    pattern, assignment, current_date, month_start
-                )
 
                 # Create schedule entry
                 schedule = ShiftSchedule(
@@ -464,3 +464,29 @@ class ScheduleGenerator:
             return pattern.day_shift_type_id
         else:
             return pattern.night_shift_type_id or pattern.day_shift_type_id
+
+    def _get_work_days_for_shift(
+        self,
+        pattern: ShiftPattern,
+        shift_type_id: UUID,
+    ) -> list[str]:
+        """
+        Resolve applicable work days for a given pattern and selected shift type.
+
+        For rotating patterns, use the shift-specific day lists when present and
+        fallback to legacy `work_days` for backward compatibility.
+        """
+        if pattern.rotation_type != RotationType.ROTATING:
+            return pattern.work_days
+
+        if shift_type_id == pattern.day_shift_type_id and pattern.day_work_days:
+            return pattern.day_work_days
+
+        if (
+            pattern.night_shift_type_id
+            and shift_type_id == pattern.night_shift_type_id
+            and pattern.night_work_days
+        ):
+            return pattern.night_work_days
+
+        return pattern.work_days

@@ -15,7 +15,7 @@ from typing import Any, Generic, TypeVar, cast
 from uuid import UUID
 
 from fastapi import HTTPException, Response
-from sqlalchemy import and_
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.schemas.bulk_actions import BulkActionResult
@@ -66,14 +66,14 @@ class BulkActionService(ABC, Generic[T]):
             ids: List of entity IDs to filter
 
         Returns:
-            SQLAlchemy query
+            SQLAlchemy select statement
         """
         id_col = getattr(self.model, self.id_field)
         org_col = getattr(self.model, self.org_field)
 
         coerced_ids = [coerce_uuid(id) for id in ids]
 
-        return self.db.query(self.model).filter(
+        return select(self.model).where(
             and_(
                 org_col == self.organization_id,
                 id_col.in_(coerced_ids),
@@ -90,7 +90,7 @@ class BulkActionService(ABC, Generic[T]):
         Returns:
             List of entity instances
         """
-        return cast(list[T], self._get_base_query(ids).all())
+        return cast(list[T], self.db.scalars(self._get_base_query(ids)).all())
 
     @abstractmethod
     def can_delete(self, entity: T) -> tuple[bool, str]:
@@ -304,10 +304,8 @@ class BulkActionService(ABC, Generic[T]):
         Returns:
             SQLAlchemy query
         """
-        from sqlalchemy import or_
-
         org_col = getattr(self.model, self.org_field)
-        query = self.db.query(self.model).filter(
+        query = select(self.model).where(
             org_col == self.organization_id,
         )
 
@@ -319,7 +317,7 @@ class BulkActionService(ABC, Generic[T]):
                 if col is not None:
                     conditions.append(col.ilike(term))
             if conditions:
-                query = query.filter(or_(*conditions))
+                query = query.where(or_(*conditions))
 
         return query
 
@@ -354,7 +352,7 @@ class BulkActionService(ABC, Generic[T]):
         if status:
             status_col = getattr(self.model, "status", None)
             if status_col is not None:
-                query = query.filter(status_col == status)
+                query = query.where(status_col == status)
 
         # Date range filtering using the date_field class attribute
         if self.date_field and (start_date or end_date):
@@ -362,14 +360,14 @@ class BulkActionService(ABC, Generic[T]):
             if date_col is not None:
                 if start_date:
                     try:
-                        query = query.filter(
+                        query = query.where(
                             date_col >= date_type.fromisoformat(start_date)
                         )
                     except ValueError:
                         logger.warning("Invalid start_date: %r", start_date)
                 if end_date:
                     try:
-                        query = query.filter(
+                        query = query.where(
                             date_col <= date_type.fromisoformat(end_date)
                         )
                     except ValueError:
@@ -381,9 +379,9 @@ class BulkActionService(ABC, Generic[T]):
                 if value:
                     col = getattr(self.model, col_name, None)
                     if col is not None:
-                        query = query.filter(col == value)
+                        query = query.where(col == value)
 
-        entities = cast(list[T], query.all())
+        entities = cast(list[T], self.db.scalars(query).all())
 
         if not entities:
             logger.info(

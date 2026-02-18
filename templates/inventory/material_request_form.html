@@ -216,7 +216,7 @@
 function materialRequestForm() {
     return {
         requestType: '{{ material_request.request_type if material_request else "PURCHASE" }}',
-        items: {{ items_json | default('[]') | safe }},
+        items: JSON.parse({{ items_json | default('[]') | tojson }}),
 
         addItem() {
             this.items.push({

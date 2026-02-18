@@ -8,15 +8,16 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, load_only
 
 from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
@@ -42,6 +43,8 @@ from app.models.finance.core_org.cost_center import CostCenter
 from app.models.finance.core_org.project import Project
 from app.models.finance.gl.account import Account
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
+from app.models.notification import EntityType, NotificationType
+from app.models.person import Person
 from app.services.audit_info import get_audit_service
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
@@ -69,6 +72,7 @@ from app.services.finance.common import (
 from app.services.finance.common.attachment import AttachmentInput, attachment_service
 from app.services.finance.common.sorting import apply_sort
 from app.services.finance.platform.currency_context import get_currency_context
+from app.services.notification import notification_service
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -121,8 +125,8 @@ def _calculate_supplier_balance_trends(
         # Query balance as of that date for all suppliers
         # Balance = sum of (total - paid) for invoices created on or before as_of_date
         # that are still open or were open at that time
-        balances = (
-            db.query(
+        balances = db.execute(
+            select(
                 SupplierInvoice.supplier_id,
                 func.coalesce(
                     func.sum(
@@ -131,7 +135,7 @@ def _calculate_supplier_balance_trends(
                     0,
                 ).label("balance"),
             )
-            .filter(
+            .where(
                 SupplierInvoice.organization_id == organization_id,
                 SupplierInvoice.supplier_id.in_(supplier_ids),
                 SupplierInvoice.invoice_date <= as_of_date,
@@ -144,8 +148,7 @@ def _calculate_supplier_balance_trends(
                 ),
             )
             .group_by(SupplierInvoice.supplier_id)
-            .all()
-        )
+        ).all()
 
         balance_map = {row.supplier_id: float(row.balance) for row in balances}
 
@@ -273,6 +276,7 @@ def _invoice_detail_view(invoice: SupplierInvoice, supplier: Supplier | None) ->
         "amount_paid": _format_currency(invoice.amount_paid, invoice.currency_code),
         "balance": _format_currency(balance, invoice.currency_code),
         "status": _invoice_status_label(invoice.status),
+        "comments": getattr(invoice, "comments", None),
         "is_overdue": (
             invoice.due_date < today
             and invoice.status
@@ -369,45 +373,47 @@ def _get_accounts(
     ifrs_category: IFRSCategory,
     subledger_type: str | None = None,
 ) -> list[Account]:
-    query = (
-        db.query(Account)
+    stmt = (
+        select(Account)
         .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-        .filter(
+        .where(
             Account.organization_id == organization_id,
             Account.is_active.is_(True),
             AccountCategory.ifrs_category == ifrs_category,
         )
     )
     if subledger_type:
-        query = query.filter(Account.subledger_type == subledger_type)
-    return query.order_by(Account.account_code).all()
+        stmt = stmt.where(Account.subledger_type == subledger_type)
+    return list(db.scalars(stmt.order_by(Account.account_code)).all())
 
 
 def _get_cost_centers(db: Session, organization_id: UUID) -> list[CostCenter]:
-    return (
-        db.query(CostCenter)
-        .filter(
-            CostCenter.organization_id == organization_id,
-            CostCenter.is_active.is_(True),
-        )
-        .order_by(CostCenter.cost_center_code)
-        .all()
+    return list(
+        db.scalars(
+            select(CostCenter)
+            .where(
+                CostCenter.organization_id == organization_id,
+                CostCenter.is_active.is_(True),
+            )
+            .order_by(CostCenter.cost_center_code)
+        ).all()
     )
 
 
 def _get_projects(db: Session, organization_id: UUID) -> list[Project]:
-    return (
-        db.query(Project)
-        .options(
-            load_only(
-                Project.project_id,
-                Project.project_code,
-                Project.project_name,
+    return list(
+        db.scalars(
+            select(Project)
+            .options(
+                load_only(
+                    Project.project_id,
+                    Project.project_code,
+                    Project.project_name,
+                )
             )
-        )
-        .filter(Project.organization_id == organization_id)
-        .order_by(Project.project_code)
-        .all()
+            .where(Project.organization_id == organization_id)
+            .order_by(Project.project_code)
+        ).all()
     )
 
 
@@ -464,20 +470,24 @@ class APWebService:
         elif status == "inactive":
             is_active = False
 
-        query = db.query(Supplier).filter(Supplier.organization_id == org_id)
+        conditions: list[Any] = [Supplier.organization_id == org_id]
+        stmt = select(Supplier).where(*conditions)
         if is_active is not None:
-            query = query.filter(Supplier.is_active == is_active)
+            conditions.append(Supplier.is_active == is_active)
+            stmt = stmt.where(Supplier.is_active == is_active)
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            search_filter = (
                 (Supplier.supplier_code.ilike(search_pattern))
                 | (Supplier.legal_name.ilike(search_pattern))
                 | (Supplier.trading_name.ilike(search_pattern))
                 | (Supplier.tax_identification_number.ilike(search_pattern))
             )
+            conditions.append(search_filter)
+            stmt = stmt.where(search_filter)
 
         total_count = (
-            query.with_entities(func.count(Supplier.supplier_id)).scalar() or 0
+            db.scalar(select(func.count(Supplier.supplier_id)).where(*conditions)) or 0
         )
         supplier_sort_map: dict[str, Any] = {
             "legal_name": Supplier.legal_name,
@@ -485,21 +495,21 @@ class APWebService:
             "supplier_code": Supplier.supplier_code,
             "status": Supplier.status,
         }
-        query = apply_sort(
-            query,
+        stmt = apply_sort(
+            stmt,
             sort,
             sort_dir,
             supplier_sort_map,
             default=Supplier.legal_name.asc(),
         )
-        suppliers = query.limit(limit).offset(offset).all()
+        suppliers = list(db.scalars(stmt.limit(limit).offset(offset)).all())
 
         open_statuses = [
             SupplierInvoiceStatus.POSTED,
             SupplierInvoiceStatus.PARTIALLY_PAID,
         ]
-        balances = (
-            db.query(
+        balances = db.execute(
+            select(
                 SupplierInvoice.supplier_id,
                 func.coalesce(
                     func.sum(
@@ -508,13 +518,12 @@ class APWebService:
                     0,
                 ).label("balance"),
             )
-            .filter(
+            .where(
                 SupplierInvoice.organization_id == org_id,
                 SupplierInvoice.status.in_(open_statuses),
             )
             .group_by(SupplierInvoice.supplier_id)
-            .all()
-        )
+        ).all()
         balance_map = {row.supplier_id: row.balance for row in balances}
 
         # Use shared audit service for user names
@@ -539,33 +548,42 @@ class APWebService:
 
         # Calculate stats for template header cards
         total_suppliers = (
-            db.query(func.count(Supplier.supplier_id))
-            .filter(Supplier.organization_id == org_id)
-            .scalar()
+            db.scalar(
+                select(func.count(Supplier.supplier_id)).where(
+                    Supplier.organization_id == org_id
+                )
+            )
             or 0
         )
         active_count = (
-            db.query(func.count(Supplier.supplier_id))
-            .filter(Supplier.organization_id == org_id, Supplier.is_active == True)
-            .scalar()
+            db.scalar(
+                select(func.count(Supplier.supplier_id)).where(
+                    Supplier.organization_id == org_id, Supplier.is_active.is_(True)
+                )
+            )
             or 0
         )
-        total_payables_raw = db.query(
-            func.coalesce(
-                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
-            )
-        ).filter(
-            SupplierInvoice.organization_id == org_id,
-            SupplierInvoice.status.in_(open_statuses),
-        ).scalar() or Decimal("0")
-        overdue_count = (
-            db.query(func.count(SupplierInvoice.invoice_id))
-            .filter(
+        total_payables_raw = db.scalar(
+            select(
+                func.coalesce(
+                    func.sum(
+                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
+                    ),
+                    0,
+                )
+            ).where(
                 SupplierInvoice.organization_id == org_id,
                 SupplierInvoice.status.in_(open_statuses),
-                SupplierInvoice.due_date < date.today(),
             )
-            .scalar()
+        ) or Decimal("0")
+        overdue_count = (
+            db.scalar(
+                select(func.count(SupplierInvoice.invoice_id)).where(
+                    SupplierInvoice.organization_id == org_id,
+                    SupplierInvoice.status.in_(open_statuses),
+                    SupplierInvoice.due_date < date.today(),
+                )
+            )
             or 0
         )
 
@@ -639,28 +657,31 @@ class APWebService:
             SupplierInvoiceStatus.PARTIALLY_PAID,
         ]
 
-        balance = db.query(
-            func.coalesce(
-                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid),
-                0,
+        balance = db.scalar(
+            select(
+                func.coalesce(
+                    func.sum(
+                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
+                    ),
+                    0,
+                )
+            ).where(
+                SupplierInvoice.organization_id == org_id,
+                SupplierInvoice.supplier_id == supplier.supplier_id,
+                SupplierInvoice.status.in_(open_statuses),
             )
-        ).filter(
-            SupplierInvoice.organization_id == org_id,
-            SupplierInvoice.supplier_id == supplier.supplier_id,
-            SupplierInvoice.status.in_(open_statuses),
-        ).scalar() or Decimal("0")
+        ) or Decimal("0")
 
-        invoices = (
-            db.query(SupplierInvoice)
-            .filter(
+        invoices = db.scalars(
+            select(SupplierInvoice)
+            .where(
                 SupplierInvoice.organization_id == org_id,
                 SupplierInvoice.supplier_id == supplier.supplier_id,
                 SupplierInvoice.status.in_(open_statuses),
             )
             .order_by(SupplierInvoice.due_date)
             .limit(10)
-            .all()
-        )
+        ).all()
 
         today = date.today()
         open_invoices = []
@@ -736,25 +757,18 @@ class APWebService:
         from_date = _parse_date(start_date)
         to_date = _parse_date(end_date)
 
-        query = (
-            db.query(SupplierInvoice, Supplier)
-            .join(Supplier, SupplierInvoice.supplier_id == Supplier.supplier_id)
-            .filter(SupplierInvoice.organization_id == org_id)
-        )
-
+        conditions: list[Any] = [SupplierInvoice.organization_id == org_id]
         if supplier_id:
-            query = query.filter(
-                SupplierInvoice.supplier_id == coerce_uuid(supplier_id)
-            )
+            conditions.append(SupplierInvoice.supplier_id == coerce_uuid(supplier_id))
         if status_value:
-            query = query.filter(SupplierInvoice.status == status_value)
+            conditions.append(SupplierInvoice.status == status_value)
         if from_date:
-            query = query.filter(SupplierInvoice.invoice_date >= from_date)
+            conditions.append(SupplierInvoice.invoice_date >= from_date)
         if to_date:
-            query = query.filter(SupplierInvoice.invoice_date <= to_date)
+            conditions.append(SupplierInvoice.invoice_date <= to_date)
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            conditions.append(
                 or_(
                     SupplierInvoice.invoice_number.ilike(search_pattern),
                     Supplier.legal_name.ilike(search_pattern),
@@ -762,8 +776,20 @@ class APWebService:
                 )
             )
 
+        base_stmt = (
+            select(SupplierInvoice, Supplier)
+            .join(Supplier, SupplierInvoice.supplier_id == Supplier.supplier_id)
+            .where(*conditions)
+        )
+
         total_count = (
-            query.with_entities(func.count(SupplierInvoice.invoice_id)).scalar() or 0
+            db.scalar(
+                select(func.count(SupplierInvoice.invoice_id))
+                .select_from(SupplierInvoice)
+                .join(Supplier, SupplierInvoice.supplier_id == Supplier.supplier_id)
+                .where(*conditions)
+            )
+            or 0
         )
         invoice_sort_map: dict[str, Any] = {
             "invoice_date": SupplierInvoice.invoice_date,
@@ -773,54 +799,70 @@ class APWebService:
             "due_date": SupplierInvoice.due_date,
             "status": SupplierInvoice.status,
         }
-        query = apply_sort(
-            query,
+        stmt = apply_sort(
+            base_stmt,
             sort,
             sort_dir,
             invoice_sort_map,
             default=SupplierInvoice.invoice_date.desc(),
         )
-        invoices = query.limit(limit).offset(offset).all()
+        invoices = db.execute(stmt.limit(limit).offset(offset)).all()
 
         open_statuses = [
             SupplierInvoiceStatus.POSTED,
             SupplierInvoiceStatus.PARTIALLY_PAID,
         ]
-        stats_base = query.with_entities(SupplierInvoice)
-        outstanding_filter = stats_base.filter(
-            SupplierInvoice.status.in_(open_statuses)
-        )
+        stats_conditions = list(conditions)
+        outstanding_conditions = [
+            *stats_conditions,
+            SupplierInvoice.status.in_(open_statuses),
+        ]
 
-        total_outstanding = outstanding_filter.with_entities(
-            func.coalesce(
-                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
-            )
-        ).scalar() or Decimal("0")
+        total_outstanding = db.scalar(
+            select(
+                func.coalesce(
+                    func.sum(
+                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
+                    ),
+                    0,
+                )
+            ).where(*outstanding_conditions)
+        ) or Decimal("0")
 
-        past_due = outstanding_filter.filter(
-            SupplierInvoice.due_date < today
-        ).with_entities(
-            func.coalesce(
-                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
-            )
-        ).scalar() or Decimal("0")
+        past_due = db.scalar(
+            select(
+                func.coalesce(
+                    func.sum(
+                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
+                    ),
+                    0,
+                )
+            ).where(*outstanding_conditions, SupplierInvoice.due_date < today)
+        ) or Decimal("0")
 
         due_this_week_end = today + timedelta(days=7)
-        due_this_week = outstanding_filter.filter(
-            SupplierInvoice.due_date >= today,
-            SupplierInvoice.due_date <= due_this_week_end,
-        ).with_entities(
-            func.coalesce(
-                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
+        due_this_week = db.scalar(
+            select(
+                func.coalesce(
+                    func.sum(
+                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
+                    ),
+                    0,
+                )
+            ).where(
+                *outstanding_conditions,
+                SupplierInvoice.due_date >= today,
+                SupplierInvoice.due_date <= due_this_week_end,
             )
-        ).scalar() or Decimal("0")
+        ) or Decimal("0")
 
         pending_count = (
-            stats_base.filter(
-                SupplierInvoice.status == SupplierInvoiceStatus.PENDING_APPROVAL
+            db.scalar(
+                select(func.count(SupplierInvoice.invoice_id)).where(
+                    *stats_conditions,
+                    SupplierInvoice.status == SupplierInvoiceStatus.PENDING_APPROVAL,
+                )
             )
-            .with_entities(func.count(SupplierInvoice.invoice_id))
-            .scalar()
             or 0
         )
 
@@ -937,13 +979,13 @@ class APWebService:
                 "is_compound": tax.is_compound,
                 "is_recoverable": getattr(tax, "is_recoverable", True),
             }
-            for tax in db.query(TaxCode)
-            .filter(
-                TaxCode.organization_id == org_id,
-                TaxCode.is_active == True,
-                TaxCode.applies_to_purchases == True,
-            )
-            .all()
+            for tax in db.scalars(
+                select(TaxCode).where(
+                    TaxCode.organization_id == org_id,
+                    TaxCode.is_active.is_(True),
+                    TaxCode.applies_to_purchases.is_(True),
+                )
+            ).all()
         ]
 
         # Pre-populated data from PO
@@ -977,12 +1019,11 @@ class APWebService:
                     selected_supplier = _supplier_option_view(supplier)
 
                 # Get PO lines for pre-populating invoice lines
-                lines = (
-                    db.query(PurchaseOrderLine)
-                    .filter(PurchaseOrderLine.po_id == po_uuid)
+                lines = db.scalars(
+                    select(PurchaseOrderLine)
+                    .where(PurchaseOrderLine.po_id == po_uuid)
                     .order_by(PurchaseOrderLine.line_number)
-                    .all()
-                )
+                ).all()
                 for line in lines:
                     po_lines.append(
                         {
@@ -1009,15 +1050,16 @@ class APWebService:
                 else 0,
                 "uom": item.base_uom,
             }
-            for item in db.query(Item)
-            .filter(
-                Item.organization_id == org_id,
-                Item.is_active == True,
-                Item.is_purchaseable == True,
-            )
-            .order_by(Item.item_code)
-            .limit(200)
-            .all()
+            for item in db.scalars(
+                select(Item)
+                .where(
+                    Item.organization_id == org_id,
+                    Item.is_active.is_(True),
+                    Item.is_purchaseable.is_(True),
+                )
+                .order_by(Item.item_code)
+                .limit(200)
+            ).all()
         ]
 
         # Get asset accounts for capitalization (AP → FA integration)
@@ -1031,13 +1073,14 @@ class APWebService:
                 "category_name": cat.category_name,
                 "threshold": float(cat.capitalization_threshold),
             }
-            for cat in db.query(AssetCategory)
-            .filter(
-                AssetCategory.organization_id == org_id,
-                AssetCategory.is_active == True,
-            )
-            .order_by(AssetCategory.category_code)
-            .all()
+            for cat in db.scalars(
+                select(AssetCategory)
+                .where(
+                    AssetCategory.organization_id == org_id,
+                    AssetCategory.is_active.is_(True),
+                )
+                .order_by(AssetCategory.category_code)
+            ).all()
         ]
 
         context = {
@@ -1137,33 +1180,38 @@ class APWebService:
         from_date = _parse_date(start_date)
         to_date = _parse_date(end_date)
 
-        query = (
-            db.query(SupplierPayment, Supplier)
-            .join(Supplier, SupplierPayment.supplier_id == Supplier.supplier_id)
-            .filter(SupplierPayment.organization_id == org_id)
-        )
-
+        conditions: list[Any] = [SupplierPayment.organization_id == org_id]
         if supplier_id:
-            query = query.filter(
-                SupplierPayment.supplier_id == coerce_uuid(supplier_id)
-            )
+            conditions.append(SupplierPayment.supplier_id == coerce_uuid(supplier_id))
         if status_value:
-            query = query.filter(SupplierPayment.status == status_value)
+            conditions.append(SupplierPayment.status == status_value)
         if from_date:
-            query = query.filter(SupplierPayment.payment_date >= from_date)
+            conditions.append(SupplierPayment.payment_date >= from_date)
         if to_date:
-            query = query.filter(SupplierPayment.payment_date <= to_date)
+            conditions.append(SupplierPayment.payment_date <= to_date)
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            conditions.append(
                 or_(
                     SupplierPayment.payment_number.ilike(search_pattern),
                     SupplierPayment.reference.ilike(search_pattern),
                 )
             )
 
+        base_stmt = (
+            select(SupplierPayment, Supplier)
+            .join(Supplier, SupplierPayment.supplier_id == Supplier.supplier_id)
+            .where(*conditions)
+        )
+
         total_count = (
-            query.with_entities(func.count(SupplierPayment.payment_id)).scalar() or 0
+            db.scalar(
+                select(func.count(SupplierPayment.payment_id))
+                .select_from(SupplierPayment)
+                .join(Supplier, SupplierPayment.supplier_id == Supplier.supplier_id)
+                .where(*conditions)
+            )
+            or 0
         )
 
         column_map = {
@@ -1172,15 +1220,15 @@ class APWebService:
             "amount": SupplierPayment.amount,
             "status": SupplierPayment.status,
         }
-        query = apply_sort(
-            query,
+        stmt = apply_sort(
+            base_stmt,
             sort,
             sort_dir,
             column_map,
             default=SupplierPayment.payment_date.desc(),
         )
 
-        payments = query.limit(limit).offset(offset).all()
+        payments = db.execute(stmt.limit(limit).offset(offset)).all()
 
         payments_view = []
         for payment, supplier in payments:
@@ -1264,18 +1312,19 @@ class APWebService:
         ]
 
         query = (
-            db.query(SupplierInvoice, Supplier)
+            select(SupplierInvoice, Supplier)
             .join(Supplier, SupplierInvoice.supplier_id == Supplier.supplier_id)
-            .filter(
+            .where(
                 SupplierInvoice.organization_id == org_id,
                 SupplierInvoice.status.in_(open_statuses),
             )
         )
 
-        if invoice_id:
-            query = query.filter(SupplierInvoice.invoice_id == coerce_uuid(invoice_id))
+        selected_invoice_id = coerce_uuid(invoice_id) if invoice_id else None
+        if selected_invoice_id:
+            query = query.where(SupplierInvoice.invoice_id == selected_invoice_id)
 
-        rows = query.order_by(SupplierInvoice.due_date).all()
+        rows = db.execute(query.order_by(SupplierInvoice.due_date)).all()
 
         open_invoices = []
         selected_invoice = None
@@ -1297,23 +1346,22 @@ class APWebService:
                 "currency_code": invoice.currency_code,
             }
             open_invoices.append(view)
-            if invoice_id and invoice.invoice_id == coerce_uuid(invoice_id):
+            if selected_invoice_id and invoice.invoice_id == selected_invoice_id:
                 selected_invoice = view
 
         # Get WHT codes for payments
         from app.models.finance.tax.tax_code import TaxCode, TaxType
 
-        wht_codes = (
-            db.query(TaxCode)
-            .filter(
+        wht_codes = db.scalars(
+            select(TaxCode)
+            .where(
                 TaxCode.organization_id == org_id,
                 TaxCode.tax_type == TaxType.WITHHOLDING,
-                TaxCode.is_active == True,
-                TaxCode.applies_to_purchases == True,
+                TaxCode.is_active.is_(True),
+                TaxCode.applies_to_purchases.is_(True),
             )
             .order_by(TaxCode.tax_code)
-            .all()
-        )
+        ).all()
         wht_codes_list = [
             {
                 "id": str(code.tax_code_id),
@@ -1328,16 +1376,15 @@ class APWebService:
         # Get bank accounts
         from app.models.finance.gl.account import Account, IFRSCategory
 
-        bank_accounts = (
-            db.query(Account)
-            .filter(
+        bank_accounts = db.scalars(
+            select(Account)
+            .where(
                 Account.organization_id == org_id,
                 Account.ifrs_category == IFRSCategory.ASSETS,
-                Account.is_active == True,
+                Account.is_active.is_(True),
             )
             .order_by(Account.account_name)
-            .all()
-        )
+        ).all()
         bank_accounts_list = [
             {
                 "id": str(acct.account_id),
@@ -1389,11 +1436,11 @@ class APWebService:
         invoice_map: dict[UUID, SupplierInvoice] = {}
         if allocations:
             invoice_ids = [allocation.invoice_id for allocation in allocations]
-            invoices = (
-                db.query(SupplierInvoice)
-                .filter(SupplierInvoice.invoice_id.in_(invoice_ids))
-                .all()
-            )
+            invoices = db.scalars(
+                select(SupplierInvoice).where(
+                    SupplierInvoice.invoice_id.in_(invoice_ids)
+                )
+            ).all()
             invoice_map = {invoice.invoice_id: invoice for invoice in invoices}
 
         allocations_view = [
@@ -1655,23 +1702,18 @@ class APWebService:
         from_date = _parse_date(start_date)
         to_date = _parse_date(end_date)
 
-        query = (
-            db.query(PurchaseOrder, Supplier)
-            .join(Supplier, PurchaseOrder.supplier_id == Supplier.supplier_id)
-            .filter(PurchaseOrder.organization_id == org_id)
-        )
-
+        filters = [PurchaseOrder.organization_id == org_id]
         if supplier_id:
-            query = query.filter(PurchaseOrder.supplier_id == coerce_uuid(supplier_id))
+            filters.append(PurchaseOrder.supplier_id == coerce_uuid(supplier_id))
         if status_value:
-            query = query.filter(PurchaseOrder.status == status_value)
+            filters.append(PurchaseOrder.status == status_value)
         if from_date:
-            query = query.filter(PurchaseOrder.po_date >= from_date)
+            filters.append(PurchaseOrder.po_date >= from_date)
         if to_date:
-            query = query.filter(PurchaseOrder.po_date <= to_date)
+            filters.append(PurchaseOrder.po_date <= to_date)
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            filters.append(
                 or_(
                     PurchaseOrder.po_number.ilike(search_pattern),
                     Supplier.legal_name.ilike(search_pattern),
@@ -1679,47 +1721,64 @@ class APWebService:
                 )
             )
 
-        total_count = query.with_entities(func.count(PurchaseOrder.po_id)).scalar() or 0
-        orders = (
-            query.order_by(PurchaseOrder.po_date.desc())
+        total_count = (
+            db.scalar(
+                select(func.count(PurchaseOrder.po_id))
+                .select_from(PurchaseOrder)
+                .join(Supplier, PurchaseOrder.supplier_id == Supplier.supplier_id)
+                .where(*filters)
+            )
+            or 0
+        )
+        orders = db.execute(
+            select(PurchaseOrder, Supplier)
+            .join(Supplier, PurchaseOrder.supplier_id == Supplier.supplier_id)
+            .where(*filters)
+            .order_by(PurchaseOrder.po_date.desc())
             .limit(limit)
             .offset(offset)
-            .all()
-        )
+        ).all()
 
         # Build stats
         draft_count = (
-            db.query(func.count(PurchaseOrder.po_id))
-            .filter(
-                PurchaseOrder.organization_id == org_id,
-                PurchaseOrder.status == POStatus.DRAFT,
+            db.scalar(
+                select(func.count(PurchaseOrder.po_id)).where(
+                    PurchaseOrder.organization_id == org_id,
+                    PurchaseOrder.status == POStatus.DRAFT,
+                )
             )
-            .scalar()
             or 0
         )
         pending_count = (
-            db.query(func.count(PurchaseOrder.po_id))
-            .filter(
-                PurchaseOrder.organization_id == org_id,
-                PurchaseOrder.status == POStatus.PENDING_APPROVAL,
+            db.scalar(
+                select(func.count(PurchaseOrder.po_id)).where(
+                    PurchaseOrder.organization_id == org_id,
+                    PurchaseOrder.status == POStatus.PENDING_APPROVAL,
+                )
             )
-            .scalar()
             or 0
         )
-        approved_total = db.query(
-            func.coalesce(func.sum(PurchaseOrder.total_amount), 0)
-        ).filter(
-            PurchaseOrder.organization_id == org_id,
-            PurchaseOrder.status == POStatus.APPROVED,
-        ).scalar() or Decimal("0")
-        open_total = db.query(
-            func.coalesce(
-                func.sum(PurchaseOrder.total_amount - PurchaseOrder.amount_received), 0
+        approved_total = db.scalar(
+            select(func.coalesce(func.sum(PurchaseOrder.total_amount), 0)).where(
+                PurchaseOrder.organization_id == org_id,
+                PurchaseOrder.status == POStatus.APPROVED,
             )
-        ).filter(
-            PurchaseOrder.organization_id == org_id,
-            PurchaseOrder.status.in_([POStatus.APPROVED, POStatus.PARTIALLY_RECEIVED]),
-        ).scalar() or Decimal("0")
+        ) or Decimal("0")
+        open_total = db.scalar(
+            select(
+                func.coalesce(
+                    func.sum(
+                        PurchaseOrder.total_amount - PurchaseOrder.amount_received
+                    ),
+                    0,
+                )
+            ).where(
+                PurchaseOrder.organization_id == org_id,
+                PurchaseOrder.status.in_(
+                    [POStatus.APPROVED, POStatus.PARTIALLY_RECEIVED]
+                ),
+            )
+        ) or Decimal("0")
 
         orders_view = []
         for po, supplier in orders:
@@ -1799,12 +1858,11 @@ class APWebService:
 
         supplier = db.get(Supplier, po.supplier_id)
 
-        lines = (
-            db.query(PurchaseOrderLine)
-            .filter(PurchaseOrderLine.po_id == po_uuid)
+        lines = db.scalars(
+            select(PurchaseOrderLine)
+            .where(PurchaseOrderLine.po_id == po_uuid)
             .order_by(PurchaseOrderLine.line_number)
-            .all()
-        )
+        ).all()
 
         lines_view = []
         for line in lines:
@@ -1844,18 +1902,19 @@ class APWebService:
         }
 
         # Get related goods receipts
-        goods_receipts = (
-            db.query(GoodsReceipt)
-            .filter(GoodsReceipt.po_id == po_uuid)
+        goods_receipts = db.scalars(
+            select(GoodsReceipt)
+            .where(GoodsReceipt.po_id == po_uuid)
             .order_by(GoodsReceipt.receipt_date.desc())
-            .all()
-        )
+        ).all()
         receipts_view = []
         for gr in goods_receipts:
             line_count = (
-                db.query(func.count(GoodsReceiptLine.line_id))
-                .filter(GoodsReceiptLine.receipt_id == gr.receipt_id)
-                .scalar()
+                db.scalar(
+                    select(func.count(GoodsReceiptLine.line_id)).where(
+                        GoodsReceiptLine.receipt_id == gr.receipt_id
+                    )
+                )
                 or 0
             )
             receipts_view.append(
@@ -1923,17 +1982,16 @@ class APWebService:
         # Get inventory items for selection
         from app.models.inventory.item import Item
 
-        items = (
-            db.query(Item)
-            .filter(
+        items = db.scalars(
+            select(Item)
+            .where(
                 Item.organization_id == org_id,
                 Item.is_active.is_(True),
                 Item.is_purchaseable.is_(True),
             )
             .order_by(Item.item_code)
             .limit(500)
-            .all()
-        )
+        ).all()
         items_list = [
             {
                 "item_id": item.item_id,
@@ -1963,12 +2021,11 @@ class APWebService:
                     "terms_and_conditions": po.terms_and_conditions,
                     "status": po.status.value,
                 }
-                po_lines = (
-                    db.query(PurchaseOrderLine)
-                    .filter(PurchaseOrderLine.po_id == po_uuid)
+                po_lines = db.scalars(
+                    select(PurchaseOrderLine)
+                    .where(PurchaseOrderLine.po_id == po_uuid)
                     .order_by(PurchaseOrderLine.line_number)
-                    .all()
-                )
+                ).all()
                 for line in po_lines:
                     lines.append(
                         {
@@ -2030,26 +2087,20 @@ class APWebService:
         from_date = _parse_date(start_date)
         to_date = _parse_date(end_date)
 
-        query = (
-            db.query(GoodsReceipt, Supplier, PurchaseOrder)
-            .join(Supplier, GoodsReceipt.supplier_id == Supplier.supplier_id)
-            .join(PurchaseOrder, GoodsReceipt.po_id == PurchaseOrder.po_id)
-            .filter(GoodsReceipt.organization_id == org_id)
-        )
-
+        filters = [GoodsReceipt.organization_id == org_id]
         if supplier_id:
-            query = query.filter(GoodsReceipt.supplier_id == coerce_uuid(supplier_id))
+            filters.append(GoodsReceipt.supplier_id == coerce_uuid(supplier_id))
         if po_id:
-            query = query.filter(GoodsReceipt.po_id == coerce_uuid(po_id))
+            filters.append(GoodsReceipt.po_id == coerce_uuid(po_id))
         if status_value:
-            query = query.filter(GoodsReceipt.status == status_value)
+            filters.append(GoodsReceipt.status == status_value)
         if from_date:
-            query = query.filter(GoodsReceipt.receipt_date >= from_date)
+            filters.append(GoodsReceipt.receipt_date >= from_date)
         if to_date:
-            query = query.filter(GoodsReceipt.receipt_date <= to_date)
+            filters.append(GoodsReceipt.receipt_date <= to_date)
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            filters.append(
                 or_(
                     GoodsReceipt.receipt_number.ilike(search_pattern),
                     PurchaseOrder.po_number.ilike(search_pattern),
@@ -2059,41 +2110,51 @@ class APWebService:
             )
 
         total_count = (
-            query.with_entities(func.count(GoodsReceipt.receipt_id)).scalar() or 0
+            db.scalar(
+                select(func.count(GoodsReceipt.receipt_id))
+                .select_from(GoodsReceipt)
+                .join(Supplier, GoodsReceipt.supplier_id == Supplier.supplier_id)
+                .join(PurchaseOrder, GoodsReceipt.po_id == PurchaseOrder.po_id)
+                .where(*filters)
+            )
+            or 0
         )
-        receipts = (
-            query.order_by(GoodsReceipt.receipt_date.desc())
+        receipts = db.execute(
+            select(GoodsReceipt, Supplier, PurchaseOrder)
+            .join(Supplier, GoodsReceipt.supplier_id == Supplier.supplier_id)
+            .join(PurchaseOrder, GoodsReceipt.po_id == PurchaseOrder.po_id)
+            .where(*filters)
+            .order_by(GoodsReceipt.receipt_date.desc())
             .limit(limit)
             .offset(offset)
-            .all()
-        )
+        ).all()
 
         # Build stats
         received_count = (
-            db.query(func.count(GoodsReceipt.receipt_id))
-            .filter(
-                GoodsReceipt.organization_id == org_id,
-                GoodsReceipt.status == ReceiptStatus.RECEIVED,
+            db.scalar(
+                select(func.count(GoodsReceipt.receipt_id)).where(
+                    GoodsReceipt.organization_id == org_id,
+                    GoodsReceipt.status == ReceiptStatus.RECEIVED,
+                )
             )
-            .scalar()
             or 0
         )
         inspecting_count = (
-            db.query(func.count(GoodsReceipt.receipt_id))
-            .filter(
-                GoodsReceipt.organization_id == org_id,
-                GoodsReceipt.status == ReceiptStatus.INSPECTING,
+            db.scalar(
+                select(func.count(GoodsReceipt.receipt_id)).where(
+                    GoodsReceipt.organization_id == org_id,
+                    GoodsReceipt.status == ReceiptStatus.INSPECTING,
+                )
             )
-            .scalar()
             or 0
         )
         accepted_count = (
-            db.query(func.count(GoodsReceipt.receipt_id))
-            .filter(
-                GoodsReceipt.organization_id == org_id,
-                GoodsReceipt.status == ReceiptStatus.ACCEPTED,
+            db.scalar(
+                select(func.count(GoodsReceipt.receipt_id)).where(
+                    GoodsReceipt.organization_id == org_id,
+                    GoodsReceipt.status == ReceiptStatus.ACCEPTED,
+                )
             )
-            .scalar()
             or 0
         )
 
@@ -2101,9 +2162,11 @@ class APWebService:
         for gr, supplier, po in receipts:
             # Count lines
             line_count = (
-                db.query(func.count(GoodsReceiptLine.line_id))
-                .filter(GoodsReceiptLine.receipt_id == gr.receipt_id)
-                .scalar()
+                db.scalar(
+                    select(func.count(GoodsReceiptLine.line_id)).where(
+                        GoodsReceiptLine.receipt_id == gr.receipt_id
+                    )
+                )
                 or 0
             )
             receipts_view.append(
@@ -2181,16 +2244,15 @@ class APWebService:
         supplier = db.get(Supplier, gr.supplier_id)
         po = db.get(PurchaseOrder, gr.po_id)
 
-        lines = (
-            db.query(GoodsReceiptLine, PurchaseOrderLine)
+        lines = db.execute(
+            select(GoodsReceiptLine, PurchaseOrderLine)
             .join(
                 PurchaseOrderLine,
                 GoodsReceiptLine.po_line_id == PurchaseOrderLine.line_id,
             )
-            .filter(GoodsReceiptLine.receipt_id == receipt_uuid)
+            .where(GoodsReceiptLine.receipt_id == receipt_uuid)
             .order_by(GoodsReceiptLine.line_number)
-            .all()
-        )
+        ).all()
 
         lines_view = []
         for gr_line, po_line in lines:
@@ -2274,17 +2336,16 @@ class APWebService:
 
         # Get POs that can receive goods (APPROVED or PARTIALLY_RECEIVED)
         receivable_statuses = [POStatus.APPROVED, POStatus.PARTIALLY_RECEIVED]
-        pos = (
-            db.query(PurchaseOrder, Supplier)
+        pos = db.execute(
+            select(PurchaseOrder, Supplier)
             .join(Supplier, PurchaseOrder.supplier_id == Supplier.supplier_id)
-            .filter(
+            .where(
                 PurchaseOrder.organization_id == org_id,
                 PurchaseOrder.status.in_(receivable_statuses),
             )
             .order_by(PurchaseOrder.po_date.desc())
             .limit(100)
-            .all()
-        )
+        ).all()
 
         po_list = []
         for po, supplier in pos:
@@ -2319,12 +2380,11 @@ class APWebService:
                     "currency_code": po.currency_code,
                 }
 
-                lines = (
-                    db.query(PurchaseOrderLine)
-                    .filter(PurchaseOrderLine.po_id == po_uuid)
+                lines = db.scalars(
+                    select(PurchaseOrderLine)
+                    .where(PurchaseOrderLine.po_id == po_uuid)
                     .order_by(PurchaseOrderLine.line_number)
-                    .all()
-                )
+                ).all()
 
                 for line in lines:
                     remaining = line.quantity_ordered - line.quantity_received
@@ -2344,15 +2404,14 @@ class APWebService:
         # Get warehouses for selection
         from app.models.inventory.warehouse import Warehouse
 
-        warehouses = (
-            db.query(Warehouse)
-            .filter(
+        warehouses = db.scalars(
+            select(Warehouse)
+            .where(
                 Warehouse.organization_id == org_id,
                 Warehouse.is_active.is_(True),
             )
             .order_by(Warehouse.warehouse_code)
-            .all()
-        )
+        ).all()
         warehouse_list = [
             {
                 "warehouse_id": str(w.warehouse_id),
@@ -2715,12 +2774,11 @@ class APWebService:
 
         # Add existing invoice data
         db.get(Supplier, invoice.supplier_id)
-        lines = (
-            db.query(SupplierInvoiceLine)
-            .filter(SupplierInvoiceLine.invoice_id == inv_id)
+        lines = db.scalars(
+            select(SupplierInvoiceLine)
+            .where(SupplierInvoiceLine.invoice_id == inv_id)
             .order_by(SupplierInvoiceLine.line_number)
-            .all()
-        )
+        ).all()
 
         context["invoice"] = {
             "invoice_id": invoice.invoice_id,
@@ -2905,6 +2963,118 @@ class APWebService:
                 url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
                 status_code=303,
             )
+
+    async def add_invoice_comment_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> RedirectResponse:
+        """Append an internal comment to an AP invoice."""
+        org_id = auth.organization_id
+        user_id = auth.person_id or auth.user_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        try:
+            invoice = supplier_invoice_service.get(
+                db, invoice_id, organization_id=org_id
+            )
+        except Exception:
+            return RedirectResponse(
+                url="/finance/ap/invoices?error=Invoice+not+found",
+                status_code=303,
+            )
+
+        form = await request.form()
+        comment_text = str(form.get("comment", "")).strip()
+        if not comment_text:
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?error=Comment+is+required#comments",
+                status_code=303,
+            )
+
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+        entry = f"[{timestamp}] {user_id}: {comment_text}"
+        invoice.comments = f"{invoice.comments}\n{entry}" if invoice.comments else entry
+
+        mentioned_person_ids: set[UUID] = set()
+
+        # Support @email mentions.
+        mention_pattern = re.compile(
+            r"@([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})"
+        )
+        mentioned_emails = {m.lower() for m in mention_pattern.findall(comment_text)}
+        if mentioned_emails:
+            email_matches = db.scalars(
+                select(Person).where(
+                    Person.organization_id == org_id,
+                    func.lower(Person.email).in_(mentioned_emails),
+                )
+            ).all()
+            mentioned_person_ids.update(person.id for person in email_matches)
+
+        # Support @Display Name mentions (for inline tagging in comment text).
+        if "@" in comment_text:
+            normalized_comment = " ".join(comment_text.lower().split())
+            org_people = db.scalars(
+                select(Person).where(Person.organization_id == org_id)
+            ).all()
+            for person in org_people:
+                candidate_names = {
+                    (person.display_name or "").strip(),
+                    f"{person.first_name} {person.last_name}".strip(),
+                }
+                for candidate in candidate_names:
+                    if not candidate:
+                        continue
+                    candidate_norm = " ".join(candidate.lower().split())
+                    needle = f"@{candidate_norm}"
+                    pos = normalized_comment.find(needle)
+                    while pos != -1:
+                        end_pos = pos + len(needle)
+                        if (
+                            end_pos == len(normalized_comment)
+                            or not normalized_comment[end_pos].isalnum()
+                        ):
+                            mentioned_person_ids.add(person.id)
+                            break
+                        pos = normalized_comment.find(needle, pos + 1)
+
+        if mentioned_person_ids:
+            actor_id = coerce_uuid(user_id)
+            actor = db.get(Person, actor_id)
+            actor_name = actor.name if actor else "A teammate"
+            mentioned_people = db.scalars(
+                select(Person).where(Person.id.in_(mentioned_person_ids))
+            ).all()
+            for person in mentioned_people:
+                if person.id == actor_id:
+                    continue
+                notification_service.create(
+                    db=db,
+                    organization_id=coerce_uuid(org_id),
+                    recipient_id=person.id,
+                    entity_type=EntityType.INVOICE,
+                    entity_id=coerce_uuid(invoice.invoice_id),
+                    notification_type=NotificationType.MENTION,
+                    title=f"Mentioned on AP invoice {invoice.invoice_number}",
+                    message=(
+                        f"{actor_name} mentioned you in a comment on invoice "
+                        f"{invoice.invoice_number}."
+                    ),
+                    action_url=f"/finance/ap/invoices/{invoice_id}#comments",
+                    actor_id=actor_id,
+                )
+        db.commit()
+
+        return RedirectResponse(
+            url=f"/finance/ap/invoices/{invoice_id}?success=Comment+added#comments",
+            status_code=303,
+        )
 
     def list_payments_response(
         self,
@@ -3258,14 +3428,13 @@ class APWebService:
             status=BankAccountStatus.active,
             limit=200,
         )
-        invoices = (
-            db.query(SupplierInvoice, Supplier)
+        invoices = db.execute(
+            select(SupplierInvoice, Supplier)
             .join(Supplier, SupplierInvoice.supplier_id == Supplier.supplier_id)
-            .filter(SupplierInvoice.organization_id == auth.organization_id)
+            .where(SupplierInvoice.organization_id == auth.organization_id)
             .order_by(SupplierInvoice.invoice_date.desc())
             .limit(50)
-            .all()
-        )
+        ).all()
         invoices_view = [
             {
                 "invoice_id": invoice.invoice_id,

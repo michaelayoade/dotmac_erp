@@ -2,7 +2,8 @@ import logging
 from typing import Any, TypeVar
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Query, Session
+from sqlalchemy import Select, select
+from sqlalchemy.orm import Session
 
 from app.models.scheduler import ScheduledTask, ScheduleType
 from app.schemas.scheduler import ScheduledTaskCreate, ScheduledTaskUpdate
@@ -15,8 +16,8 @@ T = TypeVar("T")
 
 
 def _apply_ordering(
-    query: Query[T], order_by: str, order_dir: str, allowed_columns: dict[str, Any]
-) -> Query[T]:
+    query: Select[T], order_by: str, order_dir: str, allowed_columns: dict[str, Any]
+) -> Select[T]:
     if order_by not in allowed_columns:
         raise HTTPException(
             status_code=400,
@@ -28,7 +29,7 @@ def _apply_ordering(
     return query.order_by(column.asc())
 
 
-def _apply_pagination(query: Query[T], limit: int, offset: int) -> Query[T]:
+def _apply_pagination(query: Select[T], limit: int, offset: int) -> Select[T]:
     return query.limit(limit).offset(offset)
 
 
@@ -70,16 +71,16 @@ class ScheduledTasks(ListResponseMixin):
         limit: int,
         offset: int,
     ) -> list[ScheduledTask]:
-        query = db.query(ScheduledTask)
+        query = select(ScheduledTask)
         if enabled is not None:
-            query = query.filter(ScheduledTask.enabled == enabled)
+            query = query.where(ScheduledTask.enabled == enabled)
         query = _apply_ordering(
             query,
             order_by,
             order_dir,
             {"created_at": ScheduledTask.created_at, "name": ScheduledTask.name},
         )
-        return _apply_pagination(query, limit, offset).all()
+        return db.scalars(_apply_pagination(query, limit, offset)).all()
 
     @staticmethod
     def update(

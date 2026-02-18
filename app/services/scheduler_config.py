@@ -3,6 +3,7 @@ import os
 from datetime import timedelta
 
 from celery.schedules import crontab
+from sqlalchemy import select
 
 from app.db import SessionLocal
 from app.models.domain_settings import DomainSetting, SettingDomain
@@ -29,12 +30,12 @@ def _env_int(name: str) -> int | None:
 
 
 def _get_setting_value(db, domain: SettingDomain, key: str) -> str | None:
-    setting = (
-        db.query(DomainSetting)
-        .filter(DomainSetting.domain == domain)
-        .filter(DomainSetting.key == key)
-        .filter(DomainSetting.is_active.is_(True))
-        .first()
+    setting = db.scalar(
+        select(DomainSetting).where(
+            DomainSetting.domain == domain,
+            DomainSetting.key == key,
+            DomainSetting.is_active.is_(True),
+        )
     )
     if not setting:
         return None
@@ -244,6 +245,60 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "task": "app.tasks.splynx.cleanup_stale_splynx_sync_history",
             "schedule": crontab(minute=17),  # Hourly at :17
             "kwargs": {"stale_after_minutes": 180, "limit": 500},
+        },
+        # ── Outbox relay tasks ──────────────────────────────────
+        "outbox-relay": {
+            "task": "app.tasks.outbox_relay.relay_outbox_events",
+            "schedule": timedelta(seconds=30),  # Every 30 seconds
+            "kwargs": {"batch_size": 100},
+        },
+        "outbox-cleanup": {
+            "task": "app.tasks.outbox_relay.cleanup_published_outbox_events",
+            "schedule": crontab(hour=2, minute=30),  # 2:30 AM daily
+            "kwargs": {"retention_days": 30, "batch_size": 5000},
+        },
+        # ── Data health tasks ────────────────────────────────────
+        "data-health-check": {
+            "task": "app.tasks.data_health.run_data_health_check",
+            "schedule": crontab(hour=4, minute=0),  # 4:00 AM daily
+        },
+        "notification-cleanup": {
+            "task": "app.tasks.data_health.cleanup_old_notifications",
+            "schedule": crontab(hour=3, minute=0),  # 3:00 AM daily
+            "kwargs": {"read_days": 30, "unread_days": 90},
+        },
+        "outbox-stuck-recovery": {
+            "task": "app.tasks.data_health.process_stuck_outbox_events",
+            "schedule": crontab(minute="*/15"),  # Every 15 minutes
+            "kwargs": {"stuck_minutes": 30, "batch_size": 500},
+        },
+        "invoice-status-reconciliation": {
+            "task": "app.tasks.data_health.reconcile_invoice_statuses",
+            "schedule": crontab(hour=4, minute=30),  # 4:30 AM daily
+        },
+        "auto-post-approved-invoices": {
+            "task": "app.tasks.data_health.auto_post_approved_invoices",
+            "schedule": crontab(hour=8, minute=30),  # 8:30 AM daily
+            "kwargs": {"max_age_days": 7},
+        },
+        "stale-draft-report": {
+            "task": "app.tasks.data_health.cleanup_stale_drafts",
+            "schedule": crontab(hour=3, minute=30, day_of_week=1),  # Monday 3:30 AM
+            "kwargs": {"draft_age_days": 180, "dry_run": True},
+        },
+        "rebuild-account-balances": {
+            "task": "app.tasks.data_health.rebuild_account_balances",
+            "schedule": crontab(hour=4, minute=45),  # 4:45 AM daily
+        },
+        "payment-allocation-reconciliation": {
+            "task": "app.tasks.data_health.reconcile_payment_allocations",
+            "schedule": crontab(hour=5, minute=0, day_of_week=0),  # Sunday 5:00 AM
+            "kwargs": {"batch_size": 1000, "dry_run": True},
+        },
+        "unbalanced-journal-check": {
+            "task": "app.tasks.data_health.fix_unbalanced_posted_journals",
+            "schedule": crontab(hour=4, minute=15),  # 4:15 AM daily
+            "kwargs": {"dry_run": True, "batch_size": 100},
         },
     }
 

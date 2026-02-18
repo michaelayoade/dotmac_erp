@@ -8,6 +8,7 @@ import logging
 
 from fastapi import Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
 
@@ -65,27 +66,22 @@ class ComponentWebService:
         per_page = DEFAULT_PAGE_SIZE
         offset = (page - 1) * per_page
 
-        query = db.query(SalaryComponent).filter(
-            SalaryComponent.organization_id == org_id
-        )
+        query = select(SalaryComponent).where(SalaryComponent.organization_id == org_id)
 
         if search:
-            query = query.filter(
+            query = query.where(
                 SalaryComponent.component_name.ilike(f"%{search}%")
                 | SalaryComponent.component_code.ilike(f"%{search}%")
             )
 
         type_enum = parse_component_type(component_type)
         if type_enum:
-            query = query.filter(SalaryComponent.component_type == type_enum)
+            query = query.where(SalaryComponent.component_type == type_enum)
 
-        total = query.count()
-        components = (
-            query.order_by(SalaryComponent.display_order)
-            .offset(offset)
-            .limit(per_page)
-            .all()
-        )
+        total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+        components = db.scalars(
+            query.order_by(SalaryComponent.display_order).offset(offset).limit(per_page)
+        ).all()
         total_pages = (total + per_page - 1) // per_page
 
         context = base_context(request, auth, "Salary Components", "payroll", db=db)
@@ -118,32 +114,30 @@ class ComponentWebService:
         org_id = coerce_uuid(auth.organization_id)
 
         # Get expense accounts for dropdown
-        expense_accounts = (
-            db.query(Account)
+        expense_accounts = db.scalars(
+            select(Account)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-            .filter(
+            .where(
                 Account.organization_id == org_id,
                 AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
                 Account.is_active.is_(True),
                 AccountCategory.is_active.is_(True),
             )
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
 
         # Get liability accounts for dropdown
-        liability_accounts = (
-            db.query(Account)
+        liability_accounts = db.scalars(
+            select(Account)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-            .filter(
+            .where(
                 Account.organization_id == org_id,
                 AccountCategory.ifrs_category == IFRSCategory.LIABILITIES,
                 Account.is_active.is_(True),
                 AccountCategory.is_active.is_(True),
             )
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
 
         context = base_context(request, auth, "New Salary Component", "payroll", db=db)
         context["request"] = request
@@ -185,31 +179,29 @@ class ComponentWebService:
                 status_code=303,
             )
 
-        expense_accounts = (
-            db.query(Account)
+        expense_accounts = db.scalars(
+            select(Account)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-            .filter(
+            .where(
                 Account.organization_id == org_id,
                 AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
                 Account.is_active.is_(True),
                 AccountCategory.is_active.is_(True),
             )
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
 
-        liability_accounts = (
-            db.query(Account)
+        liability_accounts = db.scalars(
+            select(Account)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-            .filter(
+            .where(
                 Account.organization_id == org_id,
                 AccountCategory.ifrs_category == IFRSCategory.LIABILITIES,
                 Account.is_active.is_(True),
                 AccountCategory.is_active.is_(True),
             )
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
 
         context = base_context(request, auth, "Edit Salary Component", "payroll", db=db)
         context["request"] = request
@@ -281,33 +273,31 @@ class ComponentWebService:
         except Exception as e:
             db.rollback()
 
-            expense_accounts = (
-                db.query(Account)
+            expense_accounts = db.scalars(
+                select(Account)
                 .join(
                     AccountCategory, Account.category_id == AccountCategory.category_id
                 )
-                .filter(
+                .where(
                     Account.organization_id == org_id,
                     AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
                     Account.is_active.is_(True),
                 )
                 .order_by(Account.account_code)
-                .all()
-            )
+            ).all()
 
-            liability_accounts = (
-                db.query(Account)
+            liability_accounts = db.scalars(
+                select(Account)
                 .join(
                     AccountCategory, Account.category_id == AccountCategory.category_id
                 )
-                .filter(
+                .where(
                     Account.organization_id == org_id,
                     AccountCategory.ifrs_category == IFRSCategory.LIABILITIES,
                     Account.is_active.is_(True),
                 )
                 .order_by(Account.account_code)
-                .all()
-            )
+            ).all()
 
             context = base_context(
                 request, auth, "New Salary Component", "payroll", db=db
@@ -403,33 +393,31 @@ class ComponentWebService:
         except Exception as e:
             db.rollback()
 
-            expense_accounts = (
-                db.query(Account)
+            expense_accounts = db.scalars(
+                select(Account)
                 .join(
                     AccountCategory, Account.category_id == AccountCategory.category_id
                 )
-                .filter(
+                .where(
                     Account.organization_id == org_id,
                     AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
                     Account.is_active.is_(True),
                 )
                 .order_by(Account.account_code)
-                .all()
-            )
+            ).all()
 
-            liability_accounts = (
-                db.query(Account)
+            liability_accounts = db.scalars(
+                select(Account)
                 .join(
                     AccountCategory, Account.category_id == AccountCategory.category_id
                 )
-                .filter(
+                .where(
                     Account.organization_id == org_id,
                     AccountCategory.ifrs_category == IFRSCategory.LIABILITIES,
                     Account.is_active.is_(True),
                 )
                 .order_by(Account.account_code)
-                .all()
-            )
+            ).all()
 
             context = base_context(
                 request, auth, "Edit Salary Component", "payroll", db=db
@@ -485,25 +473,29 @@ class ComponentWebService:
             )
 
         in_structure = (
-            db.query(SalaryStructureEarning)
-            .filter(SalaryStructureEarning.component_id == c_id)
-            .first()
+            db.scalar(
+                select(SalaryStructureEarning).where(
+                    SalaryStructureEarning.component_id == c_id
+                )
+            )
             is not None
-        ) or (
-            db.query(SalaryStructureDeduction)
-            .filter(SalaryStructureDeduction.component_id == c_id)
-            .first()
+            or db.scalar(
+                select(SalaryStructureDeduction).where(
+                    SalaryStructureDeduction.component_id == c_id
+                )
+            )
             is not None
         )
         in_slips = (
-            db.query(SalarySlipEarning)
-            .filter(SalarySlipEarning.component_id == c_id)
-            .first()
+            db.scalar(
+                select(SalarySlipEarning).where(SalarySlipEarning.component_id == c_id)
+            )
             is not None
-        ) or (
-            db.query(SalarySlipDeduction)
-            .filter(SalarySlipDeduction.component_id == c_id)
-            .first()
+            or db.scalar(
+                select(SalarySlipDeduction).where(
+                    SalarySlipDeduction.component_id == c_id
+                )
+            )
             is not None
         )
 

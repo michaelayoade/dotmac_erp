@@ -58,15 +58,16 @@ class LifecycleWebService:
         employee = svc.get_employee(employee_id)
         person = db.get(Person, employee.person_id)
 
-        templates_list = (
-            db.query(ChecklistTemplate)
-            .filter(
-                ChecklistTemplate.organization_id == org_id,
-                ChecklistTemplate.template_type == ChecklistTemplateType.ONBOARDING,
-                ChecklistTemplate.is_active == True,
-            )
-            .order_by(ChecklistTemplate.template_name)
-            .all()
+        templates_list = list(
+            db.scalars(
+                select(ChecklistTemplate)
+                .where(
+                    ChecklistTemplate.organization_id == org_id,
+                    ChecklistTemplate.template_type == ChecklistTemplateType.ONBOARDING,
+                    ChecklistTemplate.is_active == True,
+                )
+                .order_by(ChecklistTemplate.template_name)
+            ).all()
         )
 
         context = base_context(request, auth, "New Onboarding", "employees", db=db)
@@ -303,18 +304,19 @@ class LifecycleWebService:
             .where(Employee.organization_id == org_id)
             .where(Employee.is_deleted == False)
         )
-        results = (
-            db.query(Person)
-            .filter(Person.organization_id == org_id)
-            .filter(Person.id.not_in(linked_people_subq))
-            .filter(
-                (Person.first_name.ilike(search_term))
-                | (Person.last_name.ilike(search_term))
-                | (Person.email.ilike(search_term))
-            )
-            .order_by(Person.first_name.asc())
-            .limit(10)
-            .all()
+        results = list(
+            db.scalars(
+                select(Person)
+                .where(Person.organization_id == org_id)
+                .where(Person.id.not_in(linked_people_subq))
+                .where(
+                    (Person.first_name.ilike(search_term))
+                    | (Person.last_name.ilike(search_term))
+                    | (Person.email.ilike(search_term))
+                )
+                .order_by(Person.first_name.asc())
+                .limit(10)
+            ).all()
         )
         payload = [
             {

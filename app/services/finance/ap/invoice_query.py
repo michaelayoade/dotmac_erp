@@ -34,7 +34,7 @@ def build_invoice_query(
     to_date = parse_date(end_date)
 
     query = (
-        db.query(SupplierInvoice)
+        Query([SupplierInvoice], session=db)
         .join(Supplier, SupplierInvoice.supplier_id == Supplier.supplier_id)
         .filter(SupplierInvoice.organization_id == org_id)
     )

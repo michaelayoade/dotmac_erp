@@ -16,6 +16,7 @@ from sqlalchemy import (
     Index,
     Numeric,
     String,
+    Text,
     UniqueConstraint,
     func,
     text,
@@ -234,6 +235,7 @@ class SupplierInvoice(Base, VersionedMixin):
         nullable=True,
     )
     correlation_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    comments: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

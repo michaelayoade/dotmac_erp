@@ -14,6 +14,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.people.hr.employee import Employee, EmployeeStatus
@@ -128,13 +129,11 @@ class SalarySlipService:
         org_id = coerce_uuid(organization_id)
 
         # Check if component exists
-        component = (
-            db.query(SalaryComponent)
-            .filter(
+        component = db.scalar(
+            select(SalaryComponent).where(
                 SalaryComponent.organization_id == org_id,
                 SalaryComponent.component_code == component_code,
             )
-            .first()
         )
 
         if component:
@@ -229,9 +228,9 @@ class SalarySlipService:
         as_of_date: date,
     ) -> SalaryStructureAssignment | None:
         """Get the active salary structure assignment for an employee."""
-        return (
-            db.query(SalaryStructureAssignment)
-            .filter(
+        return db.scalars(
+            select(SalaryStructureAssignment)
+            .where(
                 SalaryStructureAssignment.organization_id == organization_id,
                 SalaryStructureAssignment.employee_id == employee_id,
                 SalaryStructureAssignment.from_date <= as_of_date,
@@ -241,8 +240,7 @@ class SalarySlipService:
                 ),
             )
             .order_by(SalaryStructureAssignment.from_date.desc())
-            .first()
-        )
+        ).first()
 
     @staticmethod
     def create_salary_slip(
@@ -283,16 +281,14 @@ class SalarySlipService:
             )
 
         # Check for existing slip in period
-        existing = (
-            db.query(SalarySlip)
-            .filter(
+        existing = db.scalar(
+            select(SalarySlip).where(
                 SalarySlip.organization_id == org_id,
                 SalarySlip.employee_id == emp_id,
                 SalarySlip.start_date == input.start_date,
                 SalarySlip.end_date == input.end_date,
                 SalarySlip.status != SalarySlipStatus.CANCELLED,
             )
-            .first()
         )
 
         if existing:
@@ -644,9 +640,8 @@ class SalarySlipService:
                 detail=f"Cannot generate slip for employee with status: {employee.status.value}",
             )
 
-        existing = (
-            db.query(SalarySlip)
-            .filter(
+        existing = db.scalar(
+            select(SalarySlip).where(
                 SalarySlip.organization_id == org_id,
                 SalarySlip.employee_id == emp_id,
                 SalarySlip.start_date == input.start_date,
@@ -654,7 +649,6 @@ class SalarySlipService:
                 SalarySlip.status != SalarySlipStatus.CANCELLED,
                 SalarySlip.slip_id != s_id,
             )
-            .first()
         )
         if existing:
             raise HTTPException(
@@ -1063,9 +1057,9 @@ class SalarySlipService:
         """List salary slips with filters."""
         org_id = coerce_uuid(organization_id)
 
-        query = db.query(SalarySlip).filter(SalarySlip.organization_id == org_id)
+        stmt = select(SalarySlip).where(SalarySlip.organization_id == org_id)
         if include_lines:
-            query = query.options(
+            stmt = stmt.options(
                 selectinload(SalarySlip.earnings).joinedload(
                     SalarySlipEarning.component
                 ),
@@ -1075,23 +1069,20 @@ class SalarySlipService:
             )
 
         if employee_id:
-            query = query.filter(SalarySlip.employee_id == coerce_uuid(employee_id))
+            stmt = stmt.where(SalarySlip.employee_id == coerce_uuid(employee_id))
 
         if status:
-            query = query.filter(SalarySlip.status == status)
+            stmt = stmt.where(SalarySlip.status == status)
 
         if from_date:
-            query = query.filter(SalarySlip.start_date >= from_date)
+            stmt = stmt.where(SalarySlip.start_date >= from_date)
 
         if to_date:
-            query = query.filter(SalarySlip.end_date <= to_date)
+            stmt = stmt.where(SalarySlip.end_date <= to_date)
 
-        return (
-            query.order_by(SalarySlip.created_at.desc())
-            .limit(limit)
-            .offset(offset)
-            .all()
-        )
+        return db.scalars(
+            stmt.order_by(SalarySlip.created_at.desc()).limit(limit).offset(offset)
+        ).all()
 
     @staticmethod
     def count(
@@ -1105,21 +1096,25 @@ class SalarySlipService:
         """Count salary slips with filters."""
         org_id = coerce_uuid(organization_id)
 
-        query = db.query(SalarySlip).filter(SalarySlip.organization_id == org_id)
+        stmt = (
+            select(func.count())
+            .select_from(SalarySlip)
+            .where(SalarySlip.organization_id == org_id)
+        )
 
         if employee_id:
-            query = query.filter(SalarySlip.employee_id == coerce_uuid(employee_id))
+            stmt = stmt.where(SalarySlip.employee_id == coerce_uuid(employee_id))
 
         if status:
-            query = query.filter(SalarySlip.status == status)
+            stmt = stmt.where(SalarySlip.status == status)
 
         if from_date:
-            query = query.filter(SalarySlip.start_date >= from_date)
+            stmt = stmt.where(SalarySlip.start_date >= from_date)
 
         if to_date:
-            query = query.filter(SalarySlip.end_date <= to_date)
+            stmt = stmt.where(SalarySlip.end_date <= to_date)
 
-        return query.count()
+        return int(db.scalar(stmt) or 0)
 
 
 # Module-level singleton instance

@@ -66,27 +66,27 @@ class FleetWebService:
     def _get_locations(self, organization_id: UUID) -> list[Location]:
         """Get active locations (branches) for dropdowns."""
         stmt = (
-            self.db.query(Location)
-            .filter(
+            sa_select(Location)
+            .where(
                 Location.organization_id == organization_id,
                 Location.is_active == True,  # noqa: E712
             )
             .order_by(Location.location_name.asc())
         )
-        return list(stmt.all())
+        return list(self.db.scalars(stmt).all())
 
     def _get_employees(self, organization_id: UUID) -> list[Employee]:
         """Get active employees for dropdowns."""
         stmt = (
-            self.db.query(Employee)
-            .filter(
+            sa_select(Employee)
+            .where(
                 Employee.organization_id == organization_id,
                 Employee.status == EmployeeStatus.ACTIVE,
                 Employee.is_deleted == False,  # noqa: E712
             )
             .order_by(Employee.employee_code.asc())
         )
-        return list(stmt.all())
+        return list(self.db.scalars(stmt).all())
 
     def _empty_list_context(self) -> dict[str, Any]:
         return {

@@ -13,7 +13,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
 
@@ -88,15 +88,14 @@ class FixedAssetWebService:
         db: Session,
         organization_id: UUID,
     ) -> list[Account]:
-        return (
-            db.query(Account)
-            .filter(
+        return db.scalars(
+            select(Account)
+            .where(
                 Account.organization_id == organization_id,
                 Account.is_active.is_(True),
             )
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
 
     @staticmethod
     def asset_form_context(
@@ -108,35 +107,31 @@ class FixedAssetWebService:
 
         org_id = coerce_uuid(organization_id)
 
-        categories = (
-            db.query(AssetCategory)
-            .filter(
+        categories = db.scalars(
+            select(AssetCategory)
+            .where(
                 AssetCategory.organization_id == org_id,
                 AssetCategory.is_active.is_(True),
             )
             .order_by(AssetCategory.category_code)
-            .all()
-        )
+        ).all()
 
-        sequence = (
-            db.query(NumberingSequence)
-            .filter(
+        sequence = db.scalar(
+            select(NumberingSequence).where(
                 NumberingSequence.organization_id == org_id,
                 NumberingSequence.sequence_type == SequenceType.ASSET,
             )
-            .first()
         )
 
         # Get suppliers list for FA → AP source tracking
-        suppliers = (
-            db.query(Supplier)
-            .filter(
+        suppliers = db.scalars(
+            select(Supplier)
+            .where(
                 Supplier.organization_id == org_id,
                 Supplier.is_active.is_(True),
             )
             .order_by(Supplier.legal_name)
-            .all()
-        )
+        ).all()
         suppliers_list = [
             {
                 "supplier_id": str(s.supplier_id),
@@ -208,15 +203,14 @@ class FixedAssetWebService:
 
         total_pages = max(1, (total_count + limit - 1) // limit)
 
-        categories = (
-            db.query(AssetCategory)
-            .filter(
+        categories = db.scalars(
+            select(AssetCategory)
+            .where(
                 AssetCategory.organization_id == org_id,
                 AssetCategory.is_active.is_(True),
             )
             .order_by(AssetCategory.category_code)
-            .all()
-        )
+        ).all()
 
         return {
             "assets": assets_view,
@@ -309,23 +303,18 @@ class FixedAssetWebService:
         org_id = coerce_uuid(organization_id)
         offset = (page - 1) * limit
 
-        query = db.query(AssetCategory).filter(AssetCategory.organization_id == org_id)
+        query = select(AssetCategory).where(AssetCategory.organization_id == org_id)
         if is_active is not None:
-            query = query.filter(
+            query = query.where(
                 AssetCategory.is_active.is_(True)
                 if is_active
                 else AssetCategory.is_active.is_(False)
             )
 
-        total_count = (
-            query.with_entities(func.count(AssetCategory.category_id)).scalar() or 0
-        )
-        rows = (
-            query.order_by(AssetCategory.category_code)
-            .limit(limit)
-            .offset(offset)
-            .all()
-        )
+        total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+        rows = db.scalars(
+            query.order_by(AssetCategory.category_code).limit(limit).offset(offset)
+        ).all()
 
         categories_view = []
         for category in rows:
@@ -361,14 +350,11 @@ class FixedAssetWebService:
         category_id: str | None = None,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
-        categories = (
-            db.query(AssetCategory)
-            .filter(
-                AssetCategory.organization_id == org_id,
-            )
+        categories = db.scalars(
+            select(AssetCategory)
+            .where(AssetCategory.organization_id == org_id)
             .order_by(AssetCategory.category_code)
-            .all()
-        )
+        ).all()
         accounts = FixedAssetWebService._get_accounts(db, org_id)
 
         category = None
@@ -618,26 +604,23 @@ class FixedAssetWebService:
         period_id = _try_uuid(period)
 
         query = (
-            db.query(DepreciationRun, FiscalPeriod)
+            select(DepreciationRun, FiscalPeriod)
             .join(
                 FiscalPeriod,
                 DepreciationRun.fiscal_period_id == FiscalPeriod.fiscal_period_id,
             )
-            .filter(DepreciationRun.organization_id == org_id)
+            .where(DepreciationRun.organization_id == org_id)
         )
 
         if period_id:
-            query = query.filter(DepreciationRun.fiscal_period_id == period_id)
+            query = query.where(DepreciationRun.fiscal_period_id == period_id)
 
-        total_count = (
-            query.with_entities(func.count(DepreciationRun.run_id)).scalar() or 0
-        )
-        rows = (
+        total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+        rows = db.execute(
             query.order_by(DepreciationRun.created_at.desc())
             .limit(limit)
             .offset(offset)
-            .all()
-        )
+        ).all()
 
         runs_view = []
         for run, fiscal_period in rows:

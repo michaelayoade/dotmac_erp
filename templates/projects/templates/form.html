@@ -3,7 +3,7 @@
 {% block title %}{% if template %}Edit{% else %}New{% endif %} Project Template{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto space-y-6" x-data="templateForm({{ tasks_payload_json | safe if tasks_payload_json is defined else '[]' }})">
+<div class="max-w-4xl mx-auto space-y-6" x-data="templateForm(JSON.parse({{ (tasks_payload_json if tasks_payload_json is defined else '[]') | tojson }}))">
     <div class="flex items-center gap-2">
         <a href="/projects/templates" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

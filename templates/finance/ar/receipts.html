@@ -22,7 +22,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6 page-enter">
     {% set zero_amount = ((presentation_currency_code or default_currency_code) ~ ' 0.00') if (presentation_currency_code or default_currency_code) else '0.00' %}
     {# Stats Summary #}
     <div class="grid gap-4 sm:grid-cols-4">

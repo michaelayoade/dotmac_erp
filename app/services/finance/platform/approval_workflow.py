@@ -16,7 +16,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.audit.approval_decision import (
@@ -84,9 +84,9 @@ class ApprovalWorkflowService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         # Find applicable workflows for this document type
-        workflows = (
-            db.query(ApprovalWorkflow)
-            .filter(
+        workflows = db.scalars(
+            select(ApprovalWorkflow)
+            .where(
                 and_(
                     ApprovalWorkflow.organization_id == org_id,
                     ApprovalWorkflow.document_type == document_type,
@@ -94,8 +94,8 @@ class ApprovalWorkflowService(ListResponseMixin):
                 )
             )
             .order_by(ApprovalWorkflow.threshold_amount.desc().nullslast())
-            .all()
         )
+        workflows = workflows.all()
 
         if not workflows:
             return None
@@ -428,7 +428,7 @@ class ApprovalWorkflowService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        query = db.query(ApprovalRequest).filter(
+        stmt = select(ApprovalRequest).where(
             and_(
                 ApprovalRequest.organization_id == org_id,
                 ApprovalRequest.status == ApprovalRequestStatus.PENDING,
@@ -436,14 +436,14 @@ class ApprovalWorkflowService(ListResponseMixin):
         )
 
         if document_type:
-            query = query.filter(ApprovalRequest.document_type == document_type)
+            stmt = stmt.where(ApprovalRequest.document_type == document_type)
 
-        requests = (
-            query.order_by(ApprovalRequest.requested_at.asc())
+        requests = db.scalars(
+            stmt.order_by(ApprovalRequest.requested_at.asc())
             .limit(limit)
             .offset(offset)
-            .all()
         )
+        requests = requests.all()
 
         results = []
         for request in requests:
@@ -655,16 +655,17 @@ class ApprovalWorkflowService(ListResponseMixin):
                 return (False, "Approval level is missing approver configuration")
             role_id = coerce_uuid(approver_id)
             has_role = (
-                db.query(Role)
-                .join(PersonRole, PersonRole.role_id == Role.id)
-                .filter(
-                    and_(
-                        PersonRole.person_id == approver_user_id,
-                        Role.id == role_id,
-                        Role.is_active == True,  # noqa: E712
+                db.scalar(
+                    select(Role)
+                    .join(PersonRole, PersonRole.role_id == Role.id)
+                    .where(
+                        and_(
+                            PersonRole.person_id == approver_user_id,
+                            Role.id == role_id,
+                            Role.is_active == True,  # noqa: E712
+                        )
                     )
                 )
-                .first()
                 is not None
             )
             if not has_role:
@@ -745,21 +746,25 @@ class ApprovalWorkflowService(ListResponseMixin):
         Returns:
             List of ApprovalRequest objects
         """
-        query = db.query(ApprovalRequest)
+        stmt = select(ApprovalRequest)
 
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 ApprovalRequest.organization_id == coerce_uuid(organization_id)
             )
 
         if document_type:
-            query = query.filter(ApprovalRequest.document_type == document_type)
+            stmt = stmt.where(ApprovalRequest.document_type == document_type)
 
         if status:
-            query = query.filter(ApprovalRequest.status == status)
+            stmt = stmt.where(ApprovalRequest.status == status)
 
-        query = query.order_by(ApprovalRequest.requested_at.desc())
-        return query.limit(limit).offset(offset).all()
+        stmt = (
+            stmt.order_by(ApprovalRequest.requested_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return db.scalars(stmt).all()
 
     @staticmethod
     def list_workflows(
@@ -784,21 +789,21 @@ class ApprovalWorkflowService(ListResponseMixin):
         Returns:
             List of ApprovalWorkflow objects
         """
-        query = db.query(ApprovalWorkflow)
+        stmt = select(ApprovalWorkflow)
 
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 ApprovalWorkflow.organization_id == coerce_uuid(organization_id)
             )
 
         if document_type:
-            query = query.filter(ApprovalWorkflow.document_type == document_type)
+            stmt = stmt.where(ApprovalWorkflow.document_type == document_type)
 
         if is_active is not None:
-            query = query.filter(ApprovalWorkflow.is_active == is_active)
+            stmt = stmt.where(ApprovalWorkflow.is_active == is_active)
 
-        query = query.order_by(ApprovalWorkflow.workflow_name)
-        return query.limit(limit).offset(offset).all()
+        stmt = stmt.order_by(ApprovalWorkflow.workflow_name).limit(limit).offset(offset)
+        return db.scalars(stmt).all()
 
 
 # Module-level singleton instance

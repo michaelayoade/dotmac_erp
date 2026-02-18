@@ -14,7 +14,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import Integer, func
+from sqlalchemy import Integer, func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.cons.intercompany_balance import IntercompanyBalance
@@ -123,15 +123,13 @@ class IntercompanyService(ListResponseMixin):
             )
 
         # Check for existing balance
-        existing = (
-            db.query(IntercompanyBalance)
-            .filter(
+        existing = db.scalar(
+            select(IntercompanyBalance).where(
                 IntercompanyBalance.fiscal_period_id == input.fiscal_period_id,
                 IntercompanyBalance.from_entity_id == input.from_entity_id,
                 IntercompanyBalance.to_entity_id == input.to_entity_id,
                 IntercompanyBalance.balance_type == input.balance_type,
             )
-            .first()
         )
 
         if existing:
@@ -195,40 +193,34 @@ class IntercompanyService(ListResponseMixin):
         period_id = coerce_uuid(fiscal_period_id)
 
         # Get all entities in group
-        entities = (
-            db.query(LegalEntity)
-            .filter(
+        entities = db.scalars(
+            select(LegalEntity).where(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.is_active == True,
             )
-            .all()
-        )
+        ).all()
         entity_ids = [e.entity_id for e in entities]
         entity_map = {e.entity_id: e.entity_code for e in entities}
 
         # Get all balances for the period
-        balances = (
-            db.query(IntercompanyBalance)
-            .filter(
+        balances = db.scalars(
+            select(IntercompanyBalance).where(
                 IntercompanyBalance.fiscal_period_id == period_id,
                 IntercompanyBalance.from_entity_id.in_(entity_ids),
             )
-            .all()
-        )
+        ).all()
 
         results = []
 
         for balance in balances:
             # Find reciprocal balance
-            reciprocal = (
-                db.query(IntercompanyBalance)
-                .filter(
+            reciprocal = db.scalar(
+                select(IntercompanyBalance).where(
                     IntercompanyBalance.fiscal_period_id == period_id,
                     IntercompanyBalance.from_entity_id == balance.to_entity_id,
                     IntercompanyBalance.to_entity_id == balance.from_entity_id,
                     IntercompanyBalance.balance_type == balance.balance_type,
                 )
-                .first()
             )
 
             if reciprocal:
@@ -354,26 +346,23 @@ class IntercompanyService(ListResponseMixin):
         period_id = coerce_uuid(fiscal_period_id)
 
         # Get entities in group
-        entities = (
-            db.query(LegalEntity)
-            .filter(
+        entities = db.scalars(
+            select(LegalEntity).where(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.is_active == True,
             )
-            .all()
-        )
+        ).all()
         entity_ids = [e.entity_id for e in entities]
 
-        return (
-            db.query(IntercompanyBalance)
-            .filter(
+        return db.scalars(
+            select(IntercompanyBalance)
+            .where(
                 IntercompanyBalance.fiscal_period_id == period_id,
                 IntercompanyBalance.from_entity_id.in_(entity_ids),
                 IntercompanyBalance.is_matched == False,
             )
             .order_by(IntercompanyBalance.difference_amount.desc())
-            .all()
-        )
+        ).all()
 
     @staticmethod
     def get_summary_by_type(
@@ -396,18 +385,16 @@ class IntercompanyService(ListResponseMixin):
         period_id = coerce_uuid(fiscal_period_id)
 
         # Get entities in group
-        entities = (
-            db.query(LegalEntity)
-            .filter(
+        entities = db.scalars(
+            select(LegalEntity).where(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.is_active == True,
             )
-            .all()
-        )
+        ).all()
         entity_ids = [e.entity_id for e in entities]
 
-        results = (
-            db.query(
+        results = db.execute(
+            select(
                 IntercompanyBalance.balance_type,
                 func.sum(IntercompanyBalance.from_entity_functional_amount).label(
                     "total_from"
@@ -421,13 +408,12 @@ class IntercompanyService(ListResponseMixin):
                 ),
                 func.count(IntercompanyBalance.balance_id).label("total_count"),
             )
-            .filter(
+            .where(
                 IntercompanyBalance.fiscal_period_id == period_id,
                 IntercompanyBalance.from_entity_id.in_(entity_ids),
             )
             .group_by(IntercompanyBalance.balance_type)
-            .all()
-        )
+        ).all()
 
         summaries = []
         for row in results:
@@ -467,26 +453,22 @@ class IntercompanyService(ListResponseMixin):
         period_id = coerce_uuid(fiscal_period_id)
 
         # Get entities in group
-        entities = (
-            db.query(LegalEntity)
-            .filter(
+        entities = db.scalars(
+            select(LegalEntity).where(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.is_active == True,
             )
-            .all()
-        )
+        ).all()
         entity_ids = [e.entity_id for e in entities]
 
-        return (
-            db.query(IntercompanyBalance)
-            .filter(
+        return db.scalars(
+            select(IntercompanyBalance).where(
                 IntercompanyBalance.fiscal_period_id == period_id,
                 IntercompanyBalance.from_entity_id.in_(entity_ids),
                 IntercompanyBalance.is_matched == True,
                 IntercompanyBalance.is_eliminated == False,
             )
-            .all()
-        )
+        ).all()
 
     @staticmethod
     def mark_as_eliminated(
@@ -511,14 +493,12 @@ class IntercompanyService(ListResponseMixin):
         elim_id = coerce_uuid(elimination_entry_id)
 
         # Get entities in group
-        entities = (
-            db.query(LegalEntity)
-            .filter(
+        entities = db.scalars(
+            select(LegalEntity).where(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.is_active == True,
             )
-            .all()
-        )
+        ).all()
         entity_ids = [e.entity_id for e in entities]
 
         updated = 0
@@ -558,34 +538,34 @@ class IntercompanyService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[IntercompanyBalance]:
         """List intercompany balances with optional filters."""
-        query = db.query(IntercompanyBalance)
+        query = select(IntercompanyBalance)
 
         if fiscal_period_id:
-            query = query.filter(
+            query = query.where(
                 IntercompanyBalance.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
 
         if from_entity_id:
-            query = query.filter(
+            query = query.where(
                 IntercompanyBalance.from_entity_id == coerce_uuid(from_entity_id)
             )
 
         if to_entity_id:
-            query = query.filter(
+            query = query.where(
                 IntercompanyBalance.to_entity_id == coerce_uuid(to_entity_id)
             )
 
         if balance_type:
-            query = query.filter(IntercompanyBalance.balance_type == balance_type)
+            query = query.where(IntercompanyBalance.balance_type == balance_type)
 
         if is_matched is not None:
-            query = query.filter(IntercompanyBalance.is_matched == is_matched)
+            query = query.where(IntercompanyBalance.is_matched == is_matched)
 
         if is_eliminated is not None:
-            query = query.filter(IntercompanyBalance.is_eliminated == is_eliminated)
+            query = query.where(IntercompanyBalance.is_eliminated == is_eliminated)
 
         query = query.order_by(IntercompanyBalance.balance_date.desc())
-        return query.limit(limit).offset(offset).all()
+        return db.scalars(query.limit(limit).offset(offset)).all()
 
 
 # Module-level singleton instance

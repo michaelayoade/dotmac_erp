@@ -205,7 +205,7 @@
 function journalForm() {
     // Initialize lines from existing data
     const existingLines = {{ lines | tojson | safe if lines else '[]' }};
-    const formDataLines = {{ form_data.lines_json | safe if form_data and form_data.lines_json else 'null' }};
+    const formDataLines = {{ form_data.lines_json | tojson if form_data and form_data.lines_json else 'null' }};
 
     let initialLines = [];
     if (formDataLines) {

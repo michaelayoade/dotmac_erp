@@ -12,7 +12,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.tax.tax_code import TaxCode, TaxType
@@ -148,8 +148,8 @@ class TaxReportService:
         org_id = coerce_uuid(organization_id)
 
         # Query tax transactions grouped by tax type
-        results = (
-            db.query(
+        results = db.execute(
+            select(
                 TaxCode.tax_type,
                 TaxTransaction.transaction_type,
                 func.sum(TaxTransaction.tax_amount).label("total_tax"),
@@ -157,14 +157,14 @@ class TaxReportService:
                 func.count(TaxTransaction.transaction_id).label("transaction_count"),
             )
             .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
-            .filter(
+            .where(
                 TaxTransaction.organization_id == org_id,
                 TaxTransaction.transaction_date >= start_date,
                 TaxTransaction.transaction_date <= end_date,
             )
             .group_by(TaxCode.tax_type, TaxTransaction.transaction_type)
-            .all()
         )
+        results = results.all()
 
         # Aggregate by tax type
         type_data: dict[TaxType, dict] = {}
@@ -247,7 +247,7 @@ class TaxReportService:
         org_id = coerce_uuid(organization_id)
 
         query = (
-            db.query(
+            select(
                 TaxCode.tax_code_id,
                 TaxCode.tax_code,
                 TaxCode.tax_name,
@@ -255,10 +255,10 @@ class TaxReportService:
                 TaxCode.tax_rate,
                 func.sum(TaxTransaction.base_amount).label("total_base"),
                 func.sum(TaxTransaction.tax_amount).label("total_tax"),
-                func.count(TaxTransaction.transaction_id).label("count"),
+                func.count(TaxTransaction.transaction_id).label("transaction_count"),
             )
             .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
-            .filter(
+            .where(
                 TaxTransaction.organization_id == org_id,
                 TaxTransaction.transaction_date >= start_date,
                 TaxTransaction.transaction_date <= end_date,
@@ -266,19 +266,18 @@ class TaxReportService:
         )
 
         if tax_type:
-            query = query.filter(TaxCode.tax_type == tax_type)
+            query = query.where(TaxCode.tax_type == tax_type)
 
-        results = (
+        results = db.execute(
             query.group_by(
                 TaxCode.tax_code_id,
                 TaxCode.tax_code,
                 TaxCode.tax_name,
                 TaxCode.tax_type,
                 TaxCode.tax_rate,
-            )
-            .order_by(TaxCode.tax_type, TaxCode.tax_code)
-            .all()
+            ).order_by(TaxCode.tax_type, TaxCode.tax_code)
         )
+        results = results.all()
 
         return [
             TaxCodeSummary(
@@ -316,23 +315,23 @@ class TaxReportService:
         org_id = coerce_uuid(organization_id)
 
         # Query VAT transactions only
-        results = (
-            db.query(
+        results = db.execute(
+            select(
                 TaxCode.tax_rate,
                 TaxTransaction.transaction_type,
                 func.sum(TaxTransaction.base_amount).label("total_base"),
                 func.sum(TaxTransaction.tax_amount).label("total_tax"),
             )
             .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
-            .filter(
+            .where(
                 TaxTransaction.organization_id == org_id,
                 TaxTransaction.transaction_date >= start_date,
                 TaxTransaction.transaction_date <= end_date,
                 TaxCode.tax_type == TaxType.VAT,
             )
             .group_by(TaxCode.tax_rate, TaxTransaction.transaction_type)
-            .all()
         )
+        results = results.all()
 
         return_data = VATReturnData(
             period_start=start_date,
@@ -401,8 +400,8 @@ class TaxReportService:
             return prefix if prefix in {"AP", "AR"} else "OTHER"
 
         # Query WHT transactions
-        results = (
-            db.query(
+        results = db.execute(
+            select(
                 TaxCode.tax_code,
                 TaxCode.tax_name,
                 TaxCode.tax_rate,
@@ -412,7 +411,7 @@ class TaxReportService:
                 func.count(TaxTransaction.transaction_id).label("count"),
             )
             .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
-            .filter(
+            .where(
                 TaxTransaction.organization_id == org_id,
                 TaxTransaction.transaction_date >= start_date,
                 TaxTransaction.transaction_date <= end_date,
@@ -424,8 +423,8 @@ class TaxReportService:
                 TaxCode.tax_rate,
                 TaxTransaction.source_document_type,
             )
-            .all()
         )
+        results = results.all()
 
         report = WHTReportData(
             period_start=start_date,
@@ -490,18 +489,18 @@ class TaxReportService:
 
         # Include transaction details if requested
         if include_transactions:
-            transactions = (
-                db.query(TaxTransaction, TaxCode)
+            transactions = db.execute(
+                select(TaxTransaction, TaxCode)
                 .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
-                .filter(
+                .where(
                     TaxTransaction.organization_id == org_id,
                     TaxTransaction.transaction_date >= start_date,
                     TaxTransaction.transaction_date <= end_date,
                     TaxCode.tax_type == TaxType.WITHHOLDING,
                 )
                 .order_by(TaxTransaction.transaction_date.desc())
-                .all()
             )
+            transactions = transactions.all()
 
             report.transactions = [
                 {
@@ -553,9 +552,9 @@ class TaxReportService:
         org_id = coerce_uuid(organization_id)
 
         query = (
-            db.query(TaxTransaction, TaxCode)
+            select(TaxTransaction, TaxCode)
             .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
-            .filter(
+            .where(
                 TaxTransaction.organization_id == org_id,
                 TaxTransaction.transaction_date >= start_date,
                 TaxTransaction.transaction_date <= end_date,
@@ -563,17 +562,16 @@ class TaxReportService:
         )
 
         if tax_type:
-            query = query.filter(TaxCode.tax_type == tax_type)
+            query = query.where(TaxCode.tax_type == tax_type)
 
         if transaction_type:
-            query = query.filter(TaxTransaction.transaction_type == transaction_type)
+            query = query.where(TaxTransaction.transaction_type == transaction_type)
 
-        results = (
+        results = db.execute(
             query.order_by(TaxTransaction.transaction_date.desc())
             .limit(limit)
             .offset(offset)
-            .all()
-        )
+        ).all()
 
         return [
             TaxTransactionDetail(

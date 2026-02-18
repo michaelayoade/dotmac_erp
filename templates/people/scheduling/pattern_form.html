@@ -103,7 +103,7 @@
             </div>
         </div>
 
-        <div>
+        <div id="work_days_container">
             <label class="form-label">Work Days <span class="text-red-500">*</span></label>
             <div class="flex flex-wrap gap-4 mt-2">
                 {% for day in work_days_options %}
@@ -114,6 +114,36 @@
                     <span class="ml-2 text-sm text-slate-700 dark:text-slate-300">{{ day }}</span>
                 </label>
                 {% endfor %}
+            </div>
+        </div>
+
+        <div id="rotating_work_days_container" class="space-y-4">
+            <div>
+                <label class="form-label">Day Shift Work Days <span class="text-red-500">*</span></label>
+                <div class="flex flex-wrap gap-4 mt-2">
+                    {% for day in work_days_options %}
+                    <label class="inline-flex items-center">
+                        <input type="checkbox" name="day_work_days" value="{{ day }}"
+                            {% if day in (pattern.day_work_days | default(pattern.work_days | default(['MON', 'TUE', 'WED', 'THU', 'FRI'], true), true)) %}checked{% endif %}
+                            class="form-checkbox h-4 w-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500">
+                        <span class="ml-2 text-sm text-slate-700 dark:text-slate-300">{{ day }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div>
+                <label class="form-label">Night Shift Work Days <span class="text-red-500">*</span></label>
+                <div class="flex flex-wrap gap-4 mt-2">
+                    {% for day in work_days_options %}
+                    <label class="inline-flex items-center">
+                        <input type="checkbox" name="night_work_days" value="{{ day }}"
+                            {% if day in (pattern.night_work_days | default(pattern.work_days | default(['MON', 'TUE', 'WED', 'THU', 'FRI'], true), true)) %}checked{% endif %}
+                            class="form-checkbox h-4 w-4 text-teal-600 rounded border-slate-300 focus:ring-teal-500">
+                        <span class="ml-2 text-sm text-slate-700 dark:text-slate-300">{{ day }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
             </div>
         </div>
 
@@ -139,10 +169,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const rotationType = document.getElementById('rotation_type');
     const cycleWeeksContainer = document.getElementById('cycle_weeks_container');
     const nightShiftContainer = document.getElementById('night_shift_container');
+    const workDaysContainer = document.getElementById('work_days_container');
+    const rotatingWorkDaysContainer = document.getElementById('rotating_work_days_container');
 
     function updateVisibility() {
         const isRotating = rotationType.value === 'ROTATING';
         cycleWeeksContainer.style.display = isRotating ? 'block' : 'none';
+        workDaysContainer.style.display = isRotating ? 'none' : 'block';
+        rotatingWorkDaysContainer.style.display = isRotating ? 'block' : 'none';
+        workDaysContainer.querySelectorAll('input[name="work_days"]').forEach((input) => {
+            input.disabled = isRotating;
+        });
+        rotatingWorkDaysContainer.querySelectorAll('input[name="day_work_days"], input[name="night_work_days"]').forEach((input) => {
+            input.disabled = !isRotating;
+        });
         nightShiftContainer.querySelector('label').innerHTML = isRotating
             ? 'Night Shift Type <span class="text-red-500">*</span>'
             : 'Night Shift Type';

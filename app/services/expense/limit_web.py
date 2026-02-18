@@ -829,17 +829,16 @@ class ExpenseLimitWebService:
         from app.models.people.hr.employee import Employee, EmployeeStatus
         from app.models.person import Person
 
-        employees = list(
-            db.query(Employee)
+        employees = db.scalars(
+            select(Employee)
             .join(Person, Person.id == Employee.person_id)
-            .filter(
+            .where(
                 Employee.organization_id == org_id,
                 Employee.status == EmployeeStatus.ACTIVE,
             )
             .order_by(Person.first_name, Person.last_name)
             .limit(200)
-            .all()
-        )
+        ).all()
 
         usage_summary = None
         if employee_id:
@@ -1056,46 +1055,40 @@ class ExpenseLimitWebService:
         from app.models.person import Person
         from app.models.rbac import Role
 
-        grades = list(
-            db.query(EmployeeGrade)
-            .filter(
+        grades = db.scalars(
+            select(EmployeeGrade)
+            .where(
                 EmployeeGrade.organization_id == org_id, EmployeeGrade.is_active == True
             )
             .order_by(EmployeeGrade.rank.desc())
-            .all()
-        )
+        ).all()
 
-        departments = list(
-            db.query(Department)
-            .filter(Department.organization_id == org_id, Department.is_active == True)
+        departments = db.scalars(
+            select(Department)
+            .where(Department.organization_id == org_id, Department.is_active == True)
             .order_by(Department.department_name)
-            .all()
-        )
+        ).all()
 
-        designations = list(
-            db.query(Designation)
-            .filter(
-                Designation.organization_id == org_id, Designation.is_active == True
-            )
+        designations = db.scalars(
+            select(Designation)
+            .where(Designation.organization_id == org_id, Designation.is_active == True)
             .order_by(Designation.designation_name)
-            .all()
-        )
+        ).all()
 
-        employees = list(
-            db.query(Employee)
+        employees = db.scalars(
+            select(Employee)
             .join(Person, Person.id == Employee.person_id)
-            .filter(
+            .where(
                 Employee.organization_id == org_id,
                 Employee.status == EmployeeStatus.ACTIVE,
             )
             .order_by(Person.first_name, Person.last_name)
             .limit(100)
-            .all()
-        )
+        ).all()
 
-        roles = list(
-            db.query(Role).filter(Role.is_active == True).order_by(Role.name).all()
-        )
+        roles = db.scalars(
+            select(Role).where(Role.is_active == True).order_by(Role.name)
+        ).all()
 
         return {
             "grades": grades,

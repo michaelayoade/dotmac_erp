@@ -1,0 +1,51 @@
+rules:
+  - id: bare-except
+    patterns:
+      - pattern: |
+          try:
+              ...
+          except:
+              ...
+      - pattern-not: |
+          try:
+              ...
+          except $TYPE:
+              ...
+      - pattern-not: |
+          try:
+              ...
+          except $TYPE as $E:
+              ...
+      - pattern-not: |
+          try:
+              ...
+          except ($TYPES):
+              ...
+    message: >
+      Bare `except:` catches KeyboardInterrupt and SystemExit. Catch a specific
+      exception type (e.g. `except Exception as e:`) instead.
+    languages: [python]
+    severity: ERROR
+    paths:
+      exclude:
+        - "**/tests/"
+        - "**/alembic/"
+        - "**/scripts/"
+
+  - id: safe-on-user-content
+    patterns:
+      - pattern-regex: '\|\s*safe\b'
+      - pattern-not-regex: 'csrf_form\s*\|\s*safe'
+      - pattern-not-regex: 'tojson\s*\|\s*safe'
+      - pattern-not-regex: 'icon_svg.*\|\s*safe'
+    message: >
+      Use of `| safe` on potentially user-controlled content. Use `| sanitize_html`
+      for user HTML or `| tojson | safe` for JSON serialization. Allowed: csrf_form, tojson, icon_svg.
+    languages: [generic]
+    severity: WARNING
+    paths:
+      include:
+        - "**/templates/"
+      exclude:
+        - "**/templates/components/"
+        - "**/templates/base*.html"

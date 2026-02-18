@@ -11,6 +11,7 @@ from typing import Any
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 from starlette.datastructures import UploadFile
 
@@ -62,12 +63,11 @@ class TaxWebService:
         """Render tax bands list page."""
         org_id = coerce_uuid(auth.organization_id)
 
-        bands = (
-            db.query(TaxBand)
-            .filter(TaxBand.organization_id == org_id, TaxBand.is_active == True)
+        bands = db.scalars(
+            select(TaxBand)
+            .where(TaxBand.organization_id == org_id, TaxBand.is_active == True)
             .order_by(TaxBand.sequence)
-            .all()
-        )
+        ).all()
 
         context = base_context(request, auth, "Tax Bands (NTA 2025)", "payroll", db=db)
         context["request"] = request
@@ -85,7 +85,14 @@ class TaxWebService:
         org_id = coerce_uuid(auth.organization_id)
 
         # Check if bands already exist
-        existing = db.query(TaxBand).filter(TaxBand.organization_id == org_id).count()
+        existing = (
+            db.scalar(
+                select(func.count())
+                .select_from(TaxBand)
+                .where(TaxBand.organization_id == org_id)
+            )
+            or 0
+        )
         if existing == 0:
             # NTA 2025 tax bands
             bands = [
@@ -155,12 +162,11 @@ class TaxWebService:
         """Render PAYE tax calculator form."""
         org_id = coerce_uuid(auth.organization_id)
 
-        bands = (
-            db.query(TaxBand)
-            .filter(TaxBand.organization_id == org_id, TaxBand.is_active == True)
+        bands = db.scalars(
+            select(TaxBand)
+            .where(TaxBand.organization_id == org_id, TaxBand.is_active == True)
             .order_by(TaxBand.sequence)
-            .all()
-        )
+        ).all()
 
         context = base_context(request, auth, "PAYE Calculator", "payroll", db=db)
         context["request"] = request
@@ -208,12 +214,11 @@ class TaxWebService:
             "0"
         )
 
-        bands = (
-            db.query(TaxBand)
-            .filter(TaxBand.organization_id == org_id, TaxBand.is_active == True)
+        bands = db.scalars(
+            select(TaxBand)
+            .where(TaxBand.organization_id == org_id, TaxBand.is_active == True)
             .order_by(TaxBand.sequence)
-            .all()
-        )
+        ).all()
 
         result = None
         if gross_monthly > 0:
@@ -267,16 +272,16 @@ class TaxWebService:
         offset = (page - 1) * per_page
 
         query = (
-            db.query(EmployeeTaxProfile)
+            select(EmployeeTaxProfile)
             .options(joinedload(EmployeeTaxProfile.employee))
-            .filter(
+            .where(
                 EmployeeTaxProfile.organization_id == org_id,
                 EmployeeTaxProfile.effective_to.is_(None),
             )
         )
 
-        total = query.count()
-        profiles = query.offset(offset).limit(per_page).all()
+        total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+        profiles = db.scalars(query.offset(offset).limit(per_page)).all()
         total_pages = (total + per_page - 1) // per_page
 
         context = base_context(request, auth, "Tax Profiles", "payroll", db=db)
@@ -313,21 +318,20 @@ class TaxWebService:
             selected_employee = db.get(Employee, parse_uuid(employee_id))
 
         # Get employees without tax profiles
-        existing_profile_ids = db.query(EmployeeTaxProfile.employee_id).filter(
+        existing_profile_ids = select(EmployeeTaxProfile.employee_id).where(
             EmployeeTaxProfile.organization_id == org_id,
             EmployeeTaxProfile.effective_to.is_(None),
         )
 
-        employees = (
-            db.query(Employee)
-            .filter(
+        employees = db.scalars(
+            select(Employee)
+            .where(
                 Employee.organization_id == org_id,
                 Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]),
                 ~Employee.employee_id.in_(existing_profile_ids),
             )
             .order_by(Employee.employee_code)
-            .all()
-        )
+        ).all()
 
         context = base_context(request, auth, "New Tax Profile", "payroll", db=db)
         context["request"] = request
@@ -449,14 +453,12 @@ class TaxWebService:
                 status_code=303,
             )
 
-        profile = (
-            db.query(EmployeeTaxProfile)
-            .filter(
+        profile = db.scalar(
+            select(EmployeeTaxProfile).where(
                 EmployeeTaxProfile.organization_id == org_id,
                 EmployeeTaxProfile.employee_id == e_id,
                 EmployeeTaxProfile.effective_to.is_(None),
             )
-            .first()
         )
 
         context = base_context(
@@ -497,14 +499,12 @@ class TaxWebService:
                 status_code=303,
             )
 
-        profile = (
-            db.query(EmployeeTaxProfile)
-            .filter(
+        profile = db.scalar(
+            select(EmployeeTaxProfile).where(
                 EmployeeTaxProfile.organization_id == org_id,
                 EmployeeTaxProfile.employee_id == e_id,
                 EmployeeTaxProfile.effective_to.is_(None),
             )
-            .first()
         )
 
         if not profile:
@@ -549,14 +549,12 @@ class TaxWebService:
                 status_code=303,
             )
 
-        profile = (
-            db.query(EmployeeTaxProfile)
-            .filter(
+        profile = db.scalar(
+            select(EmployeeTaxProfile).where(
                 EmployeeTaxProfile.organization_id == org_id,
                 EmployeeTaxProfile.employee_id == e_id,
                 EmployeeTaxProfile.effective_to.is_(None),
             )
-            .first()
         )
 
         if not profile:
@@ -629,21 +627,20 @@ class TaxWebService:
         """Render tax profile form with error."""
         org_id = coerce_uuid(auth.organization_id)
 
-        existing_profile_ids = db.query(EmployeeTaxProfile.employee_id).filter(
+        existing_profile_ids = select(EmployeeTaxProfile.employee_id).where(
             EmployeeTaxProfile.organization_id == org_id,
             EmployeeTaxProfile.effective_to.is_(None),
         )
 
-        employees = (
-            db.query(Employee)
-            .filter(
+        employees = db.scalars(
+            select(Employee)
+            .where(
                 Employee.organization_id == org_id,
                 Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]),
                 ~Employee.employee_id.in_(existing_profile_ids),
             )
             .order_by(Employee.employee_code)
-            .all()
-        )
+        ).all()
 
         context = base_context(request, auth, "New Tax Profile", "payroll", db=db)
         context["request"] = request

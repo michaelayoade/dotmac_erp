@@ -77,6 +77,35 @@ def test_format_quantity_strips_trailing_zeroes():
     assert ar_base._format_quantity(Decimal("10.2500")) == "10.25"
 
 
+def test_invoice_line_view_includes_tax_metadata_fields(monkeypatch):
+    monkeypatch.setattr(
+        ar_base,
+        "format_currency",
+        lambda amount, currency=None: f"{amount}:{currency}",
+    )
+
+    line = SimpleNamespace(
+        line_id=uuid4(),
+        line_number=1,
+        description="Line",
+        quantity=Decimal("2.0000"),
+        unit_price=Decimal("50"),
+        discount_amount=Decimal("0"),
+        tax_amount=Decimal("7.5"),
+        tax_code_id=uuid4(),
+        line_amount=Decimal("100"),
+        revenue_account_id=uuid4(),
+        item_id=None,
+        cost_center_id=None,
+        project_id=None,
+    )
+
+    view = ar_base.invoice_line_view(line, "USD")
+    assert view["tax_amount"] == "7.5:USD"
+    assert view["tax_amount_raw"] == 7.5
+    assert view["tax_code_id"] == line.tax_code_id
+
+
 def test_invoice_detail_view_overdue_flag(monkeypatch):
     monkeypatch.setattr(ar_base, "format_date", lambda d: d.isoformat() if d else None)
     monkeypatch.setattr(

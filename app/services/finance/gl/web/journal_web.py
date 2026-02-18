@@ -11,7 +11,7 @@ from datetime import date
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -206,17 +206,17 @@ class JournalWebService:
         if journal_entry_id:
             entry = db.get(JournalEntry, coerce_uuid(journal_entry_id))
             if entry and entry.organization_id == org_id:
-                lines = (
-                    db.query(JournalEntryLine)
-                    .filter(JournalEntryLine.journal_entry_id == entry.journal_entry_id)
+                lines = db.scalars(
+                    select(JournalEntryLine)
+                    .where(JournalEntryLine.journal_entry_id == entry.journal_entry_id)
                     .order_by(JournalEntryLine.line_number)
-                    .all()
                 )
+                lines = lines.all()
 
                 account_ids = [line.account_id for line in lines]
-                accounts = (
-                    db.query(Account).filter(Account.account_id.in_(account_ids)).all()
-                )
+                accounts = db.scalars(
+                    select(Account).where(Account.account_id.in_(account_ids))
+                ).all()
                 account_map = {
                     a.account_id: (a.account_code, a.account_name) for a in accounts
                 }
@@ -228,16 +228,16 @@ class JournalWebService:
                 entry = None
 
         # Get available accounts for selection
-        accounts = (
-            db.query(Account)
-            .filter(
+        accounts = db.scalars(
+            select(Account)
+            .where(
                 Account.organization_id == org_id,
                 Account.is_active.is_(True),
                 Account.is_posting_allowed.is_(True),
             )
             .order_by(Account.account_code)
-            .all()
         )
+        accounts = accounts.all()
 
         accounts_view = [
             {
@@ -250,15 +250,15 @@ class JournalWebService:
         ]
 
         # Get open periods
-        periods = (
-            db.query(FiscalPeriod)
-            .filter(
+        periods = db.scalars(
+            select(FiscalPeriod)
+            .where(
                 FiscalPeriod.organization_id == org_id,
                 FiscalPeriod.status == PeriodStatus.OPEN,
             )
             .order_by(FiscalPeriod.start_date.desc())
-            .all()
         )
+        periods = periods.all()
 
         return {
             "entry": journal_entry_view(entry) if entry else None,
@@ -287,15 +287,17 @@ class JournalWebService:
         if not entry or entry.organization_id != org_id:
             return {"entry": None, "lines": []}
 
-        lines = (
-            db.query(JournalEntryLine)
-            .filter(JournalEntryLine.journal_entry_id == entry.journal_entry_id)
+        lines = db.scalars(
+            select(JournalEntryLine)
+            .where(JournalEntryLine.journal_entry_id == entry.journal_entry_id)
             .order_by(JournalEntryLine.line_number)
-            .all()
         )
+        lines = lines.all()
 
         account_ids = [line.account_id for line in lines]
-        accounts = db.query(Account).filter(Account.account_id.in_(account_ids)).all()
+        accounts = db.scalars(
+            select(Account).where(Account.account_id.in_(account_ids))
+        ).all()
         account_map = {a.account_id: (a.account_code, a.account_name) for a in accounts}
 
         lines_view = []

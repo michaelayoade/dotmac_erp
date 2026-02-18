@@ -12,6 +12,7 @@ from datetime import UTC, date, datetime
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.core_config.numbering_sequence import SequenceType
@@ -126,11 +127,12 @@ class ReversalService(ListResponseMixin):
         )
 
         # 6. Load original lines
-        original_lines = (
-            db.query(JournalEntryLine)
-            .filter(JournalEntryLine.journal_entry_id == journal_id)
-            .order_by(JournalEntryLine.line_number)
-            .all()
+        original_lines = list(
+            db.scalars(
+                select(JournalEntryLine)
+                .where(JournalEntryLine.journal_entry_id == journal_id)
+                .order_by(JournalEntryLine.line_number)
+            ).all()
         )
 
         # 7. Create reversal journal
@@ -319,20 +321,20 @@ class ReversalService(ListResponseMixin):
         Returns:
             List of reversal JournalEntry objects
         """
-        query = db.query(JournalEntry).filter(JournalEntry.is_reversal == True)  # noqa: E712
+        query = select(JournalEntry).where(JournalEntry.is_reversal == True)  # noqa: E712
 
         if organization_id:
-            query = query.filter(
+            query = query.where(
                 JournalEntry.organization_id == coerce_uuid(organization_id)
             )
 
         if original_journal_id:
-            query = query.filter(
+            query = query.where(
                 JournalEntry.reversed_journal_id == coerce_uuid(original_journal_id)
             )
 
         query = query.order_by(JournalEntry.created_at.desc())
-        return query.limit(limit).offset(offset).all()
+        return list(db.scalars(query.limit(limit).offset(offset)).all())
 
 
 # Module-level singleton instance

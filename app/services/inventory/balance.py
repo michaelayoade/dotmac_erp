@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import and_, case, func, or_
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.inventory.inventory_lot import InventoryLot
@@ -110,7 +110,7 @@ class InventoryBalanceService:
         itm_id = coerce_uuid(item_id)
 
         # Build transaction sum query
-        query = db.query(
+        query = select(
             func.sum(
                 case(
                     (
@@ -137,7 +137,7 @@ class InventoryBalanceService:
                     else_=InventoryTransaction.quantity,
                 )
             )
-        ).filter(
+        ).where(
             and_(
                 InventoryTransaction.organization_id == org_id,
                 InventoryTransaction.item_id == itm_id,
@@ -145,11 +145,11 @@ class InventoryBalanceService:
         )
 
         if warehouse_id:
-            query = query.filter(
+            query = query.where(
                 InventoryTransaction.warehouse_id == coerce_uuid(warehouse_id)
             )
 
-        result = query.scalar()
+        result = db.scalar(query)
         return result or Decimal("0")
 
     @staticmethod
@@ -175,7 +175,7 @@ class InventoryBalanceService:
         itm_id = coerce_uuid(item_id)
 
         # Sum allocated quantities from lots
-        query = db.query(func.sum(InventoryLot.quantity_allocated)).filter(
+        query = select(func.sum(InventoryLot.quantity_allocated)).where(
             and_(
                 InventoryLot.organization_id == org_id,
                 InventoryLot.item_id == itm_id,
@@ -185,14 +185,14 @@ class InventoryBalanceService:
 
         if warehouse_id:
             wh_id = coerce_uuid(warehouse_id)
-            query = query.filter(
+            query = query.where(
                 or_(
                     InventoryLot.warehouse_id == wh_id,
                     InventoryLot.warehouse_id.is_(None),
                 )
             )
 
-        result = query.scalar()
+        result = db.scalar(query)
 
         return result or Decimal("0")
 
@@ -303,16 +303,16 @@ class InventoryBalanceService:
         category = db.get(ItemCategory, item.category_id) if item.category_id else None
 
         # Get all warehouses with inventory for this item
-        warehouse_ids = (
-            db.query(InventoryTransaction.warehouse_id.distinct())
-            .filter(
+        warehouse_ids = db.execute(
+            select(InventoryTransaction.warehouse_id)
+            .where(
                 and_(
                     InventoryTransaction.organization_id == org_id,
                     InventoryTransaction.item_id == itm_id,
                 )
             )
-            .all()
-        )
+            .distinct()
+        ).all()
 
         warehouse_balances = []
         total_on_hand = Decimal("0")
@@ -407,10 +407,10 @@ class InventoryBalanceService:
             )
 
         # Get items with reorder point or minimum stock (item-level or category fallback)
-        items = (
-            db.query(Item, ItemCategory)
+        items = db.execute(
+            select(Item, ItemCategory)
             .join(ItemCategory, Item.category_id == ItemCategory.category_id)
-            .filter(
+            .where(
                 and_(
                     Item.organization_id == org_id,
                     Item.is_active == True,
@@ -418,8 +418,7 @@ class InventoryBalanceService:
                     or_(*stock_filters),
                 )
             )
-            .all()
-        )
+        ).all()
 
         low_stock = []
         for item, category in items:
@@ -535,27 +534,27 @@ class InventoryBalanceService:
             )
         )
 
-        on_hand_query = db.query(InventoryTransaction.item_id, on_hand_expr).filter(
+        on_hand_query = select(InventoryTransaction.item_id, on_hand_expr).where(
             and_(
                 InventoryTransaction.organization_id == org_id,
                 InventoryTransaction.item_id.in_(item_ids),
             )
         )
         if warehouse_id:
-            on_hand_query = on_hand_query.filter(
+            on_hand_query = on_hand_query.where(
                 InventoryTransaction.warehouse_id == coerce_uuid(warehouse_id)
             )
         on_hand_query = on_hand_query.group_by(InventoryTransaction.item_id)
 
         on_hand_map: dict[UUID, Decimal] = {
-            row[0]: row[1] or Decimal("0") for row in on_hand_query.all()
+            row[0]: row[1] or Decimal("0") for row in db.execute(on_hand_query).all()
         }
 
         # Query 2: reserved per item
-        reserved_query = db.query(
+        reserved_query = select(
             InventoryLot.item_id,
             func.sum(InventoryLot.quantity_allocated),
-        ).filter(
+        ).where(
             and_(
                 InventoryLot.organization_id == org_id,
                 InventoryLot.item_id.in_(item_ids),
@@ -564,7 +563,7 @@ class InventoryBalanceService:
         )
         if warehouse_id:
             wh_id = coerce_uuid(warehouse_id)
-            reserved_query = reserved_query.filter(
+            reserved_query = reserved_query.where(
                 or_(
                     InventoryLot.warehouse_id == wh_id,
                     InventoryLot.warehouse_id.is_(None),
@@ -573,7 +572,7 @@ class InventoryBalanceService:
         reserved_query = reserved_query.group_by(InventoryLot.item_id)
 
         reserved_map: dict[UUID, Decimal] = {
-            row[0]: row[1] or Decimal("0") for row in reserved_query.all()
+            row[0]: row[1] or Decimal("0") for row in db.execute(reserved_query).all()
         }
 
         # Merge into result
@@ -606,16 +605,16 @@ class InventoryBalanceService:
         wh_id = coerce_uuid(warehouse_id)
 
         # Get all items with transactions at this warehouse
-        item_ids = (
-            db.query(InventoryTransaction.item_id.distinct())
-            .filter(
+        item_ids = db.execute(
+            select(InventoryTransaction.item_id)
+            .where(
                 and_(
                     InventoryTransaction.organization_id == org_id,
                     InventoryTransaction.warehouse_id == wh_id,
                 )
             )
-            .all()
-        )
+            .distinct()
+        ).all()
 
         balances = []
         for (item_id,) in item_ids:
@@ -705,16 +704,14 @@ class InventoryBalanceService:
             if warehouse_id:
                 lot_number = f"__GENERAL__:{warehouse_id}"
 
-            general_lot = (
-                db.query(InventoryLot)
-                .filter(
+            general_lot = db.scalar(
+                select(InventoryLot).where(
                     and_(
                         InventoryLot.organization_id == org_id,
                         InventoryLot.item_id == itm_id,
                         InventoryLot.lot_number == lot_number,
                     )
                 )
-                .first()
             )
 
             if not general_lot:
@@ -790,16 +787,14 @@ class InventoryBalanceService:
             lot_number = "__GENERAL__"
             if warehouse_id:
                 lot_number = f"__GENERAL__:{warehouse_id}"
-            general_lot = (
-                db.query(InventoryLot)
-                .filter(
+            general_lot = db.scalar(
+                select(InventoryLot).where(
                     and_(
                         InventoryLot.organization_id == org_id,
                         InventoryLot.item_id == itm_id,
                         InventoryLot.lot_number == lot_number,
                     )
                 )
-                .first()
             )
 
             if general_lot:

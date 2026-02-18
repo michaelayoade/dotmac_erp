@@ -29,28 +29,28 @@
 
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
-                    <label for="bank_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Bank Name <span class="text-rose-500">*</span></label>
+                    <label for="bank_name" class="form-label">Bank Name <span class="text-rose-500">*</span></label>
                     <input type="text" id="bank_name" name="bank_name" required
                            value="{{ account.bank_name if account else '' }}"
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                           class="form-input">
                 </div>
                 <div>
-                    <label for="bank_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Bank Code</label>
+                    <label for="bank_code" class="form-label">Bank Code</label>
                     <input type="text" id="bank_code" name="bank_code"
                            value="{{ account.bank_code if account else '' }}"
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                           class="form-input">
                 </div>
                 <div>
-                    <label for="branch_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Branch Name</label>
+                    <label for="branch_name" class="form-label">Branch Name</label>
                     <input type="text" id="branch_name" name="branch_name"
                            value="{{ account.branch_name if account else '' }}"
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                           class="form-input">
                 </div>
                 <div>
-                    <label for="branch_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Branch Code</label>
+                    <label for="branch_code" class="form-label">Branch Code</label>
                     <input type="text" id="branch_code" name="branch_code"
                            value="{{ account.branch_code if account else '' }}"
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                           class="form-input">
                 </div>
             </div>
         </div>
@@ -61,22 +61,22 @@
 
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
-                    <label for="account_number" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Account Number <span class="text-rose-500">*</span></label>
+                    <label for="account_number" class="form-label">Account Number <span class="text-rose-500">*</span></label>
                     <input type="text" id="account_number" name="account_number" required
                            value="{{ account.account_number if account else '' }}"
                            {{ 'readonly' if account else '' }}
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-mono focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white {{ 'bg-slate-100 dark:bg-slate-700' if account else '' }}">
+                           class="form-input font-mono {{ 'bg-slate-100 dark:bg-slate-700' if account else '' }}">
                 </div>
                 <div>
-                    <label for="account_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Account Name <span class="text-rose-500">*</span></label>
+                    <label for="account_name" class="form-label">Account Name <span class="text-rose-500">*</span></label>
                     <input type="text" id="account_name" name="account_name" required
                            value="{{ account.account_name if account else '' }}"
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                           class="form-input">
                 </div>
                 <div>
-                    <label for="account_type" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Account Type <span class="text-rose-500">*</span></label>
+                    <label for="account_type" class="form-label">Account Type <span class="text-rose-500">*</span></label>
                     <select id="account_type" name="account_type" required
-                            class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                            class="form-select">
                         <option value="checking" {{ 'selected' if account and account.account_type == 'checking' else '' }}>Checking</option>
                         <option value="savings" {{ 'selected' if account and account.account_type == 'savings' else '' }}>Savings</option>
                         <option value="money_market" {{ 'selected' if account and account.account_type == 'money_market' else '' }}>Money Market</option>
@@ -85,9 +85,9 @@
                     </select>
                 </div>
                 <div>
-                    <label for="currency_code" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Currency <span class="text-rose-500">*</span></label>
+                    <label for="currency_code" class="form-label">Currency <span class="text-rose-500">*</span></label>
                     <select id="currency_code" name="currency_code" required
-                            class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                            class="form-select">
                         {% set selected_currency = account.currency_code if account else default_currency_code %}
                         {% for currency in currencies %}
                         <option value="{{ currency.code }}" {{ 'selected' if currency.code == selected_currency else '' }}>
@@ -97,15 +97,15 @@
                     </select>
                 </div>
                 <div>
-                    <label for="iban" class="block text-sm font-medium text-slate-700 dark:text-slate-300">IBAN</label>
+                    <label for="iban" class="form-label">IBAN</label>
                     <input type="text" id="iban" name="iban"
                            value="{{ account.iban if account else '' }}"
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-mono focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                           class="form-input font-mono">
                 </div>
                 <div>
-                    <label for="gl_account_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300">GL Account <span class="text-rose-500">*</span></label>
+                    <label for="gl_account_id" class="form-label">GL Account <span class="text-rose-500">*</span></label>
                     <select id="gl_account_id" name="gl_account_id" required
-                            class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                            class="form-select">
                         <option value="">Select GL Account</option>
                         {% for gl in gl_accounts %}
                         <option value="{{ gl.account_id }}" {{ 'selected' if account and account.gl_account_id == gl.account_id else '' }}>{{ gl.account_code }} - {{ gl.account_name }}</option>
@@ -123,14 +123,14 @@
                 <div class="flex items-center gap-3">
                     <input type="checkbox" id="allow_overdraft" name="allow_overdraft"
                            {{ 'checked' if account and account.allow_overdraft else '' }}
-                           class="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500">
+                           class="h-4 w-4 rounded border-slate-300 text-teal-600 focus:ring-teal-500">
                     <label for="allow_overdraft" class="text-sm font-medium text-slate-700 dark:text-slate-300">Allow Overdraft</label>
                 </div>
                 <div>
-                    <label for="overdraft_limit" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Overdraft Limit</label>
+                    <label for="overdraft_limit" class="form-label">Overdraft Limit</label>
                     <input type="number" id="overdraft_limit" name="overdraft_limit" step="0.01" min="0"
                            value="{{ account.overdraft_limit if account else '' }}"
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                           class="form-input">
                 </div>
             </div>
         </div>
@@ -141,31 +141,31 @@
 
             <div class="grid gap-4 sm:grid-cols-3">
                 <div>
-                    <label for="contact_name" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Contact Name</label>
+                    <label for="contact_name" class="form-label">Contact Name</label>
                     <input type="text" id="contact_name" name="contact_name"
                            value="{{ account.contact_name if account else '' }}"
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                           class="form-input">
                 </div>
                 <div>
-                    <label for="contact_phone" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Phone</label>
+                    <label for="contact_phone" class="form-label">Phone</label>
                     <input type="tel" id="contact_phone" name="contact_phone"
                            value="{{ account.contact_phone if account else '' }}"
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                           class="form-input">
                 </div>
                 <div>
-                    <label for="contact_email" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Email</label>
+                    <label for="contact_email" class="form-label">Email</label>
                     <input type="email" id="contact_email" name="contact_email"
                            value="{{ account.contact_email if account else '' }}"
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                           class="form-input">
                 </div>
             </div>
         </div>
 
         <!-- Notes -->
         <div class="card p-6">
-            <label for="notes" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Notes</label>
+            <label for="notes" class="form-label">Notes</label>
             <textarea id="notes" name="notes" rows="3"
-                      class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">{{ account.notes if account else '' }}</textarea>
+                      class="form-input">{{ account.notes if account else '' }}</textarea>
         </div>
 
         <!-- Actions -->
@@ -176,7 +176,8 @@
             </a>
             <button type="submit"
                     class="btn btn-primary">
-                {{ "Update Account" if account else "Create Account" }}
+                <span class="btn-spinner"></span>
+                <span class="btn-hide-on-load">{{ "Update Account" if account else "Create Account" }}</span>
             </button>
         </div>
     </form>

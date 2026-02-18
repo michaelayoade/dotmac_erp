@@ -13,7 +13,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, func
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models.fixed_assets.asset import Asset, AssetStatus
@@ -278,15 +278,13 @@ class DepreciationService(ListResponseMixin):
         user_id = coerce_uuid(created_by_user_id)
 
         # Get next run number for this period
-        existing_runs = (
-            db.query(func.count(DepreciationRun.run_id))
-            .filter(
+        existing_runs = db.scalar(
+            select(func.count(DepreciationRun.run_id)).where(
                 and_(
                     DepreciationRun.organization_id == org_id,
                     DepreciationRun.fiscal_period_id == period_id,
                 )
             )
-            .scalar()
         )
 
         run = DepreciationRun(
@@ -346,9 +344,8 @@ class DepreciationService(ListResponseMixin):
 
         try:
             # Get all depreciable assets
-            assets = (
-                db.query(Asset)
-                .filter(
+            assets = db.scalars(
+                select(Asset).where(
                     and_(
                         Asset.organization_id == org_id,
                         Asset.status == AssetStatus.ACTIVE,
@@ -356,16 +353,16 @@ class DepreciationService(ListResponseMixin):
                         Asset.net_book_value > Asset.residual_value,
                     )
                 )
-                .all()
             )
+            assets = assets.all()
 
             total_depreciation = Decimal("0")
             assets_processed = 0
 
             # Delete any existing schedules for this run
-            db.query(DepreciationSchedule).filter(
-                DepreciationSchedule.run_id == r_id
-            ).delete()
+            db.execute(
+                delete(DepreciationSchedule).where(DepreciationSchedule.run_id == r_id)
+            )
 
             for asset in assets:
                 if asset.depreciation_start_date is None:
@@ -474,11 +471,10 @@ class DepreciationService(ListResponseMixin):
                 raise HTTPException(status_code=400, detail=result.message)
 
             # Update asset records
-            schedules = (
-                db.query(DepreciationSchedule)
-                .filter(DepreciationSchedule.run_id == r_id)
-                .all()
+            schedules = db.scalars(
+                select(DepreciationSchedule).where(DepreciationSchedule.run_id == r_id)
             )
+            schedules = schedules.all()
 
             for schedule in schedules:
                 asset = db.get(Asset, schedule.asset_id)
@@ -528,11 +524,9 @@ class DepreciationService(ListResponseMixin):
         if not run or run.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Depreciation run not found")
 
-        return (
-            db.query(DepreciationSchedule)
-            .filter(DepreciationSchedule.run_id == r_id)
-            .all()
-        )
+        return db.scalars(
+            select(DepreciationSchedule).where(DepreciationSchedule.run_id == r_id)
+        ).all()
 
     @staticmethod
     def get(
@@ -560,23 +554,25 @@ class DepreciationService(ListResponseMixin):
         offset: int = 0,
     ) -> list[DepreciationRun]:
         """List depreciation runs with optional filters."""
-        query = db.query(DepreciationRun)
+        stmt = select(DepreciationRun)
 
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 DepreciationRun.organization_id == coerce_uuid(organization_id)
             )
 
         if fiscal_period_id:
-            query = query.filter(
+            stmt = stmt.where(
                 DepreciationRun.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
 
         if status:
-            query = query.filter(DepreciationRun.status == status)
+            stmt = stmt.where(DepreciationRun.status == status)
 
-        query = query.order_by(DepreciationRun.created_at.desc())
-        return query.limit(limit).offset(offset).all()
+        stmt = (
+            stmt.order_by(DepreciationRun.created_at.desc()).limit(limit).offset(offset)
+        )
+        return db.scalars(stmt).all()
 
 
 # Module-level singleton instance

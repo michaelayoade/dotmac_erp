@@ -441,14 +441,12 @@ class BankingWebService:
 
         status_value = _parse_account_status(status)
 
-        filtered_query = db.query(BankAccount).filter(
-            BankAccount.organization_id == org_id
-        )
+        conditions: list[Any] = [BankAccount.organization_id == org_id]
         if status_value:
-            filtered_query = filtered_query.filter(BankAccount.status == status_value)
+            conditions.append(BankAccount.status == status_value)
         if search:
             search_pattern = f"%{search}%"
-            filtered_query = filtered_query.filter(
+            conditions.append(
                 or_(
                     BankAccount.bank_name.ilike(search_pattern),
                     BankAccount.account_name.ilike(search_pattern),
@@ -458,9 +456,9 @@ class BankingWebService:
             )
 
         total_count = (
-            filtered_query.with_entities(
-                func.count(BankAccount.bank_account_id)
-            ).scalar()
+            db.scalar(
+                select(func.count(BankAccount.bank_account_id)).where(*conditions)
+            )
             or 0
         )
         account_sort_map: dict[str, Any] = {
@@ -469,33 +467,40 @@ class BankingWebService:
             "account_number": BankAccount.account_number,
             "status": BankAccount.status,
         }
-        list_query = apply_sort(
-            filtered_query,
+        list_stmt = apply_sort(
+            select(BankAccount).where(*conditions),
             sort,
             sort_dir,
             account_sort_map,
             default=[BankAccount.bank_name.asc(), BankAccount.account_name.asc()],
         )
-        accounts = list_query.limit(limit).offset(offset).all()
+        accounts = db.scalars(list_stmt.limit(limit).offset(offset)).all()
 
         active_count = (
-            filtered_query.filter(BankAccount.status == BankAccountStatus.active)
-            .with_entities(func.count(BankAccount.bank_account_id))
-            .scalar()
+            db.scalar(
+                select(func.count(BankAccount.bank_account_id)).where(
+                    *conditions, BankAccount.status == BankAccountStatus.active
+                )
+            )
             or 0
         )
-        total_balance = filtered_query.with_entities(
-            func.coalesce(func.sum(BankAccount.last_statement_balance), 0)
-        ).scalar() or Decimal("0")
+        total_balance = db.scalar(
+            select(
+                func.coalesce(func.sum(BankAccount.last_statement_balance), 0)
+            ).where(*conditions)
+        ) or Decimal("0")
         pending_recon = (
-            db.query(func.count(BankReconciliation.reconciliation_id))
-            .filter(
-                BankReconciliation.organization_id == org_id,
-                BankReconciliation.status.in_(
-                    [ReconciliationStatus.draft, ReconciliationStatus.pending_review]
-                ),
+            db.scalar(
+                select(func.count(BankReconciliation.reconciliation_id)).where(
+                    BankReconciliation.organization_id == org_id,
+                    BankReconciliation.status.in_(
+                        [
+                            ReconciliationStatus.draft,
+                            ReconciliationStatus.pending_review,
+                        ]
+                    ),
+                )
             )
-            .scalar()
             or 0
         )
 
@@ -529,15 +534,14 @@ class BankingWebService:
         if account_id:
             account = db.get(BankAccount, coerce_uuid(account_id))
 
-        gl_accounts = (
-            db.query(Account)
-            .filter(
+        gl_accounts = db.scalars(
+            select(Account)
+            .where(
                 Account.organization_id == org_id,
                 Account.is_active.is_(True),
             )
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
 
         context = {
             "account": _account_view(account) if account else None,
@@ -558,13 +562,13 @@ class BankingWebService:
             account = None
         transactions: list[dict] = []
         if account:
-            rows = (
-                db.query(BankStatementLine, BankStatement)
+            rows = db.execute(
+                select(BankStatementLine, BankStatement)
                 .join(
                     BankStatement,
                     BankStatementLine.statement_id == BankStatement.statement_id,
                 )
-                .filter(
+                .where(
                     BankStatement.organization_id == org_id,
                     BankStatement.bank_account_id == account.bank_account_id,
                 )
@@ -573,8 +577,7 @@ class BankingWebService:
                     BankStatementLine.line_number.desc(),
                 )
                 .limit(50)
-                .all()
-            )
+            ).all()
             for line, statement in rows:
                 view = _statement_line_view(line)
                 view.update(
@@ -589,6 +592,184 @@ class BankingWebService:
         return {
             "account": _account_view(account) if account else None,
             "transactions": transactions,
+        }
+
+    @staticmethod
+    def transaction_detail_context(
+        db: Session,
+        organization_id: str,
+        line_id: str,
+    ) -> dict:
+        """Build context for the transaction line detail page."""
+        from app.services.finance.banking.bank_reconciliation import (
+            _build_source_url,
+        )
+
+        org_id = coerce_uuid(organization_id)
+        line = db.get(BankStatementLine, coerce_uuid(line_id))
+        if not line:
+            return {"line": None}
+
+        # Verify org ownership via parent statement
+        statement = line.statement
+        if not statement or statement.organization_id != org_id:
+            return {"line": None}
+
+        account = statement.bank_account
+        currency = statement.currency_code
+
+        # Base line view
+        line_view = _statement_line_view(line, currency)
+        # Add extra fields not in the list helper
+        line_view["value_date"] = _format_date(line.value_date)
+        line_view["check_number"] = line.check_number
+        line_view["bank_category"] = line.bank_category
+        line_view["bank_code"] = line.bank_code
+        line_view["notes"] = line.notes
+        line_view["transaction_id"] = line.transaction_id
+        line_view["matched_at"] = (
+            line.matched_at.strftime("%d %b %Y %H:%M") if line.matched_at else None
+        )
+
+        # Parent statement/account info
+        statement_view = {
+            "statement_id": str(statement.statement_id),
+            "statement_number": statement.statement_number,
+            "statement_date": _format_date(statement.statement_date),
+            "status": _statement_status_label(statement.status),
+        }
+        account_view = (
+            {
+                "bank_account_id": str(account.bank_account_id),
+                "account_name": account.account_name,
+                "bank_name": account.bank_name,
+                "account_number": account.account_number,
+            }
+            if account
+            else None
+        )
+
+        # Matched GL entries (via multi-match junction table)
+        gl_matches: list[dict] = []
+        for match in line.matched_gl_lines:
+            jl = db.get(JournalEntryLine, match.journal_line_id)
+            if not jl:
+                continue
+            entry = getattr(jl, "journal_entry", None) or getattr(jl, "entry", None)
+            if not entry:
+                continue
+            source_url = _build_source_url(
+                getattr(entry, "source_document_type", None),
+                getattr(entry, "source_document_id", None),
+                getattr(entry, "entry_id", None),
+            )
+            meta = resolve_payment_metadata(
+                db,
+                getattr(entry, "source_document_type", None),
+                getattr(entry, "source_document_id", None),
+            )
+            gl_matches.append(
+                {
+                    "journal_line_id": str(jl.line_id),
+                    "entry_id": str(entry.entry_id),
+                    "entry_date": _format_date(entry.entry_date),
+                    "description": jl.description or entry.description or "",
+                    "reference": entry.reference or "",
+                    "debit_amount": _format_currency(jl.debit_amount, currency),
+                    "credit_amount": _format_currency(jl.credit_amount, currency),
+                    "account_name": (
+                        f"{jl.account.account_code} - {jl.account.account_name}"
+                        if jl.account
+                        else ""
+                    ),
+                    "source_url": source_url,
+                    "match_detail": _build_match_detail(
+                        db, entry, source_url, metadata=meta
+                    ),
+                    "match_type": match.match_type or "",
+                    "match_score": float(match.match_score)
+                    if match.match_score
+                    else None,
+                    "is_primary": match.is_primary,
+                    "matched_at": (
+                        match.matched_at.strftime("%d %b %Y %H:%M")
+                        if match.matched_at
+                        else None
+                    ),
+                }
+            )
+
+        # Also check legacy single-match field if no multi-matches found
+        if not gl_matches and line.matched_journal_line_id:
+            jl = db.get(JournalEntryLine, line.matched_journal_line_id)
+            if jl:
+                entry = getattr(jl, "journal_entry", None) or getattr(jl, "entry", None)
+                if entry:
+                    source_url = _build_source_url(
+                        getattr(entry, "source_document_type", None),
+                        getattr(entry, "source_document_id", None),
+                        getattr(entry, "entry_id", None),
+                    )
+                    meta = resolve_payment_metadata(
+                        db,
+                        getattr(entry, "source_document_type", None),
+                        getattr(entry, "source_document_id", None),
+                    )
+                    gl_matches.append(
+                        {
+                            "journal_line_id": str(jl.line_id),
+                            "entry_id": str(entry.entry_id),
+                            "entry_date": _format_date(entry.entry_date),
+                            "description": jl.description or entry.description or "",
+                            "reference": entry.reference or "",
+                            "debit_amount": _format_currency(jl.debit_amount, currency),
+                            "credit_amount": _format_currency(
+                                jl.credit_amount, currency
+                            ),
+                            "account_name": (
+                                f"{jl.account.account_code} - {jl.account.account_name}"
+                                if jl.account
+                                else ""
+                            ),
+                            "source_url": source_url,
+                            "match_detail": _build_match_detail(
+                                db, entry, source_url, metadata=meta
+                            ),
+                            "match_type": "LEGACY",
+                            "match_score": None,
+                            "is_primary": True,
+                            "matched_at": (
+                                line.matched_at.strftime("%d %b %Y %H:%M")
+                                if line.matched_at
+                                else None
+                            ),
+                        }
+                    )
+
+        # Suggested account name lookup
+        suggested_account_name = None
+        if line.suggested_account_id:
+            acct = db.get(Account, line.suggested_account_id)
+            if acct:
+                suggested_account_name = f"{acct.account_code} - {acct.account_name}"
+
+        # Suggested rule name lookup
+        suggested_rule_name = None
+        if line.suggested_rule_id:
+            from app.models.finance.banking.transaction_rule import TransactionRule
+
+            rule = db.get(TransactionRule, line.suggested_rule_id)
+            if rule:
+                suggested_rule_name = rule.rule_name
+
+        return {
+            "line": line_view,
+            "statement": statement_view,
+            "account": account_view,
+            "gl_matches": gl_matches,
+            "suggested_account_name": suggested_account_name,
+            "suggested_rule_name": suggested_rule_name,
+            "currency_code": currency,
         }
 
     @staticmethod
@@ -611,49 +792,52 @@ class BankingWebService:
         from_date = _parse_date(start_date)
         to_date = _parse_date(end_date)
 
-        query = (
-            db.query(BankStatement)
+        conditions: list[Any] = [BankStatement.organization_id == org_id]
+        stmt = (
+            select(BankStatement)
             .join(
                 BankAccount,
                 BankStatement.bank_account_id == BankAccount.bank_account_id,
             )
-            .filter(BankStatement.organization_id == org_id)
+            .where(*conditions)
         )
 
         if account_id:
-            query = query.filter(
-                BankStatement.bank_account_id == coerce_uuid(account_id)
-            )
+            stmt = stmt.where(BankStatement.bank_account_id == coerce_uuid(account_id))
+            conditions.append(BankStatement.bank_account_id == coerce_uuid(account_id))
         if status_value:
-            query = query.filter(BankStatement.status == status_value)
+            stmt = stmt.where(BankStatement.status == status_value)
+            conditions.append(BankStatement.status == status_value)
         if from_date:
-            query = query.filter(BankStatement.statement_date >= from_date)
+            stmt = stmt.where(BankStatement.statement_date >= from_date)
+            conditions.append(BankStatement.statement_date >= from_date)
         if to_date:
-            query = query.filter(BankStatement.statement_date <= to_date)
+            stmt = stmt.where(BankStatement.statement_date <= to_date)
+            conditions.append(BankStatement.statement_date <= to_date)
 
         total_count = (
-            query.with_entities(func.count(BankStatement.statement_id)).scalar() or 0
+            db.scalar(select(func.count(BankStatement.statement_id)).where(*conditions))
+            or 0
         )
         statement_sort_map: dict[str, Any] = {
             "statement_date": BankStatement.statement_date,
             "account_name": BankAccount.account_name,
             "status": BankStatement.status,
         }
-        query = apply_sort(
-            query,
+        stmt = apply_sort(
+            stmt,
             sort,
             sort_dir,
             statement_sort_map,
             default=BankStatement.statement_date.desc(),
         )
-        statements = query.limit(limit).offset(offset).all()
+        statements = db.scalars(stmt.limit(limit).offset(offset)).all()
 
-        accounts = (
-            db.query(BankAccount)
-            .filter(BankAccount.organization_id == org_id)
+        accounts = db.scalars(
+            select(BankAccount)
+            .where(BankAccount.organization_id == org_id)
             .order_by(BankAccount.bank_name, BankAccount.account_number)
-            .all()
-        )
+        ).all()
 
         total_lines = sum(statement.total_lines or 0 for statement in statements)
         matched_lines = sum(statement.matched_lines or 0 for statement in statements)
@@ -698,12 +882,11 @@ class BankingWebService:
         organization_id: str,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
-        accounts = (
-            db.query(BankAccount)
-            .filter(BankAccount.organization_id == org_id)
+        accounts = db.scalars(
+            select(BankAccount)
+            .where(BankAccount.organization_id == org_id)
             .order_by(BankAccount.bank_name, BankAccount.account_number)
-            .all()
-        )
+        ).all()
         # Build JSON-safe account list for Alpine.js tojson serialization.
         accounts_json = [
             {
@@ -744,9 +927,9 @@ class BankingWebService:
         ]
         account_map: dict[str, str] = {}
         if account_ids:
-            accounts = (
-                db.query(Account).filter(Account.account_id.in_(account_ids)).all()
-            )
+            accounts = db.scalars(
+                select(Account).where(Account.account_id.in_(account_ids))
+            ).all()
             account_map = {
                 str(a.account_id): f"{a.account_code} - {a.account_name}"
                 for a in accounts
@@ -957,40 +1140,40 @@ class BankingWebService:
         from_date = _parse_date(start_date)
         to_date = _parse_date(end_date)
 
-        query = db.query(BankReconciliation).filter(
-            BankReconciliation.organization_id == org_id
-        )
+        conditions: list[Any] = [BankReconciliation.organization_id == org_id]
 
         if account_id:
-            query = query.filter(
+            conditions.append(
                 BankReconciliation.bank_account_id == coerce_uuid(account_id)
             )
         if status_value:
-            query = query.filter(BankReconciliation.status == status_value)
+            conditions.append(BankReconciliation.status == status_value)
         if from_date:
-            query = query.filter(BankReconciliation.reconciliation_date >= from_date)
+            conditions.append(BankReconciliation.reconciliation_date >= from_date)
         if to_date:
-            query = query.filter(BankReconciliation.reconciliation_date <= to_date)
+            conditions.append(BankReconciliation.reconciliation_date <= to_date)
 
         total_count = (
-            query.with_entities(
-                func.count(BankReconciliation.reconciliation_id)
-            ).scalar()
+            db.scalar(
+                select(func.count(BankReconciliation.reconciliation_id)).where(
+                    *conditions
+                )
+            )
             or 0
         )
-        reconciliations = (
-            query.order_by(BankReconciliation.reconciliation_date.desc())
+        reconciliations = db.scalars(
+            select(BankReconciliation)
+            .where(*conditions)
+            .order_by(BankReconciliation.reconciliation_date.desc())
             .limit(limit)
             .offset(offset)
-            .all()
-        )
+        ).all()
 
-        accounts = (
-            db.query(BankAccount)
-            .filter(BankAccount.organization_id == org_id)
+        accounts = db.scalars(
+            select(BankAccount)
+            .where(BankAccount.organization_id == org_id)
             .order_by(BankAccount.bank_name, BankAccount.account_number)
-            .all()
-        )
+        ).all()
 
         in_progress_count = sum(
             1 for recon in reconciliations if recon.status == ReconciliationStatus.draft
@@ -1046,15 +1229,14 @@ class BankingWebService:
         account_id: str | None = None,
     ) -> dict:
         org_id = coerce_uuid(organization_id)
-        accounts = (
-            db.query(BankAccount)
-            .filter(
+        accounts = db.scalars(
+            select(BankAccount)
+            .where(
                 BankAccount.organization_id == org_id,
                 BankAccount.status == BankAccountStatus.active,
             )
             .order_by(BankAccount.bank_name, BankAccount.account_number)
-            .all()
-        )
+        ).all()
         context: dict = {"accounts": [_account_view(account) for account in accounts]}
         if account_id:
             context["selected_account_id"] = account_id
@@ -1083,39 +1265,37 @@ class BankingWebService:
 
         bank_account = reconciliation.bank_account
 
-        statement_lines = (
-            db.query(BankStatementLine)
+        statement_lines = db.scalars(
+            select(BankStatementLine)
             .join(
                 BankStatement,
                 BankStatementLine.statement_id == BankStatement.statement_id,
             )
-            .filter(
+            .where(
                 BankStatement.bank_account_id == reconciliation.bank_account_id,
                 BankStatementLine.is_matched.is_(False),
                 BankStatementLine.transaction_date >= reconciliation.period_start,
                 BankStatementLine.transaction_date <= reconciliation.period_end,
             )
             .order_by(BankStatementLine.transaction_date, BankStatementLine.line_number)
-            .all()
-        )
+        ).all()
 
         gl_lines: list[Any] = []
         if bank_account:
-            gl_lines = (
-                db.query(JournalEntryLine, JournalEntry)
+            gl_lines = db.execute(
+                select(JournalEntryLine, JournalEntry)
                 .join(
                     JournalEntry,
                     JournalEntryLine.journal_entry_id == JournalEntry.journal_entry_id,
                 )
-                .filter(
+                .where(
                     JournalEntryLine.account_id == bank_account.gl_account_id,
                     JournalEntry.status == JournalStatus.POSTED,
                     JournalEntry.entry_date >= reconciliation.period_start,
                     JournalEntry.entry_date <= reconciliation.period_end,
                 )
                 .order_by(JournalEntry.entry_date, JournalEntryLine.line_number)
-                .all()
-            )
+            ).all()
 
         # Batch-resolve payment metadata for GL lines
         metadata_pairs: list[tuple[str | None, UUID | None]] = [
@@ -1291,14 +1471,14 @@ class BankingWebService:
 
         org_id = coerce_uuid(organization_id)
 
-        query = db.query(Payee).filter(
+        conditions: list[Any] = [
             Payee.organization_id == org_id,
-            Payee.is_active == True,
-        )
+            Payee.is_active.is_(True),
+        ]
 
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            conditions.append(
                 or_(
                     Payee.payee_name.ilike(search_pattern),
                     Payee.name_patterns.ilike(search_pattern),
@@ -1308,25 +1488,26 @@ class BankingWebService:
         if payee_type:
             try:
                 pt = PayeeType(payee_type)
-                query = query.filter(Payee.payee_type == pt)
+                conditions.append(Payee.payee_type == pt)
             except ValueError:
                 pass
 
-        total = query.count()
-        payees = (
-            query.order_by(Payee.payee_name)
+        total = db.scalar(select(func.count(Payee.payee_id)).where(*conditions)) or 0
+        payees = db.scalars(
+            select(Payee)
+            .where(*conditions)
+            .order_by(Payee.payee_name)
             .offset((page - 1) * per_page)
             .limit(per_page)
-            .all()
-        )
+        ).all()
 
         # Get GL accounts for display
         account_map = {}
         account_ids = [p.default_account_id for p in payees if p.default_account_id]
         if account_ids:
-            accounts = (
-                db.query(Account).filter(Account.account_id.in_(account_ids)).all()
-            )
+            accounts = db.scalars(
+                select(Account).where(Account.account_id.in_(account_ids))
+            ).all()
             account_map = {
                 a.account_id: f"{a.account_code} - {a.account_name}" for a in accounts
             }
@@ -1392,12 +1573,11 @@ class BankingWebService:
         org_id = coerce_uuid(organization_id)
 
         # Get GL accounts for dropdown
-        accounts = (
-            db.query(Account)
-            .filter(Account.organization_id == org_id, Account.is_active == True)
+        accounts = db.scalars(
+            select(Account)
+            .where(Account.organization_id == org_id, Account.is_active.is_(True))
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
 
         account_options = [
             {
@@ -1457,32 +1637,34 @@ class BankingWebService:
 
         org_id = coerce_uuid(organization_id)
 
-        query = db.query(TransactionRule).filter(
-            TransactionRule.organization_id == org_id,
-        )
+        conditions: list[Any] = [TransactionRule.organization_id == org_id]
 
         if rule_type:
             try:
                 rt = RuleType(rule_type)
-                query = query.filter(TransactionRule.rule_type == rt)
+                conditions.append(TransactionRule.rule_type == rt)
             except ValueError:
                 pass
 
-        total = query.count()
-        rules = (
-            query.order_by(TransactionRule.sort_order.asc(), TransactionRule.rule_name)
+        total = (
+            db.scalar(select(func.count(TransactionRule.rule_id)).where(*conditions))
+            or 0
+        )
+        rules = db.scalars(
+            select(TransactionRule)
+            .where(*conditions)
+            .order_by(TransactionRule.sort_order.asc(), TransactionRule.rule_name)
             .offset((page - 1) * per_page)
             .limit(per_page)
-            .all()
-        )
+        ).all()
 
         # Get GL accounts for display
         account_map = {}
         account_ids = [r.target_account_id for r in rules if r.target_account_id]
         if account_ids:
-            accounts = (
-                db.query(Account).filter(Account.account_id.in_(account_ids)).all()
-            )
+            accounts = db.scalars(
+                select(Account).where(Account.account_id.in_(account_ids))
+            ).all()
             account_map = {
                 a.account_id: f"{a.account_code} - {a.account_name}" for a in accounts
             }
@@ -1513,20 +1695,32 @@ class BankingWebService:
             )
 
         # Aggregate stats across ALL rules for the org (not just current page)
-        all_rules_query = db.query(TransactionRule).filter(
-            TransactionRule.organization_id == org_id,
+        active_count = (
+            db.scalar(
+                select(func.count(TransactionRule.rule_id)).where(
+                    TransactionRule.organization_id == org_id,
+                    TransactionRule.is_active.is_(True),
+                )
+            )
+            or 0
         )
-        active_count = all_rules_query.filter(
-            TransactionRule.is_active.is_(True),
-        ).count()
-        auto_apply_count = all_rules_query.filter(
-            TransactionRule.auto_apply.is_(True),
-        ).count()
+        auto_apply_count = (
+            db.scalar(
+                select(func.count(TransactionRule.rule_id)).where(
+                    TransactionRule.organization_id == org_id,
+                    TransactionRule.auto_apply.is_(True),
+                )
+            )
+            or 0
+        )
         total_matches = (
-            db.query(func.coalesce(func.sum(TransactionRule.match_count), 0))
-            .filter(TransactionRule.organization_id == org_id)
-            .scalar()
-        ) or 0
+            db.scalar(
+                select(func.coalesce(func.sum(TransactionRule.match_count), 0)).where(
+                    TransactionRule.organization_id == org_id
+                )
+            )
+            or 0
+        )
 
         total_pages = (total + per_page - 1) // per_page
         active_filters = build_active_filters(
@@ -1596,12 +1790,11 @@ class BankingWebService:
         org_id = coerce_uuid(organization_id)
 
         # Get GL accounts for dropdown
-        accounts = (
-            db.query(Account)
-            .filter(Account.organization_id == org_id, Account.is_active == True)
+        accounts = db.scalars(
+            select(Account)
+            .where(Account.organization_id == org_id, Account.is_active.is_(True))
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
 
         account_options = [
             {
@@ -1612,15 +1805,14 @@ class BankingWebService:
         ]
 
         # Get bank accounts for dropdown
-        bank_accounts = (
-            db.query(BankAccount)
-            .filter(
+        bank_accounts = db.scalars(
+            select(BankAccount)
+            .where(
                 BankAccount.organization_id == org_id,
                 BankAccount.status == BankAccountStatus.active,
             )
             .order_by(BankAccount.account_name)
-            .all()
-        )
+        ).all()
 
         bank_account_options = [
             {
@@ -1631,24 +1823,22 @@ class BankingWebService:
         ]
 
         # Get payees for dropdown
-        payees = (
-            db.query(Payee)
-            .filter(Payee.organization_id == org_id, Payee.is_active == True)
+        payees = db.scalars(
+            select(Payee)
+            .where(Payee.organization_id == org_id, Payee.is_active.is_(True))
             .order_by(Payee.payee_name)
-            .all()
-        )
+        ).all()
 
         payee_options = [
             {"value": str(p.payee_id), "label": p.payee_name} for p in payees
         ]
 
         # Get tax codes for dropdown
-        tax_codes = (
-            db.query(TaxCode)
-            .filter(TaxCode.organization_id == org_id, TaxCode.is_active == True)
+        tax_codes = db.scalars(
+            select(TaxCode)
+            .where(TaxCode.organization_id == org_id, TaxCode.is_active.is_(True))
             .order_by(TaxCode.tax_code)
-            .all()
-        )
+        ).all()
 
         tax_code_options = [
             {
@@ -1729,15 +1919,14 @@ class BankingWebService:
         if not source_rule or source_rule.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Rule not found")
 
-        bank_accounts = (
-            db.query(BankAccount)
-            .filter(
+        bank_accounts = db.scalars(
+            select(BankAccount)
+            .where(
                 BankAccount.organization_id == org_id,
                 BankAccount.status == BankAccountStatus.active,
             )
             .order_by(BankAccount.account_name)
-            .all()
-        )
+        ).all()
 
         # Exclude the source rule's bank account — it's already covered
         source_ba_id = source_rule.bank_account_id
@@ -1785,27 +1974,25 @@ class BankingWebService:
         if not unique_ids:
             raise ValueError("Select at least one rule")
 
-        rules = list(
-            db.query(TransactionRule)
-            .filter(
+        rules = db.scalars(
+            select(TransactionRule)
+            .where(
                 TransactionRule.organization_id == org_id,
                 TransactionRule.rule_id.in_(unique_ids),
             )
             .order_by(TransactionRule.rule_name.asc())
-            .all()
-        )
+        ).all()
         if not rules:
             raise ValueError("No valid rules selected")
 
-        bank_accounts = (
-            db.query(BankAccount)
-            .filter(
+        bank_accounts = db.scalars(
+            select(BankAccount)
+            .where(
                 BankAccount.organization_id == org_id,
                 BankAccount.status == BankAccountStatus.active,
             )
             .order_by(BankAccount.account_name)
-            .all()
-        )
+        ).all()
 
         return {
             "source_rules": [
@@ -2059,6 +2246,25 @@ class BankingWebService:
         )
         return templates.TemplateResponse(
             request, "finance/banking/account_detail.html", context
+        )
+
+    def transaction_detail_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        line_id: str,
+    ) -> HTMLResponse:
+        context = base_context(request, auth, "Transaction Detail", "banking", db=db)
+        context.update(
+            self.transaction_detail_context(
+                db,
+                str(auth.organization_id),
+                line_id,
+            )
+        )
+        return templates.TemplateResponse(
+            request, "finance/banking/transaction_detail.html", context
         )
 
     def account_edit_form_response(

@@ -14,6 +14,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -466,9 +467,11 @@ class JournalService(ListResponseMixin):
         journal.correlation_id = input.correlation_id
 
         # Delete existing lines
-        db.query(JournalEntryLine).filter(
-            JournalEntryLine.journal_entry_id == journal_id
-        ).delete()
+        db.execute(
+            delete(JournalEntryLine).where(
+                JournalEntryLine.journal_entry_id == journal_id
+            )
+        )
 
         # Create new lines
         for i, line_input in enumerate(input.lines):
@@ -841,11 +844,12 @@ class JournalService(ListResponseMixin):
         """
         journal_id = coerce_uuid(journal_entry_id)
 
-        return (
-            db.query(JournalEntryLine)
-            .filter(JournalEntryLine.journal_entry_id == journal_id)
-            .order_by(JournalEntryLine.line_number)
-            .all()
+        return list(
+            db.scalars(
+                select(JournalEntryLine)
+                .where(JournalEntryLine.journal_entry_id == journal_id)
+                .order_by(JournalEntryLine.line_number)
+            ).all()
         )
 
     @staticmethod
@@ -877,32 +881,32 @@ class JournalService(ListResponseMixin):
         Returns:
             List of JournalEntry objects
         """
-        query = db.query(JournalEntry)
+        query = select(JournalEntry)
 
         if organization_id:
-            query = query.filter(
+            query = query.where(
                 JournalEntry.organization_id == coerce_uuid(organization_id)
             )
 
         if status:
-            query = query.filter(JournalEntry.status == status)
+            query = query.where(JournalEntry.status == status)
 
         if journal_type:
-            query = query.filter(JournalEntry.journal_type == journal_type)
+            query = query.where(JournalEntry.journal_type == journal_type)
 
         if fiscal_period_id:
-            query = query.filter(
+            query = query.where(
                 JournalEntry.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
 
         if from_date:
-            query = query.filter(JournalEntry.posting_date >= from_date)
+            query = query.where(JournalEntry.posting_date >= from_date)
 
         if to_date:
-            query = query.filter(JournalEntry.posting_date <= to_date)
+            query = query.where(JournalEntry.posting_date <= to_date)
 
         query = query.order_by(JournalEntry.created_at.desc())
-        return query.limit(limit).offset(offset).all()
+        return list(db.scalars(query.limit(limit).offset(offset)).all())
 
     @staticmethod
     def create_entry(

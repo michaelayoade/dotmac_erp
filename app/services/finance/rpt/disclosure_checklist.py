@@ -14,7 +14,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import Integer, func
+from sqlalchemy import Integer, func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.rpt.disclosure_checklist import (
@@ -107,14 +107,12 @@ class DisclosureChecklistService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         # Check for duplicate
-        existing = (
-            db.query(DisclosureChecklist)
-            .filter(
+        existing = db.scalar(
+            select(DisclosureChecklist).where(
                 DisclosureChecklist.organization_id == org_id,
                 DisclosureChecklist.fiscal_period_id == input.fiscal_period_id,
                 DisclosureChecklist.disclosure_code == input.disclosure_code,
             )
-            .first()
         )
         if existing:
             raise HTTPException(
@@ -391,14 +389,13 @@ class DisclosureChecklistService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(fiscal_period_id)
 
-        items = (
-            db.query(DisclosureChecklist)
-            .filter(
+        items = db.scalars(
+            select(DisclosureChecklist).where(
                 DisclosureChecklist.organization_id == org_id,
                 DisclosureChecklist.fiscal_period_id == period_id,
             )
-            .all()
         )
+        items = items.all()
 
         total = len(items)
         not_started = len(
@@ -463,8 +460,8 @@ class DisclosureChecklistService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(fiscal_period_id)
 
-        results = (
-            db.query(
+        results = db.execute(
+            select(
                 DisclosureChecklist.ifrs_standard,
                 func.count(DisclosureChecklist.checklist_id).label("total"),
                 func.sum(
@@ -480,14 +477,14 @@ class DisclosureChecklistService(ListResponseMixin):
                     )
                 ).label("completed"),
             )
-            .filter(
+            .where(
                 DisclosureChecklist.organization_id == org_id,
                 DisclosureChecklist.fiscal_period_id == period_id,
             )
             .group_by(DisclosureChecklist.ifrs_standard)
             .order_by(DisclosureChecklist.ifrs_standard)
-            .all()
         )
+        results = results.all()
 
         summaries = []
         for row in results:
@@ -529,9 +526,9 @@ class DisclosureChecklistService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(fiscal_period_id)
 
-        return (
-            db.query(DisclosureChecklist)
-            .filter(
+        return db.scalars(
+            select(DisclosureChecklist)
+            .where(
                 DisclosureChecklist.organization_id == org_id,
                 DisclosureChecklist.fiscal_period_id == period_id,
                 DisclosureChecklist.is_mandatory == True,
@@ -546,8 +543,7 @@ class DisclosureChecklistService(ListResponseMixin):
                 DisclosureChecklist.ifrs_standard,
                 DisclosureChecklist.sequence_number,
             )
-            .all()
-        )
+        ).all()
 
     @staticmethod
     def copy_checklist_to_period(
@@ -573,15 +569,15 @@ class DisclosureChecklistService(ListResponseMixin):
         tgt_period = coerce_uuid(target_period_id)
 
         # Get source items
-        source_items = (
-            db.query(DisclosureChecklist)
-            .filter(
+        source_items = db.scalars(
+            select(DisclosureChecklist)
+            .where(
                 DisclosureChecklist.organization_id == org_id,
                 DisclosureChecklist.fiscal_period_id == src_period,
             )
             .order_by(DisclosureChecklist.sequence_number)
-            .all()
         )
+        source_items = source_items.all()
 
         # Map old IDs to new IDs
         id_map: dict[UUID, UUID] = {}
@@ -651,32 +647,33 @@ class DisclosureChecklistService(ListResponseMixin):
         offset: int = 0,
     ) -> list[DisclosureChecklist]:
         """List disclosure checklist items with optional filters."""
-        query = db.query(DisclosureChecklist)
+        stmt = select(DisclosureChecklist)
 
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 DisclosureChecklist.organization_id == coerce_uuid(organization_id)
             )
 
         if fiscal_period_id:
-            query = query.filter(
+            stmt = stmt.where(
                 DisclosureChecklist.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
 
         if ifrs_standard:
-            query = query.filter(DisclosureChecklist.ifrs_standard == ifrs_standard)
+            stmt = stmt.where(DisclosureChecklist.ifrs_standard == ifrs_standard)
 
         if status:
-            query = query.filter(DisclosureChecklist.status == status)
+            stmt = stmt.where(DisclosureChecklist.status == status)
 
         if is_mandatory is not None:
-            query = query.filter(DisclosureChecklist.is_mandatory == is_mandatory)
+            stmt = stmt.where(DisclosureChecklist.is_mandatory == is_mandatory)
 
-        query = query.order_by(
+        stmt = stmt.order_by(
             DisclosureChecklist.ifrs_standard,
             DisclosureChecklist.sequence_number,
         )
-        return query.limit(limit).offset(offset).all()
+        stmt = stmt.limit(limit).offset(offset)
+        return db.scalars(stmt).all()
 
 
 # Module-level singleton instance

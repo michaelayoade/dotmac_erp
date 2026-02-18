@@ -5,7 +5,7 @@
 
 {% block breadcrumbs %}
 <nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
-    <a href="/finance/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Finance</a>
+    <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
     <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
     </svg>
@@ -553,10 +553,10 @@
                             <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                                 <td class="w-10 pr-2 text-center text-xs text-slate-400 dark:text-slate-500 tabular-nums border-r border-slate-100 dark:border-slate-700/50">{{ line.line_number }}</td>
                                 <td class="pl-4 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">{{ line.transaction_date }}</td>
-                                <td>
-                                    <p class="text-sm text-slate-900 dark:text-white">{{ line.description if line.description else "-" }}</p>
+                                <td class="max-w-[320px]">
+                                    <p class="text-sm text-slate-900 dark:text-white truncate" title="{{ line.description if line.description else '' }}">{{ line.description if line.description else "-" }}</p>
                                     {% if line.payee_payer %}
-                                    <p class="text-xs text-slate-500 dark:text-slate-400">{{ line.payee_payer }}</p>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 truncate" title="{{ line.payee_payer }}">{{ line.payee_payer }}</p>
                                     {% endif %}
                                 </td>
                                 <td class="text-right font-mono tabular-nums text-sm {{ 'text-emerald-600 dark:text-emerald-400' if line.transaction_type == 'credit' else 'text-rose-600 dark:text-rose-400' }}">
@@ -861,7 +861,7 @@
                     {# Auto-Match button — deterministic matching against Paystack + Splynx payments #}
                     {% if statement.unmatched_lines > 0 %}
                     <form method="POST" action="/finance/banking/statements/{{ statement.statement_id }}/auto-match"
-                          onsubmit="return confirm('Run auto-match on {{ statement.unmatched_lines }} unmatched lines?\n\nThis will attempt to match against Paystack and Splynx payments.');">
+                          onsubmit="return confirm('Run auto-match on {{ statement.unmatched_lines }} unmatched lines? This will attempt to match against Paystack and Splynx payments.');">
                         {{ request.state.csrf_form | safe }}
                         <button type="submit"
                                 class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 transition-colors">

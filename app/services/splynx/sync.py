@@ -11,7 +11,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, TypedDict
 from uuid import UUID
 
@@ -27,7 +27,9 @@ from app.models.finance.ar.customer_payment import (
 from app.models.finance.ar.external_sync import EntityType, ExternalSource, ExternalSync
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
 from app.models.finance.ar.invoice_line import InvoiceLine
+from app.models.finance.ar.invoice_line_tax import InvoiceLineTax
 from app.models.finance.ar.payment_allocation import PaymentAllocation
+from app.models.finance.tax.tax_code import TaxCode, TaxType
 from app.services.splynx.client import (
     SplynxClient,
     SplynxConfig,
@@ -197,6 +199,18 @@ class SplynxSyncService:
         ] = {}  # splynx_method_id -> erp_bank_account_id
         self._default_bank_account_cache: dict[str, UUID] = {}
 
+        # Sales tax code for VAT extraction on synced invoices (lazy)
+        self._sales_tax_code_resolved: bool = False
+        self._sales_tax_code: TaxCode | None = None
+
+    @property
+    def sales_tax_code(self) -> TaxCode | None:
+        """Lazy-resolve the org's active VAT sales tax code on first access."""
+        if not self._sales_tax_code_resolved:
+            self._sales_tax_code = self._resolve_sales_tax()
+            self._sales_tax_code_resolved = True
+        return self._sales_tax_code
+
     @property
     def client(self) -> SplynxClient:
         """Lazy-initialize Splynx client."""
@@ -209,6 +223,97 @@ class SplynxSyncService:
         if self._client:
             self._client.close()
             self._client = None
+
+    # =========================================================================
+    # Tax Extraction
+    # =========================================================================
+
+    def _resolve_sales_tax(self) -> TaxCode | None:
+        """Look up the org's active VAT/GST sales tax code.
+
+        Finds the first active VAT-type tax code that applies to sales
+        and is currently effective.  Returns ``None`` if no qualifying
+        code exists (sync will proceed without tax extraction).
+        """
+        today = date.today()
+        stmt = (
+            select(TaxCode)
+            .where(
+                TaxCode.organization_id == self.organization_id,
+                TaxCode.tax_type == TaxType.VAT,
+                TaxCode.applies_to_sales.is_(True),
+                TaxCode.is_active.is_(True),
+                TaxCode.effective_from <= today,
+                or_(TaxCode.effective_to.is_(None), TaxCode.effective_to >= today),
+            )
+            .order_by(TaxCode.effective_from.desc())
+            .limit(1)
+        )
+        tax_code = self.db.scalar(stmt)
+        if tax_code:
+            logger.info(
+                "Splynx sync using sales tax code '%s' (rate=%s, inclusive=%s)",
+                tax_code.tax_code,
+                tax_code.tax_rate,
+                tax_code.is_inclusive,
+            )
+        else:
+            logger.warning(
+                "No active VAT sales tax code found for org %s — "
+                "invoices will be synced without tax extraction",
+                self.organization_id,
+            )
+        return tax_code
+
+    def _extract_tax(self, total: Decimal) -> tuple[Decimal, Decimal]:
+        """Extract subtotal and tax from a total amount.
+
+        When a sales tax code is configured as inclusive, extracts the
+        tax component: ``tax = total × rate / (1 + rate)``.
+        When exclusive or no tax code, returns ``(total, 0)``.
+
+        Returns:
+            ``(subtotal, tax_amount)`` tuple.
+        """
+        tc = self.sales_tax_code  # lazy-resolves on first call
+        if not tc or tc.tax_rate == Decimal("0"):
+            return total, Decimal("0")
+
+        if tc.is_inclusive:
+            divisor = Decimal("1") + tc.tax_rate
+            tax_amount = (total * tc.tax_rate / divisor).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+            subtotal = total - tax_amount
+        else:
+            # Exclusive: tax is on top, but Splynx total IS the price.
+            # Treat the Splynx total as the base; tax would be additional.
+            subtotal = total
+            tax_amount = (total * tc.tax_rate).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+        return subtotal, tax_amount
+
+    def _create_line_tax_record(
+        self,
+        line_id: UUID,
+        base_amount: Decimal,
+        tax_amount: Decimal,
+    ) -> None:
+        """Create an InvoiceLineTax audit record for a synced line."""
+        tc = self.sales_tax_code
+        if not tc or tax_amount == Decimal("0"):
+            return
+        line_tax = InvoiceLineTax(
+            line_id=line_id,
+            tax_code_id=tc.tax_code_id,
+            base_amount=base_amount,
+            tax_rate=tc.tax_rate,
+            tax_amount=tax_amount,
+            is_inclusive=tc.is_inclusive,
+            sequence=1,
+        )
+        self.db.add(line_tax)
 
     def _load_payment_methods(self) -> None:
         """Load payment methods from Splynx and build bank account mapping."""
@@ -1004,13 +1109,17 @@ class SplynxSyncService:
 
         currency_code = splynx_invoice.currency or "NGN"
 
+        # Extract tax from total (inclusive VAT) or compute additive tax
+        subtotal, tax_amount = self._extract_tax(splynx_invoice.total)
+
         if existing:
             # Update existing invoice — apply ALL mutable fields
             existing.customer_id = customer_id
             existing.invoice_date = invoice_date
             existing.due_date = due_date
             existing.currency_code = currency_code
-            existing.subtotal = splynx_invoice.total
+            existing.subtotal = subtotal
+            existing.tax_amount = tax_amount
             existing.total_amount = splynx_invoice.total
             existing.functional_currency_amount = splynx_invoice.total
             existing.amount_paid = amount_paid
@@ -1020,7 +1129,7 @@ class SplynxSyncService:
             existing.splynx_number = splynx_invoice.number
             existing.last_synced_at = datetime.now(UTC)
 
-            # Replace invoice lines with parsed items
+            # Replace invoice lines with parsed items (cascade deletes line taxes)
             self._replace_invoice_lines(
                 existing.invoice_id, splynx_invoice, is_credit_note=False
             )
@@ -1044,8 +1153,8 @@ class SplynxSyncService:
                 invoice_date=invoice_date,
                 due_date=due_date,
                 currency_code=currency_code,
-                subtotal=splynx_invoice.total,
-                tax_amount=Decimal("0"),
+                subtotal=subtotal,
+                tax_amount=tax_amount,
                 total_amount=splynx_invoice.total,
                 amount_paid=amount_paid,
                 functional_currency_amount=splynx_invoice.total,
@@ -1085,10 +1194,12 @@ class SplynxSyncService:
         """Create InvoiceLine records from Splynx items array.
 
         Falls back to a single summary line if items array is empty or missing.
+        Extracts line-level tax and creates InvoiceLineTax audit records.
         """
         if not self.default_revenue_account_id:
             return
 
+        tc = self.sales_tax_code
         items = getattr(splynx_doc, "items", []) or []
         label = "Credit Note" if is_credit_note else "Invoice"
 
@@ -1103,6 +1214,9 @@ class SplynxSyncService:
                 if not desc:
                     desc = f"Splynx {label} {splynx_doc.number} - line {seq}"
 
+                # Extract line-level tax
+                line_subtotal, line_tax = self._extract_tax(total)
+
                 line = InvoiceLine(
                     invoice_id=invoice_id,
                     line_number=seq,
@@ -1111,26 +1225,36 @@ class SplynxSyncService:
                     unit_price=price,
                     discount_percentage=Decimal("0"),
                     discount_amount=Decimal("0"),
-                    line_amount=total,
-                    tax_amount=Decimal("0"),
+                    line_amount=line_subtotal,
+                    tax_amount=line_tax,
+                    tax_code_id=tc.tax_code_id if tc else None,
                     revenue_account_id=self.default_revenue_account_id,
                 )
                 self.db.add(line)
+                self.db.flush()  # Get line_id for tax record
+
+                self._create_line_tax_record(line.line_id, line_subtotal, line_tax)
         else:
             # Fallback: single summary line
+            line_subtotal, line_tax = self._extract_tax(splynx_doc.total)
+
             line = InvoiceLine(
                 invoice_id=invoice_id,
                 line_number=1,
                 description=f"Splynx {label} {splynx_doc.number}",
                 quantity=Decimal("1"),
-                unit_price=splynx_doc.total,
+                unit_price=line_subtotal,
                 discount_percentage=Decimal("0"),
                 discount_amount=Decimal("0"),
-                line_amount=splynx_doc.total,
-                tax_amount=Decimal("0"),
+                line_amount=line_subtotal,
+                tax_amount=line_tax,
+                tax_code_id=tc.tax_code_id if tc else None,
                 revenue_account_id=self.default_revenue_account_id,
             )
             self.db.add(line)
+            self.db.flush()
+
+            self._create_line_tax_record(line.line_id, line_subtotal, line_tax)
 
     def _replace_invoice_lines(
         self,
@@ -1926,12 +2050,16 @@ class SplynxSyncService:
         # Parse date
         cn_date = self._parse_date(splynx_cn.date_created) or date.today()
 
+        # Extract tax from credit note total
+        cn_subtotal, cn_tax = self._extract_tax(splynx_cn.total)
+
         if existing:
             # Update existing credit note
             existing.customer_id = customer_id
             existing.invoice_date = cn_date
             existing.due_date = cn_date
-            existing.subtotal = splynx_cn.total
+            existing.subtotal = cn_subtotal
+            existing.tax_amount = cn_tax
             existing.total_amount = splynx_cn.total
             existing.functional_currency_amount = splynx_cn.total
             existing.notes = splynx_cn.note
@@ -1939,7 +2067,7 @@ class SplynxSyncService:
             existing.splynx_number = splynx_cn.number
             existing.last_synced_at = datetime.now(UTC)
 
-            # Replace lines with parsed items
+            # Replace lines with parsed items (cascade deletes line taxes)
             self._replace_invoice_lines(
                 existing.invoice_id, splynx_cn, is_credit_note=True
             )
@@ -1967,8 +2095,8 @@ class SplynxSyncService:
                 invoice_date=cn_date,
                 due_date=cn_date,
                 currency_code="NGN",
-                subtotal=splynx_cn.total,
-                tax_amount=Decimal("0"),
+                subtotal=cn_subtotal,
+                tax_amount=cn_tax,
                 total_amount=splynx_cn.total,
                 amount_paid=Decimal("0"),
                 functional_currency_amount=splynx_cn.total,

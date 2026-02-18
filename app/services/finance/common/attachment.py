@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import BinaryIO
 
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.common.attachment import Attachment, AttachmentCategory
@@ -122,7 +122,7 @@ class AttachmentService:
             content_type=input.content_type,
             category=input.category,
             description=input.description,
-            storage_provider="LOCAL",
+            storage_provider="S3",
             checksum=upload_result.checksum,
             uploaded_by=user_id,
             uploaded_at=datetime.utcnow(),
@@ -164,15 +164,16 @@ class AttachmentService:
         org_id = coerce_uuid(organization_id)
         ent_id = coerce_uuid(entity_id)
 
-        return (
-            db.query(Attachment)
-            .filter(
-                Attachment.organization_id == org_id,
-                Attachment.entity_type == entity_type,
-                Attachment.entity_id == ent_id,
-            )
-            .order_by(Attachment.uploaded_at.desc())
-            .all()
+        return list(
+            db.scalars(
+                select(Attachment)
+                .where(
+                    Attachment.organization_id == org_id,
+                    Attachment.entity_type == entity_type,
+                    Attachment.entity_id == ent_id,
+                )
+                .order_by(Attachment.uploaded_at.desc())
+            ).all()
         )
 
     @staticmethod
@@ -185,13 +186,11 @@ class AttachmentService:
         att_id = coerce_uuid(attachment_id)
         org_id = coerce_uuid(organization_id)
 
-        attachment = (
-            db.query(Attachment)
-            .filter(
+        attachment = db.scalar(
+            select(Attachment).where(
                 Attachment.attachment_id == att_id,
                 Attachment.organization_id == org_id,
             )
-            .first()
         )
 
         if not attachment:
@@ -224,13 +223,13 @@ class AttachmentService:
         ent_id = coerce_uuid(entity_id)
 
         return (
-            db.query(func.count(Attachment.attachment_id))
-            .filter(
-                Attachment.organization_id == org_id,
-                Attachment.entity_type == entity_type,
-                Attachment.entity_id == ent_id,
+            db.scalar(
+                select(func.count(Attachment.attachment_id)).where(
+                    Attachment.organization_id == org_id,
+                    Attachment.entity_type == entity_type,
+                    Attachment.entity_id == ent_id,
+                )
             )
-            .scalar()
             or 0
         )
 

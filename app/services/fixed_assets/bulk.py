@@ -11,6 +11,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import Response
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.fixed_assets.asset import Asset, AssetStatus
@@ -66,13 +67,13 @@ class AssetBulkService(BulkActionService[Asset]):
             )
 
         # Check for depreciation schedules
-        schedule_count = (
-            self.db.query(DepreciationSchedule)
-            .filter(DepreciationSchedule.asset_id == entity.asset_id)
-            .count()
+        schedule_count = self.db.scalar(
+            select(func.count())
+            .select_from(DepreciationSchedule)
+            .where(DepreciationSchedule.asset_id == entity.asset_id)
         )
 
-        if schedule_count > 0:
+        if schedule_count and schedule_count > 0:
             return (
                 False,
                 f"Cannot delete '{entity.asset_name}': has {schedule_count} depreciation schedule(s)",

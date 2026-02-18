@@ -90,6 +90,7 @@ ignore = [
 "tests/**/*.py" = ["S101", "S105", "S106", "S311", "B017", "SIM117"]  # test fixtures use hardcoded values
 "alembic/**/*.py" = ["E402", "F841", "S608"]  # migrations: late imports, unused vars, raw SQL
 "scripts/**/*.py" = ["T20", "E402", "S"]  # scripts: print, late imports, relaxed security
+"app/tasks/data_health.py" = ["S608"]  # data health tasks: conditional SQL with hardcoded fragments
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]

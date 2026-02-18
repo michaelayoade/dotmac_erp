@@ -16,7 +16,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func, or_
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -254,12 +254,12 @@ def _resolve_person_name_map(
     if not resolved_ids:
         return {}
 
-    query = db.query(Person).filter(Person.id.in_(resolved_ids))
+    stmt = select(Person).where(Person.id.in_(resolved_ids))
     if organization_id:
-        query = query.filter(Person.organization_id == organization_id)
+        stmt = stmt.where(Person.organization_id == organization_id)
 
     names: dict[str, str] = {}
-    for person in query.all():
+    for person in db.scalars(stmt).all():
         display = (
             _derive_display_name(
                 person.first_name,
@@ -316,44 +316,50 @@ class AdminWebService:
         week_start = now - timedelta(days=7)
 
         # Total users
-        total_users = db.query(func.count(Person.id)).scalar() or 0
+        total_users = db.scalar(select(func.count(Person.id))) or 0
         new_users_week = (
-            db.query(func.count(Person.id))
-            .filter(Person.created_at >= week_start)
-            .scalar()
+            db.scalar(
+                select(func.count(Person.id)).where(Person.created_at >= week_start)
+            )
             or 0
         )
 
         # Active sessions
         active_sessions = (
-            db.query(func.count(AuthSession.id))
-            .filter(AuthSession.status == SessionStatus.active)
-            .filter(AuthSession.revoked_at.is_(None))
-            .filter(AuthSession.expires_at > now)
-            .scalar()
+            db.scalar(
+                select(func.count(AuthSession.id)).where(
+                    AuthSession.status == SessionStatus.active,
+                    AuthSession.revoked_at.is_(None),
+                    AuthSession.expires_at > now,
+                )
+            )
             or 0
         )
         unique_users_today = (
-            db.query(func.count(func.distinct(AuthSession.person_id)))
-            .filter(AuthSession.last_seen_at.isnot(None))
-            .filter(AuthSession.last_seen_at >= start_of_day)
-            .scalar()
+            db.scalar(
+                select(func.count(func.distinct(AuthSession.person_id))).where(
+                    AuthSession.last_seen_at.isnot(None),
+                    AuthSession.last_seen_at >= start_of_day,
+                )
+            )
             or 0
         )
 
         total_organizations = (
-            db.query(func.count(Organization.organization_id)).scalar() or 0
+            db.scalar(select(func.count(Organization.organization_id))) or 0
         )
         active_organizations = (
-            db.query(func.count(Organization.organization_id))
-            .filter(Organization.is_active.is_(True))
-            .scalar()
+            db.scalar(
+                select(func.count(Organization.organization_id)).where(
+                    Organization.is_active.is_(True)
+                )
+            )
             or 0
         )
 
         # Recent users (last 5)
-        recent_users_query = (
-            db.query(Person).order_by(Person.created_at.desc()).limit(5).all()
+        recent_users_query = list(
+            db.scalars(select(Person).order_by(Person.created_at.desc()).limit(5)).all()
         )
 
         recent_users = []
@@ -399,13 +405,13 @@ class AdminWebService:
         """Get context for users list page."""
         offset = (page - 1) * limit
 
-        query = db.query(Person)
+        conditions = []
 
         # Apply search filter
         search_value = search.strip() if search else ""
         if search_value:
             search_pattern = f"%{search_value}%"
-            query = query.filter(
+            conditions.append(
                 or_(
                     Person.first_name.ilike(search_pattern),
                     Person.last_name.ilike(search_pattern),
@@ -416,15 +422,21 @@ class AdminWebService:
 
         status_enum = _parse_person_status(status)
         if status_enum:
-            query = query.filter(Person.status == status_enum)
+            conditions.append(Person.status == status_enum)
 
         # Get total count
-        total = query.with_entities(func.count(Person.id)).scalar() or 0
+        total = db.scalar(select(func.count(Person.id)).where(*conditions)) or 0
         total_pages = max(1, (total + limit - 1) // limit)
 
         # Get paginated results
-        persons = (
-            query.order_by(Person.created_at.desc()).offset(offset).limit(limit).all()
+        persons = list(
+            db.scalars(
+                select(Person)
+                .where(*conditions)
+                .order_by(Person.created_at.desc())
+                .offset(offset)
+                .limit(limit)
+            ).all()
         )
 
         # Get roles and last active for each user
@@ -434,25 +446,25 @@ class AdminWebService:
 
         if person_ids:
             # Get roles
-            person_roles = (
-                db.query(PersonRole.person_id, Role.name)
+            person_roles = db.execute(
+                select(PersonRole.person_id, Role.name)
                 .join(Role, PersonRole.role_id == Role.id)
-                .filter(PersonRole.person_id.in_(person_ids))
-                .filter(Role.is_active.is_(True))
-                .all()
-            )
+                .where(
+                    PersonRole.person_id.in_(person_ids),
+                    Role.is_active.is_(True),
+                )
+            ).all()
             for person_id, role_name in person_roles:
                 if person_id not in person_roles_map:
                     person_roles_map[person_id] = []
                 person_roles_map[person_id].append(role_name)
 
             # Get last active sessions
-            last_sessions = (
-                db.query(AuthSession.person_id, func.max(AuthSession.last_seen_at))
-                .filter(AuthSession.person_id.in_(person_ids))
+            last_sessions = db.execute(
+                select(AuthSession.person_id, func.max(AuthSession.last_seen_at))
+                .where(AuthSession.person_id.in_(person_ids))
                 .group_by(AuthSession.person_id)
-                .all()
-            )
+            ).all()
             for person_id, last_seen in last_sessions:
                 if last_seen:
                     last_active_map[person_id] = _format_relative_time(last_seen)
@@ -494,8 +506,10 @@ class AdminWebService:
     def user_form_context(db: Session, user_id: str | None = None) -> dict:
         """Get context for user create/edit form."""
         # Get organizations
-        organizations = (
-            db.query(Organization).filter(Organization.is_active.is_(True)).all()
+        organizations = list(
+            db.scalars(
+                select(Organization).where(Organization.is_active.is_(True))
+            ).all()
         )
         org_list = [
             {
@@ -506,8 +520,10 @@ class AdminWebService:
         ]
 
         # Get roles
-        roles = (
-            db.query(Role).filter(Role.is_active.is_(True)).order_by(Role.name).all()
+        roles = list(
+            db.scalars(
+                select(Role).where(Role.is_active.is_(True)).order_by(Role.name)
+            ).all()
         )
         role_list = [
             {"id": str(role.id), "name": role.name, "description": role.description}
@@ -521,19 +537,20 @@ class AdminWebService:
                 raise HTTPException(status_code=404, detail="User not found")
 
             # Get user credential
-            credential = (
-                db.query(UserCredential)
-                .filter(UserCredential.person_id == person.id)
-                .filter(UserCredential.provider == AuthProvider.local)
-                .first()
+            credential = db.scalar(
+                select(UserCredential).where(
+                    UserCredential.person_id == person.id,
+                    UserCredential.provider == AuthProvider.local,
+                )
             )
 
             # Get user roles
-            user_roles = (
-                db.query(Role)
-                .join(PersonRole, PersonRole.role_id == Role.id)
-                .filter(PersonRole.person_id == person.id)
-                .all()
+            user_roles = list(
+                db.scalars(
+                    select(Role)
+                    .join(PersonRole, PersonRole.role_id == Role.id)
+                    .where(PersonRole.person_id == person.id)
+                ).all()
             )
 
             user_data = {
@@ -611,15 +628,15 @@ class AdminWebService:
             return None, "Password must be at least 8 characters"
 
         # Check if email exists
-        if db.query(Person).filter(Person.email == email).first():
+        if db.scalar(select(Person).where(Person.email == email)):
             return None, "A user with this email already exists"
 
         # Check if username exists
-        existing_username = (
-            db.query(UserCredential)
-            .filter(UserCredential.username == username)
-            .filter(UserCredential.provider == AuthProvider.local)
-            .first()
+        existing_username = db.scalar(
+            select(UserCredential).where(
+                UserCredential.username == username,
+                UserCredential.provider == AuthProvider.local,
+            )
         )
         if existing_username:
             return None, "A user with this username already exists"
@@ -722,22 +739,19 @@ class AdminWebService:
                 return None, "Password must be at least 8 characters"
 
         # Check email uniqueness
-        existing_email = (
-            db.query(Person)
-            .filter(Person.email == email)
-            .filter(Person.id != person.id)
-            .first()
+        existing_email = db.scalar(
+            select(Person).where(Person.email == email, Person.id != person.id)
         )
         if existing_email:
             return None, "A user with this email already exists"
 
         # Check username uniqueness
-        existing_username = (
-            db.query(UserCredential)
-            .filter(UserCredential.username == username)
-            .filter(UserCredential.provider == AuthProvider.local)
-            .filter(UserCredential.person_id != person.id)
-            .first()
+        existing_username = db.scalar(
+            select(UserCredential).where(
+                UserCredential.username == username,
+                UserCredential.provider == AuthProvider.local,
+                UserCredential.person_id != person.id,
+            )
         )
         if existing_username:
             return None, "A user with this username already exists"
@@ -759,11 +773,11 @@ class AdminWebService:
             person.email_verified = email_verified
 
             # Update credential
-            credential = (
-                db.query(UserCredential)
-                .filter(UserCredential.person_id == person.id)
-                .filter(UserCredential.provider == AuthProvider.local)
-                .first()
+            credential = db.scalar(
+                select(UserCredential).where(
+                    UserCredential.person_id == person.id,
+                    UserCredential.provider == AuthProvider.local,
+                )
             )
 
             if credential:
@@ -786,23 +800,25 @@ class AdminWebService:
             # Update roles
             current_role_ids = {
                 str(role_id)
-                for (role_id,) in db.query(PersonRole.role_id)
-                .filter(PersonRole.person_id == person.id)
-                .all()
+                for (role_id,) in db.execute(
+                    select(PersonRole.role_id).where(PersonRole.person_id == person.id)
+                ).all()
             }
-            db.query(PersonRole).filter(PersonRole.person_id == person.id).delete()
+            db.execute(delete(PersonRole).where(PersonRole.person_id == person.id))
             for role_id in normalized_role_ids:
                 db.add(PersonRole(person_id=person.id, role_id=coerce_uuid(role_id)))
 
             roles_changed = current_role_ids != normalized_role_ids
             session_ids_to_invalidate: list[UUID] = []
             if roles_changed:
-                active_sessions = (
-                    db.query(AuthSession)
-                    .filter(AuthSession.person_id == person.id)
-                    .filter(AuthSession.status == SessionStatus.active)
-                    .filter(AuthSession.revoked_at.is_(None))
-                    .all()
+                active_sessions = list(
+                    db.scalars(
+                        select(AuthSession).where(
+                            AuthSession.person_id == person.id,
+                            AuthSession.status == SessionStatus.active,
+                            AuthSession.revoked_at.is_(None),
+                        )
+                    ).all()
                 )
                 session_ids_to_invalidate = [session.id for session in active_sessions]
                 for session in active_sessions:
@@ -853,11 +869,11 @@ class AdminWebService:
             raise HTTPException(status_code=404, detail="User not found")
 
         try:
-            employee = (
-                db.query(Employee)
-                .filter(Employee.person_id == person.id)
-                .filter(Employee.is_deleted.is_(False))
-                .first()
+            employee = db.scalar(
+                select(Employee).where(
+                    Employee.person_id == person.id,
+                    Employee.is_deleted.is_(False),
+                )
             )
             if employee:
                 return (
@@ -866,11 +882,11 @@ class AdminWebService:
                 )
 
             # Delete related records
-            db.query(PersonRole).filter(PersonRole.person_id == person.id).delete()
-            db.query(UserCredential).filter(
-                UserCredential.person_id == person.id
-            ).delete()
-            db.query(AuthSession).filter(AuthSession.person_id == person.id).delete()
+            db.execute(delete(PersonRole).where(PersonRole.person_id == person.id))
+            db.execute(
+                delete(UserCredential).where(UserCredential.person_id == person.id)
+            )
+            db.execute(delete(AuthSession).where(AuthSession.person_id == person.id))
 
             db.delete(person)
             db.commit()
@@ -890,11 +906,11 @@ class AdminWebService:
     ) -> dict:
         offset = (page - 1) * limit
 
-        base_query = db.query(Role)
+        conditions = []
         search_value = search.strip() if search else ""
         if search_value:
             search_pattern = f"%{search_value}%"
-            base_query = base_query.filter(
+            conditions.append(
                 or_(
                     Role.name.ilike(search_pattern),
                     Role.description.ilike(search_pattern),
@@ -902,25 +918,37 @@ class AdminWebService:
             )
 
         active_count = (
-            base_query.filter(Role.is_active.is_(True))
-            .with_entities(func.count(Role.id))
-            .scalar()
+            db.scalar(
+                select(func.count(Role.id)).where(*conditions, Role.is_active.is_(True))
+            )
             or 0
         )
         inactive_count = (
-            base_query.filter(Role.is_active.is_(False))
-            .with_entities(func.count(Role.id))
-            .scalar()
+            db.scalar(
+                select(func.count(Role.id)).where(
+                    *conditions, Role.is_active.is_(False)
+                )
+            )
             or 0
         )
 
         status_flag = _parse_status_filter(status)
-        query = base_query
+        role_conditions = list(conditions)
         if status_flag is not None:
-            query = query.filter(Role.is_active == status_flag)
+            role_conditions.append(Role.is_active == status_flag)
 
-        total_count = query.with_entities(func.count(Role.id)).scalar() or 0
-        roles = query.order_by(Role.name).limit(limit).offset(offset).all()
+        total_count = (
+            db.scalar(select(func.count(Role.id)).where(*role_conditions)) or 0
+        )
+        roles = list(
+            db.scalars(
+                select(Role)
+                .where(*role_conditions)
+                .order_by(Role.name)
+                .limit(limit)
+                .offset(offset)
+            ).all()
+        )
 
         role_ids = [role.id for role in roles]
         permission_counts: dict[UUID, int] = {}
@@ -928,21 +956,19 @@ class AdminWebService:
         if role_ids:
             permission_counts = {
                 role_id: count
-                for role_id, count in db.query(
-                    RolePermission.role_id, func.count(RolePermission.id)
-                )
-                .filter(RolePermission.role_id.in_(role_ids))
-                .group_by(RolePermission.role_id)
-                .all()
+                for role_id, count in db.execute(
+                    select(RolePermission.role_id, func.count(RolePermission.id))
+                    .where(RolePermission.role_id.in_(role_ids))
+                    .group_by(RolePermission.role_id)
+                ).all()
             }
             member_counts = {
                 role_id: count
-                for role_id, count in db.query(
-                    PersonRole.role_id, func.count(PersonRole.id)
-                )
-                .filter(PersonRole.role_id.in_(role_ids))
-                .group_by(PersonRole.role_id)
-                .all()
+                for role_id, count in db.execute(
+                    select(PersonRole.role_id, func.count(PersonRole.id))
+                    .where(PersonRole.role_id.in_(role_ids))
+                    .group_by(PersonRole.role_id)
+                ).all()
             }
 
         roles_view = [
@@ -988,18 +1014,19 @@ class AdminWebService:
                 # Get role permissions
                 role_permission_ids = [
                     rp.permission_id
-                    for rp in db.query(RolePermission)
-                    .filter(RolePermission.role_id == role.id)
-                    .all()
+                    for rp in db.scalars(
+                        select(RolePermission).where(RolePermission.role_id == role.id)
+                    ).all()
                 ]
 
                 # Get role members with details
-                members_query = (
-                    db.query(Person)
-                    .join(PersonRole, PersonRole.person_id == Person.id)
-                    .filter(PersonRole.role_id == role.id)
-                    .limit(20)
-                    .all()
+                members_query = list(
+                    db.scalars(
+                        select(Person)
+                        .join(PersonRole, PersonRole.person_id == Person.id)
+                        .where(PersonRole.role_id == role.id)
+                        .limit(20)
+                    ).all()
                 )
 
                 members = []
@@ -1022,11 +1049,12 @@ class AdminWebService:
                 }
 
         # Get all permissions grouped by category
-        permissions = (
-            db.query(Permission)
-            .filter(Permission.is_active.is_(True))
-            .order_by(Permission.key)
-            .all()
+        permissions = list(
+            db.scalars(
+                select(Permission)
+                .where(Permission.is_active.is_(True))
+                .order_by(Permission.key)
+            ).all()
         )
 
         # Group permissions by category (first part of key before colon or underscore)
@@ -1065,13 +1093,16 @@ class AdminWebService:
             return {"role": None}
 
         # Get role permissions with details
-        role_permissions = (
-            db.query(Permission)
-            .join(RolePermission, RolePermission.permission_id == Permission.id)
-            .filter(RolePermission.role_id == role.id)
-            .filter(Permission.is_active.is_(True))
-            .order_by(Permission.key)
-            .all()
+        role_permissions = list(
+            db.scalars(
+                select(Permission)
+                .join(RolePermission, RolePermission.permission_id == Permission.id)
+                .where(
+                    RolePermission.role_id == role.id,
+                    Permission.is_active.is_(True),
+                )
+                .order_by(Permission.key)
+            ).all()
         )
 
         # Group permissions by module (first part of key before colon)
@@ -1096,20 +1127,21 @@ class AdminWebService:
 
         # Get member count
         member_count = (
-            db.query(func.count(PersonRole.id))
-            .filter(PersonRole.role_id == role.id)
-            .scalar()
+            db.scalar(
+                select(func.count(PersonRole.id)).where(PersonRole.role_id == role.id)
+            )
             or 0
         )
 
         # Get role members with details (up to 50)
-        members_query = (
-            db.query(Person)
-            .join(PersonRole, PersonRole.person_id == Person.id)
-            .filter(PersonRole.role_id == role.id)
-            .order_by(Person.display_name, Person.first_name, Person.email)
-            .limit(50)
-            .all()
+        members_query = list(
+            db.scalars(
+                select(Person)
+                .join(PersonRole, PersonRole.person_id == Person.id)
+                .where(PersonRole.role_id == role.id)
+                .order_by(Person.display_name, Person.first_name, Person.email)
+                .limit(50)
+            ).all()
         )
 
         members = []
@@ -1197,7 +1229,7 @@ class AdminWebService:
         from app.services.common import coerce_uuid
 
         # Check if role name already exists
-        existing = db.query(Role).filter(Role.name == name).first()
+        existing = db.scalar(select(Role).where(Role.name == name))
         if existing:
             return None, "A role with this name already exists"
 
@@ -1243,9 +1275,7 @@ class AdminWebService:
             return None, "Role not found"
 
         # Check if name already exists for another role
-        existing = (
-            db.query(Role).filter(Role.name == name).filter(Role.id != role.id).first()
-        )
+        existing = db.scalar(select(Role).where(Role.name == name, Role.id != role.id))
         if existing:
             return None, "A role with this name already exists"
 
@@ -1255,7 +1285,7 @@ class AdminWebService:
             role.is_active = is_active
 
             # Update permissions - remove old, add new
-            db.query(RolePermission).filter(RolePermission.role_id == role.id).delete()
+            db.execute(delete(RolePermission).where(RolePermission.role_id == role.id))
 
             for perm_id in permission_ids:
                 if perm_id:
@@ -1286,10 +1316,10 @@ class AdminWebService:
 
         try:
             # Remove role permissions
-            db.query(RolePermission).filter(RolePermission.role_id == role.id).delete()
+            db.execute(delete(RolePermission).where(RolePermission.role_id == role.id))
 
             # Remove person-role assignments
-            db.query(PersonRole).filter(PersonRole.role_id == role.id).delete()
+            db.execute(delete(PersonRole).where(PersonRole.role_id == role.id))
 
             # Delete role
             db.delete(role)
@@ -1311,11 +1341,11 @@ class AdminWebService:
         """Get context for permissions list page."""
         offset = (page - 1) * limit
 
-        base_query = db.query(Permission)
+        conditions = []
         search_value = search.strip() if search else ""
         if search_value:
             search_pattern = f"%{search_value}%"
-            base_query = base_query.filter(
+            conditions.append(
                 or_(
                     Permission.key.ilike(search_pattern),
                     Permission.description.ilike(search_pattern),
@@ -1323,25 +1353,40 @@ class AdminWebService:
             )
 
         active_count = (
-            base_query.filter(Permission.is_active.is_(True))
-            .with_entities(func.count(Permission.id))
-            .scalar()
+            db.scalar(
+                select(func.count(Permission.id)).where(
+                    *conditions, Permission.is_active.is_(True)
+                )
+            )
             or 0
         )
         inactive_count = (
-            base_query.filter(Permission.is_active.is_(False))
-            .with_entities(func.count(Permission.id))
-            .scalar()
+            db.scalar(
+                select(func.count(Permission.id)).where(
+                    *conditions, Permission.is_active.is_(False)
+                )
+            )
             or 0
         )
 
         status_flag = _parse_status_filter(status)
-        query = base_query
+        permission_conditions = list(conditions)
         if status_flag is not None:
-            query = query.filter(Permission.is_active == status_flag)
+            permission_conditions.append(Permission.is_active == status_flag)
 
-        total_count = query.with_entities(func.count(Permission.id)).scalar() or 0
-        permissions = query.order_by(Permission.key).limit(limit).offset(offset).all()
+        total_count = (
+            db.scalar(select(func.count(Permission.id)).where(*permission_conditions))
+            or 0
+        )
+        permissions = list(
+            db.scalars(
+                select(Permission)
+                .where(*permission_conditions)
+                .order_by(Permission.key)
+                .limit(limit)
+                .offset(offset)
+            ).all()
+        )
 
         # Get role counts for each permission
         perm_ids = [p.id for p in permissions]
@@ -1349,12 +1394,11 @@ class AdminWebService:
         if perm_ids:
             role_counts = {
                 perm_id: count
-                for perm_id, count in db.query(
-                    RolePermission.permission_id, func.count(RolePermission.id)
-                )
-                .filter(RolePermission.permission_id.in_(perm_ids))
-                .group_by(RolePermission.permission_id)
-                .all()
+                for perm_id, count in db.execute(
+                    select(RolePermission.permission_id, func.count(RolePermission.id))
+                    .where(RolePermission.permission_id.in_(perm_ids))
+                    .group_by(RolePermission.permission_id)
+                ).all()
             }
 
         permissions_view = [
@@ -1395,12 +1439,11 @@ class AdminWebService:
             perm = db.get(Permission, coerce_uuid(permission_id))
             if perm:
                 # Get roles that have this permission
-                roles_with_permission = (
-                    db.query(Role.name)
+                roles_with_permission = db.execute(
+                    select(Role.name)
                     .join(RolePermission, RolePermission.role_id == Role.id)
-                    .filter(RolePermission.permission_id == perm.id)
-                    .all()
-                )
+                    .where(RolePermission.permission_id == perm.id)
+                ).all()
 
                 permission_data = {
                     "id": str(perm.id),
@@ -1423,7 +1466,7 @@ class AdminWebService:
     ) -> tuple[Permission | None, str | None]:
         """Create a new permission. Returns (permission, error)."""
         # Check if key already exists
-        existing = db.query(Permission).filter(Permission.key == key).first()
+        existing = db.scalar(select(Permission).where(Permission.key == key))
         if existing:
             return None, "A permission with this key already exists"
 
@@ -1455,11 +1498,11 @@ class AdminWebService:
             return None, "Permission not found"
 
         # Check if key already exists for another permission
-        existing = (
-            db.query(Permission)
-            .filter(Permission.key == key)
-            .filter(Permission.id != permission.id)
-            .first()
+        existing = db.scalar(
+            select(Permission).where(
+                Permission.key == key,
+                Permission.id != permission.id,
+            )
         )
         if existing:
             return None, "A permission with this key already exists"
@@ -1488,9 +1531,11 @@ class AdminWebService:
 
         try:
             # Remove role-permission assignments
-            db.query(RolePermission).filter(
-                RolePermission.permission_id == permission.id
-            ).delete()
+            db.execute(
+                delete(RolePermission).where(
+                    RolePermission.permission_id == permission.id
+                )
+            )
 
             db.delete(permission)
             db.commit()
@@ -1510,11 +1555,11 @@ class AdminWebService:
     ) -> dict:
         offset = (page - 1) * limit
 
-        base_query = db.query(Organization)
+        conditions = []
         search_value = search.strip() if search else ""
         if search_value:
             search_pattern = f"%{search_value}%"
-            base_query = base_query.filter(
+            conditions.append(
                 or_(
                     Organization.organization_code.ilike(search_pattern),
                     Organization.legal_name.ilike(search_pattern),
@@ -1523,31 +1568,41 @@ class AdminWebService:
             )
 
         active_count = (
-            base_query.filter(Organization.is_active.is_(True))
-            .with_entities(func.count(Organization.organization_id))
-            .scalar()
+            db.scalar(
+                select(func.count(Organization.organization_id)).where(
+                    *conditions, Organization.is_active.is_(True)
+                )
+            )
             or 0
         )
         inactive_count = (
-            base_query.filter(Organization.is_active.is_(False))
-            .with_entities(func.count(Organization.organization_id))
-            .scalar()
+            db.scalar(
+                select(func.count(Organization.organization_id)).where(
+                    *conditions, Organization.is_active.is_(False)
+                )
+            )
             or 0
         )
 
         status_flag = _parse_status_filter(status)
-        query = base_query
+        org_conditions = list(conditions)
         if status_flag is not None:
-            query = query.filter(Organization.is_active == status_flag)
+            org_conditions.append(Organization.is_active == status_flag)
 
         total_count = (
-            query.with_entities(func.count(Organization.organization_id)).scalar() or 0
+            db.scalar(
+                select(func.count(Organization.organization_id)).where(*org_conditions)
+            )
+            or 0
         )
-        organizations = (
-            query.order_by(Organization.created_at.desc())
-            .limit(limit)
-            .offset(offset)
-            .all()
+        organizations = list(
+            db.scalars(
+                select(Organization)
+                .where(*org_conditions)
+                .order_by(Organization.created_at.desc())
+                .limit(limit)
+                .offset(offset)
+            ).all()
         )
 
         org_ids = [org.organization_id for org in organizations]
@@ -1556,22 +1611,22 @@ class AdminWebService:
         if org_ids:
             user_counts = {
                 org_id: count
-                for org_id, count in db.query(
-                    Person.organization_id, func.count(Person.id)
-                )
-                .filter(Person.organization_id.in_(org_ids))
-                .group_by(Person.organization_id)
-                .all()
+                for org_id, count in db.execute(
+                    select(Person.organization_id, func.count(Person.id))
+                    .where(Person.organization_id.in_(org_ids))
+                    .group_by(Person.organization_id)
+                ).all()
             }
             active_user_counts = {
                 org_id: count
-                for org_id, count in db.query(
-                    Person.organization_id, func.count(Person.id)
-                )
-                .filter(Person.organization_id.in_(org_ids))
-                .filter(Person.is_active.is_(True))
-                .group_by(Person.organization_id)
-                .all()
+                for org_id, count in db.execute(
+                    select(Person.organization_id, func.count(Person.id))
+                    .where(
+                        Person.organization_id.in_(org_ids),
+                        Person.is_active.is_(True),
+                    )
+                    .group_by(Person.organization_id)
+                ).all()
             }
 
         organizations_view = [
@@ -1616,11 +1671,12 @@ class AdminWebService:
         from app.models.finance.core_org.organization import ConsolidationMethod
 
         # Get parent organizations for dropdown
-        parent_orgs = (
-            db.query(Organization)
-            .filter(Organization.is_active.is_(True))
-            .order_by(Organization.legal_name)
-            .all()
+        parent_orgs = list(
+            db.scalars(
+                select(Organization)
+                .where(Organization.is_active.is_(True))
+                .order_by(Organization.legal_name)
+            ).all()
         )
 
         parent_org_list = [
@@ -1661,17 +1717,21 @@ class AdminWebService:
             if org:
                 # Get user count
                 user_count = (
-                    db.query(func.count(Person.id))
-                    .filter(Person.organization_id == org.organization_id)
-                    .scalar()
+                    db.scalar(
+                        select(func.count(Person.id)).where(
+                            Person.organization_id == org.organization_id
+                        )
+                    )
                     or 0
                 )
 
                 # Get subsidiaries count
                 subsidiaries_count = (
-                    db.query(func.count(Organization.organization_id))
-                    .filter(Organization.parent_organization_id == org.organization_id)
-                    .scalar()
+                    db.scalar(
+                        select(func.count(Organization.organization_id)).where(
+                            Organization.parent_organization_id == org.organization_id
+                        )
+                    )
                     or 0
                 )
 
@@ -1742,19 +1802,21 @@ class AdminWebService:
             org_uuid = coerce_uuid(organization_id)
 
             # Get expense accounts (IFRS category = EXPENSES)
-            expense_accts = (
-                db.query(Account)
-                .join(
-                    AccountCategory, Account.category_id == AccountCategory.category_id
-                )
-                .filter(
-                    Account.organization_id == org_uuid,
-                    Account.is_active.is_(True),
-                    Account.is_posting_allowed.is_(True),
-                    AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
-                )
-                .order_by(Account.account_code)
-                .all()
+            expense_accts = list(
+                db.scalars(
+                    select(Account)
+                    .join(
+                        AccountCategory,
+                        Account.category_id == AccountCategory.category_id,
+                    )
+                    .where(
+                        Account.organization_id == org_uuid,
+                        Account.is_active.is_(True),
+                        Account.is_posting_allowed.is_(True),
+                        AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
+                    )
+                    .order_by(Account.account_code)
+                ).all()
             )
             expense_accounts = [
                 {
@@ -1766,19 +1828,21 @@ class AdminWebService:
             ]
 
             # Get liability accounts (IFRS category = LIABILITIES)
-            liability_accts = (
-                db.query(Account)
-                .join(
-                    AccountCategory, Account.category_id == AccountCategory.category_id
-                )
-                .filter(
-                    Account.organization_id == org_uuid,
-                    Account.is_active.is_(True),
-                    Account.is_posting_allowed.is_(True),
-                    AccountCategory.ifrs_category == IFRSCategory.LIABILITIES,
-                )
-                .order_by(Account.account_code)
-                .all()
+            liability_accts = list(
+                db.scalars(
+                    select(Account)
+                    .join(
+                        AccountCategory,
+                        Account.category_id == AccountCategory.category_id,
+                    )
+                    .where(
+                        Account.organization_id == org_uuid,
+                        Account.is_active.is_(True),
+                        Account.is_posting_allowed.is_(True),
+                        AccountCategory.ifrs_category == IFRSCategory.LIABILITIES,
+                    )
+                    .order_by(Account.account_code)
+                ).all()
             )
             liability_accounts = [
                 {
@@ -1843,10 +1907,10 @@ class AdminWebService:
         from app.models.finance.core_org.organization import ConsolidationMethod
 
         # Check if organization code already exists
-        existing = (
-            db.query(Organization)
-            .filter(Organization.organization_code == organization_code)
-            .first()
+        existing = db.scalar(
+            select(Organization).where(
+                Organization.organization_code == organization_code
+            )
         )
         if existing:
             return None, "An organization with this code already exists"
@@ -1856,10 +1920,8 @@ class AdminWebService:
         if slug_error:
             return None, slug_error
         if normalized_slug:
-            slug_exists = (
-                db.query(Organization)
-                .filter(Organization.slug == normalized_slug)
-                .first()
+            slug_exists = db.scalar(
+                select(Organization).where(Organization.slug == normalized_slug)
             )
             if slug_exists:
                 return None, "An organization with this slug already exists"
@@ -1958,11 +2020,11 @@ class AdminWebService:
             return None, "Organization not found"
 
         # Check if code already exists for another org
-        existing = (
-            db.query(Organization)
-            .filter(Organization.organization_code == organization_code)
-            .filter(Organization.organization_id != org.organization_id)
-            .first()
+        existing = db.scalar(
+            select(Organization).where(
+                Organization.organization_code == organization_code,
+                Organization.organization_id != org.organization_id,
+            )
         )
         if existing:
             return None, "An organization with this code already exists"
@@ -1979,11 +2041,11 @@ class AdminWebService:
         if slug_error:
             return None, slug_error
         if normalized_slug:
-            slug_exists = (
-                db.query(Organization)
-                .filter(Organization.slug == normalized_slug)
-                .filter(Organization.organization_id != org.organization_id)
-                .first()
+            slug_exists = db.scalar(
+                select(Organization).where(
+                    Organization.slug == normalized_slug,
+                    Organization.organization_id != org.organization_id,
+                )
             )
             if slug_exists:
                 return None, "An organization with this slug already exists"
@@ -2064,9 +2126,11 @@ class AdminWebService:
 
         # Check for users
         user_count = (
-            db.query(func.count(Person.id))
-            .filter(Person.organization_id == org.organization_id)
-            .scalar()
+            db.scalar(
+                select(func.count(Person.id)).where(
+                    Person.organization_id == org.organization_id
+                )
+            )
             or 0
         )
         if user_count > 0:
@@ -2074,9 +2138,11 @@ class AdminWebService:
 
         # Check for subsidiaries
         subsidiaries_count = (
-            db.query(func.count(Organization.organization_id))
-            .filter(Organization.parent_organization_id == org.organization_id)
-            .scalar()
+            db.scalar(
+                select(func.count(Organization.organization_id)).where(
+                    Organization.parent_organization_id == org.organization_id
+                )
+            )
             or 0
         )
         if subsidiaries_count > 0:
@@ -2104,39 +2170,49 @@ class AdminWebService:
 
         domain_value = _parse_domain(domain)
 
-        base_query = db.query(DomainSetting)
+        conditions = []
         if domain_value:
-            base_query = base_query.filter(DomainSetting.domain == domain_value)
+            conditions.append(DomainSetting.domain == domain_value)
 
         search_value = search.strip() if search else ""
         if search_value:
             search_pattern = f"%{search_value}%"
-            base_query = base_query.filter(DomainSetting.key.ilike(search_pattern))
+            conditions.append(DomainSetting.key.ilike(search_pattern))
 
         active_count = (
-            base_query.filter(DomainSetting.is_active.is_(True))
-            .with_entities(func.count(DomainSetting.id))
-            .scalar()
+            db.scalar(
+                select(func.count(DomainSetting.id)).where(
+                    *conditions, DomainSetting.is_active.is_(True)
+                )
+            )
             or 0
         )
         inactive_count = (
-            base_query.filter(DomainSetting.is_active.is_(False))
-            .with_entities(func.count(DomainSetting.id))
-            .scalar()
+            db.scalar(
+                select(func.count(DomainSetting.id)).where(
+                    *conditions, DomainSetting.is_active.is_(False)
+                )
+            )
             or 0
         )
 
         status_flag = _parse_status_filter(status)
-        query = base_query
+        setting_conditions = list(conditions)
         if status_flag is not None:
-            query = query.filter(DomainSetting.is_active == status_flag)
+            setting_conditions.append(DomainSetting.is_active == status_flag)
 
-        total_count = query.with_entities(func.count(DomainSetting.id)).scalar() or 0
-        settings = (
-            query.order_by(DomainSetting.domain, DomainSetting.key)
-            .limit(limit)
-            .offset(offset)
-            .all()
+        total_count = (
+            db.scalar(select(func.count(DomainSetting.id)).where(*setting_conditions))
+            or 0
+        )
+        settings = list(
+            db.scalars(
+                select(DomainSetting)
+                .where(*setting_conditions)
+                .order_by(DomainSetting.domain, DomainSetting.key)
+                .limit(limit)
+                .offset(offset)
+            ).all()
         )
 
         settings_view = [
@@ -2232,11 +2308,11 @@ class AdminWebService:
             return None, f"Invalid value type: {value_type}"
 
         # Check if setting already exists
-        existing = (
-            db.query(DomainSetting)
-            .filter(DomainSetting.domain == domain_enum)
-            .filter(DomainSetting.key == key)
-            .first()
+        existing = db.scalar(
+            select(DomainSetting).where(
+                DomainSetting.domain == domain_enum,
+                DomainSetting.key == key,
+            )
         )
         if existing:
             return (
@@ -2313,12 +2389,12 @@ class AdminWebService:
             return None, f"Invalid value type: {value_type}"
 
         # Check if key already exists for another setting in the same domain
-        existing = (
-            db.query(DomainSetting)
-            .filter(DomainSetting.domain == domain_enum)
-            .filter(DomainSetting.key == key)
-            .filter(DomainSetting.id != setting.id)
-            .first()
+        existing = db.scalar(
+            select(DomainSetting).where(
+                DomainSetting.domain == domain_enum,
+                DomainSetting.key == key,
+                DomainSetting.id != setting.id,
+            )
         )
         if existing:
             return (
@@ -2395,14 +2471,14 @@ class AdminWebService:
     ) -> dict:
         offset = (page - 1) * limit
 
-        query = db.query(AuditEvent)
+        conditions = []
         if organization_id:
-            query = query.filter(AuditEvent.organization_id == organization_id)
+            conditions.append(AuditEvent.organization_id == organization_id)
 
         search_value = search.strip() if search else ""
         if search_value:
             search_pattern = f"%{search_value}%"
-            query = query.filter(
+            conditions.append(
                 or_(
                     AuditEvent.action.ilike(search_pattern),
                     AuditEvent.entity_type.ilike(search_pattern),
@@ -2414,18 +2490,23 @@ class AdminWebService:
 
         actor_type_value = _parse_actor_type(actor_type)
         if actor_type_value:
-            query = query.filter(AuditEvent.actor_type == actor_type_value)
+            conditions.append(AuditEvent.actor_type == actor_type_value)
 
         success_value = _parse_success_filter(status)
         if success_value is not None:
-            query = query.filter(AuditEvent.is_success == success_value)
+            conditions.append(AuditEvent.is_success == success_value)
 
-        total_count = query.with_entities(func.count(AuditEvent.id)).scalar() or 0
-        events = (
-            query.order_by(AuditEvent.occurred_at.desc())
-            .limit(limit)
-            .offset(offset)
-            .all()
+        total_count = (
+            db.scalar(select(func.count(AuditEvent.id)).where(*conditions)) or 0
+        )
+        events = list(
+            db.scalars(
+                select(AuditEvent)
+                .where(*conditions)
+                .order_by(AuditEvent.occurred_at.desc())
+                .limit(limit)
+                .offset(offset)
+            ).all()
         )
 
         actor_ids = [
@@ -2511,11 +2592,11 @@ class AdminWebService:
     ) -> dict:
         offset = (page - 1) * limit
 
-        query = db.query(ScheduledTask)
+        conditions = []
         search_value = search.strip() if search else ""
         if search_value:
             search_pattern = f"%{search_value}%"
-            query = query.filter(
+            conditions.append(
                 or_(
                     ScheduledTask.name.ilike(search_pattern),
                     ScheduledTask.task_name.ilike(search_pattern),
@@ -2528,10 +2609,20 @@ class AdminWebService:
         elif status == "disabled":
             status_flag = False
         if status_flag is not None:
-            query = query.filter(ScheduledTask.enabled == status_flag)
+            conditions.append(ScheduledTask.enabled == status_flag)
 
-        total_count = query.with_entities(func.count(ScheduledTask.id)).scalar() or 0
-        tasks = query.order_by(ScheduledTask.name).limit(limit).offset(offset).all()
+        total_count = (
+            db.scalar(select(func.count(ScheduledTask.id)).where(*conditions)) or 0
+        )
+        tasks = list(
+            db.scalars(
+                select(ScheduledTask)
+                .where(*conditions)
+                .order_by(ScheduledTask.name)
+                .limit(limit)
+                .offset(offset)
+            ).all()
+        )
 
         tasks_view = []
         for task in tasks:
@@ -2633,7 +2724,7 @@ class AdminWebService:
             return None, f"Invalid schedule type: {schedule_type}"
 
         # Check if task name already exists
-        existing = db.query(ScheduledTask).filter(ScheduledTask.name == name).first()
+        existing = db.scalar(select(ScheduledTask).where(ScheduledTask.name == name))
         if existing:
             return None, f"A task with name '{name}' already exists"
 
@@ -2699,11 +2790,11 @@ class AdminWebService:
             return None, f"Invalid schedule type: {schedule_type}"
 
         # Check if name already exists for another task
-        existing = (
-            db.query(ScheduledTask)
-            .filter(ScheduledTask.name == name)
-            .filter(ScheduledTask.id != task.id)
-            .first()
+        existing = db.scalar(
+            select(ScheduledTask).where(
+                ScheduledTask.name == name,
+                ScheduledTask.id != task.id,
+            )
         )
         if existing:
             return None, f"A task with name '{name}' already exists"
@@ -4236,28 +4327,28 @@ class AdminWebService:
     ) -> dict:
         offset = (page - 1) * limit
 
-        query = db.query(AuditLog)
+        conditions = []
 
         if organization_id:
-            query = query.filter(AuditLog.organization_id == organization_id)
+            conditions.append(AuditLog.organization_id == organization_id)
 
         if module:
-            query = query.filter(AuditLog.table_schema == module)
+            conditions.append(AuditLog.table_schema == module)
 
         if entity:
-            query = query.filter(AuditLog.table_name == entity)
+            conditions.append(AuditLog.table_name == entity)
 
         if action:
             try:
                 action_enum = AuditAction(action)
-                query = query.filter(AuditLog.action == action_enum)
+                conditions.append(AuditLog.action == action_enum)
             except ValueError:
                 pass
 
         search_value = search.strip() if search else ""
         if search_value:
             search_pattern = f"%{search_value}%"
-            query = query.filter(
+            conditions.append(
                 or_(
                     AuditLog.record_id.ilike(search_pattern),
                     AuditLog.reason.ilike(search_pattern),
@@ -4265,12 +4356,17 @@ class AdminWebService:
                 )
             )
 
-        total_count = query.with_entities(func.count(AuditLog.audit_id)).scalar() or 0
-        logs = (
-            query.order_by(AuditLog.occurred_at.desc())
-            .limit(limit)
-            .offset(offset)
-            .all()
+        total_count = (
+            db.scalar(select(func.count(AuditLog.audit_id)).where(*conditions)) or 0
+        )
+        logs = list(
+            db.scalars(
+                select(AuditLog)
+                .where(*conditions)
+                .order_by(AuditLog.occurred_at.desc())
+                .limit(limit)
+                .offset(offset)
+            ).all()
         )
 
         user_ids = [str(log.user_id) for log in logs if log.user_id]
@@ -4310,12 +4406,16 @@ class AdminWebService:
         modules = sorted(
             {
                 row[0]
-                for row in db.query(AuditLog.table_schema).distinct().all()
+                for row in db.execute(select(AuditLog.table_schema).distinct()).all()
                 if row[0]
             }
         )
         entities = sorted(
-            {row[0] for row in db.query(AuditLog.table_name).distinct().all() if row[0]}
+            {
+                row[0]
+                for row in db.execute(select(AuditLog.table_name).distinct()).all()
+                if row[0]
+            }
         )
 
         total_pages = max(1, (total_count + limit - 1) // limit)

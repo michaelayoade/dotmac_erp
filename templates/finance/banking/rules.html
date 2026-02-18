@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import compact_filters, empty_state, status_badge, pagination, filter_select_field %}
+{% from "components/macros.html" import compact_filters, empty_state, status_badge, pagination, filter_select_field, stats_card %}
 
 {% block page_title %}Transaction Rules{% endblock %}
 
@@ -30,25 +30,13 @@
 {% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6 page-enter">
     <!-- Stats Summary -->
     <div class="grid gap-4 sm:grid-cols-4">
-        <div class="card p-4">
-            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Rules</p>
-            <p class="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{{ total_count | default(0) }}</p>
-        </div>
-        <div class="card p-4">
-            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Active</p>
-            <p class="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ active_count | default(0) }}</p>
-        </div>
-        <div class="card p-4">
-            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Auto-Apply</p>
-            <p class="mt-1 text-2xl font-bold text-blue-600 dark:text-blue-400">{{ auto_apply_count | default(0) }}</p>
-        </div>
-        <div class="card p-4">
-            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Matches</p>
-            <p class="mt-1 text-2xl font-bold text-purple-600 dark:text-purple-400">{{ total_matches | default(0) }}</p>
-        </div>
+        {{ stats_card("Total Rules", total_count | default(0), icon="document", color="slate") }}
+        {{ stats_card("Active", active_count | default(0), icon="check-circle", color="emerald") }}
+        {{ stats_card("Auto-Apply", auto_apply_count | default(0), icon="trending-up", color="blue") }}
+        {{ stats_card("Total Matches", total_matches | default(0), icon="chart", color="violet") }}
     </div>
 
     <!-- Info Banner -->

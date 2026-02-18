@@ -27,7 +27,7 @@ def build_supplier_query(
     elif status == "inactive":
         is_active = False
 
-    query = db.query(Supplier).filter(Supplier.organization_id == org_id)
+    query = Query([Supplier], session=db).filter(Supplier.organization_id == org_id)
 
     if is_active is not None:
         query = query.filter(Supplier.is_active == is_active)

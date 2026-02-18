@@ -11,7 +11,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import and_
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.platform.saga_execution import (
@@ -62,7 +62,7 @@ class SagaRecoveryService:
         threshold = threshold_minutes or SagaRecoveryService.STUCK_THRESHOLD_MINUTES
         cutoff_time = datetime.now(UTC) - timedelta(minutes=threshold)
 
-        query = db.query(SagaExecution).filter(
+        stmt = select(SagaExecution).where(
             and_(
                 SagaExecution.status.in_(
                     [
@@ -75,11 +75,11 @@ class SagaRecoveryService:
         )
 
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 SagaExecution.organization_id == coerce_uuid(organization_id)
             )
 
-        stuck = query.all()
+        stuck = db.scalars(stmt).all()
 
         if stuck:
             logger.warning(
@@ -198,21 +198,19 @@ class SagaRecoveryService:
         Returns:
             Dictionary with status counts and stuck saga info
         """
-        from sqlalchemy import func
-
-        query = db.query(
+        stmt = select(
             SagaExecution.status,
             func.count(SagaExecution.saga_id).label("count"),
         )
 
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 SagaExecution.organization_id == coerce_uuid(organization_id)
             )
 
         status_counts: dict[SagaStatus, int] = {
             status: count
-            for status, count in query.group_by(SagaExecution.status).all()
+            for status, count in db.execute(stmt.group_by(SagaExecution.status)).all()
         }
 
         stuck = SagaRecoveryService.find_stuck_sagas(db, organization_id)
@@ -261,12 +259,15 @@ class SagaRecoveryService:
 
         # Check if any steps need compensation
         steps_to_compensate = (
-            db.query(SagaStep)
-            .filter(
-                SagaStep.saga_id == saga_id,
-                SagaStep.status == StepStatus.COMPLETED,
+            db.scalar(
+                select(func.count())
+                .select_from(SagaStep)
+                .where(
+                    SagaStep.saga_id == saga_id,
+                    SagaStep.status == StepStatus.COMPLETED,
+                )
             )
-            .count()
+            or 0
         )
 
         if steps_to_compensate == 0:
@@ -308,9 +309,9 @@ class SagaRecoveryService:
         cutoff_date = datetime.now(UTC) - timedelta(days=days_to_keep)
 
         # Get IDs to delete
-        saga_ids = (
-            db.query(SagaExecution.saga_id)
-            .filter(
+        saga_ids = db.scalars(
+            select(SagaExecution.saga_id)
+            .where(
                 SagaExecution.status.in_(
                     [
                         SagaStatus.COMPLETED,
@@ -321,19 +322,20 @@ class SagaRecoveryService:
                 SagaExecution.completed_at < cutoff_date,
             )
             .limit(batch_size)
-            .all()
         )
+        saga_ids = saga_ids.all()
 
         if not saga_ids:
             return 0
 
-        ids_to_delete = [s[0] for s in saga_ids]
+        ids_to_delete = list(saga_ids)
 
         # Delete in batches (steps cascade)
         deleted = (
-            db.query(SagaExecution)
-            .filter(SagaExecution.saga_id.in_(ids_to_delete))
-            .delete(synchronize_session=False)
+            db.execute(
+                delete(SagaExecution).where(SagaExecution.saga_id.in_(ids_to_delete))
+            ).rowcount
+            or 0
         )
 
         db.commit()

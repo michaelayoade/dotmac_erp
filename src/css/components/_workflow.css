@@ -92,6 +92,22 @@
         color: var(--ink);
         font-weight: 600;
     }
+    .dark .workflow-step-current .workflow-step-number {
+        background: rgba(255, 255, 255, 0.06);
+    }
+    .dark .workflow-step-current .workflow-step-label {
+        color: white;
+    }
+    .dark .workflow-step-number {
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--ink-faint);
+    }
+    @media (prefers-color-scheme: dark) {
+        @keyframes currentStepPulse {
+            0%, 100% { box-shadow: 0 0 0 4px rgba(13, 148, 136, 0.25); }
+            50% { box-shadow: 0 0 0 8px rgba(13, 148, 136, 0.12); }
+        }
+    }
 
     /* Compact variant for tight spaces */
     .workflow-stepper-compact .workflow-step-number {

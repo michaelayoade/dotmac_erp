@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card, compact_filters, filter_select_field, filter_custom_select_field, action_buttons %}
+{% from "components/macros.html" import pagination, status_badge, empty_state, stats_card, compact_filters, filter_select_field, filter_custom_select_field, action_buttons, list_header_actions %}
 
 {% block page_title %}Bank Reconciliations{% endblock %}
 
@@ -14,16 +14,14 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/finance/banking/reconciliations/new" data-testid="bank-reconciliations-new" class="btn btn-primary">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-    </svg>
-    New Reconciliation
-</a>
+{{ list_header_actions(
+    new_url="/finance/banking/reconciliations/new",
+    new_label="New Reconciliation"
+) }}
 {% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6 page-enter">
     {# Stats Row #}
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" data-testid="bank-reconciliations-stats">
         {{ stats_card("Total", total_count | default(0), icon="document", color="slate") }}
@@ -90,9 +88,9 @@
                         <td>
                             <p class="text-sm text-slate-900 dark:text-white">{{ recon.period_start }} - {{ recon.period_end }}</p>
                         </td>
-                        <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ recon.statement_closing_balance }}</td>
-                        <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ recon.gl_closing_balance }}</td>
-                        <td class="text-right font-mono font-medium {{ 'text-emerald-600 dark:text-emerald-400' if recon.reconciliation_difference == 0 else 'text-rose-600 dark:text-rose-400' }}">
+                        <td class="text-right font-mono tabular-nums font-medium text-slate-900 dark:text-white">{{ recon.statement_closing_balance }}</td>
+                        <td class="text-right font-mono tabular-nums font-medium text-slate-900 dark:text-white">{{ recon.gl_closing_balance }}</td>
+                        <td class="text-right font-mono tabular-nums font-medium {{ 'text-emerald-600 dark:text-emerald-400' if recon.reconciliation_difference == 0 else 'text-rose-600 dark:text-rose-400' }}">
                             {{ recon.reconciliation_difference }}
                         </td>
                         <td class="text-center">

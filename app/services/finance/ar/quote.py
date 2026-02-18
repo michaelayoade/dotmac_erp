@@ -10,7 +10,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Query, Session
 
 from app.config import settings
 from app.models.finance.ar.customer import Customer
@@ -632,7 +632,7 @@ class QuoteService:
         """Mark expired quotes. Returns count of expired quotes."""
         today = date.today()
         count = (
-            db.query(Quote)
+            Query([Quote], session=db)
             .filter(
                 Quote.status.in_(
                     [QuoteStatus.DRAFT, QuoteStatus.SENT, QuoteStatus.VIEWED]
@@ -663,7 +663,7 @@ class QuoteService:
 
         org_id = coerce_uuid(organization_id)
 
-        query = db.query(Quote).filter(Quote.organization_id == org_id)
+        query = Query([Quote], session=db).filter(Quote.organization_id == org_id)
 
         if customer_id:
             query = query.filter(Quote.customer_id == coerce_uuid(customer_id))

@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import compact_filters, pagination, status_badge, empty_state, stats_card, action_buttons, filter_select_field, sortable_th %}
+{% from "components/macros.html" import compact_filters, pagination, status_badge, empty_state, stats_card, action_buttons, filter_select_field, sortable_th, list_header_actions %}
 
 {% block page_title %}Bank Accounts{% endblock %}
 
@@ -14,16 +14,14 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/finance/banking/accounts/new" data-testid="bank-accounts-new" class="btn btn-primary">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-    </svg>
-    New Bank Account
-</a>
+{{ list_header_actions(
+    new_url="/finance/banking/accounts/new",
+    new_label="New Bank Account"
+) }}
 {% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6 page-enter">
     {% set zero_amount = ((presentation_currency_code or default_currency_code) ~ ' 0.00') if (presentation_currency_code or default_currency_code) else '0.00' %}
     {# Stats Row #}
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -80,7 +78,7 @@
                         <td class="text-slate-600 dark:text-slate-400">{{ account.account_type | title }}</td>
                         <td class="text-slate-600 dark:text-slate-400">{{ account.currency_code }}</td>
                         <td class="text-right">
-                            <span class="font-mono font-medium text-slate-900 dark:text-white">{{ account.last_statement_balance | default("—") }}</span>
+                            <span class="font-mono tabular-nums font-medium text-slate-900 dark:text-white">{{ account.last_statement_balance | default("—") }}</span>
                             {% if account.last_statement_date %}
                             <p class="text-xs text-slate-500 dark:text-slate-400">{{ account.last_statement_date }}</p>
                             {% endif %}

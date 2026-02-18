@@ -666,6 +666,14 @@ class AttendanceService:
         if existing:
             raise DuplicateAttendanceError(employee_id, attendance_date)
 
+        # Manual/web inputs often arrive as timezone-naive local values.
+        # Normalize them to the organization's timezone so display round-trips
+        # do not shift by timezone offset.
+        if check_in:
+            check_in = self._normalize_in_org_tz(org_id, check_in)
+        if check_out:
+            check_out = self._normalize_in_org_tz(org_id, check_out)
+
         # Calculate working hours if check-in and check-out provided
         if working_hours is None and check_in and check_out:
             delta = check_out - check_in
@@ -1455,7 +1463,7 @@ class AttendanceService:
 
         # Base query
         query = (
-            self.db.query(
+            select(
                 func.count(Attendance.attendance_id).label("total_records"),
                 func.count(
                     case((Attendance.status == AttendanceStatus.PRESENT, 1))
@@ -1479,7 +1487,7 @@ class AttendanceService:
                 func.sum(Attendance.overtime_hours).label("total_overtime_hours"),
             )
             .join(Employee, Employee.employee_id == Attendance.employee_id)
-            .filter(
+            .where(
                 Attendance.organization_id == org_id,
                 Attendance.attendance_date >= start_date,
                 Attendance.attendance_date <= end_date,
@@ -1487,9 +1495,9 @@ class AttendanceService:
         )
 
         if department_id:
-            query = query.filter(Employee.department_id == department_id)
+            query = query.where(Employee.department_id == department_id)
 
-        result = query.one()
+        result = self.db.execute(query).one()
 
         # Calculate attendance percentage
         total = result.total_records or 0
@@ -1536,7 +1544,7 @@ class AttendanceService:
 
         # Query by employee
         query = (
-            self.db.query(
+            select(
                 Employee.employee_id,
                 Person.first_name,
                 Person.last_name,
@@ -1560,7 +1568,7 @@ class AttendanceService:
             .join(Attendance, Attendance.employee_id == Employee.employee_id)
             .join(Person, Employee.person_id == Person.id)
             .outerjoin(Department, Employee.department_id == Department.department_id)
-            .filter(
+            .where(
                 Attendance.organization_id == org_id,
                 Attendance.attendance_date >= start_date,
                 Attendance.attendance_date <= end_date,
@@ -1568,13 +1576,15 @@ class AttendanceService:
         )
 
         if department_id:
-            query = query.filter(Employee.department_id == department_id)
+            query = query.where(Employee.department_id == department_id)
 
-        results = query.group_by(
-            Employee.employee_id,
-            Person.first_name,
-            Person.last_name,
-            Department.department_name,
+        results = self.db.execute(
+            query.group_by(
+                Employee.employee_id,
+                Person.first_name,
+                Person.last_name,
+                Department.department_name,
+            )
         ).all()
 
         employees = []
@@ -1632,7 +1642,7 @@ class AttendanceService:
 
         # Query late/early records
         query = (
-            self.db.query(
+            select(
                 Attendance,
                 Person.first_name,
                 Person.last_name,
@@ -1641,7 +1651,7 @@ class AttendanceService:
             .join(Employee, Employee.employee_id == Attendance.employee_id)
             .join(Person, Employee.person_id == Person.id)
             .outerjoin(Department, Employee.department_id == Department.department_id)
-            .filter(
+            .where(
                 Attendance.organization_id == org_id,
                 Attendance.attendance_date >= start_date,
                 Attendance.attendance_date <= end_date,
@@ -1650,9 +1660,11 @@ class AttendanceService:
         )
 
         if department_id:
-            query = query.filter(Employee.department_id == department_id)
+            query = query.where(Employee.department_id == department_id)
 
-        results = query.order_by(Attendance.attendance_date.desc()).all()
+        results = self.db.execute(
+            query.order_by(Attendance.attendance_date.desc())
+        ).all()
 
         late_entries = []
         early_exits = []
@@ -1707,8 +1719,8 @@ class AttendanceService:
             literal_column("'month'"),
             Attendance.attendance_date,
         ).label("month")
-        results = (
-            self.db.query(
+        results = self.db.execute(
+            select(
                 month_bucket,
                 func.count(Attendance.attendance_id).label("total_records"),
                 func.count(
@@ -1722,15 +1734,14 @@ class AttendanceService:
                 ),
                 func.sum(Attendance.working_hours).label("total_hours"),
             )
-            .filter(
+            .where(
                 Attendance.organization_id == org_id,
                 Attendance.attendance_date >= start_date,
                 Attendance.attendance_date <= today,
             )
             .group_by(month_bucket)
             .order_by(month_bucket)
-            .all()
-        )
+        ).all()
 
         # Build results dict by month
         monthly_data = {}

@@ -1,9 +1,10 @@
 import builtins
 import logging
-from typing import Any, TypeVar
+from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Query, Session
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from app.models.domain_settings import (
     DomainSetting,
@@ -21,8 +22,6 @@ logger = logging.getLogger(__name__)
 
 # Structured logger for settings audit trail
 settings_audit_logger = logging.getLogger("dotmac.settings.audit")
-
-T = TypeVar("T")
 
 
 def _log_setting_change(
@@ -162,8 +161,8 @@ def _record_setting_history(
 
 
 def _apply_ordering(
-    query: Query[T], order_by: str, order_dir: str, allowed_columns: dict[str, Any]
-) -> Query[T]:
+    stmt: Any, order_by: str, order_dir: str, allowed_columns: dict[str, Any]
+) -> Any:
     if order_by not in allowed_columns:
         raise HTTPException(
             status_code=400,
@@ -171,12 +170,12 @@ def _apply_ordering(
         )
     column = allowed_columns[order_by]
     if order_dir == "desc":
-        return query.order_by(column.desc())
-    return query.order_by(column.asc())
+        return stmt.order_by(column.desc())
+    return stmt.order_by(column.asc())
 
 
-def _apply_pagination(query: Query[T], limit: int, offset: int) -> Query[T]:
-    return query.limit(limit).offset(offset)
+def _apply_pagination(stmt: Any, limit: int, offset: int) -> Any:
+    return stmt.limit(limit).offset(offset)
 
 
 def _normalize_setting_values(
@@ -304,21 +303,22 @@ class DomainSettings(ListResponseMixin):
         limit: int,
         offset: int,
     ) -> list[DomainSetting]:
-        query = db.query(DomainSetting)
+        stmt = select(DomainSetting)
         effective_domain = self.domain or domain
         if effective_domain:
-            query = query.filter(DomainSetting.domain == effective_domain)
+            stmt = stmt.where(DomainSetting.domain == effective_domain)
         if is_active is None:
-            query = query.filter(DomainSetting.is_active.is_(True))
+            stmt = stmt.where(DomainSetting.is_active.is_(True))
         else:
-            query = query.filter(DomainSetting.is_active == is_active)
-        query = _apply_ordering(
-            query,
+            stmt = stmt.where(DomainSetting.is_active == is_active)
+        stmt = _apply_ordering(
+            stmt,
             order_by,
             order_dir,
             {"created_at": DomainSetting.created_at, "key": DomainSetting.key},
         )
-        return _apply_pagination(query, limit, offset).all()
+        stmt = _apply_pagination(stmt, limit, offset)
+        return db.scalars(stmt).all()
 
     def update(
         self,
@@ -401,11 +401,11 @@ class DomainSettings(ListResponseMixin):
     def get_by_key(self, db: Session, key: str) -> DomainSetting:
         if not self.domain:
             raise HTTPException(status_code=400, detail="Setting domain is required")
-        setting = (
-            db.query(DomainSetting)
-            .filter(DomainSetting.domain == self.domain)
-            .filter(DomainSetting.key == key)
-            .first()
+        setting = db.scalar(
+            select(DomainSetting).where(
+                DomainSetting.domain == self.domain,
+                DomainSetting.key == key,
+            )
         )
         if not setting:
             raise HTTPException(status_code=404, detail="Setting not found")
@@ -423,11 +423,11 @@ class DomainSettings(ListResponseMixin):
     ) -> DomainSetting:
         if not self.domain:
             raise HTTPException(status_code=400, detail="Setting domain is required")
-        setting = (
-            db.query(DomainSetting)
-            .filter(DomainSetting.domain == self.domain)
-            .filter(DomainSetting.key == key)
-            .first()
+        setting = db.scalar(
+            select(DomainSetting).where(
+                DomainSetting.domain == self.domain,
+                DomainSetting.key == key,
+            )
         )
         if setting:
             # Capture old values for audit/history
@@ -508,11 +508,11 @@ class DomainSettings(ListResponseMixin):
     ) -> DomainSetting:
         if not self.domain:
             raise HTTPException(status_code=400, detail="Setting domain is required")
-        existing = (
-            db.query(DomainSetting)
-            .filter(DomainSetting.domain == self.domain)
-            .filter(DomainSetting.key == key)
-            .first()
+        existing = db.scalar(
+            select(DomainSetting).where(
+                DomainSetting.domain == self.domain,
+                DomainSetting.key == key,
+            )
         )
         if existing:
             return existing
@@ -629,24 +629,24 @@ def list_setting_history(
     Returns:
         Tuple of (history_entries, total_count)
     """
-    query = db.query(DomainSettingHistory)
+    stmt = select(DomainSettingHistory)
 
     if setting_id:
-        query = query.filter(DomainSettingHistory.setting_id == coerce_uuid(setting_id))
+        stmt = stmt.where(DomainSettingHistory.setting_id == coerce_uuid(setting_id))
     elif domain:
-        query = query.filter(DomainSettingHistory.domain == domain.value)
+        stmt = stmt.where(DomainSettingHistory.domain == domain.value)
         if key:
-            query = query.filter(DomainSettingHistory.key == key)
+            stmt = stmt.where(DomainSettingHistory.key == key)
 
-    total = query.count()
-    items = (
-        query.order_by(DomainSettingHistory.changed_at.desc())
+    total = db.scalar(select(func.count()).select_from(stmt.subquery()))
+    items = db.scalars(
+        stmt.order_by(DomainSettingHistory.changed_at.desc())
         .limit(limit)
         .offset(offset)
-        .all()
     )
+    items = items.all()
 
-    return items, total
+    return items, int(total or 0)
 
 
 def get_history_entry(db: Session, history_id: str) -> DomainSettingHistory | None:
@@ -702,13 +702,11 @@ def restore_from_history(
         ) from exc
 
     # Find existing setting
-    setting = (
-        db.query(DomainSetting)
-        .filter(
+    setting = db.scalar(
+        select(DomainSetting).where(
             DomainSetting.domain == domain,
             DomainSetting.key == history.key,
         )
-        .first()
     )
 
     # Determine what values to restore based on action type

@@ -5,6 +5,7 @@ from typing import cast
 from uuid import UUID
 
 from fastapi import Cookie, Depends, Header, HTTPException, Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings as app_settings
@@ -62,13 +63,12 @@ def _validate_session_sso(
     Returns:
         AuthSession if valid, None if invalid
     """
-    session = (
-        auth_db.query(AuthSession)
-        .filter(AuthSession.id == session_id)
-        .filter(AuthSession.person_id == person_id)
-        .filter(AuthSession.status == SessionStatus.active)
-        .filter(AuthSession.revoked_at.is_(None))
-        .first()
+    session = auth_db.scalar(
+        select(AuthSession)
+        .where(AuthSession.id == session_id)
+        .where(AuthSession.person_id == person_id)
+        .where(AuthSession.status == SessionStatus.active)
+        .where(AuthSession.revoked_at.is_(None))
     )
 
     if not session:
@@ -201,14 +201,13 @@ def _query_session(
     if auth_db:
         return _validate_session_sso(session_id, person_id, now, auth_db)
 
-    return (
-        db.query(AuthSession)
-        .filter(AuthSession.id == session_id)
-        .filter(AuthSession.person_id == person_id)
-        .filter(AuthSession.status == SessionStatus.active)
-        .filter(AuthSession.revoked_at.is_(None))
-        .filter(AuthSession.expires_at > now)
-        .first()
+    return db.scalar(
+        select(AuthSession)
+        .where(AuthSession.id == session_id)
+        .where(AuthSession.person_id == person_id)
+        .where(AuthSession.status == SessionStatus.active)
+        .where(AuthSession.revoked_at.is_(None))
+        .where(AuthSession.expires_at > now)
     )
 
 
@@ -462,13 +461,12 @@ def require_audit_auth(
         auth_db = _get_auth_db_for_sso()
         try:
             target_db = auth_db if auth_db else db
-            session = (
-                target_db.query(AuthSession)
-                .filter(AuthSession.token_hash == hash_session_token(token))
-                .filter(AuthSession.status == SessionStatus.active)
-                .filter(AuthSession.revoked_at.is_(None))
-                .filter(AuthSession.expires_at > now)
-                .first()
+            session = target_db.scalar(
+                select(AuthSession)
+                .where(AuthSession.token_hash == hash_session_token(token))
+                .where(AuthSession.status == SessionStatus.active)
+                .where(AuthSession.revoked_at.is_(None))
+                .where(AuthSession.expires_at > now)
             )
             if session:
                 if request is not None:
@@ -479,13 +477,12 @@ def require_audit_auth(
                 auth_db.close()
 
     if x_api_key:
-        api_key = (
-            db.query(ApiKey)
-            .filter(ApiKey.key_hash == hash_api_key(x_api_key))
-            .filter(ApiKey.is_active.is_(True))
-            .filter(ApiKey.revoked_at.is_(None))
-            .filter((ApiKey.expires_at.is_(None)) | (ApiKey.expires_at > now))
-            .first()
+        api_key = db.scalar(
+            select(ApiKey)
+            .where(ApiKey.key_hash == hash_api_key(x_api_key))
+            .where(ApiKey.is_active.is_(True))
+            .where(ApiKey.revoked_at.is_(None))
+            .where((ApiKey.expires_at.is_(None)) | (ApiKey.expires_at > now))
         )
         if api_key:
             if request is not None:
@@ -530,14 +527,13 @@ def require_user_auth(
             session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
         else:
             # SSO provider or non-SSO mode - validate against local database
-            session = (
-                db.query(AuthSession)
-                .filter(AuthSession.id == session_uuid)
-                .filter(AuthSession.person_id == person_uuid)
-                .filter(AuthSession.status == SessionStatus.active)
-                .filter(AuthSession.revoked_at.is_(None))
-                .filter(AuthSession.expires_at > now)
-                .first()
+            session = db.scalar(
+                select(AuthSession)
+                .where(AuthSession.id == session_uuid)
+                .where(AuthSession.person_id == person_uuid)
+                .where(AuthSession.status == SessionStatus.active)
+                .where(AuthSession.revoked_at.is_(None))
+                .where(AuthSession.expires_at > now)
             )
 
         if not session:
@@ -587,19 +583,15 @@ def require_role(role_name: str):
         roles = set(auth.get("roles") or [])
         if role_name in roles:
             return auth
-        role = (
-            db.query(Role)
-            .filter(Role.name == role_name)
-            .filter(Role.is_active.is_(True))
-            .first()
+        role = db.scalar(
+            select(Role).where(Role.name == role_name).where(Role.is_active.is_(True))
         )
         if not role:
             raise HTTPException(status_code=403, detail="Role not found")
-        link = (
-            db.query(PersonRole)
-            .filter(PersonRole.person_id == person_id)
-            .filter(PersonRole.role_id == role.id)
-            .first()
+        link = db.scalar(
+            select(PersonRole)
+            .where(PersonRole.person_id == person_id)
+            .where(PersonRole.role_id == role.id)
         )
         if not link:
             raise HTTPException(status_code=403, detail="Forbidden")
@@ -618,22 +610,21 @@ def require_permission(permission_key: str):
         scopes = set(auth.get("scopes") or [])
         if "admin" in roles or permission_key in scopes:
             return auth
-        permission = (
-            db.query(Permission)
-            .filter(Permission.key == permission_key)
-            .filter(Permission.is_active.is_(True))
-            .first()
+        permission = db.scalar(
+            select(Permission)
+            .where(Permission.key == permission_key)
+            .where(Permission.is_active.is_(True))
         )
         if not permission:
             raise HTTPException(status_code=403, detail="Permission not found")
-        has_permission = (
-            db.query(RolePermission)
+        has_permission = db.scalar(
+            select(RolePermission)
             .join(Role, RolePermission.role_id == Role.id)
             .join(PersonRole, PersonRole.role_id == Role.id)
-            .filter(PersonRole.person_id == person_id)
-            .filter(RolePermission.permission_id == permission.id)
-            .filter(Role.is_active.is_(True))
-            .first()
+            .where(PersonRole.person_id == person_id)
+            .where(RolePermission.permission_id == permission.id)
+            .where(Role.is_active.is_(True))
+            .limit(1)
         )
         if not has_permission:
             raise HTTPException(status_code=403, detail="Forbidden")
@@ -662,7 +653,7 @@ def require_tenant_auth(
         @app.get("/items")
         def list_items(auth=Depends(require_tenant_auth), db: Session = Depends(get_db)):
             # All queries in this request are automatically scoped to the user's org
-            return db.query(Item).all()
+            return db.scalars(select(Item)).all()
     """
     token = _extract_bearer_token(authorization) or access_token
     if not token:
@@ -687,14 +678,13 @@ def require_tenant_auth(
             session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
         else:
             # SSO provider or non-SSO mode - validate against local database
-            session = (
-                db.query(AuthSession)
-                .filter(AuthSession.id == session_uuid)
-                .filter(AuthSession.person_id == person_uuid)
-                .filter(AuthSession.status == SessionStatus.active)
-                .filter(AuthSession.revoked_at.is_(None))
-                .filter(AuthSession.expires_at > now)
-                .first()
+            session = db.scalar(
+                select(AuthSession)
+                .where(AuthSession.id == session_uuid)
+                .where(AuthSession.person_id == person_uuid)
+                .where(AuthSession.status == SessionStatus.active)
+                .where(AuthSession.revoked_at.is_(None))
+                .where(AuthSession.expires_at > now)
             )
 
         if not session:
@@ -768,19 +758,15 @@ def require_tenant_role(role_name: str):
         roles = set(auth.get("roles") or [])
         if role_name in roles:
             return auth
-        role = (
-            db.query(Role)
-            .filter(Role.name == role_name)
-            .filter(Role.is_active.is_(True))
-            .first()
+        role = db.scalar(
+            select(Role).where(Role.name == role_name).where(Role.is_active.is_(True))
         )
         if not role:
             raise HTTPException(status_code=403, detail="Role not found")
-        link = (
-            db.query(PersonRole)
-            .filter(PersonRole.person_id == person_id)
-            .filter(PersonRole.role_id == role.id)
-            .first()
+        link = db.scalar(
+            select(PersonRole)
+            .where(PersonRole.person_id == person_id)
+            .where(PersonRole.role_id == role.id)
         )
         if not link:
             raise HTTPException(status_code=403, detail="Forbidden")
@@ -805,22 +791,21 @@ def require_tenant_permission(permission_key: str):
         scopes = set(auth.get("scopes") or [])
         if "admin" in roles or permission_key in scopes:
             return auth
-        permission = (
-            db.query(Permission)
-            .filter(Permission.key == permission_key)
-            .filter(Permission.is_active.is_(True))
-            .first()
+        permission = db.scalar(
+            select(Permission)
+            .where(Permission.key == permission_key)
+            .where(Permission.is_active.is_(True))
         )
         if not permission:
             raise HTTPException(status_code=403, detail="Permission not found")
-        has_permission = (
-            db.query(RolePermission)
+        has_permission = db.scalar(
+            select(RolePermission)
             .join(Role, RolePermission.role_id == Role.id)
             .join(PersonRole, PersonRole.role_id == Role.id)
-            .filter(PersonRole.person_id == person_id)
-            .filter(RolePermission.permission_id == permission.id)
-            .filter(Role.is_active.is_(True))
-            .first()
+            .where(PersonRole.person_id == person_id)
+            .where(RolePermission.permission_id == permission.id)
+            .where(Role.is_active.is_(True))
+            .limit(1)
         )
         if not has_permission:
             raise HTTPException(status_code=403, detail="Forbidden")
@@ -846,7 +831,7 @@ def require_admin_bypass(
         @app.get("/admin/all-organizations")
         def list_all_orgs(auth=Depends(require_admin_bypass), db: Session = Depends(get_db)):
             # Can see all organizations across tenants
-            return db.query(Organization).all()
+            return db.scalars(select(Organization)).all()
     """
     token = _extract_bearer_token(authorization)
     if not token:
@@ -867,14 +852,13 @@ def require_admin_bypass(
         if auth_db:
             session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
         else:
-            session = (
-                db.query(AuthSession)
-                .filter(AuthSession.id == session_uuid)
-                .filter(AuthSession.person_id == person_uuid)
-                .filter(AuthSession.status == SessionStatus.active)
-                .filter(AuthSession.revoked_at.is_(None))
-                .filter(AuthSession.expires_at > now)
-                .first()
+            session = db.scalar(
+                select(AuthSession)
+                .where(AuthSession.id == session_uuid)
+                .where(AuthSession.person_id == person_uuid)
+                .where(AuthSession.status == SessionStatus.active)
+                .where(AuthSession.revoked_at.is_(None))
+                .where(AuthSession.expires_at > now)
             )
 
         if not session:
@@ -900,18 +884,14 @@ def require_admin_bypass(
     roles = [str(role) for role in roles_value] if isinstance(roles_value, list) else []
     if "admin" not in roles:
         # Also check database for admin role
-        admin_role = (
-            db.query(Role)
-            .filter(Role.name == "admin")
-            .filter(Role.is_active.is_(True))
-            .first()
+        admin_role = db.scalar(
+            select(Role).where(Role.name == "admin").where(Role.is_active.is_(True))
         )
         if admin_role:
-            link = (
-                db.query(PersonRole)
-                .filter(PersonRole.person_id == person_uuid)
-                .filter(PersonRole.role_id == admin_role.id)
-                .first()
+            link = db.scalar(
+                select(PersonRole)
+                .where(PersonRole.person_id == person_uuid)
+                .where(PersonRole.role_id == admin_role.id)
             )
             if not link:
                 raise HTTPException(status_code=403, detail="Admin access required")
@@ -963,14 +943,13 @@ def _resolve_web_session_from_access_token(
         if auth_db:
             session = _validate_session_sso(session_uuid, person_uuid, now, auth_db)
         else:
-            session = (
-                db.query(AuthSession)
-                .filter(AuthSession.id == session_uuid)
-                .filter(AuthSession.person_id == person_uuid)
-                .filter(AuthSession.status == SessionStatus.active)
-                .filter(AuthSession.revoked_at.is_(None))
-                .filter(AuthSession.expires_at > now)
-                .first()
+            session = db.scalar(
+                select(AuthSession)
+                .where(AuthSession.id == session_uuid)
+                .where(AuthSession.person_id == person_uuid)
+                .where(AuthSession.status == SessionStatus.active)
+                .where(AuthSession.revoked_at.is_(None))
+                .where(AuthSession.expires_at > now)
             )
 
         if not session or is_session_inactive(session, now):
@@ -1022,13 +1001,12 @@ def require_web_session(
         auth_db = _get_auth_db_for_sso()
         try:
             target_db = auth_db if auth_db else db
-            session = (
-                target_db.query(AuthSession)
-                .filter(AuthSession.token_hash == hash_session_token(session_token))
-                .filter(AuthSession.status == SessionStatus.active)
-                .filter(AuthSession.revoked_at.is_(None))
-                .filter(AuthSession.expires_at > now)
-                .first()
+            session = target_db.scalar(
+                select(AuthSession)
+                .where(AuthSession.token_hash == hash_session_token(session_token))
+                .where(AuthSession.status == SessionStatus.active)
+                .where(AuthSession.revoked_at.is_(None))
+                .where(AuthSession.expires_at > now)
             )
 
             if not session or is_session_inactive(session, now):
@@ -1136,13 +1114,12 @@ def optional_web_session(
         auth_db = _get_auth_db_for_sso()
         try:
             target_db = auth_db if auth_db else db
-            session = (
-                target_db.query(AuthSession)
-                .filter(AuthSession.token_hash == hash_session_token(session_token))
-                .filter(AuthSession.status == SessionStatus.active)
-                .filter(AuthSession.revoked_at.is_(None))
-                .filter(AuthSession.expires_at > now)
-                .first()
+            session = target_db.scalar(
+                select(AuthSession)
+                .where(AuthSession.token_hash == hash_session_token(session_token))
+                .where(AuthSession.status == SessionStatus.active)
+                .where(AuthSession.revoked_at.is_(None))
+                .where(AuthSession.expires_at > now)
             )
 
             if not session or is_session_inactive(session, now):

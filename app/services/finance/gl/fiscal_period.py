@@ -13,6 +13,7 @@ from datetime import UTC, date, datetime
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
@@ -65,20 +66,47 @@ class FiscalPeriodService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         year_id = coerce_uuid(input.fiscal_year_id)
 
+        if input.start_date > input.end_date:
+            raise HTTPException(
+                status_code=400,
+                detail="Fiscal period start_date cannot be after end_date",
+            )
+
         # Check for duplicate period number
-        existing = (
-            db.query(FiscalPeriod)
-            .filter(
+        existing = db.scalar(
+            select(FiscalPeriod).where(
                 FiscalPeriod.fiscal_year_id == year_id,
                 FiscalPeriod.period_number == input.period_number,
             )
-            .first()
         )
         if existing:
             raise HTTPException(
                 status_code=400,
                 detail=f"Period number {input.period_number} already exists for this fiscal year",
             )
+
+        # Normal posting periods must not overlap each other within an organization.
+        # Adjustment/closing periods are excluded from this guard.
+        if not input.is_adjustment_period and not input.is_closing_period:
+            overlap = db.scalar(
+                select(FiscalPeriod).where(
+                    and_(
+                        FiscalPeriod.organization_id == org_id,
+                        FiscalPeriod.is_adjustment_period.is_(False),
+                        FiscalPeriod.is_closing_period.is_(False),
+                        FiscalPeriod.start_date <= input.end_date,
+                        FiscalPeriod.end_date >= input.start_date,
+                    )
+                )
+            )
+            if overlap:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Fiscal period date range overlaps an existing period "
+                        f"('{overlap.period_name}')"
+                    ),
+                )
 
         period = FiscalPeriod(
             organization_id=org_id,
@@ -359,23 +387,23 @@ class FiscalPeriodService(ListResponseMixin):
         Returns:
             List of FiscalPeriod objects
         """
-        query = db.query(FiscalPeriod)
+        query = select(FiscalPeriod)
 
         if organization_id:
-            query = query.filter(
+            query = query.where(
                 FiscalPeriod.organization_id == coerce_uuid(organization_id)
             )
 
         if fiscal_year_id:
-            query = query.filter(
+            query = query.where(
                 FiscalPeriod.fiscal_year_id == coerce_uuid(fiscal_year_id)
             )
 
         if status:
-            query = query.filter(FiscalPeriod.status == status)
+            query = query.where(FiscalPeriod.status == status)
 
         query = query.order_by(FiscalPeriod.period_number)
-        return query.limit(limit).offset(offset).all()
+        return list(db.scalars(query.limit(limit).offset(offset)).all())
 
 
 # Module-level singleton instance

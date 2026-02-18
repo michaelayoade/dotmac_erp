@@ -39,6 +39,14 @@ class ShiftPatternBase(BaseModel):
         default=["MON", "TUE", "WED", "THU", "FRI"],
         description="Days of the week: MON, TUE, WED, THU, FRI, SAT, SUN",
     )
+    day_work_days: list[str] | None = Field(
+        default=None,
+        description="For ROTATING patterns: day-shift days",
+    )
+    night_work_days: list[str] | None = Field(
+        default=None,
+        description="For ROTATING patterns: night-shift days",
+    )
     day_shift_type_id: UUID
     night_shift_type_id: UUID | None = None
     is_active: bool = True
@@ -49,6 +57,22 @@ class ShiftPatternBase(BaseModel):
         """Validate that work_days contains only valid day codes."""
         if not v:
             raise ValueError("work_days cannot be empty")
+        invalid_days = [day for day in v if day not in VALID_DAY_CODES]
+        if invalid_days:
+            raise ValueError(
+                f"Invalid day codes: {invalid_days}. "
+                f"Valid values are: {sorted(VALID_DAY_CODES)}"
+            )
+        return v
+
+    @field_validator("day_work_days", "night_work_days")
+    @classmethod
+    def validate_optional_work_days(cls, v: list[str] | None) -> list[str] | None:
+        """Validate optional rotating day lists when provided."""
+        if v is None:
+            return v
+        if not v:
+            raise ValueError("work day list cannot be empty")
         invalid_days = [day for day in v if day not in VALID_DAY_CODES]
         if invalid_days:
             raise ValueError(
@@ -73,6 +97,8 @@ class ShiftPatternUpdate(BaseModel):
     rotation_type: RotationType | None = None
     cycle_weeks: int | None = Field(default=None, ge=1, le=4)
     work_days: list[str] | None = None
+    day_work_days: list[str] | None = None
+    night_work_days: list[str] | None = None
     day_shift_type_id: UUID | None = None
     night_shift_type_id: UUID | None = None
     is_active: bool | None = None
@@ -85,6 +111,24 @@ class ShiftPatternUpdate(BaseModel):
             return v
         if not v:
             raise ValueError("work_days cannot be empty")
+        invalid_days = [day for day in v if day not in VALID_DAY_CODES]
+        if invalid_days:
+            raise ValueError(
+                f"Invalid day codes: {invalid_days}. "
+                f"Valid values are: {sorted(VALID_DAY_CODES)}"
+            )
+        return v
+
+    @field_validator("day_work_days", "night_work_days")
+    @classmethod
+    def validate_optional_update_work_days(
+        cls, v: list[str] | None
+    ) -> list[str] | None:
+        """Validate rotating day lists when provided in updates."""
+        if v is None:
+            return v
+        if not v:
+            raise ValueError("work day list cannot be empty")
         invalid_days = [day for day in v if day not in VALID_DAY_CODES]
         if invalid_days:
             raise ValueError(

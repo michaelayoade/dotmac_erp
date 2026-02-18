@@ -272,6 +272,8 @@ class AuthWebService:
         """
         from datetime import datetime
 
+        from sqlalchemy import select
+
         from app.models.auth import Session as AuthSession
         from app.models.auth import SessionStatus
 
@@ -282,11 +284,11 @@ class AuthWebService:
             # SSO client - revoke in shared auth database
             auth_db = get_auth_db_session()
             try:
-                session = (
-                    auth_db.query(AuthSession)
-                    .filter(AuthSession.token_hash == token_hash)
-                    .filter(AuthSession.revoked_at.is_(None))
-                    .first()
+                session = auth_db.scalar(
+                    select(AuthSession).where(
+                        AuthSession.token_hash == token_hash,
+                        AuthSession.revoked_at.is_(None),
+                    )
                 )
                 if session:
                     session.status = SessionStatus.revoked
@@ -301,11 +303,11 @@ class AuthWebService:
         else:
             # SSO provider or non-SSO - revoke in local database
             try:
-                session = (
-                    db.query(AuthSession)
-                    .filter(AuthSession.token_hash == token_hash)
-                    .filter(AuthSession.revoked_at.is_(None))
-                    .first()
+                session = db.scalar(
+                    select(AuthSession).where(
+                        AuthSession.token_hash == token_hash,
+                        AuthSession.revoked_at.is_(None),
+                    )
                 )
                 if session:
                     session.status = SessionStatus.revoked

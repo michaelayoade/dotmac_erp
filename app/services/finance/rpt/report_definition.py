@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.rpt.report_definition import ReportDefinition, ReportType
@@ -102,13 +103,11 @@ class ReportDefinitionService(ListResponseMixin):
         user_id = coerce_uuid(created_by_user_id)
 
         # Check for duplicate report code
-        existing = (
-            db.query(ReportDefinition)
-            .filter(
+        existing = db.scalar(
+            select(ReportDefinition).where(
                 ReportDefinition.organization_id == org_id,
                 ReportDefinition.report_code == input.report_code,
             )
-            .first()
         )
         if existing:
             raise HTTPException(
@@ -357,13 +356,11 @@ class ReportDefinitionService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Source definition not found")
 
         # Check for duplicate
-        existing = (
-            db.query(ReportDefinition)
-            .filter(
+        existing = db.scalar(
+            select(ReportDefinition).where(
                 ReportDefinition.organization_id == org_id,
                 ReportDefinition.report_code == new_report_code,
             )
-            .first()
         )
         if existing:
             raise HTTPException(
@@ -406,13 +403,11 @@ class ReportDefinitionService(ListResponseMixin):
         report_code: str,
     ) -> ReportDefinition | None:
         """Get report definition by code."""
-        return (
-            db.query(ReportDefinition)
-            .filter(
+        return db.scalar(
+            select(ReportDefinition).where(
                 ReportDefinition.organization_id == coerce_uuid(organization_id),
                 ReportDefinition.report_code == report_code,
             )
-            .first()
         )
 
     @staticmethod
@@ -422,16 +417,15 @@ class ReportDefinitionService(ListResponseMixin):
         report_type: ReportType,
     ) -> builtins.list[ReportDefinition]:
         """Get report definitions by type."""
-        return (
-            db.query(ReportDefinition)
-            .filter(
+        return db.scalars(
+            select(ReportDefinition)
+            .where(
                 ReportDefinition.organization_id == coerce_uuid(organization_id),
                 ReportDefinition.report_type == report_type,
                 ReportDefinition.is_active == True,
             )
             .order_by(ReportDefinition.report_name)
-            .all()
-        )
+        ).all()
 
     @staticmethod
     def get(
@@ -461,27 +455,28 @@ class ReportDefinitionService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[ReportDefinition]:
         """List report definitions with optional filters."""
-        query = db.query(ReportDefinition)
+        stmt = select(ReportDefinition)
 
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 ReportDefinition.organization_id == coerce_uuid(organization_id)
             )
 
         if report_type:
-            query = query.filter(ReportDefinition.report_type == report_type)
+            stmt = stmt.where(ReportDefinition.report_type == report_type)
 
         if category:
-            query = query.filter(ReportDefinition.category == category)
+            stmt = stmt.where(ReportDefinition.category == category)
 
         if is_active is not None:
-            query = query.filter(ReportDefinition.is_active == is_active)
+            stmt = stmt.where(ReportDefinition.is_active == is_active)
 
         if is_system_report is not None:
-            query = query.filter(ReportDefinition.is_system_report == is_system_report)
+            stmt = stmt.where(ReportDefinition.is_system_report == is_system_report)
 
-        query = query.order_by(ReportDefinition.category, ReportDefinition.report_name)
-        return query.limit(limit).offset(offset).all()
+        stmt = stmt.order_by(ReportDefinition.category, ReportDefinition.report_name)
+        stmt = stmt.limit(limit).offset(offset)
+        return db.scalars(stmt).all()
 
 
 # Module-level singleton instance

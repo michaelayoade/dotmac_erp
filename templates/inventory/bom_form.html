@@ -187,7 +187,7 @@
 <script>
 function bomForm() {
     return {
-        components: {{ (bom.components | map(attribute='__dict__') | list | tojson) if bom and bom.components else '[]' | safe }},
+        components: {{ (bom.components | map(attribute='__dict__') | list | tojson) if bom and bom.components else '[]' }},
         addComponent() {
             this.components.push({
                 item_id: '',

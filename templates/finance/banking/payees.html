@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import empty_state, status_badge, pagination, compact_filters, filter_select_field %}
+{% from "components/macros.html" import empty_state, status_badge, pagination, compact_filters, filter_select_field, stats_card, action_buttons, list_header_actions %}
 
 {% block page_title %}Payees{% endblock %}
 
@@ -18,34 +18,20 @@
 {% endblock %}
 
 {% block header_actions %}
-<a href="/finance/banking/payees/new" data-testid="payees-new" class="btn btn-primary">
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-    </svg>
-    New Payee
-</a>
+{{ list_header_actions(
+    new_url="/finance/banking/payees/new",
+    new_label="New Payee"
+) }}
 {% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6 page-enter">
     <!-- Stats Summary -->
     <div class="grid gap-4 sm:grid-cols-4">
-        <div class="card p-4">
-            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Payees</p>
-            <p class="mt-1 text-2xl font-bold text-slate-900 dark:text-white">{{ total_count | default(0) }}</p>
-        </div>
-        <div class="card p-4">
-            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Active</p>
-            <p class="mt-1 text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ active_count | default(0) }}</p>
-        </div>
-        <div class="card p-4">
-            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Vendors</p>
-            <p class="mt-1 text-2xl font-bold text-blue-600 dark:text-blue-400">{{ vendor_count | default(0) }}</p>
-        </div>
-        <div class="card p-4">
-            <p class="text-sm font-medium text-slate-500 dark:text-slate-400">Total Matches</p>
-            <p class="mt-1 text-2xl font-bold text-purple-600 dark:text-purple-400">{{ total_matches | default(0) }}</p>
-        </div>
+        {{ stats_card("Total Payees", total_count | default(0), icon="users", color="slate") }}
+        {{ stats_card("Active", active_count | default(0), icon="check-circle", color="emerald") }}
+        {{ stats_card("Vendors", vendor_count | default(0), icon="building", color="blue") }}
+        {{ stats_card("Total Matches", total_matches | default(0), icon="chart", color="violet") }}
     </div>
 
     <!-- Filters -->
@@ -124,16 +110,11 @@
                         <td class="whitespace-nowrap">
                             {{ status_badge('active' if payee.is_active else 'inactive', 'sm') }}
                         </td>
-                        <td class="whitespace-nowrap text-right">
-                            <div class="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <a href="/finance/banking/payees/{{ payee.payee_id }}"
-                                   class="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-700 dark:hover:text-slate-300"
-                                   title="Edit" aria-label="Edit">
-                                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                                    </svg>
-                                </a>
-                            </div>
+                        <td>
+                            {{ action_buttons(
+                                view_href="/finance/banking/payees/" ~ payee.payee_id,
+                                edit_href="/finance/banking/payees/" ~ payee.payee_id ~ "/edit"
+                            ) }}
                         </td>
                     </tr>
                     {% else %}

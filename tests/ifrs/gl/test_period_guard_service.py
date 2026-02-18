@@ -41,6 +41,12 @@ class MockColumn:
     def in_(self, values):
         return MagicMock()
 
+    def desc(self):
+        return MagicMock()
+
+    def asc(self):
+        return MagicMock()
+
 
 class MockFiscalPeriod:
     """Mock FiscalPeriod model for testing."""
@@ -94,6 +100,9 @@ def patch_period_guard():
                 "app.services.finance.gl.period_guard.and_", return_value=MagicMock()
             ),
             patch(
+                "app.services.finance.gl.period_guard.select", return_value=MagicMock()
+            ),
+            patch(
                 "app.services.finance.gl.period_guard.PeriodStatus", MockPeriodStatus
             ),
         ):
@@ -123,7 +132,7 @@ class TestCanPostToDate:
 
     def test_no_period_found_returns_not_allowed(self, mock_db, org_id):
         """Test when no fiscal period contains the date and auto-create fails."""
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.scalars.return_value.all.return_value = []
         posting_date = date(2024, 1, 15)
 
         with (
@@ -144,7 +153,7 @@ class TestCanPostToDate:
             organization_id=org_id,
             status=MockPeriodStatus.OPEN,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = period
+        mock_db.scalars.return_value.all.return_value = [period]
         posting_date = date(2024, 1, 15)
 
         with patch_period_guard():
@@ -160,7 +169,7 @@ class TestCanPostToDate:
             organization_id=org_id,
             status=MockPeriodStatus.FUTURE,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = period
+        mock_db.scalars.return_value.all.return_value = [period]
         posting_date = date(2024, 1, 15)
 
         with patch_period_guard():
@@ -175,7 +184,7 @@ class TestCanPostToDate:
             organization_id=org_id,
             status=MockPeriodStatus.SOFT_CLOSED,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = period
+        mock_db.scalars.return_value.all.return_value = [period]
         posting_date = date(2024, 1, 15)
 
         with patch_period_guard():
@@ -190,7 +199,7 @@ class TestCanPostToDate:
             organization_id=org_id,
             status=MockPeriodStatus.HARD_CLOSED,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = period
+        mock_db.scalars.return_value.all.return_value = [period]
         posting_date = date(2024, 1, 15)
 
         with patch_period_guard():
@@ -207,7 +216,7 @@ class TestCanPostToDate:
             status=MockPeriodStatus.REOPENED,
             last_reopen_session_id=session_id,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = period
+        mock_db.scalars.return_value.all.return_value = [period]
         posting_date = date(2024, 1, 15)
 
         with patch_period_guard():
@@ -224,7 +233,7 @@ class TestCanPostToDate:
             status=MockPeriodStatus.REOPENED,
             last_reopen_session_id=session_id,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = period
+        mock_db.scalars.return_value.all.return_value = [period]
         posting_date = date(2024, 1, 15)
 
         with patch_period_guard():
@@ -242,7 +251,7 @@ class TestCanPostToDate:
             status=MockPeriodStatus.OPEN,
             is_adjustment_period=True,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = period
+        mock_db.scalars.return_value.all.return_value = [period]
         posting_date = date(2024, 1, 15)
 
         with patch_period_guard():
@@ -258,7 +267,7 @@ class TestCanPostToDate:
             status=MockPeriodStatus.OPEN,
             is_adjustment_period=True,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = period
+        mock_db.scalars.return_value.all.return_value = [period]
         posting_date = date(2024, 1, 15)
 
         with patch_period_guard():
@@ -278,7 +287,7 @@ class TestRequireOpenPeriod:
             organization_id=org_id,
             status=MockPeriodStatus.OPEN,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = period
+        mock_db.scalars.return_value.all.return_value = [period]
         posting_date = date(2024, 1, 15)
 
         with patch_period_guard():
@@ -296,7 +305,7 @@ class TestRequireOpenPeriod:
             organization_id=org_id,
             status=MockPeriodStatus.HARD_CLOSED,
         )
-        mock_db.query.return_value.filter.return_value.first.return_value = period
+        mock_db.scalars.return_value.all.return_value = [period]
         posting_date = date(2024, 1, 15)
 
         with patch_period_guard(), pytest.raises(HTTPException) as exc:
@@ -420,7 +429,7 @@ class TestGetPeriodMethods:
     def test_get_period_for_date(self, mock_db, org_id):
         """Test getting period containing a specific date."""
         period = MockFiscalPeriod(organization_id=org_id)
-        mock_db.query.return_value.filter.return_value.first.return_value = period
+        mock_db.scalars.return_value.all.return_value = [period]
         target_date = date(2024, 1, 15)
 
         with patch_period_guard():
@@ -436,7 +445,7 @@ class TestGetPeriodMethods:
             MockFiscalPeriod(organization_id=org_id, status=MockPeriodStatus.OPEN),
             MockFiscalPeriod(organization_id=org_id, status=MockPeriodStatus.REOPENED),
         ]
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = periods
+        mock_db.scalars.return_value.all.return_value = periods
 
         with patch_period_guard():
             result = PeriodGuardService.get_open_periods(mock_db, org_id)
@@ -446,7 +455,7 @@ class TestGetPeriodMethods:
     def test_get_current_period(self, mock_db, org_id):
         """Test getting period for today."""
         period = MockFiscalPeriod(organization_id=org_id)
-        mock_db.query.return_value.filter.return_value.first.return_value = period
+        mock_db.scalars.return_value.all.return_value = [period]
 
         with patch_period_guard():
             result = PeriodGuardService.get_current_period(mock_db, org_id)
@@ -456,13 +465,7 @@ class TestGetPeriodMethods:
     def test_list_periods(self, mock_db, org_id):
         """Test listing periods with filters."""
         periods = [MockFiscalPeriod(organization_id=org_id)]
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = periods
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = periods
 
         with patch_period_guard():
             result = PeriodGuardService.list(

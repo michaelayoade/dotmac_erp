@@ -11,6 +11,7 @@ import logging
 import time
 from typing import Any, cast
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.domain_settings import DomainSetting, SettingDomain, SettingValueType
@@ -336,14 +337,12 @@ class SettingsCache:
             return cached
 
         # Query database
-        setting = (
-            db.query(DomainSetting)
-            .filter(
+        setting = db.scalar(
+            select(DomainSetting).where(
                 DomainSetting.domain == domain,
                 DomainSetting.key == key,
                 DomainSetting.is_active.is_(True),
             )
-            .first()
         )
 
         ttl = self._get_ttl(domain)
@@ -380,13 +379,13 @@ class SettingsCache:
             return cast(dict[str, Any], cached)
 
         # Query database
-        settings = (
-            db.query(DomainSetting)
-            .filter(
-                DomainSetting.domain == domain,
-                DomainSetting.is_active.is_(True),
-            )
-            .all()
+        settings = list(
+            db.scalars(
+                select(DomainSetting).where(
+                    DomainSetting.domain == domain,
+                    DomainSetting.is_active.is_(True),
+                )
+            ).all()
         )
 
         result = {}

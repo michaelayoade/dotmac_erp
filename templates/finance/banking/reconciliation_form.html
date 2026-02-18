@@ -39,12 +39,12 @@
             <h3 class="mb-4 text-lg font-medium text-slate-900 dark:text-white">Select Bank Account</h3>
 
             <div>
-                <label for="bank_account_id" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Bank Account <span class="text-rose-500">*</span></label>
+                <label for="bank_account_id" class="form-label">Bank Account <span class="text-rose-500">*</span></label>
                 <select id="bank_account_id" name="bank_account_id" required
                         hx-get="/api/v1/banking/accounts/{value}/balance"
                         hx-trigger="change"
                         hx-target="#account-info"
-                        class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                        class="form-select">
                     <option value="">Select a bank account</option>
                     {% for acc in accounts %}
                     <option value="{{ acc.bank_account_id }}" {{ 'selected' if selected_account_id is defined and acc.bank_account_id|string == selected_account_id else '' }}>{{ acc.bank_name }} - {{ acc.account_number }} ({{ acc.account_name }})</option>
@@ -63,19 +63,19 @@
 
             <div class="grid gap-4 sm:grid-cols-3">
                 <div>
-                    <label for="reconciliation_date" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Reconciliation Date <span class="text-rose-500">*</span></label>
+                    <label for="reconciliation_date" class="form-label">Reconciliation Date <span class="text-rose-500">*</span></label>
                     <input type="date" id="reconciliation_date" name="reconciliation_date" required
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                           class="form-input">
                 </div>
                 <div>
-                    <label for="period_start" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Period Start <span class="text-rose-500">*</span></label>
+                    <label for="period_start" class="form-label">Period Start <span class="text-rose-500">*</span></label>
                     <input type="date" id="period_start" name="period_start" required
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                           class="form-input">
                 </div>
                 <div>
-                    <label for="period_end" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Period End <span class="text-rose-500">*</span></label>
+                    <label for="period_end" class="form-label">Period End <span class="text-rose-500">*</span></label>
                     <input type="date" id="period_end" name="period_end" required
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                           class="form-input">
                 </div>
             </div>
         </div>
@@ -86,14 +86,14 @@
 
             <div class="grid gap-4 sm:grid-cols-2">
                 <div>
-                    <label for="statement_opening_balance" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Statement Opening Balance <span class="text-rose-500">*</span></label>
+                    <label for="statement_opening_balance" class="form-label">Statement Opening Balance <span class="text-rose-500">*</span></label>
                     <input type="number" id="statement_opening_balance" name="statement_opening_balance" step="0.01" required
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                           class="form-input">
                 </div>
                 <div>
-                    <label for="statement_closing_balance" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Statement Closing Balance <span class="text-rose-500">*</span></label>
+                    <label for="statement_closing_balance" class="form-label">Statement Closing Balance <span class="text-rose-500">*</span></label>
                     <input type="number" id="statement_closing_balance" name="statement_closing_balance" step="0.01" required
-                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white">
+                           class="form-input">
                 </div>
             </div>
             <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
@@ -103,10 +103,10 @@
 
         <!-- Notes -->
         <div class="card p-6">
-            <label for="notes" class="block text-sm font-medium text-slate-700 dark:text-slate-300">Notes</label>
+            <label for="notes" class="form-label">Notes</label>
             <textarea id="notes" name="notes" rows="3"
                       placeholder="Optional notes about this reconciliation..."
-                      class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-slate-600 dark:bg-slate-800 dark:text-white"></textarea>
+                      class="form-input"></textarea>
         </div>
 
         <!-- Actions -->
@@ -117,7 +117,8 @@
             </a>
             <button type="submit"
                     class="btn btn-primary">
-                Start Reconciliation
+                <span class="btn-spinner"></span>
+                <span class="btn-hide-on-load">Start Reconciliation</span>
             </button>
         </div>
     </form>

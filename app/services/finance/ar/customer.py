@@ -14,7 +14,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -25,7 +25,6 @@ from app.services.finance.ar.input_utils import (
     resolve_currency_code,
 )
 from app.services.finance.common import (
-    apply_search_filter,
     get_org_scoped_entity,
     parse_enum_safe,
     toggle_entity_status,
@@ -587,17 +586,16 @@ class CustomerService(ListResponseMixin):
             return (True, Decimal("0"), Decimal("999999999"))
 
         # Get outstanding balance
-        invoices = (
-            db.query(Invoice)
-            .filter(
+        invoices = db.scalars(
+            select(Invoice).where(
                 and_(
                     Invoice.organization_id == org_id,
                     Invoice.customer_id == cust_id,
                     Invoice.status.in_(InvoiceStatus.outstanding()),
                 )
             )
-            .all()
         )
+        invoices = invoices.all()
 
         current_balance = sum((inv.balance_due for inv in invoices), Decimal("0"))
         available_credit = customer.credit_limit - current_balance
@@ -634,15 +632,13 @@ class CustomerService(ListResponseMixin):
         """Get a customer by code."""
         org_id = coerce_uuid(organization_id)
 
-        return (
-            db.query(Customer)
-            .filter(
+        return db.scalar(
+            select(Customer).where(
                 and_(
                     Customer.organization_id == org_id,
                     Customer.customer_code == customer_code,
                 )
             )
-            .first()
         )
 
     @staticmethod
@@ -662,33 +658,33 @@ class CustomerService(ListResponseMixin):
             raise HTTPException(status_code=400, detail="organization_id is required")
 
         org_id = coerce_uuid(organization_id)
-        query = db.query(Customer).filter(Customer.organization_id == org_id)
+        stmt = select(Customer).where(Customer.organization_id == org_id)
 
         if customer_type:
-            query = query.filter(Customer.customer_type == customer_type)
+            stmt = stmt.where(Customer.customer_type == customer_type)
 
         if risk_category:
-            query = query.filter(Customer.risk_category == risk_category)
+            stmt = stmt.where(Customer.risk_category == risk_category)
 
         if is_active is not None:
-            query = query.filter(Customer.is_active == is_active)
+            stmt = stmt.where(Customer.is_active == is_active)
 
         if is_related_party is not None:
-            query = query.filter(Customer.is_related_party == is_related_party)
+            stmt = stmt.where(Customer.is_related_party == is_related_party)
 
-        query = apply_search_filter(
-            query,
-            search,
-            [
-                Customer.customer_code,
-                Customer.legal_name,
-                Customer.trading_name,
-                Customer.tax_identification_number,
-            ],
-        )
+        if search:
+            pattern = f"%{search.strip()}%"
+            stmt = stmt.where(
+                or_(
+                    Customer.customer_code.ilike(pattern),
+                    Customer.legal_name.ilike(pattern),
+                    Customer.trading_name.ilike(pattern),
+                    Customer.tax_identification_number.ilike(pattern),
+                )
+            )
 
-        query = query.order_by(Customer.legal_name)
-        return query.limit(limit).offset(offset).all()
+        stmt = stmt.order_by(Customer.legal_name).limit(limit).offset(offset)
+        return db.scalars(stmt).all()
 
     @staticmethod
     def get_customer_summary(
@@ -714,17 +710,16 @@ class CustomerService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Customer not found")
 
         # Get outstanding invoices
-        invoices = (
-            db.query(Invoice)
-            .filter(
+        invoices = db.scalars(
+            select(Invoice).where(
                 and_(
                     Invoice.organization_id == org_id,
                     Invoice.customer_id == cust_id,
                     Invoice.status.in_(InvoiceStatus.outstanding()),
                 )
             )
-            .all()
         )
+        invoices = invoices.all()
 
         total_outstanding = sum((inv.balance_due for inv in invoices), Decimal("0"))
         invoice_count = len(invoices)
@@ -764,12 +759,12 @@ class CustomerService(ListResponseMixin):
         from app.models.finance.ar.invoice import Invoice
 
         invoice_count = (
-            db.query(func.count(Invoice.invoice_id))
-            .filter(
-                Invoice.organization_id == org_id,
-                Invoice.customer_id == cust_id,
+            db.scalar(
+                select(func.count(Invoice.invoice_id)).where(
+                    Invoice.organization_id == org_id,
+                    Invoice.customer_id == cust_id,
+                )
             )
-            .scalar()
             or 0
         )
         if invoice_count > 0:
@@ -782,12 +777,12 @@ class CustomerService(ListResponseMixin):
             )
 
         payment_count = (
-            db.query(func.count(CustomerPayment.payment_id))
-            .filter(
-                CustomerPayment.organization_id == org_id,
-                CustomerPayment.customer_id == cust_id,
+            db.scalar(
+                select(func.count(CustomerPayment.payment_id)).where(
+                    CustomerPayment.organization_id == org_id,
+                    CustomerPayment.customer_id == cust_id,
+                )
             )
-            .scalar()
             or 0
         )
         if payment_count > 0:

@@ -79,7 +79,7 @@
                 </div>
             </div>
         </div>
-        <div class="mt-4 grid gap-4 sm:grid-cols-4">
+        <div class="mt-4 grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
             <div>
                 <p class="text-xs uppercase tracking-wide text-slate-500">Payment Date</p>
                 <p class="text-sm font-medium text-slate-900 dark:text-white">{{ payment.payment_date }}</p>
@@ -87,6 +87,10 @@
             <div>
                 <p class="text-xs uppercase tracking-wide text-slate-500">Method</p>
                 <p class="text-sm font-medium text-slate-900 dark:text-white">{{ payment.payment_method | replace('_', ' ') | title }}</p>
+            </div>
+            <div>
+                <p class="text-xs uppercase tracking-wide text-slate-500">Bank Account</p>
+                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ payment.bank_account_name if payment.bank_account_name else "-" }}</p>
             </div>
             <div>
                 <p class="text-xs uppercase tracking-wide text-slate-500">Reference</p>

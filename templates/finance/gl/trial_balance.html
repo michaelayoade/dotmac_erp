@@ -61,10 +61,10 @@
                     {% for balance in balances %}
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                         <td class="px-6 py-4 whitespace-nowrap">
-                            <span class="font-mono text-sm font-medium text-slate-900 dark:text-white">{{ balance.account_code | default("--") }}</span>
+                            <a href="/finance/gl/accounts/{{ balance.account_id }}" class="font-mono text-sm font-medium text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300">{{ balance.account_code | default("--") }}</a>
                         </td>
                         <td class="px-6 py-4">
-                            <p class="text-sm text-slate-900 dark:text-white">{{ balance.account_name | default("Unknown Account") }}</p>
+                            <a href="/finance/gl/accounts/{{ balance.account_id }}" class="text-sm text-slate-900 dark:text-white hover:text-teal-600 dark:hover:text-teal-400">{{ balance.account_name | default("Unknown Account") }}</a>
                             {% if balance.category %}
                             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ balance.category | replace('_', ' ') | title }}</p>
                             {% endif %}

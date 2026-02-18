@@ -203,7 +203,7 @@
                 <!-- Password -->
                 <div>
                     <label for="password" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                        Password {{ '' if user_data else '<span class="text-red-500">*</span>' | safe }}
+                        Password {% if not user_data %}<span class="text-red-500">*</span>{% endif %}
                     </label>
                     <div class="relative">
                         <input
@@ -238,7 +238,7 @@
                 <!-- Confirm Password -->
                 <div>
                     <label for="password_confirm" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                        Confirm Password {{ '' if user_data else '<span class="text-red-500">*</span>' | safe }}
+                        Confirm Password {% if not user_data %}<span class="text-red-500">*</span>{% endif %}
                     </label>
                     <div class="relative">
                         <input

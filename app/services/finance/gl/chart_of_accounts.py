@@ -11,13 +11,13 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.account import Account, AccountType, NormalBalance
 from app.models.finance.gl.account_category import AccountCategory, IFRSCategory
 from app.services.common import coerce_uuid
 from app.services.finance.common import (
-    apply_search_filter,
     get_org_scoped_entity,
     toggle_entity_status,
     validate_unique_code,
@@ -75,15 +75,14 @@ class ChartOfAccountsService(ListResponseMixin):
         """Ensure default account categories exist and return active categories."""
         org_id = coerce_uuid(organization_id)
 
-        categories = (
-            db.query(AccountCategory)
-            .filter(
+        categories = db.scalars(
+            select(AccountCategory)
+            .where(
                 AccountCategory.organization_id == org_id,
                 AccountCategory.is_active.is_(True),
             )
             .order_by(AccountCategory.category_code)
-            .all()
-        )
+        ).all()
 
         if categories:
             return categories
@@ -117,15 +116,14 @@ class ChartOfAccountsService(ListResponseMixin):
         db.add_all(seeded)
         db.commit()
 
-        return (
-            db.query(AccountCategory)
-            .filter(
+        return db.scalars(
+            select(AccountCategory)
+            .where(
                 AccountCategory.organization_id == org_id,
                 AccountCategory.is_active.is_(True),
             )
             .order_by(AccountCategory.category_code)
-            .all()
-        )
+        ).all()
 
     @staticmethod
     def build_input_from_payload(
@@ -274,12 +272,12 @@ class ChartOfAccountsService(ListResponseMixin):
         if account is None:
             raise HTTPException(status_code=404, detail="Account not found")
 
-        existing = (
-            db.query(Account)
-            .filter(Account.organization_id == org_id)
-            .filter(Account.account_code == input.account_code)
-            .filter(Account.account_id != acc_id)
-            .first()
+        existing = db.scalar(
+            select(Account).where(
+                Account.organization_id == org_id,
+                Account.account_code == input.account_code,
+                Account.account_id != acc_id,
+            )
         )
         if existing:
             raise HTTPException(
@@ -335,9 +333,12 @@ class ChartOfAccountsService(ListResponseMixin):
         from app.models.finance.gl.journal_entry_line import JournalEntryLine
 
         line_count = (
-            db.query(JournalEntryLine)
-            .filter(JournalEntryLine.account_id == acc_id)
-            .count()
+            db.scalar(
+                select(func.count())
+                .select_from(JournalEntryLine)
+                .where(JournalEntryLine.account_id == acc_id)
+            )
+            or 0
         )
         if line_count > 0:
             raise HTTPException(
@@ -349,7 +350,12 @@ class ChartOfAccountsService(ListResponseMixin):
             )
 
         balance_count = (
-            db.query(AccountBalance).filter(AccountBalance.account_id == acc_id).count()
+            db.scalar(
+                select(func.count())
+                .select_from(AccountBalance)
+                .where(AccountBalance.account_id == acc_id)
+            )
+            or 0
         )
         if balance_count > 0:
             raise HTTPException(
@@ -547,13 +553,11 @@ class ChartOfAccountsService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        account = (
-            db.query(Account)
-            .filter(
+        account = db.scalar(
+            select(Account).where(
                 Account.organization_id == org_id,
                 Account.account_code == account_code,
             )
-            .first()
         )
         if not account:
             raise HTTPException(status_code=404, detail="Account not found")
@@ -588,37 +592,35 @@ class ChartOfAccountsService(ListResponseMixin):
         Returns:
             List of Account objects
         """
-        query = db.query(Account)
+        query = select(Account)
 
         if organization_id:
-            query = query.filter(
-                Account.organization_id == coerce_uuid(organization_id)
-            )
+            query = query.where(Account.organization_id == coerce_uuid(organization_id))
 
         if category_id:
-            query = query.filter(Account.category_id == coerce_uuid(category_id))
+            query = query.where(Account.category_id == coerce_uuid(category_id))
 
         if account_type:
-            query = query.filter(Account.account_type == account_type)
+            query = query.where(Account.account_type == account_type)
 
         if is_active is not None:
-            query = query.filter(Account.is_active == is_active)
+            query = query.where(Account.is_active == is_active)
 
         if is_posting_allowed is not None:
-            query = query.filter(Account.is_posting_allowed == is_posting_allowed)
+            query = query.where(Account.is_posting_allowed == is_posting_allowed)
 
-        query = apply_search_filter(
-            query,
-            search,
-            [
-                Account.account_code,
-                Account.account_name,
-                Account.search_terms,
-            ],
-        )
+        if search:
+            pattern = f"%{search}%"
+            query = query.where(
+                or_(
+                    Account.account_code.ilike(pattern),
+                    Account.account_name.ilike(pattern),
+                    Account.search_terms.ilike(pattern),
+                )
+            )
 
         query = query.order_by(Account.account_code)
-        return query.limit(limit).offset(offset).all()
+        return db.scalars(query.limit(limit).offset(offset)).all()
 
     @staticmethod
     def suggest_next_code(
@@ -667,15 +669,15 @@ class ChartOfAccountsService(ListResponseMixin):
         prefix = IFRS_CODE_PREFIXES.get(ifrs_category, "9")
 
         # Find the highest account code starting with this prefix
-        highest = (
-            db.query(Account.account_code)
-            .filter(
+        highest = db.execute(
+            select(Account.account_code)
+            .where(
                 Account.organization_id == org_id,
                 Account.account_code.like(f"{prefix}%"),
             )
             .order_by(Account.account_code.desc())
-            .first()
-        )
+            .limit(1)
+        ).first()
 
         if highest and highest[0]:
             # Try to extract numeric part and increment

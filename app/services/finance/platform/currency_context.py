@@ -6,6 +6,7 @@ Provides active currency options and organization defaults.
 
 from __future__ import annotations
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings as app_settings
@@ -43,12 +44,11 @@ def get_currency_context(db: Session, organization_id: str) -> dict:
     _ensure_default_currency(db)
 
     settings = org_context_service.get_currency_settings(db, organization_id)
-    currencies = (
-        db.query(Currency)
-        .filter(Currency.is_active.is_(True))
+    currencies = db.scalars(
+        select(Currency)
+        .where(Currency.is_active.is_(True))
         .order_by(Currency.currency_code)
-        .all()
-    )
+    ).all()
 
     return {
         "currencies": [

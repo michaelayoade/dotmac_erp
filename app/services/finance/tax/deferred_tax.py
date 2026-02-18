@@ -13,7 +13,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.tax.deferred_tax_basis import DeferredTaxBasis, DifferenceType
@@ -155,13 +155,11 @@ class DeferredTaxService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         # Check for duplicate
-        existing = (
-            db.query(DeferredTaxBasis)
-            .filter(
+        existing = db.scalar(
+            select(DeferredTaxBasis).where(
                 DeferredTaxBasis.organization_id == org_id,
                 DeferredTaxBasis.basis_code == input.basis_code,
             )
-            .first()
         )
         if existing:
             raise HTTPException(
@@ -477,17 +475,17 @@ class DeferredTaxService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        query = db.query(DeferredTaxBasis).filter(
+        stmt = select(DeferredTaxBasis).where(
             DeferredTaxBasis.organization_id == org_id,
             DeferredTaxBasis.is_active == True,
         )
 
         if jurisdiction_id:
-            query = query.filter(
+            stmt = stmt.where(
                 DeferredTaxBasis.jurisdiction_id == coerce_uuid(jurisdiction_id)
             )
 
-        bases = query.all()
+        bases = db.scalars(stmt).all()
 
         total_dta = Decimal("0")
         total_dtl = Decimal("0")
@@ -528,8 +526,8 @@ class DeferredTaxService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(fiscal_period_id)
 
-        result = (
-            db.query(
+        result = db.execute(
+            select(
                 func.sum(DeferredTaxMovement.deferred_tax_movement_pl).label(
                     "pl_total"
                 ),
@@ -545,12 +543,12 @@ class DeferredTaxService(ListResponseMixin):
                 func.sum(DeferredTaxMovement.recognition_change).label("recognition"),
             )
             .join(DeferredTaxBasis)
-            .filter(
+            .where(
                 DeferredTaxBasis.organization_id == org_id,
                 DeferredTaxMovement.fiscal_period_id == period_id,
             )
-            .first()
         )
+        result = result.first()
 
         if result is None:
             return {
@@ -598,20 +596,20 @@ class DeferredTaxService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[DeferredTaxBasis]:
         """List deferred tax bases with optional filters."""
-        query = db.query(DeferredTaxBasis)
+        stmt = select(DeferredTaxBasis)
 
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 DeferredTaxBasis.organization_id == coerce_uuid(organization_id)
             )
 
         if jurisdiction_id:
-            query = query.filter(
+            stmt = stmt.where(
                 DeferredTaxBasis.jurisdiction_id == coerce_uuid(jurisdiction_id)
             )
 
         if difference_type:
-            query = query.filter(DeferredTaxBasis.difference_type == difference_type)
+            stmt = stmt.where(DeferredTaxBasis.difference_type == difference_type)
 
         if asset_liability_type and is_asset is None:
             normalized = asset_liability_type.strip().upper()
@@ -621,13 +619,13 @@ class DeferredTaxService(ListResponseMixin):
                 is_asset = False
 
         if is_asset is not None:
-            query = query.filter(DeferredTaxBasis.is_asset == is_asset)
+            stmt = stmt.where(DeferredTaxBasis.is_asset == is_asset)
 
         if is_active is not None:
-            query = query.filter(DeferredTaxBasis.is_active == is_active)
+            stmt = stmt.where(DeferredTaxBasis.is_active == is_active)
 
-        query = query.order_by(DeferredTaxBasis.basis_code)
-        return query.limit(limit).offset(offset).all()
+        stmt = stmt.order_by(DeferredTaxBasis.basis_code).limit(limit).offset(offset)
+        return db.scalars(stmt).all()
 
     @staticmethod
     def list_movements(
@@ -637,14 +635,13 @@ class DeferredTaxService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[DeferredTaxMovement]:
         """List movements for a deferred tax basis."""
-        return (
-            db.query(DeferredTaxMovement)
-            .filter(DeferredTaxMovement.basis_id == coerce_uuid(basis_id))
+        return db.scalars(
+            select(DeferredTaxMovement)
+            .where(DeferredTaxMovement.basis_id == coerce_uuid(basis_id))
             .order_by(DeferredTaxMovement.created_at.desc())
             .limit(limit)
             .offset(offset)
-            .all()
-        )
+        ).all()
 
 
 # Module-level singleton instance

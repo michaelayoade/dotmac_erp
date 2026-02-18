@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.payment_batch import APBatchStatus
@@ -26,7 +26,6 @@ from app.models.finance.ap.supplier_payment import (
 )
 from app.models.finance.banking.bank_account import BankAccountStatus
 from app.models.finance.common.attachment import AttachmentCategory
-from app.models.finance.gl.account_category import IFRSCategory
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
 from app.services.finance.ap.ap_aging import ap_aging_service
@@ -41,7 +40,6 @@ from app.services.finance.ap.web.base import (
     format_currency,
     format_date,
     format_file_size,
-    get_accounts,
     logger,
     parse_date,
     payment_detail_view,
@@ -215,32 +213,33 @@ class PaymentWebService:
         ]
 
         open_statuses = [
+            SupplierInvoiceStatus.APPROVED,
             SupplierInvoiceStatus.POSTED,
             SupplierInvoiceStatus.PARTIALLY_PAID,
         ]
 
-        query = (
-            db.query(SupplierInvoice, Supplier)
+        stmt = (
+            select(SupplierInvoice, Supplier)
             .join(Supplier, SupplierInvoice.supplier_id == Supplier.supplier_id)
-            .filter(
+            .where(
                 SupplierInvoice.organization_id == org_id,
                 SupplierInvoice.status.in_(open_statuses),
             )
         )
 
         if invoice_id:
-            query = query.filter(SupplierInvoice.invoice_id == coerce_uuid(invoice_id))
+            stmt = stmt.where(SupplierInvoice.invoice_id == coerce_uuid(invoice_id))
 
-        rows = query.order_by(SupplierInvoice.due_date).all()
+        rows = db.execute(stmt.order_by(SupplierInvoice.due_date)).all()
 
         open_invoices = []
         selected_invoice = None
         for invoice, supplier in rows:
             balance = invoice.total_amount - invoice.amount_paid
             view = {
-                "invoice_id": invoice.invoice_id,
+                "invoice_id": str(invoice.invoice_id),
                 "invoice_number": invoice.invoice_number,
-                "supplier_id": invoice.supplier_id,
+                "supplier_id": str(invoice.supplier_id),
                 "supplier_name": supplier_display_name(supplier),
                 "invoice_date": format_date(invoice.invoice_date),
                 "due_date": format_date(invoice.due_date),
@@ -257,17 +256,17 @@ class PaymentWebService:
                 selected_invoice = view
 
         # Get WHT codes for payments
-        wht_codes = (
-            db.query(TaxCode)
-            .filter(
+        wht_codes = db.scalars(
+            select(TaxCode)
+            .where(
                 TaxCode.organization_id == org_id,
                 TaxCode.tax_type == TaxType.WITHHOLDING,
                 TaxCode.is_active == True,
                 TaxCode.applies_to_purchases == True,
             )
             .order_by(TaxCode.tax_code)
-            .all()
         )
+        wht_codes = wht_codes.all()
         wht_codes_list = [
             {
                 "id": str(code.tax_code_id),
@@ -279,15 +278,27 @@ class PaymentWebService:
             for code in wht_codes
         ]
 
-        # Get bank accounts
-        bank_accounts = get_accounts(db, org_id, IFRSCategory.ASSETS)
+        # Get bank accounts — filter to actual bank/cash accounts, not all assets
+        from app.models.finance.banking.bank_account import BankAccount
+        from app.models.finance.gl.account import Account
+
+        bank_accounts_query = db.execute(
+            select(BankAccount, Account)
+            .join(Account, BankAccount.gl_account_id == Account.account_id)
+            .where(
+                BankAccount.organization_id == org_id,
+                BankAccount.status == BankAccountStatus.active,
+            )
+            .order_by(Account.account_code)
+        )
+        bank_accounts_query = bank_accounts_query.all()
         bank_accounts_list = [
             {
-                "id": str(acct.account_id),
+                "id": str(ba.gl_account_id),
                 "code": acct.account_code,
-                "name": acct.account_name,
+                "name": f"{ba.bank_name} - {ba.account_name} ({acct.account_code})",
             }
-            for acct in bank_accounts
+            for ba, acct in bank_accounts_query
         ]
 
         context = {
@@ -336,11 +347,12 @@ class PaymentWebService:
         invoice_map: dict[UUID, SupplierInvoice] = {}
         if allocations:
             invoice_ids = [allocation.invoice_id for allocation in allocations]
-            invoices = (
-                db.query(SupplierInvoice)
-                .filter(SupplierInvoice.invoice_id.in_(invoice_ids))
-                .all()
+            invoices = db.scalars(
+                select(SupplierInvoice).where(
+                    SupplierInvoice.invoice_id.in_(invoice_ids)
+                )
             )
+            invoices = invoices.all()
             invoice_map = {invoice.invoice_id: invoice for invoice in invoices}
 
         allocations_view = [
@@ -378,8 +390,17 @@ class PaymentWebService:
             "payment_detail_context: found %d allocations", len(allocations_view)
         )
 
+        # Resolve bank account name
+        bank_account_name = ""
+        if payment.bank_account_id:
+            from app.models.finance.gl.account import Account
+
+            acct = db.get(Account, payment.bank_account_id)
+            if acct:
+                bank_account_name = f"{acct.account_code} - {acct.account_name}"
+
         return {
-            "payment": payment_detail_view(payment, supplier),
+            "payment": payment_detail_view(payment, supplier, bank_account_name),
             "supplier": supplier_form_view(supplier) if supplier else None,
             "allocations": allocations_view,
             "attachments": attachments_view,
@@ -776,14 +797,14 @@ class PaymentWebService:
             status=BankAccountStatus.active,
             limit=200,
         )
-        invoices = (
-            db.query(SupplierInvoice, Supplier)
+        invoices = db.execute(
+            select(SupplierInvoice, Supplier)
             .join(Supplier, SupplierInvoice.supplier_id == Supplier.supplier_id)
-            .filter(SupplierInvoice.organization_id == org_id)
+            .where(SupplierInvoice.organization_id == org_id)
             .order_by(SupplierInvoice.invoice_date.desc())
             .limit(50)
-            .all()
         )
+        invoices = invoices.all()
         invoices_view = [
             {
                 "invoice_id": invoice.invoice_id,

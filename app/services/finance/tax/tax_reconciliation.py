@@ -14,6 +14,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.tax.tax_jurisdiction import TaxJurisdiction
@@ -115,14 +116,12 @@ class TaxReconciliationService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Jurisdiction not found")
 
         # Check for existing reconciliation
-        existing = (
-            db.query(TaxReconciliation)
-            .filter(
+        existing = db.scalar(
+            select(TaxReconciliation).where(
                 TaxReconciliation.organization_id == org_id,
                 TaxReconciliation.fiscal_period_id == input.fiscal_period_id,
                 TaxReconciliation.jurisdiction_id == input.jurisdiction_id,
             )
-            .first()
         )
         if existing:
             raise HTTPException(
@@ -444,14 +443,12 @@ class TaxReconciliationService(ListResponseMixin):
         jurisdiction_id: str,
     ) -> TaxReconciliation | None:
         """Get reconciliation by period and jurisdiction."""
-        return (
-            db.query(TaxReconciliation)
-            .filter(
+        return db.scalar(
+            select(TaxReconciliation).where(
                 TaxReconciliation.organization_id == coerce_uuid(organization_id),
                 TaxReconciliation.fiscal_period_id == coerce_uuid(fiscal_period_id),
                 TaxReconciliation.jurisdiction_id == coerce_uuid(jurisdiction_id),
             )
-            .first()
         )
 
     @staticmethod
@@ -465,31 +462,31 @@ class TaxReconciliationService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[TaxReconciliation]:
         """List reconciliations with optional filters."""
-        query = db.query(TaxReconciliation)
+        query = select(TaxReconciliation)
 
         if organization_id:
-            query = query.filter(
+            query = query.where(
                 TaxReconciliation.organization_id == coerce_uuid(organization_id)
             )
 
         if fiscal_period_id:
-            query = query.filter(
+            query = query.where(
                 TaxReconciliation.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
 
         if jurisdiction_id:
-            query = query.filter(
+            query = query.where(
                 TaxReconciliation.jurisdiction_id == coerce_uuid(jurisdiction_id)
             )
 
         if is_reviewed is not None:
             if is_reviewed:
-                query = query.filter(TaxReconciliation.reviewed_by_user_id.isnot(None))
+                query = query.where(TaxReconciliation.reviewed_by_user_id.isnot(None))
             else:
-                query = query.filter(TaxReconciliation.reviewed_by_user_id.is_(None))
+                query = query.where(TaxReconciliation.reviewed_by_user_id.is_(None))
 
         query = query.order_by(TaxReconciliation.created_at.desc())
-        return query.limit(limit).offset(offset).all()
+        return list(db.scalars(query.limit(limit).offset(offset)).all())
 
 
 # Module-level singleton instance

@@ -199,13 +199,11 @@ class CashFlowComputer(BaseComputer):
 
         # ── 5. AP due within 7 days ──────────────────────────────
         ap_due_cutoff = snapshot_date + timedelta(days=7)
-        ap_active_statuses = (
-            SupplierInvoiceStatus.POSTED,
-            SupplierInvoiceStatus.PARTIALLY_PAID,
+        # outstanding() + pre-posting statuses that represent future obligations
+        ap_active_statuses = SupplierInvoiceStatus.outstanding() | {
             SupplierInvoiceStatus.APPROVED,
             SupplierInvoiceStatus.DISPUTED,
-            SupplierInvoiceStatus.ON_HOLD,
-        )
+        }
         ap_stmt = select(
             func.coalesce(
                 func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid),

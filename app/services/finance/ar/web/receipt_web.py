@@ -12,7 +12,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
@@ -298,13 +298,13 @@ class ReceiptWebService:
                 "tax_name": tc.tax_name,
                 "tax_rate": tc.tax_rate,
             }
-            for tc in db.query(TaxCode)
-            .filter(
-                TaxCode.organization_id == org_id,
-                TaxCode.is_active == True,
-                TaxCode.tax_type == TaxType.WITHHOLDING,
-            )
-            .all()
+            for tc in db.scalars(
+                select(TaxCode).where(
+                    TaxCode.organization_id == org_id,
+                    TaxCode.is_active == True,
+                    TaxCode.tax_type == TaxType.WITHHOLDING,
+                )
+            ).all()
         ]
 
         # Get bank accounts
@@ -317,22 +317,22 @@ class ReceiptWebService:
         ]
 
         query = (
-            db.query(Invoice, Customer)
+            select(Invoice, Customer)
             .join(Customer, Invoice.customer_id == Customer.customer_id)
-            .filter(
+            .where(
                 Invoice.organization_id == org_id,
                 Invoice.status.in_(open_statuses),
             )
         )
 
         if invoice_id:
-            query = query.filter(Invoice.invoice_id == coerce_uuid(invoice_id))
+            query = query.where(Invoice.invoice_id == coerce_uuid(invoice_id))
         elif selected_customer_id:
-            query = query.filter(
+            query = query.where(
                 Invoice.customer_id == coerce_uuid(selected_customer_id)
             )
 
-        rows = query.order_by(Invoice.due_date).all()
+        rows = db.execute(query.order_by(Invoice.due_date)).all()
 
         open_invoices = []
         selected_invoice = None
@@ -406,8 +406,10 @@ class ReceiptWebService:
         invoice_map: dict[UUID, Invoice] = {}
         if allocations:
             invoice_ids = [allocation.invoice_id for allocation in allocations]
-            invoices = (
-                db.query(Invoice).filter(Invoice.invoice_id.in_(invoice_ids)).all()
+            invoices = list(
+                db.scalars(
+                    select(Invoice).where(Invoice.invoice_id.in_(invoice_ids))
+                ).all()
             )
             invoice_map = {invoice.invoice_id: invoice for invoice in invoices}
 

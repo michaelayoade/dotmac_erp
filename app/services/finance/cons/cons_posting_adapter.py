@@ -13,6 +13,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.cons.consolidation_run import (
@@ -109,13 +110,11 @@ class CONSPostingAdapter:
             )
 
         # Get parent entity for organization_id
-        parent = (
-            db.query(LegalEntity)
-            .filter(
+        parent = db.scalar(
+            select(LegalEntity).where(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.is_consolidating_entity == True,
             )
-            .first()
         )
 
         if not parent or not parent.organization_id:
@@ -234,11 +233,11 @@ class CONSPostingAdapter:
         if not run or run.group_id != grp_id:
             return [CONSPostingResult(success=False, message="Run not found")]
 
-        entries = (
-            db.query(EliminationEntry)
-            .filter(EliminationEntry.consolidation_run_id == r_id)
-            .all()
-        )
+        entries = db.scalars(
+            select(EliminationEntry).where(
+                EliminationEntry.consolidation_run_id == r_id
+            )
+        ).all()
 
         results = []
         for entry in entries:
@@ -308,13 +307,11 @@ class CONSPostingAdapter:
             )
 
         # Get parent for organization_id
-        parent = (
-            db.query(LegalEntity)
-            .filter(
+        parent = db.scalar(
+            select(LegalEntity).where(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.is_consolidating_entity == True,
             )
-            .first()
         )
 
         if not parent or not parent.organization_id:
@@ -438,13 +435,11 @@ class CONSPostingAdapter:
             )
 
         # Get parent for organization_id
-        parent = (
-            db.query(LegalEntity)
-            .filter(
+        parent = db.scalar(
+            select(LegalEntity).where(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.is_consolidating_entity == True,
             )
-            .first()
         )
 
         if not parent or not parent.organization_id:

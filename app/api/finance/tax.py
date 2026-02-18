@@ -244,9 +244,10 @@ class TaxTransactionRead(BaseModel):
     transaction_date: date
     base_amount: Decimal
     tax_amount: Decimal
+    transaction_type: TaxTransactionType
     source_document_type: str
-    is_input_tax: bool
-    is_posted: bool
+    is_included_in_return: bool
+    journal_entry_id: UUID | None
 
 
 class TaxReturnSummaryRead(BaseModel):

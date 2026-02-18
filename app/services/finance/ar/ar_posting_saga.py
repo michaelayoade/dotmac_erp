@@ -14,6 +14,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
@@ -156,11 +157,12 @@ class ARInvoicePostingSaga(SagaOrchestrator):
             )
 
         # Load invoice lines
-        lines = (
-            db.query(InvoiceLine)
-            .filter(InvoiceLine.invoice_id == invoice_id)
-            .order_by(InvoiceLine.line_number)
-            .all()
+        lines = list(
+            db.scalars(
+                select(InvoiceLine)
+                .where(InvoiceLine.invoice_id == invoice_id)
+                .order_by(InvoiceLine.line_number)
+            ).all()
         )
 
         if not lines:
@@ -204,11 +206,12 @@ class ARInvoicePostingSaga(SagaOrchestrator):
         customer = db.get(Customer, invoice.customer_id)
         if not customer:
             return StepResult(success=False, error="Customer not found")
-        lines = (
-            db.query(InvoiceLine)
-            .filter(InvoiceLine.invoice_id == invoice_id)
-            .order_by(InvoiceLine.line_number)
-            .all()
+        lines = list(
+            db.scalars(
+                select(InvoiceLine)
+                .where(InvoiceLine.invoice_id == invoice_id)
+                .order_by(InvoiceLine.line_number)
+            ).all()
         )
 
         exchange_rate = invoice.exchange_rate or Decimal("1.0")
@@ -503,20 +506,22 @@ class ARInvoicePostingSaga(SagaOrchestrator):
         customer = db.get(Customer, invoice.customer_id)
         if not customer:
             return StepResult(success=False, error="Customer not found")
-        lines = db.query(InvoiceLine).filter(InvoiceLine.invoice_id == invoice_id).all()
+        lines = list(
+            db.scalars(
+                select(InvoiceLine).where(InvoiceLine.invoice_id == invoice_id)
+            ).all()
+        )
 
         exchange_rate = invoice.exchange_rate or Decimal("1.0")
         is_credit_note = invoice.invoice_type == InvoiceType.CREDIT_NOTE
 
         # Get fiscal period
-        fiscal_period = (
-            db.query(FiscalPeriod)
-            .filter(
+        fiscal_period = db.scalar(
+            select(FiscalPeriod).where(
                 FiscalPeriod.organization_id == org_id,
                 FiscalPeriod.start_date <= invoice.invoice_date,
                 FiscalPeriod.end_date >= invoice.invoice_date,
             )
-            .first()
         )
 
         if not fiscal_period:

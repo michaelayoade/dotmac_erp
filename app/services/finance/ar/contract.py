@@ -16,6 +16,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.contract import Contract, ContractStatus, ContractType
@@ -118,14 +119,12 @@ class ContractService(ListResponseMixin):
         customer_id = coerce_uuid(input.customer_id)
 
         # Validate customer exists
-        customer = (
-            db.query(Customer)
-            .filter(
+        customer = db.scalars(
+            select(Customer).where(
                 Customer.customer_id == customer_id,
                 Customer.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not customer:
             raise HTTPException(status_code=404, detail="Customer not found")
@@ -151,7 +150,12 @@ class ContractService(ListResponseMixin):
 
         # Generate contract number
         contract_count = (
-            db.query(Contract).filter(Contract.organization_id == org_id).count()
+            db.scalar(
+                select(func.count(Contract.contract_id)).where(
+                    Contract.organization_id == org_id
+                )
+            )
+            or 0
         )
         contract_number = f"CTR-{contract_count + 1:06d}"
 
@@ -235,14 +239,12 @@ class ContractService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         contract_id = coerce_uuid(contract_id)
 
-        contract = (
-            db.query(Contract)
-            .filter(
+        contract = db.scalars(
+            select(Contract).where(
                 Contract.contract_id == contract_id,
                 Contract.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
@@ -255,9 +257,12 @@ class ContractService(ListResponseMixin):
 
         # Verify contract has performance obligations
         obligation_count = (
-            db.query(PerformanceObligation)
-            .filter(PerformanceObligation.contract_id == contract_id)
-            .count()
+            db.scalar(
+                select(func.count(PerformanceObligation.obligation_id)).where(
+                    PerformanceObligation.contract_id == contract_id
+                )
+            )
+            or 0
         )
 
         if obligation_count == 0:
@@ -296,14 +301,12 @@ class ContractService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         contract_id = coerce_uuid(contract_id)
 
-        contract = (
-            db.query(Contract)
-            .filter(
+        contract = db.scalars(
+            select(Contract).where(
                 Contract.contract_id == contract_id,
                 Contract.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
@@ -316,9 +319,12 @@ class ContractService(ListResponseMixin):
 
         # Get next obligation number
         max_number = (
-            db.query(PerformanceObligation)
-            .filter(PerformanceObligation.contract_id == contract_id)
-            .count()
+            db.scalar(
+                select(func.count(PerformanceObligation.obligation_id)).where(
+                    PerformanceObligation.contract_id == contract_id
+                )
+            )
+            or 0
         )
 
         obligation = PerformanceObligation(
@@ -367,23 +373,21 @@ class ContractService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         contract_id = coerce_uuid(contract_id)
 
-        contract = (
-            db.query(Contract)
-            .filter(
+        contract = db.scalars(
+            select(Contract).where(
                 Contract.contract_id == contract_id,
                 Contract.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not contract:
             return
 
-        obligations = (
-            db.query(PerformanceObligation)
-            .filter(PerformanceObligation.contract_id == contract_id)
-            .all()
-        )
+        obligations = db.scalars(
+            select(PerformanceObligation).where(
+                PerformanceObligation.contract_id == contract_id
+            )
+        ).all()
 
         if not obligations:
             return
@@ -423,14 +427,12 @@ class ContractService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         obligation_id = coerce_uuid(input.obligation_id)
 
-        obligation = (
-            db.query(PerformanceObligation)
-            .filter(
+        obligation = db.scalars(
+            select(PerformanceObligation).where(
                 PerformanceObligation.obligation_id == obligation_id,
                 PerformanceObligation.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not obligation:
             raise HTTPException(
@@ -512,14 +514,12 @@ class ContractService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         obligation_id = coerce_uuid(obligation_id)
 
-        obligation = (
-            db.query(PerformanceObligation)
-            .filter(
+        obligation = db.scalars(
+            select(PerformanceObligation).where(
                 PerformanceObligation.obligation_id == obligation_id,
                 PerformanceObligation.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not obligation:
             raise HTTPException(
@@ -591,14 +591,12 @@ class ContractService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         contract_id = coerce_uuid(contract_id)
 
-        contract = (
-            db.query(Contract)
-            .filter(
+        contract = db.scalars(
+            select(Contract).where(
                 Contract.contract_id == contract_id,
                 Contract.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
@@ -643,27 +641,23 @@ class ContractService(ListResponseMixin):
     @staticmethod
     def _reallocate_prospectively(db: Session, contract: Contract) -> None:
         """Reallocate remaining consideration prospectively."""
-        obligations = (
-            db.query(PerformanceObligation)
-            .filter(
+        obligations = db.scalars(
+            select(PerformanceObligation).where(
                 PerformanceObligation.contract_id == contract.contract_id,
                 PerformanceObligation.status != "SATISFIED",
             )
-            .all()
-        )
+        ).all()
 
         if not obligations:
             return
 
         # Calculate remaining consideration
-        satisfied = (
-            db.query(PerformanceObligation)
-            .filter(
+        satisfied = db.scalars(
+            select(PerformanceObligation).where(
                 PerformanceObligation.contract_id == contract.contract_id,
                 PerformanceObligation.status == "SATISFIED",
             )
-            .all()
-        )
+        ).all()
 
         satisfied_amount = sum(
             (o.allocated_transaction_price or Decimal("0") for o in satisfied),
@@ -682,11 +676,11 @@ class ContractService(ListResponseMixin):
     def _reallocate_cumulative_catchup(db: Session, contract: Contract) -> None:
         """Reallocate with cumulative catch-up adjustment."""
         # Get all obligations
-        obligations = (
-            db.query(PerformanceObligation)
-            .filter(PerformanceObligation.contract_id == contract.contract_id)
-            .all()
-        )
+        obligations = db.scalars(
+            select(PerformanceObligation).where(
+                PerformanceObligation.contract_id == contract.contract_id
+            )
+        ).all()
 
         total_ssp = sum((o.standalone_selling_price for o in obligations), Decimal("0"))
 
@@ -738,26 +732,25 @@ class ContractService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         contract_id = coerce_uuid(contract_id)
 
-        contract = (
-            db.query(Contract)
-            .filter(
+        contract = db.scalars(
+            select(Contract).where(
                 Contract.contract_id == contract_id,
                 Contract.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not contract:
             raise HTTPException(status_code=404, detail="Contract not found")
 
         # Check all obligations are satisfied
         unsatisfied = (
-            db.query(PerformanceObligation)
-            .filter(
-                PerformanceObligation.contract_id == contract_id,
-                PerformanceObligation.status != "SATISFIED",
+            db.scalar(
+                select(func.count(PerformanceObligation.obligation_id)).where(
+                    PerformanceObligation.contract_id == contract_id,
+                    PerformanceObligation.status != "SATISFIED",
+                )
             )
-            .count()
+            or 0
         )
 
         if unsatisfied > 0:
@@ -779,11 +772,9 @@ class ContractService(ListResponseMixin):
         organization_id: UUID | None = None,
     ) -> Contract | None:
         """Get a contract by ID."""
-        contract = (
-            db.query(Contract)
-            .filter(Contract.contract_id == coerce_uuid(contract_id))
-            .first()
-        )
+        contract = db.scalars(
+            select(Contract).where(Contract.contract_id == coerce_uuid(contract_id))
+        ).first()
         if not contract:
             return None
         if organization_id is not None and contract.organization_id != coerce_uuid(
@@ -799,14 +790,12 @@ class ContractService(ListResponseMixin):
         contract_number: str,
     ) -> Contract | None:
         """Get a contract by number."""
-        return (
-            db.query(Contract)
-            .filter(
+        return db.scalars(
+            select(Contract).where(
                 Contract.organization_id == coerce_uuid(organization_id),
                 Contract.contract_number == contract_number,
             )
-            .first()
-        )
+        ).first()
 
     @staticmethod
     def get_obligations(
@@ -814,12 +803,11 @@ class ContractService(ListResponseMixin):
         contract_id: str,
     ) -> builtins.list[PerformanceObligation]:
         """Get all performance obligations for a contract."""
-        return (
-            db.query(PerformanceObligation)
-            .filter(PerformanceObligation.contract_id == coerce_uuid(contract_id))
+        return db.scalars(
+            select(PerformanceObligation)
+            .where(PerformanceObligation.contract_id == coerce_uuid(contract_id))
             .order_by(PerformanceObligation.obligation_number)
-            .all()
-        )
+        ).all()
 
     @staticmethod
     def get_recognition_events(
@@ -827,12 +815,11 @@ class ContractService(ListResponseMixin):
         obligation_id: str,
     ) -> builtins.list[RevenueRecognitionEvent]:
         """Get all recognition events for an obligation."""
-        return (
-            db.query(RevenueRecognitionEvent)
-            .filter(RevenueRecognitionEvent.obligation_id == coerce_uuid(obligation_id))
+        return db.scalars(
+            select(RevenueRecognitionEvent)
+            .where(RevenueRecognitionEvent.obligation_id == coerce_uuid(obligation_id))
             .order_by(RevenueRecognitionEvent.event_date)
-            .all()
-        )
+        ).all()
 
     @staticmethod
     def list(
@@ -863,31 +850,29 @@ class ContractService(ListResponseMixin):
         Returns:
             List of Contract objects
         """
-        query = db.query(Contract)
+        stmt = select(Contract)
 
         if organization_id:
-            query = query.filter(
-                Contract.organization_id == coerce_uuid(organization_id)
-            )
+            stmt = stmt.where(Contract.organization_id == coerce_uuid(organization_id))
 
         if customer_id:
-            query = query.filter(Contract.customer_id == coerce_uuid(customer_id))
+            stmt = stmt.where(Contract.customer_id == coerce_uuid(customer_id))
 
         if status:
-            query = query.filter(Contract.status == status)
+            stmt = stmt.where(Contract.status == status)
 
         if contract_type:
-            query = query.filter(Contract.contract_type == contract_type)
+            stmt = stmt.where(Contract.contract_type == contract_type)
 
         if from_date:
-            query = query.filter(Contract.start_date >= from_date)
+            stmt = stmt.where(Contract.start_date >= from_date)
 
         if to_date:
-            query = query.filter(Contract.start_date <= to_date)
+            stmt = stmt.where(Contract.start_date <= to_date)
 
-        return (
-            query.order_by(Contract.start_date.desc()).offset(offset).limit(limit).all()
-        )
+        return db.scalars(
+            stmt.order_by(Contract.start_date.desc()).offset(offset).limit(limit)
+        ).all()
 
 
 # Module-level instance

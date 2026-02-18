@@ -12,7 +12,7 @@ from uuid import UUID
 
 from fastapi import Response
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Query, Session
 
 from app.models.finance.ap.supplier_payment import APPaymentStatus, SupplierPayment
 from app.services.bulk_actions import BulkActionService
@@ -105,10 +105,13 @@ class APPaymentBulkService(BulkActionService[SupplierPayment]):
             from app.models.finance.ap.supplier import Supplier
 
             rows = (
-                self.db.query(
-                    Supplier.supplier_id,
-                    Supplier.trading_name,
-                    Supplier.legal_name,
+                Query(
+                    [
+                        Supplier.supplier_id,
+                        Supplier.trading_name,
+                        Supplier.legal_name,
+                    ],
+                    session=self.db,
                 )
                 .filter(Supplier.organization_id == self.organization_id)
                 .all()

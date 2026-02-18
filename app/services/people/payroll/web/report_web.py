@@ -11,7 +11,7 @@ from typing import TypedDict
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.people.hr.department import Department
@@ -113,23 +113,24 @@ class ReportWebService:
                 end_date = date(year, month + 1, 1)
 
         # Get department breakdown
-        departments = (
-            db.query(Department)
-            .filter(Department.organization_id == org_id)
-            .order_by(Department.department_name)
-            .all()
+        departments = list(
+            db.scalars(
+                select(Department)
+                .where(Department.organization_id == org_id)
+                .order_by(Department.department_name)
+            ).all()
         )
 
         dept_data: list[DepartmentSummaryRow] = []
         for dept in departments:
-            result = (
-                db.query(
+            result = db.execute(
+                select(
                     func.count(SalarySlip.slip_id).label("slip_count"),
                     func.sum(SalarySlip.gross_pay).label("total_gross"),
                     func.sum(SalarySlip.net_pay).label("total_net"),
                 )
                 .join(Employee, SalarySlip.employee_id == Employee.employee_id)
-                .filter(
+                .where(
                     SalarySlip.organization_id == org_id,
                     Employee.department_id == dept.department_id,
                     SalarySlip.status.in_(
@@ -138,8 +139,7 @@ class ReportWebService:
                     SalarySlip.start_date >= start_date,
                     SalarySlip.start_date < end_date,
                 )
-                .first()
-            )
+            ).first()
             if result and result.slip_count and result.slip_count > 0:
                 dept_data.append(
                     {
@@ -220,17 +220,17 @@ class ReportWebService:
             end_date = date(year, month + 1, 1)
 
         # Get all approved/posted slips for the period
-        slips = (
-            db.query(SalarySlip)
-            .filter(
-                SalarySlip.organization_id == org_id,
-                SalarySlip.status.in_(
-                    [SalarySlipStatus.APPROVED, SalarySlipStatus.POSTED]
-                ),
-                SalarySlip.start_date >= start_date,
-                SalarySlip.start_date < end_date,
-            )
-            .all()
+        slips = list(
+            db.scalars(
+                select(SalarySlip).where(
+                    SalarySlip.organization_id == org_id,
+                    SalarySlip.status.in_(
+                        [SalarySlipStatus.APPROVED, SalarySlipStatus.POSTED]
+                    ),
+                    SalarySlip.start_date >= start_date,
+                    SalarySlip.start_date < end_date,
+                )
+            ).all()
         )
 
         # Calculate totals
@@ -330,13 +330,12 @@ class ReportWebService:
             else:
                 end_date = date(start_date.year, start_date.month + 1, 1)
 
-            result = (
-                db.query(
+            result = db.execute(
+                select(
                     func.count(SalarySlip.slip_id).label("slip_count"),
                     func.sum(SalarySlip.gross_pay).label("total_gross"),
                     func.sum(SalarySlip.net_pay).label("total_net"),
-                )
-                .filter(
+                ).where(
                     SalarySlip.organization_id == org_id,
                     SalarySlip.status.in_(
                         [SalarySlipStatus.APPROVED, SalarySlipStatus.POSTED]
@@ -344,8 +343,7 @@ class ReportWebService:
                     SalarySlip.start_date >= start_date,
                     SalarySlip.start_date < end_date,
                 )
-                .first()
-            )
+            ).first()
 
             if result is None:
                 slip_count = 0

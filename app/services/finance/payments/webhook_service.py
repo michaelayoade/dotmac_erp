@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -69,10 +70,8 @@ class WebhookService:
         event_id = self._build_event_id(event_type, event_data)
 
         # Check for duplicate (idempotency)
-        existing = (
-            self.db.query(PaymentWebhook)
-            .filter(PaymentWebhook.paystack_event_id == event_id)
-            .first()
+        existing = self.db.scalar(
+            select(PaymentWebhook).where(PaymentWebhook.paystack_event_id == event_id)
         )
         if existing:
             logger.info(f"Duplicate webhook received: {event_id}")
@@ -96,10 +95,10 @@ class WebhookService:
             self.db.flush()
         except IntegrityError:
             self.db.rollback()
-            existing = (
-                self.db.query(PaymentWebhook)
-                .filter(PaymentWebhook.paystack_event_id == event_id)
-                .first()
+            existing = self.db.scalar(
+                select(PaymentWebhook).where(
+                    PaymentWebhook.paystack_event_id == event_id
+                )
             )
             if existing:
                 logger.info(f"Duplicate webhook received: {event_id}")
@@ -113,10 +112,10 @@ class WebhookService:
             # Find payment intent by reference
             intent: PaymentIntent | None = None
             if reference:
-                intent = (
-                    self.db.query(PaymentIntent)
-                    .filter(PaymentIntent.paystack_reference == reference)
-                    .first()
+                intent = self.db.scalar(
+                    select(PaymentIntent).where(
+                        PaymentIntent.paystack_reference == reference
+                    )
                 )
 
             if not intent:
@@ -413,10 +412,8 @@ class WebhookService:
 
     def get_webhook_by_event_id(self, event_id: str) -> PaymentWebhook | None:
         """Get a webhook record by event ID."""
-        return (
-            self.db.query(PaymentWebhook)
-            .filter(PaymentWebhook.paystack_event_id == event_id)
-            .first()
+        return self.db.scalar(
+            select(PaymentWebhook).where(PaymentWebhook.paystack_event_id == event_id)
         )
 
     def retry_failed_webhook(self, webhook_id: UUID) -> PaymentWebhook:
@@ -442,10 +439,10 @@ class WebhookService:
         self.db.flush()
 
         # Find intent and re-process
-        intent = (
-            self.db.query(PaymentIntent)
-            .filter(PaymentIntent.paystack_reference == webhook.paystack_reference)
-            .first()
+        intent = self.db.scalar(
+            select(PaymentIntent).where(
+                PaymentIntent.paystack_reference == webhook.paystack_reference
+            )
         )
 
         if not intent:

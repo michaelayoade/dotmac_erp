@@ -9,10 +9,12 @@ from __future__ import annotations
 import logging
 from datetime import date, timedelta
 from decimal import Decimal
+from urllib.parse import quote_plus
 from uuid import UUID
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
 
@@ -69,17 +71,16 @@ def _get_accounts(
     ifrs_category: IFRSCategory,
 ) -> list[Account]:
     """Get GL accounts by IFRS category for dropdowns."""
-    return (
-        db.query(Account)
+    return db.scalars(
+        select(Account)
         .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-        .filter(
+        .where(
             Account.organization_id == organization_id,
             Account.is_active.is_(True),
             AccountCategory.ifrs_category == ifrs_category,
         )
         .order_by(Account.account_code)
-        .all()
-    )
+    ).all()
 
 
 def _tax_code_form_view(tax_code: TaxCode) -> dict:
@@ -250,7 +251,10 @@ class TaxWebService:
             try:
                 txn_type = TaxTransactionType(transaction_type)
             except ValueError:
-                pass
+                logger.warning(
+                    "Invalid transaction_type filter for VAT register: %s",
+                    transaction_type,
+                )
 
         transactions, total_count = tax_transaction_service.get_vat_register(
             db=db,
@@ -517,7 +521,7 @@ class TaxWebService:
             try:
                 tax_type_enum = TaxType(tax_type)
             except ValueError:
-                pass
+                logger.warning("Invalid tax_type filter: %s", tax_type)
 
         codes = tax_code_service.list(
             db=db,
@@ -690,7 +694,9 @@ class TaxWebService:
 
         period_ids = {ret.tax_period_id for ret in returns if ret.tax_period_id}
         periods = (
-            db.query(TaxPeriod).filter(TaxPeriod.period_id.in_(period_ids)).all()
+            db.scalars(
+                select(TaxPeriod).where(TaxPeriod.period_id.in_(period_ids))
+            ).all()
             if period_ids
             else []
         )
@@ -823,13 +829,11 @@ class TaxWebService:
             if not return_type_str:
                 raise ValueError("Return type is required")
 
-            period = (
-                db.query(TaxPeriod)
-                .filter(
+            period = db.scalar(
+                select(TaxPeriod).where(
                     TaxPeriod.period_id == coerce_uuid(tax_period_id),
                     TaxPeriod.organization_id == org_id,
                 )
-                .first()
             )
             if not period:
                 raise ValueError("Tax period not found")
@@ -912,13 +916,11 @@ class TaxWebService:
                 status_code=303,
             )
 
-        period = (
-            db.query(TaxPeriod)
-            .filter(
+        period = db.scalar(
+            select(TaxPeriod).where(
                 TaxPeriod.period_id == tax_return.tax_period_id,
                 TaxPeriod.organization_id == org_id,
             )
-            .first()
         )
         periods = [period] if period else []
 
@@ -1151,8 +1153,15 @@ class TaxWebService:
                 organization_id=org_id,
                 return_id=coerce_uuid(return_id),
             )
-        except Exception:
-            logger.exception("Ignored exception")
+        except Exception as exc:
+            logger.exception("Failed to recalculate tax return %s", return_id)
+            message = quote_plus(
+                getattr(exc, "detail", str(exc)) or "Recalculate failed"
+            )
+            return RedirectResponse(
+                url=f"/finance/tax/returns/{return_id}?error={message}",
+                status_code=303,
+            )
 
         return RedirectResponse(
             url=f"/finance/tax/returns/{return_id}?saved=1",
@@ -1178,8 +1187,13 @@ class TaxWebService:
                 return_id=coerce_uuid(return_id),
                 reviewed_by_user_id=coerce_uuid(auth.person_id),
             )
-        except Exception:
-            logger.exception("Ignored exception")
+        except Exception as exc:
+            logger.exception("Failed to review tax return %s", return_id)
+            message = quote_plus(getattr(exc, "detail", str(exc)) or "Review failed")
+            return RedirectResponse(
+                url=f"/finance/tax/returns/{return_id}?error={message}",
+                status_code=303,
+            )
 
         return RedirectResponse(
             url=f"/finance/tax/returns/{return_id}?saved=1",
@@ -1205,8 +1219,13 @@ class TaxWebService:
                 return_id=coerce_uuid(return_id),
                 filed_by_user_id=coerce_uuid(auth.person_id),
             )
-        except Exception:
-            logger.exception("Ignored exception")
+        except Exception as exc:
+            logger.exception("Failed to file tax return %s", return_id)
+            message = quote_plus(getattr(exc, "detail", str(exc)) or "File failed")
+            return RedirectResponse(
+                url=f"/finance/tax/returns/{return_id}?error={message}",
+                status_code=303,
+            )
 
         return RedirectResponse(
             url=f"/finance/tax/returns/{return_id}?saved=1",

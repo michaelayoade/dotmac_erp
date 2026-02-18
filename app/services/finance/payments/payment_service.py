@@ -61,14 +61,14 @@ class PaymentService:
         organization_id: UUID | None = None,
     ) -> PaymentIntent | None:
         """Get a payment intent by reference (optionally scoped to org)."""
-        query = db.query(PaymentIntent).filter(
+        stmt = select(PaymentIntent).where(
             PaymentIntent.paystack_reference == reference
         )
         if organization_id is not None:
-            query = query.filter(
+            stmt = stmt.where(
                 PaymentIntent.organization_id == coerce_uuid(organization_id)
             )
-        return query.first()
+        return db.scalar(stmt)
 
     def create_invoice_payment_intent(
         self,
@@ -120,14 +120,12 @@ class PaymentService:
 
         # Check for existing active payment intent to prevent duplicate payments
         active_statuses = [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]
-        existing_intent = (
-            self.db.query(PaymentIntent)
-            .filter(
+        existing_intent = self.db.scalar(
+            select(PaymentIntent).where(
                 PaymentIntent.source_type == "INVOICE",
                 PaymentIntent.source_id == inv_id,
                 PaymentIntent.status.in_(active_statuses),
             )
-            .first()
         )
         if existing_intent:
             expires_at = existing_intent.expires_at
@@ -373,20 +371,21 @@ class PaymentService:
 
     def list_pending_transfers(self) -> list[PaymentIntent]:
         """List pending outbound transfers for the organization."""
-        return (
-            self.db.query(PaymentIntent)
-            .filter(
-                PaymentIntent.organization_id == self.organization_id,
-                PaymentIntent.direction == PaymentDirection.OUTBOUND,
-                PaymentIntent.status.in_(
-                    [
-                        PaymentIntentStatus.PENDING,
-                        PaymentIntentStatus.PROCESSING,
-                    ]
-                ),
-            )
-            .order_by(PaymentIntent.created_at.desc())
-            .all()
+        return list(
+            self.db.scalars(
+                select(PaymentIntent)
+                .where(
+                    PaymentIntent.organization_id == self.organization_id,
+                    PaymentIntent.direction == PaymentDirection.OUTBOUND,
+                    PaymentIntent.status.in_(
+                        [
+                            PaymentIntentStatus.PENDING,
+                            PaymentIntentStatus.PROCESSING,
+                        ]
+                    ),
+                )
+                .order_by(PaymentIntent.created_at.desc())
+            ).all()
         )
 
     def process_successful_payment(
@@ -415,7 +414,6 @@ class PaymentService:
         Raises:
             HTTPException: If processing fails
         """
-        from sqlalchemy import select
 
         # Re-fetch intent with row-level lock to prevent race conditions
         # between webhook and manual verification
@@ -1021,7 +1019,6 @@ class PaymentService:
             gateway_response: Full Paystack response
             fee_kobo: Transfer fee in kobo (smallest currency unit)
         """
-        from sqlalchemy import select
 
         from app.models.expense.expense_claim import ExpenseClaim, ExpenseClaimStatus
 
@@ -1274,10 +1271,10 @@ class PaymentService:
             error_message: Error description (for FAILED status)
         """
         # Find batch item by payment intent
-        batch_item = (
-            self.db.query(TransferBatchItem)
-            .filter(TransferBatchItem.payment_intent_id == intent.intent_id)
-            .first()
+        batch_item = self.db.scalar(
+            select(TransferBatchItem).where(
+                TransferBatchItem.payment_intent_id == intent.intent_id
+            )
         )
 
         if not batch_item:

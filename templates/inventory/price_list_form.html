@@ -190,7 +190,7 @@
 <script>
 function priceListForm() {
     return {
-        items: {{ (price_list.items | map(attribute='__dict__') | list | tojson) if price_list and price_list.items else '[]' | safe }},
+        items: {{ (price_list.items | map(attribute='__dict__') | list | tojson) if price_list and price_list.items else '[]' }},
         addItem() {
             this.items.push({
                 item_id: '',

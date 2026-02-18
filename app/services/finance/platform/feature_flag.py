@@ -9,7 +9,7 @@ import logging
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, or_
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.core_config.system_configuration import (
@@ -56,30 +56,22 @@ class FeatureFlagService(ListResponseMixin):
         config_key = f"{FEATURE_FLAG_PREFIX}{feature_code}"
 
         # Check org-specific flag first
-        org_flag = (
-            db.query(SystemConfiguration)
-            .filter(
-                and_(
-                    SystemConfiguration.organization_id == org_id,
-                    SystemConfiguration.config_key == config_key,
-                )
+        org_flag = db.scalar(
+            select(SystemConfiguration).where(
+                SystemConfiguration.organization_id == org_id,
+                SystemConfiguration.config_key == config_key,
             )
-            .first()
         )
 
         if org_flag:
             return org_flag.config_value.lower() in ("true", "1", "yes", "on")
 
         # Fall back to system default (NULL org_id)
-        system_flag = (
-            db.query(SystemConfiguration)
-            .filter(
-                and_(
-                    SystemConfiguration.organization_id.is_(None),
-                    SystemConfiguration.config_key == config_key,
-                )
+        system_flag = db.scalar(
+            select(SystemConfiguration).where(
+                SystemConfiguration.organization_id.is_(None),
+                SystemConfiguration.config_key == config_key,
             )
-            .first()
         )
 
         if system_flag:
@@ -108,19 +100,16 @@ class FeatureFlagService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         # Get all feature flags (both system and org-specific)
-        flags = (
-            db.query(SystemConfiguration)
-            .filter(
-                and_(
-                    SystemConfiguration.config_key.startswith(FEATURE_FLAG_PREFIX),
-                    or_(
-                        SystemConfiguration.organization_id.is_(None),
-                        SystemConfiguration.organization_id == org_id,
-                    ),
-                )
+        flags = db.scalars(
+            select(SystemConfiguration).where(
+                SystemConfiguration.config_key.startswith(FEATURE_FLAG_PREFIX),
+                or_(
+                    SystemConfiguration.organization_id.is_(None),
+                    SystemConfiguration.organization_id == org_id,
+                ),
             )
-            .all()
         )
+        flags = flags.all()
 
         # Build result dict, with org-specific overriding system defaults
         result: dict[str, bool] = {}
@@ -175,15 +164,11 @@ class FeatureFlagService(ListResponseMixin):
         config_key = f"{FEATURE_FLAG_PREFIX}{feature_code}"
 
         # Check if flag exists for this org
-        existing = (
-            db.query(SystemConfiguration)
-            .filter(
-                and_(
-                    SystemConfiguration.organization_id == org_id,
-                    SystemConfiguration.config_key == config_key,
-                )
+        existing = db.scalar(
+            select(SystemConfiguration).where(
+                SystemConfiguration.organization_id == org_id,
+                SystemConfiguration.config_key == config_key,
             )
-            .first()
         )
 
         if existing:
@@ -231,15 +216,11 @@ class FeatureFlagService(ListResponseMixin):
         config_key = f"{FEATURE_FLAG_PREFIX}{feature_code}"
 
         # Check if system default exists
-        existing = (
-            db.query(SystemConfiguration)
-            .filter(
-                and_(
-                    SystemConfiguration.organization_id.is_(None),
-                    SystemConfiguration.config_key == config_key,
-                )
+        existing = db.scalar(
+            select(SystemConfiguration).where(
+                SystemConfiguration.organization_id.is_(None),
+                SystemConfiguration.config_key == config_key,
             )
-            .first()
         )
 
         if existing:
@@ -308,18 +289,18 @@ class FeatureFlagService(ListResponseMixin):
         """
         config_key = f"{FEATURE_FLAG_PREFIX}{feature_code}"
 
-        query = db.query(SystemConfiguration).filter(
+        stmt = select(SystemConfiguration).where(
             SystemConfiguration.config_key == config_key
         )
 
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 SystemConfiguration.organization_id == coerce_uuid(organization_id)
             )
         else:
-            query = query.filter(SystemConfiguration.organization_id.is_(None))
+            stmt = stmt.where(SystemConfiguration.organization_id.is_(None))
 
-        existing = query.first()
+        existing = db.scalar(stmt)
 
         if existing:
             db.delete(existing)
@@ -349,26 +330,26 @@ class FeatureFlagService(ListResponseMixin):
         Returns:
             List of SystemConfiguration records for feature flags
         """
-        query = db.query(SystemConfiguration).filter(
+        stmt = select(SystemConfiguration).where(
             SystemConfiguration.config_key.startswith(FEATURE_FLAG_PREFIX)
         )
 
         if organization_id:
             org_id = coerce_uuid(organization_id)
             if include_system_defaults:
-                query = query.filter(
+                stmt = stmt.where(
                     or_(
                         SystemConfiguration.organization_id == org_id,
                         SystemConfiguration.organization_id.is_(None),
                     )
                 )
             else:
-                query = query.filter(SystemConfiguration.organization_id == org_id)
+                stmt = stmt.where(SystemConfiguration.organization_id == org_id)
         elif not include_system_defaults:
-            query = query.filter(SystemConfiguration.organization_id.isnot(None))
+            stmt = stmt.where(SystemConfiguration.organization_id.isnot(None))
 
-        query = query.order_by(SystemConfiguration.config_key)
-        return query.limit(limit).offset(offset).all()
+        stmt = stmt.order_by(SystemConfiguration.config_key).limit(limit).offset(offset)
+        return db.scalars(stmt).all()
 
     @staticmethod
     def list(

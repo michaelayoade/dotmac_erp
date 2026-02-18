@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Any, Protocol, TypeVar
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.person import Person
@@ -55,7 +56,7 @@ class AuditInfoService:
         if user_id in self._user_cache:
             return self._user_cache[user_id]
 
-        person = self.db.query(Person).filter(Person.id == user_id).first()
+        person = self.db.scalar(select(Person).where(Person.id == user_id))
         if person:
             name = self._format_person_name(person)
             self._user_cache[user_id] = name
@@ -75,7 +76,9 @@ class AuditInfoService:
         uncached_ids = [uid for uid in user_ids if uid not in self._user_cache]
 
         if uncached_ids:
-            persons = self.db.query(Person).filter(Person.id.in_(uncached_ids)).all()
+            persons = self.db.scalars(
+                select(Person).where(Person.id.in_(uncached_ids))
+            ).all()
             for person in persons:
                 self._user_cache[person.id] = self._format_person_name(person)
 

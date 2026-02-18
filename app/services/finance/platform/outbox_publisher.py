@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import and_
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.platform.event_outbox import EventOutbox, EventStatus
@@ -109,7 +109,7 @@ class OutboxPublisher(ListResponseMixin):
         now = datetime.now(UTC)
         max_retries = max_retry_count or OutboxPublisher.MAX_RETRY_COUNT
 
-        query = db.query(EventOutbox).filter(
+        stmt = select(EventOutbox).where(
             and_(
                 EventOutbox.status.in_([EventStatus.PENDING, EventStatus.FAILED]),
                 EventOutbox.retry_count < max_retries,
@@ -117,12 +117,12 @@ class OutboxPublisher(ListResponseMixin):
         )
 
         # Filter by next_retry_at (NULL or <= now)
-        query = query.filter(
+        stmt = stmt.where(
             (EventOutbox.next_retry_at.is_(None)) | (EventOutbox.next_retry_at <= now)
         )
 
-        query = query.order_by(EventOutbox.occurred_at.asc())
-        return query.limit(batch_size).all()
+        stmt = stmt.order_by(EventOutbox.occurred_at.asc()).limit(batch_size)
+        return db.scalars(stmt).all()
 
     @staticmethod
     def mark_published(
@@ -238,13 +238,12 @@ class OutboxPublisher(ListResponseMixin):
         Returns:
             List of EventOutbox records
         """
-        return (
-            db.query(EventOutbox)
-            .filter(EventOutbox.status == status)
+        return db.scalars(
+            select(EventOutbox)
+            .where(EventOutbox.status == status)
             .order_by(EventOutbox.occurred_at.desc())
             .limit(limit)
-            .all()
-        )
+        ).all()
 
     @staticmethod
     def retry_dead_event(
@@ -313,9 +312,9 @@ class OutboxPublisher(ListResponseMixin):
         Returns:
             List of EventOutbox records
         """
-        return (
-            db.query(EventOutbox)
-            .filter(
+        return db.scalars(
+            select(EventOutbox)
+            .where(
                 and_(
                     EventOutbox.aggregate_type == aggregate_type,
                     EventOutbox.aggregate_id == aggregate_id,
@@ -323,8 +322,7 @@ class OutboxPublisher(ListResponseMixin):
             )
             .order_by(EventOutbox.occurred_at.desc())
             .limit(limit)
-            .all()
-        )
+        ).all()
 
     @staticmethod
     def get_events_by_correlation(
@@ -343,13 +341,12 @@ class OutboxPublisher(ListResponseMixin):
         Returns:
             List of EventOutbox records
         """
-        return (
-            db.query(EventOutbox)
-            .filter(EventOutbox.correlation_id == correlation_id)
+        return db.scalars(
+            select(EventOutbox)
+            .where(EventOutbox.correlation_id == correlation_id)
             .order_by(EventOutbox.occurred_at.asc())
             .limit(limit)
-            .all()
-        )
+        ).all()
 
     @staticmethod
     def list(
@@ -372,16 +369,16 @@ class OutboxPublisher(ListResponseMixin):
         Returns:
             List of EventOutbox objects
         """
-        query = db.query(EventOutbox)
+        stmt = select(EventOutbox)
 
         if status:
-            query = query.filter(EventOutbox.status == status)
+            stmt = stmt.where(EventOutbox.status == status)
 
         if producer_module:
-            query = query.filter(EventOutbox.producer_module == producer_module)
+            stmt = stmt.where(EventOutbox.producer_module == producer_module)
 
-        query = query.order_by(EventOutbox.occurred_at.desc())
-        return query.limit(limit).offset(offset).all()
+        stmt = stmt.order_by(EventOutbox.occurred_at.desc()).limit(limit).offset(offset)
+        return db.scalars(stmt).all()
 
 
 # Module-level singleton instance

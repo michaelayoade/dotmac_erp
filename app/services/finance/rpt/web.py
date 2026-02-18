@@ -18,7 +18,7 @@ import logging
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.supplier import Supplier
@@ -101,8 +101,8 @@ class ReportsWebService:
     ) -> dict:
         org_id = coerce_uuid(organization_id)
 
-        query = (
-            db.query(
+        stmt = (
+            select(
                 AccountCategory.category_code,
                 AccountCategory.ifrs_category,
                 func.coalesce(
@@ -118,23 +118,25 @@ class ReportsWebService:
                 JournalEntry,
                 JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
             )
-            .filter(
+            .where(
                 JournalEntry.organization_id == org_id,
                 JournalEntry.status == JournalStatus.POSTED,
             )
         )
 
         if as_of_date:
-            query = query.filter(JournalEntry.posting_date <= as_of_date)
+            stmt = stmt.where(JournalEntry.posting_date <= as_of_date)
         else:
             if start_date:
-                query = query.filter(JournalEntry.posting_date >= start_date)
+                stmt = stmt.where(JournalEntry.posting_date >= start_date)
             if end_date:
-                query = query.filter(JournalEntry.posting_date <= end_date)
+                stmt = stmt.where(JournalEntry.posting_date <= end_date)
 
-        rows = query.group_by(
-            AccountCategory.category_code,
-            AccountCategory.ifrs_category,
+        rows = db.execute(
+            stmt.group_by(
+                AccountCategory.category_code,
+                AccountCategory.ifrs_category,
+            )
         ).all()
 
         balances = {}
@@ -159,8 +161,8 @@ class ReportsWebService:
     ) -> dict:
         org_id = coerce_uuid(organization_id)
 
-        rows = (
-            db.query(
+        rows = db.execute(
+            select(
                 AccountCategory.category_code,
                 func.coalesce(
                     func.sum(JournalEntryLine.debit_amount_functional), 0
@@ -175,7 +177,7 @@ class ReportsWebService:
                 JournalEntry,
                 JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
             )
-            .filter(
+            .where(
                 JournalEntry.organization_id == org_id,
                 JournalEntry.status == JournalStatus.POSTED,
                 JournalEntry.posting_date >= start_date,
@@ -183,8 +185,7 @@ class ReportsWebService:
                 AccountCategory.category_code.in_(["CAT016", "CAT017", "CAT019"]),
             )
             .group_by(AccountCategory.category_code)
-            .all()
-        )
+        ).all()
 
         totals = {
             "CAT016": Decimal("0"),
@@ -229,16 +230,15 @@ class ReportsWebService:
         to_date = _parse_date(end_date) or today
 
         # ========== Financial Position Summary ==========
-        period = (
-            db.query(FiscalPeriod)
-            .filter(
+        period = db.scalars(
+            select(FiscalPeriod)
+            .where(
                 FiscalPeriod.organization_id == org_id,
                 FiscalPeriod.start_date <= to_date,
                 FiscalPeriod.end_date >= to_date,
             )
             .order_by(FiscalPeriod.start_date.desc())
-            .first()
-        )
+        ).first()
 
         total_assets = Decimal("0")
         total_liabilities = Decimal("0")
@@ -246,8 +246,8 @@ class ReportsWebService:
         total_revenue = Decimal("0")
         total_expenses = Decimal("0")
 
-        bs_rows = (
-            db.query(
+        bs_rows = db.execute(
+            select(
                 AccountCategory.ifrs_category,
                 func.coalesce(
                     func.sum(JournalEntryLine.debit_amount_functional), 0
@@ -262,7 +262,7 @@ class ReportsWebService:
             )
             .join(Account, Account.account_id == JournalEntryLine.account_id)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-            .filter(
+            .where(
                 JournalEntry.organization_id == org_id,
                 JournalEntry.status == JournalStatus.POSTED,
                 JournalEntry.posting_date <= to_date,
@@ -275,8 +275,7 @@ class ReportsWebService:
                 ),
             )
             .group_by(AccountCategory.ifrs_category)
-            .all()
-        )
+        ).all()
 
         for ifrs_category, debit, credit in bs_rows:
             debit = Decimal(str(debit or 0))
@@ -290,8 +289,8 @@ class ReportsWebService:
                 total_equity += credit - debit
 
         # ========== AP/AR Control Balances (GL Source of Truth) ==========
-        ar_control_query = (
-            db.query(
+        ar_control_stmt = (
+            select(
                 func.coalesce(
                     func.sum(
                         JournalEntryLine.debit_amount_functional
@@ -305,18 +304,18 @@ class ReportsWebService:
                 JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
             )
             .join(Account, Account.account_id == JournalEntryLine.account_id)
-            .filter(
+            .where(
                 JournalEntry.organization_id == org_id,
                 JournalEntry.status == JournalStatus.POSTED,
                 Account.subledger_type == "AR",
                 Account.is_active.is_(True),
             )
         )
-        ar_control_query = ar_control_query.filter(JournalEntry.posting_date <= to_date)
-        ar_total = Decimal(str(ar_control_query.scalar() or 0))
+        ar_control_stmt = ar_control_stmt.where(JournalEntry.posting_date <= to_date)
+        ar_total = Decimal(str(db.scalar(ar_control_stmt) or 0))
 
-        ap_control_query = (
-            db.query(
+        ap_control_stmt = (
+            select(
                 func.coalesce(
                     func.sum(
                         JournalEntryLine.credit_amount_functional
@@ -330,15 +329,15 @@ class ReportsWebService:
                 JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
             )
             .join(Account, Account.account_id == JournalEntryLine.account_id)
-            .filter(
+            .where(
                 JournalEntry.organization_id == org_id,
                 JournalEntry.status == JournalStatus.POSTED,
                 Account.subledger_type == "AP",
                 Account.is_active.is_(True),
             )
         )
-        ap_control_query = ap_control_query.filter(JournalEntry.posting_date <= to_date)
-        ap_total = Decimal(str(ap_control_query.scalar() or 0))
+        ap_control_stmt = ap_control_stmt.where(JournalEntry.posting_date <= to_date)
+        ap_total = Decimal(str(db.scalar(ap_control_stmt) or 0))
 
         # ========== Tax Summary (GL Source of Truth) ==========
         tax_totals = ReportsWebService._tax_totals_from_gl(
@@ -353,17 +352,18 @@ class ReportsWebService:
 
         # Get overdue tax periods
         overdue_tax_periods = (
-            db.query(TaxPeriod)
-            .filter(
-                TaxPeriod.organization_id == org_id,
-                TaxPeriod.status == TaxPeriodStatus.OPEN,
-                TaxPeriod.due_date < today,
+            db.scalar(
+                select(func.count(TaxPeriod.tax_period_id)).where(
+                    TaxPeriod.organization_id == org_id,
+                    TaxPeriod.status == TaxPeriodStatus.OPEN,
+                    TaxPeriod.due_date < today,
+                )
             )
-            .count()
+            or 0
         )
 
-        pl_rows = (
-            db.query(
+        pl_rows = db.execute(
+            select(
                 AccountCategory.ifrs_category,
                 func.coalesce(
                     func.sum(JournalEntryLine.debit_amount_functional), 0
@@ -378,7 +378,7 @@ class ReportsWebService:
             )
             .join(Account, Account.account_id == JournalEntryLine.account_id)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-            .filter(
+            .where(
                 JournalEntry.organization_id == org_id,
                 JournalEntry.status == JournalStatus.POSTED,
                 JournalEntry.posting_date >= from_date,
@@ -391,8 +391,7 @@ class ReportsWebService:
                 ),
             )
             .group_by(AccountCategory.ifrs_category)
-            .all()
-        )
+        ).all()
 
         total_revenue = Decimal("0")
         total_expenses = Decimal("0")
@@ -440,28 +439,26 @@ class ReportsWebService:
         }
 
         # Get report definitions
-        definitions = (
-            db.query(ReportDefinition)
-            .filter(
+        definitions = db.scalars(
+            select(ReportDefinition)
+            .where(
                 ReportDefinition.organization_id == org_id,
                 ReportDefinition.is_active.is_(True),
             )
             .order_by(ReportDefinition.report_name)
-            .all()
-        )
+        ).all()
 
         # Recent report instances
-        recent_instances = (
-            db.query(ReportInstance, ReportDefinition)
+        recent_instances = db.execute(
+            select(ReportInstance, ReportDefinition)
             .join(
                 ReportDefinition,
                 ReportInstance.report_def_id == ReportDefinition.report_def_id,
             )
-            .filter(ReportInstance.organization_id == org_id)
+            .where(ReportInstance.organization_id == org_id)
             .order_by(ReportInstance.queued_at.desc())
             .limit(10)
-            .all()
-        )
+        ).all()
 
         # Group reports by category
         financial_statements = []
@@ -597,24 +594,22 @@ class ReportsWebService:
         ref_date = _parse_date(as_of_date) or date.today()
 
         # Find the fiscal period for the date
-        period = (
-            db.query(FiscalPeriod)
-            .filter(
+        period = db.scalars(
+            select(FiscalPeriod)
+            .where(
                 FiscalPeriod.organization_id == org_id,
                 FiscalPeriod.start_date <= ref_date,
                 FiscalPeriod.end_date >= ref_date,
             )
             .order_by(FiscalPeriod.start_date.desc())
-            .first()
-        )
+        ).first()
 
         if not period:
-            period = (
-                db.query(FiscalPeriod)
-                .filter(FiscalPeriod.organization_id == org_id)
+            period = db.scalars(
+                select(FiscalPeriod)
+                .where(FiscalPeriod.organization_id == org_id)
                 .order_by(FiscalPeriod.end_date.desc())
-                .first()
-            )
+            ).first()
 
         balances = []
         total_debit = Decimal("0")
@@ -627,8 +622,8 @@ class ReportsWebService:
         revenue = []
         expenses = []
 
-        rows = (
-            db.query(
+        rows = db.execute(
+            select(
                 Account.account_code,
                 Account.account_name,
                 AccountCategory.ifrs_category,
@@ -645,7 +640,7 @@ class ReportsWebService:
             )
             .join(Account, Account.account_id == JournalEntryLine.account_id)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-            .filter(
+            .where(
                 JournalEntry.organization_id == org_id,
                 JournalEntry.status == JournalStatus.POSTED,
                 JournalEntry.posting_date <= ref_date,
@@ -656,8 +651,7 @@ class ReportsWebService:
                 AccountCategory.ifrs_category,
             )
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
 
         for account_code, account_name, ifrs_category, debit, credit in rows:
             debit = Decimal(str(debit or 0))
@@ -717,16 +711,15 @@ class ReportsWebService:
         to_date = _parse_date(end_date) or today
 
         # Find fiscal period
-        period = (
-            db.query(FiscalPeriod)
-            .filter(
+        period = db.scalars(
+            select(FiscalPeriod)
+            .where(
                 FiscalPeriod.organization_id == org_id,
                 FiscalPeriod.start_date <= to_date,
                 FiscalPeriod.end_date >= from_date,
             )
             .order_by(FiscalPeriod.start_date.desc())
-            .first()
-        )
+        ).first()
 
         balances = ReportsWebService._category_balances(
             db=db,
@@ -807,24 +800,22 @@ class ReportsWebService:
         ref_date = _parse_date(as_of_date) or date.today()
 
         # Find fiscal period
-        period = (
-            db.query(FiscalPeriod)
-            .filter(
+        period = db.scalars(
+            select(FiscalPeriod)
+            .where(
                 FiscalPeriod.organization_id == org_id,
                 FiscalPeriod.start_date <= ref_date,
                 FiscalPeriod.end_date >= ref_date,
             )
             .order_by(FiscalPeriod.start_date.desc())
-            .first()
-        )
+        ).first()
 
         if not period:
-            period = (
-                db.query(FiscalPeriod)
-                .filter(FiscalPeriod.organization_id == org_id)
+            period = db.scalars(
+                select(FiscalPeriod)
+                .where(FiscalPeriod.organization_id == org_id)
                 .order_by(FiscalPeriod.end_date.desc())
-                .first()
-            )
+            ).first()
 
         balances = ReportsWebService._category_balances(
             db=db,
@@ -933,10 +924,10 @@ class ReportsWebService:
         ref_date = _parse_date(as_of_date) or date.today()
 
         # Get open invoices
-        invoices = (
-            db.query(SupplierInvoice, Supplier)
+        invoices = db.execute(
+            select(SupplierInvoice, Supplier)
             .join(Supplier, SupplierInvoice.supplier_id == Supplier.supplier_id)
-            .filter(
+            .where(
                 SupplierInvoice.organization_id == org_id,
                 SupplierInvoice.status.in_(
                     [
@@ -947,8 +938,7 @@ class ReportsWebService:
                 SupplierInvoice.invoice_date <= ref_date,
             )
             .order_by(SupplierInvoice.due_date)
-            .all()
-        )
+        ).all()
 
         # Aging buckets
         current = []
@@ -1057,10 +1047,10 @@ class ReportsWebService:
         # Get open invoices
         from app.models.finance.ar.invoice import InvoiceStatus as ARInvoiceStatus
 
-        invoices = (
-            db.query(ARInvoice, Customer)
+        invoices = db.execute(
+            select(ARInvoice, Customer)
             .join(Customer, ARInvoice.customer_id == Customer.customer_id)
-            .filter(
+            .where(
                 ARInvoice.organization_id == org_id,
                 ARInvoice.status.in_(
                     [
@@ -1071,8 +1061,7 @@ class ReportsWebService:
                 ARInvoice.invoice_date <= ref_date,
             )
             .order_by(ARInvoice.due_date)
-            .all()
-        )
+        ).all()
 
         # Aging buckets
         current = []
@@ -1187,15 +1176,14 @@ class ReportsWebService:
         to_date = _parse_date(end_date) or today
 
         # Get accounts for dropdown
-        accounts = (
-            db.query(Account)
-            .filter(
+        accounts = db.scalars(
+            select(Account)
+            .where(
                 Account.organization_id == org_id,
                 Account.is_active.is_(True),
             )
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
 
         account_options = [
             {
@@ -1216,14 +1204,14 @@ class ReportsWebService:
 
             if selected_account and selected_account.organization_id == org_id:
                 # Get journal lines for this account
-                lines = (
-                    db.query(JournalEntryLine, JournalEntry)
+                lines = db.execute(
+                    select(JournalEntryLine, JournalEntry)
                     .join(
                         JournalEntry,
                         JournalEntry.journal_entry_id
                         == JournalEntryLine.journal_entry_id,
                     )
-                    .filter(
+                    .where(
                         JournalEntryLine.account_id == acct_id,
                         JournalEntry.organization_id == org_id,
                         JournalEntry.status == JournalStatus.POSTED,
@@ -1231,8 +1219,7 @@ class ReportsWebService:
                         JournalEntry.posting_date <= to_date,
                     )
                     .order_by(JournalEntry.posting_date, JournalEntry.journal_entry_id)
-                    .all()
-                )
+                ).all()
 
                 for line, entry in lines:
                     debit = line.debit_amount_functional or Decimal("0")
@@ -1359,8 +1346,8 @@ class ReportsWebService:
         total_expenses = Decimal("0")
 
         # Aggregate posted ledger lines within the date range for expense accounts.
-        expense_rows = (
-            db.query(
+        expense_rows = db.execute(
+            select(
                 Account.account_code,
                 Account.account_name,
                 AccountCategory.category_name,
@@ -1377,7 +1364,7 @@ class ReportsWebService:
             )
             .join(Account, JournalEntryLine.account_id == Account.account_id)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-            .filter(
+            .where(
                 JournalEntry.organization_id == org_id,
                 JournalEntry.status == JournalStatus.POSTED,
                 JournalEntry.posting_date >= from_date,
@@ -1390,8 +1377,7 @@ class ReportsWebService:
                 AccountCategory.category_name,
             )
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
 
         for account_code, account_name, category_name, debit, credit in expense_rows:
             debit = Decimal(str(debit or 0))
@@ -1438,26 +1424,22 @@ class ReportsWebService:
         to_date = _parse_date(end_date) or today
 
         cash_category_codes = {"CAT003", "CAT012"}
-        cash_categories = (
-            db.query(AccountCategory.category_id)
-            .filter(
+        cash_category_ids = db.scalars(
+            select(AccountCategory.category_id).where(
                 AccountCategory.organization_id == org_id,
                 AccountCategory.category_code.in_(cash_category_codes),
             )
-            .all()
-        )
-        cash_category_ids = [row.category_id for row in cash_categories]
+        ).all()
 
-        cash_accounts = (
-            db.query(Account.account_id, Account.account_code, Account.account_name)
-            .filter(
+        cash_accounts = db.execute(
+            select(Account.account_id, Account.account_code, Account.account_name)
+            .where(
                 Account.organization_id == org_id,
                 Account.category_id.in_(cash_category_ids),
                 Account.is_active.is_(True),
             )
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
         account_ids = [row.account_id for row in cash_accounts]
 
         movements = []
@@ -1465,8 +1447,8 @@ class ReportsWebService:
         total_outflow = Decimal("0")
 
         if account_ids:
-            rows = (
-                db.query(
+            rows = db.execute(
+                select(
                     Account.account_id,
                     func.coalesce(
                         func.sum(JournalEntryLine.debit_amount_functional), 0
@@ -1480,7 +1462,7 @@ class ReportsWebService:
                     JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
                 )
                 .join(Account, Account.account_id == JournalEntryLine.account_id)
-                .filter(
+                .where(
                     JournalEntry.organization_id == org_id,
                     JournalEntry.status == JournalStatus.POSTED,
                     JournalEntry.posting_date >= from_date,
@@ -1488,8 +1470,7 @@ class ReportsWebService:
                     JournalEntryLine.account_id.in_(account_ids),
                 )
                 .group_by(Account.account_id)
-                .all()
-            )
+            ).all()
 
             acct_map = {row.account_id: row for row in cash_accounts}
             for account_id, debit, credit in rows:
@@ -1537,8 +1518,8 @@ class ReportsWebService:
         from_date = _parse_date(start_date) or today.replace(day=1)
         to_date = _parse_date(end_date) or today
 
-        equity_rows = (
-            db.query(
+        equity_rows = db.execute(
+            select(
                 Account.account_id,
                 Account.account_code,
                 Account.account_name,
@@ -1555,7 +1536,7 @@ class ReportsWebService:
             )
             .join(Account, Account.account_id == JournalEntryLine.account_id)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-            .filter(
+            .where(
                 JournalEntry.organization_id == org_id,
                 JournalEntry.status == JournalStatus.POSTED,
                 JournalEntry.posting_date >= from_date,
@@ -1564,11 +1545,10 @@ class ReportsWebService:
             )
             .group_by(Account.account_id, Account.account_code, Account.account_name)
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
 
-        opening_rows = (
-            db.query(
+        opening_rows = db.execute(
+            select(
                 Account.account_id,
                 func.coalesce(
                     func.sum(JournalEntryLine.debit_amount_functional), 0
@@ -1583,15 +1563,14 @@ class ReportsWebService:
             )
             .join(Account, Account.account_id == JournalEntryLine.account_id)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-            .filter(
+            .where(
                 JournalEntry.organization_id == org_id,
                 JournalEntry.status == JournalStatus.POSTED,
                 JournalEntry.posting_date < from_date,
                 AccountCategory.ifrs_category == IFRSCategory.EQUITY,
             )
             .group_by(Account.account_id)
-            .all()
-        )
+        ).all()
         opening_map = {row.account_id: (row.debit, row.credit) for row in opening_rows}
 
         line_items = []
@@ -1625,8 +1604,8 @@ class ReportsWebService:
             )
 
         # Net income for the period
-        revenue_expense = (
-            db.query(
+        revenue_expense = db.execute(
+            select(
                 AccountCategory.ifrs_category,
                 func.coalesce(
                     func.sum(JournalEntryLine.debit_amount_functional), 0
@@ -1641,7 +1620,7 @@ class ReportsWebService:
             )
             .join(Account, Account.account_id == JournalEntryLine.account_id)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-            .filter(
+            .where(
                 JournalEntry.organization_id == org_id,
                 JournalEntry.status == JournalStatus.POSTED,
                 JournalEntry.posting_date >= from_date,
@@ -1654,8 +1633,7 @@ class ReportsWebService:
                 ),
             )
             .group_by(AccountCategory.ifrs_category)
-            .all()
-        )
+        ).all()
         total_revenue = Decimal("0")
         total_expenses = Decimal("0")
         for ifrs_category, debit, credit in revenue_expense:
@@ -1697,22 +1675,20 @@ class ReportsWebService:
         from_date = _parse_date(start_date) or today.replace(day=1)
         to_date = _parse_date(end_date) or today
 
-        periods = (
-            db.query(FiscalPeriod)
-            .filter(
+        periods = db.scalars(
+            select(FiscalPeriod).where(
                 FiscalPeriod.organization_id == org_id,
                 FiscalPeriod.start_date <= to_date,
                 FiscalPeriod.end_date >= from_date,
             )
-            .all()
-        )
+        ).all()
         period_ids = [p.fiscal_period_id for p in periods]
 
-        budget_query = (
-            db.query(BudgetLine, Budget, Account)
+        budget_stmt = (
+            select(BudgetLine, Budget, Account)
             .join(Budget, BudgetLine.budget_id == Budget.budget_id)
             .join(Account, BudgetLine.account_id == Account.account_id)
-            .filter(
+            .where(
                 Budget.organization_id == org_id,
                 Budget.status.in_([BudgetStatus.APPROVED, BudgetStatus.ACTIVE]),
                 BudgetLine.fiscal_period_id.in_(period_ids),
@@ -1720,13 +1696,11 @@ class ReportsWebService:
         )
 
         if budget_id:
-            budget_query = budget_query.filter(
-                Budget.budget_id == coerce_uuid(budget_id)
-            )
+            budget_stmt = budget_stmt.where(Budget.budget_id == coerce_uuid(budget_id))
         if budget_code:
-            budget_query = budget_query.filter(Budget.budget_code == budget_code)
+            budget_stmt = budget_stmt.where(Budget.budget_code == budget_code)
 
-        budget_lines = budget_query.all()
+        budget_lines = db.execute(budget_stmt).all()
 
         budget_totals: dict[UUID, dict[str, Any]] = {}
         for line, _budget, account in budget_lines:
@@ -1746,8 +1720,8 @@ class ReportsWebService:
         account_ids = list(budget_totals.keys())
         actual_rows = []
         if account_ids:
-            actual_rows = (
-                db.query(
+            actual_rows = db.execute(
+                select(
                     JournalEntryLine.account_id,
                     func.coalesce(
                         func.sum(JournalEntryLine.debit_amount_functional), 0
@@ -1760,7 +1734,7 @@ class ReportsWebService:
                     JournalEntry,
                     JournalEntry.journal_entry_id == JournalEntryLine.journal_entry_id,
                 )
-                .filter(
+                .where(
                     JournalEntry.organization_id == org_id,
                     JournalEntry.status == JournalStatus.POSTED,
                     JournalEntry.posting_date >= from_date,
@@ -1768,8 +1742,7 @@ class ReportsWebService:
                     JournalEntryLine.account_id.in_(account_ids),
                 )
                 .group_by(JournalEntryLine.account_id)
-                .all()
-            )
+            ).all()
 
         actual_map = {row.account_id: row for row in actual_rows}
 

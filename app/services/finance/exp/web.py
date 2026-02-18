@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.core_org.business_unit import BusinessUnit
@@ -55,20 +55,20 @@ class ExpenseWebService:
 
         org_id = coerce_uuid(organization_id)
 
-        query = db.query(ExpenseEntry).filter(ExpenseEntry.organization_id == org_id)
+        query = select(ExpenseEntry).where(ExpenseEntry.organization_id == org_id)
 
         if status:
-            query = query.filter(ExpenseEntry.status == ExpenseStatus(status))
+            query = query.where(ExpenseEntry.status == ExpenseStatus(status))
 
         if start_date:
-            query = query.filter(ExpenseEntry.expense_date >= start_date)
+            query = query.where(ExpenseEntry.expense_date >= start_date)
 
         if end_date:
-            query = query.filter(ExpenseEntry.expense_date <= end_date)
+            query = query.where(ExpenseEntry.expense_date <= end_date)
 
         if search:
             term = f"%{search}%"
-            query = query.filter(
+            query = query.where(
                 or_(
                     ExpenseEntry.expense_number.ilike(term),
                     ExpenseEntry.description.ilike(term),
@@ -76,13 +76,10 @@ class ExpenseWebService:
                 )
             )
 
-        total = query.count()
-        expenses = (
-            query.order_by(ExpenseEntry.expense_date.desc())
-            .offset(offset)
-            .limit(limit)
-            .all()
-        )
+        total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+        expenses = db.scalars(
+            query.order_by(ExpenseEntry.expense_date.desc()).offset(offset).limit(limit)
+        ).all()
 
         items = []
         for exp in expenses:
@@ -107,12 +104,11 @@ class ExpenseWebService:
             )
 
         # Status counts
-        status_counts = (
-            db.query(ExpenseEntry.status, func.count())
-            .filter(ExpenseEntry.organization_id == org_id)
+        status_counts = db.execute(
+            select(ExpenseEntry.status, func.count())
+            .where(ExpenseEntry.organization_id == org_id)
             .group_by(ExpenseEntry.status)
-            .all()
-        )
+        ).all()
         counts = {s.value: c for s, c in status_counts}
 
         active_filters = build_active_filters(
@@ -143,17 +139,16 @@ class ExpenseWebService:
         org_id = coerce_uuid(organization_id)
 
         # Get expense accounts (EXPENSES category)
-        expense_accounts = (
-            db.query(Account)
+        expense_accounts = db.scalars(
+            select(Account)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-            .filter(
+            .where(
                 Account.organization_id == org_id,
                 Account.is_active.is_(True),
                 AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
             )
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
 
         expense_account_options = [
             {
@@ -165,17 +160,16 @@ class ExpenseWebService:
         ]
 
         # Get payment accounts (cash, bank - typically ASSETS)
-        payment_accounts = (
-            db.query(Account)
+        payment_accounts = db.scalars(
+            select(Account)
             .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-            .filter(
+            .where(
                 Account.organization_id == org_id,
                 Account.is_active.is_(True),
                 AccountCategory.ifrs_category == IFRSCategory.ASSETS,
             )
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
 
         payment_account_options = [
             {
@@ -187,15 +181,14 @@ class ExpenseWebService:
         ]
 
         # Get tax codes
-        tax_codes = (
-            db.query(TaxCode)
-            .filter(
+        tax_codes = db.scalars(
+            select(TaxCode)
+            .where(
                 TaxCode.organization_id == org_id,
                 TaxCode.is_active.is_(True),
             )
             .order_by(TaxCode.tax_code)
-            .all()
-        )
+        ).all()
 
         tax_code_options = [
             {
@@ -208,15 +201,14 @@ class ExpenseWebService:
         ]
 
         # Get open fiscal periods
-        periods = (
-            db.query(FiscalPeriod)
-            .filter(
+        periods = db.scalars(
+            select(FiscalPeriod)
+            .where(
                 FiscalPeriod.organization_id == org_id,
-                FiscalPeriod.status.in_([PeriodStatus.OPEN, PeriodStatus.REOPENED]),
+                FiscalPeriod.status.in_(PeriodStatus.accepts_postings()),
             )
             .order_by(FiscalPeriod.start_date.desc())
-            .all()
-        )
+        ).all()
 
         period_options = [
             {
@@ -227,15 +219,14 @@ class ExpenseWebService:
         ]
 
         # Get active projects
-        projects = (
-            db.query(Project)
-            .filter(
+        projects = db.scalars(
+            select(Project)
+            .where(
                 Project.organization_id == org_id,
                 Project.status == ProjectStatus.ACTIVE,
             )
             .order_by(Project.project_code)
-            .all()
-        )
+        ).all()
 
         project_options = [
             {
@@ -247,15 +238,14 @@ class ExpenseWebService:
         ]
 
         # Get cost centers
-        cost_centers = (
-            db.query(CostCenter)
-            .filter(
+        cost_centers = db.scalars(
+            select(CostCenter)
+            .where(
                 CostCenter.organization_id == org_id,
                 CostCenter.is_active.is_(True),
             )
             .order_by(CostCenter.cost_center_code)
-            .all()
-        )
+        ).all()
 
         cost_center_options = [
             {
@@ -267,12 +257,11 @@ class ExpenseWebService:
         ]
 
         # Get business units
-        business_units = (
-            db.query(BusinessUnit)
-            .filter(BusinessUnit.organization_id == org_id)
+        business_units = db.scalars(
+            select(BusinessUnit)
+            .where(BusinessUnit.organization_id == org_id)
             .order_by(BusinessUnit.unit_code)
-            .all()
-        )
+        ).all()
 
         business_unit_options = [
             {

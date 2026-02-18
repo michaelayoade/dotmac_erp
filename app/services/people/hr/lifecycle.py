@@ -6,7 +6,7 @@ import logging
 from datetime import date
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.hr import Employee
@@ -173,9 +173,11 @@ class LifecycleService:
                 setattr(onboarding, key, value)
 
         if activities is not None:
-            self.db.query(EmployeeOnboardingActivity).filter(
-                EmployeeOnboardingActivity.onboarding_id == onboarding_id
-            ).delete()
+            self.db.execute(
+                delete(EmployeeOnboardingActivity).where(
+                    EmployeeOnboardingActivity.onboarding_id == onboarding_id
+                )
+            )
             for idx, activity in enumerate(activities):
                 self.db.add(
                     EmployeeOnboardingActivity(
@@ -377,9 +379,11 @@ class LifecycleService:
                 setattr(separation, key, value)
 
         if activities is not None:
-            self.db.query(EmployeeSeparationActivity).filter(
-                EmployeeSeparationActivity.separation_id == separation_id
-            ).delete()
+            self.db.execute(
+                delete(EmployeeSeparationActivity).where(
+                    EmployeeSeparationActivity.separation_id == separation_id
+                )
+            )
             for idx, activity in enumerate(activities):
                 self.db.add(
                     EmployeeSeparationActivity(
@@ -516,9 +520,11 @@ class LifecycleService:
                 setattr(promotion, key, value)
 
         if details is not None:
-            self.db.query(EmployeePromotionDetail).filter(
-                EmployeePromotionDetail.promotion_id == promotion_id
-            ).delete()
+            self.db.execute(
+                delete(EmployeePromotionDetail).where(
+                    EmployeePromotionDetail.promotion_id == promotion_id
+                )
+            )
             for idx, detail in enumerate(details):
                 self.db.add(
                     EmployeePromotionDetail(
@@ -631,9 +637,11 @@ class LifecycleService:
                 setattr(transfer, key, value)
 
         if details is not None:
-            self.db.query(EmployeeTransferDetail).filter(
-                EmployeeTransferDetail.transfer_id == transfer_id
-            ).delete()
+            self.db.execute(
+                delete(EmployeeTransferDetail).where(
+                    EmployeeTransferDetail.transfer_id == transfer_id
+                )
+            )
             for idx, detail in enumerate(details):
                 self.db.add(
                     EmployeeTransferDetail(

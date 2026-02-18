@@ -10,6 +10,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.core_fx.currency import Currency
@@ -191,28 +192,27 @@ def _ensure_category(
     default_name: str,
     summary: TaxSeedSummary,
 ) -> AccountCategory:
-    category = (
-        db.query(AccountCategory)
-        .filter(
+    category = db.scalars(
+        select(AccountCategory)
+        .where(
             AccountCategory.organization_id == organization_id,
             AccountCategory.ifrs_category == ifrs_category,
             AccountCategory.is_active.is_(True),
         )
         .order_by(AccountCategory.category_code)
-        .first()
     )
+    category = category.first()
     if category:
         return category
 
     code = default_code
-    code_taken = (
-        db.query(AccountCategory)
-        .filter(
+    code_taken = db.scalars(
+        select(AccountCategory).where(
             AccountCategory.organization_id == organization_id,
             AccountCategory.category_code == code,
         )
-        .first()
     )
+    code_taken = code_taken.first()
     if code_taken:
         code = f"{default_code}-TAX"
 
@@ -241,14 +241,13 @@ def _ensure_account(
     summary: TaxSeedSummary,
     description: str = "",
 ) -> Account:
-    account = (
-        db.query(Account)
-        .filter(
+    account = db.scalars(
+        select(Account).where(
             Account.organization_id == organization_id,
             Account.account_code == account_code,
         )
-        .first()
     )
+    account = account.first()
     if account:
         if not account.is_active:
             account.is_active = True
@@ -290,14 +289,13 @@ def _ensure_jurisdiction(
     corporate_tax_rate: Decimal = Decimal("0.30"),
     tax_authority_name: str = "Federal Inland Revenue Service",
 ) -> TaxJurisdiction:
-    jurisdiction = (
-        db.query(TaxJurisdiction)
-        .filter(
+    jurisdiction = db.scalars(
+        select(TaxJurisdiction).where(
             TaxJurisdiction.organization_id == organization_id,
             TaxJurisdiction.jurisdiction_code == jurisdiction_code,
         )
-        .first()
     )
+    jurisdiction = jurisdiction.first()
     if jurisdiction:
         return jurisdiction
 
@@ -353,14 +351,13 @@ def _ensure_tax_code(
     tax_return_box: str | None = None,
     reporting_code: str | None = None,
 ) -> TaxCode:
-    existing = (
-        db.query(TaxCode)
-        .filter(
+    existing = db.scalars(
+        select(TaxCode).where(
             TaxCode.organization_id == organization_id,
             TaxCode.tax_code == tax_code,
         )
-        .first()
     )
+    existing = existing.first()
     if existing:
         return existing
 
@@ -640,28 +637,26 @@ def get_default_jurisdiction(
     if country_code:
         config = get_country_config(country_code)
         if config:
-            jurisdiction = (
-                db.query(TaxJurisdiction)
-                .filter(
+            jurisdiction = db.scalars(
+                select(TaxJurisdiction).where(
                     TaxJurisdiction.organization_id == org_id,
                     TaxJurisdiction.jurisdiction_code == config.jurisdiction_code,
                     TaxJurisdiction.is_active.is_(True),
                 )
-                .first()
             )
+            jurisdiction = jurisdiction.first()
             if jurisdiction:
                 return jurisdiction
 
     # Fallback: return first active jurisdiction
-    return (
-        db.query(TaxJurisdiction)
-        .filter(
+    return db.scalars(
+        select(TaxJurisdiction)
+        .where(
             TaxJurisdiction.organization_id == org_id,
             TaxJurisdiction.is_active.is_(True),
         )
         .order_by(TaxJurisdiction.jurisdiction_code)
-        .first()
-    )
+    ).first()
 
 
 def get_or_create_default_jurisdiction(

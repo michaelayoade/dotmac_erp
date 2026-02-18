@@ -27,7 +27,6 @@ from app.models.finance.ap.supplier_payment import SupplierPayment
 from app.services.common import coerce_uuid
 from app.services.finance.ap.input_utils import resolve_currency_code
 from app.services.finance.common import (
-    apply_search_filter,
     get_org_scoped_entity,
     parse_enum_safe,
     toggle_entity_status,
@@ -475,12 +474,12 @@ class SupplierService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Supplier not found")
 
         invoice_count = (
-            db.query(func.count(SupplierInvoice.invoice_id))
-            .filter(
-                SupplierInvoice.organization_id == org_id,
-                SupplierInvoice.supplier_id == sup_id,
+            db.scalar(
+                select(func.count(SupplierInvoice.invoice_id)).where(
+                    SupplierInvoice.organization_id == org_id,
+                    SupplierInvoice.supplier_id == sup_id,
+                )
             )
-            .scalar()
             or 0
         )
         if invoice_count > 0:
@@ -493,12 +492,12 @@ class SupplierService(ListResponseMixin):
             )
 
         payment_count = (
-            db.query(func.count(SupplierPayment.payment_id))
-            .filter(
-                SupplierPayment.organization_id == org_id,
-                SupplierPayment.supplier_id == sup_id,
+            db.scalar(
+                select(func.count(SupplierPayment.payment_id)).where(
+                    SupplierPayment.organization_id == org_id,
+                    SupplierPayment.supplier_id == sup_id,
+                )
             )
-            .scalar()
             or 0
         )
         if payment_count > 0:
@@ -602,30 +601,27 @@ class SupplierService(ListResponseMixin):
             raise HTTPException(status_code=400, detail="organization_id is required")
 
         org_id = coerce_uuid(organization_id)
-        query = db.query(Supplier).filter(Supplier.organization_id == org_id)
+        query = select(Supplier).where(Supplier.organization_id == org_id)
 
         if supplier_type:
-            query = query.filter(Supplier.supplier_type == supplier_type)
+            query = query.where(Supplier.supplier_type == supplier_type)
 
         if is_active is not None:
-            query = query.filter(Supplier.is_active == is_active)
+            query = query.where(Supplier.is_active == is_active)
 
         if is_related_party is not None:
-            query = query.filter(Supplier.is_related_party == is_related_party)
-
-        query = apply_search_filter(
-            query,
-            search,
-            [
-                Supplier.supplier_code,
-                Supplier.legal_name,
-                Supplier.trading_name,
-                Supplier.tax_identification_number,
-            ],
-        )
+            query = query.where(Supplier.is_related_party == is_related_party)
+        if search:
+            pattern = f"%{search}%"
+            query = query.where(
+                Supplier.supplier_code.ilike(pattern)
+                | Supplier.legal_name.ilike(pattern)
+                | Supplier.trading_name.ilike(pattern)
+                | Supplier.tax_identification_number.ilike(pattern)
+            )
 
         query = query.order_by(Supplier.legal_name)
-        return query.limit(limit).offset(offset).all()
+        return list(db.scalars(query.limit(limit).offset(offset)).all())
 
     @staticmethod
     def get_supplier_summary(

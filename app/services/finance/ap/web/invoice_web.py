@@ -6,13 +6,14 @@ Provides view-focused data and operations for AP invoice web routes.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+import re
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.purchase_order import PurchaseOrder
@@ -23,8 +24,12 @@ from app.models.finance.ap.supplier_invoice import (
     SupplierInvoiceStatus,
 )
 from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
+from app.models.finance.ap.supplier_invoice_line_tax import SupplierInvoiceLineTax
 from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
+from app.models.finance.tax.tax_code import TaxCode, TaxType
+from app.models.notification import EntityType, NotificationType
+from app.models.person import Person
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
 from app.services.finance.ap.supplier import supplier_service
@@ -49,6 +54,7 @@ from app.services.finance.ap.web.base import (
 from app.services.finance.common.attachment import AttachmentInput, attachment_service
 from app.services.finance.common.sorting import apply_sort
 from app.services.finance.platform.currency_context import get_currency_context
+from app.services.notification import notification_service
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -301,13 +307,13 @@ class InvoiceWebService:
                 "is_compound": tax.is_compound,
                 "is_recoverable": getattr(tax, "is_recoverable", True),
             }
-            for tax in db.query(TaxCode)
-            .filter(
-                TaxCode.organization_id == org_id,
-                TaxCode.is_active == True,
-                TaxCode.applies_to_purchases == True,
-            )
-            .all()
+            for tax in db.scalars(
+                select(TaxCode).where(
+                    TaxCode.organization_id == org_id,
+                    TaxCode.is_active == True,
+                    TaxCode.applies_to_purchases == True,
+                )
+            ).all()
         ]
 
         # Pre-populated data from PO
@@ -341,17 +347,17 @@ class InvoiceWebService:
                     selected_supplier = supplier_option_view(supplier)
 
                 # Get PO lines for pre-populating invoice lines
-                lines = (
-                    db.query(PurchaseOrderLine)
-                    .filter(PurchaseOrderLine.po_id == po_uuid)
+                lines = db.scalars(
+                    select(PurchaseOrderLine)
+                    .where(PurchaseOrderLine.po_id == po_uuid)
                     .order_by(PurchaseOrderLine.line_number)
-                    .all()
-                )
+                ).all()
                 for line in lines:
                     po_lines.append(
                         {
                             "line_id": str(line.line_id),
                             "line_number": line.line_number,
+                            "item_id": str(line.item_id) if line.item_id else "",
                             "description": line.description,
                             "quantity": float(line.quantity_ordered),
                             "unit_price": float(line.unit_price),
@@ -373,15 +379,16 @@ class InvoiceWebService:
                 else 0,
                 "uom": item.base_uom,
             }
-            for item in db.query(Item)
-            .filter(
-                Item.organization_id == org_id,
-                Item.is_active == True,
-                Item.is_purchaseable == True,
-            )
-            .order_by(Item.item_code)
-            .limit(200)
-            .all()
+            for item in db.scalars(
+                select(Item)
+                .where(
+                    Item.organization_id == org_id,
+                    Item.is_active == True,
+                    Item.is_purchaseable == True,
+                )
+                .order_by(Item.item_code)
+                .limit(200)
+            ).all()
         ]
 
         # Get asset accounts for capitalization (AP -> FA integration)
@@ -395,13 +402,14 @@ class InvoiceWebService:
                 "category_name": cat.category_name,
                 "threshold": float(cat.capitalization_threshold),
             }
-            for cat in db.query(AssetCategory)
-            .filter(
-                AssetCategory.organization_id == org_id,
-                AssetCategory.is_active == True,
-            )
-            .order_by(AssetCategory.category_code)
-            .all()
+            for cat in db.scalars(
+                select(AssetCategory)
+                .where(
+                    AssetCategory.organization_id == org_id,
+                    AssetCategory.is_active == True,
+                )
+                .order_by(AssetCategory.category_code)
+            ).all()
         ]
 
         context = {
@@ -452,6 +460,80 @@ class InvoiceWebService:
             invoice_id=invoice.invoice_id,
         )
         lines_view = [invoice_line_view(line, invoice.currency_code) for line in lines]
+
+        # Enrich lines with tax metadata and VAT-per-line display values.
+        primary_tax_ids = {line.tax_code_id for line in lines if line.tax_code_id}
+        tax_map: dict[UUID, TaxCode] = {}
+        if primary_tax_ids:
+            tax_codes = db.scalars(
+                select(TaxCode).where(
+                    TaxCode.organization_id == org_id,
+                    TaxCode.tax_code_id.in_(primary_tax_ids),
+                )
+            ).all()
+            tax_map = {tax.tax_code_id: tax for tax in tax_codes}
+
+        vat_by_line: dict[UUID, Decimal] = {}
+        vat_labels_by_line: dict[UUID, set[str]] = {}
+        line_ids = [line.line_id for line in lines]
+        if line_ids:
+            vat_taxes = db.execute(
+                select(SupplierInvoiceLineTax, TaxCode)
+                .join(
+                    TaxCode, TaxCode.tax_code_id == SupplierInvoiceLineTax.tax_code_id
+                )
+                .where(
+                    SupplierInvoiceLineTax.line_id.in_(line_ids),
+                    TaxCode.organization_id == org_id,
+                    TaxCode.tax_type.in_([TaxType.VAT, TaxType.GST]),
+                )
+            ).all()
+            for line_tax, tax_code in vat_taxes:
+                vat_by_line[line_tax.line_id] = (
+                    vat_by_line.get(line_tax.line_id, Decimal("0"))
+                    + line_tax.tax_amount
+                )
+                rate_label = (
+                    f"{(line_tax.tax_rate * 100).quantize(Decimal('0.01'))}%"
+                    if line_tax.tax_rate < 1
+                    else f"{line_tax.tax_rate}%"
+                )
+                vat_labels_by_line.setdefault(line_tax.line_id, set()).add(
+                    f"{tax_code.tax_code} {rate_label}"
+                )
+
+        for idx, line in enumerate(lines):
+            line_view = lines_view[idx]
+            tax = tax_map.get(line.tax_code_id) if line.tax_code_id else None
+            if tax:
+                line_view["tax_code"] = tax.tax_code
+                line_view["tax_name"] = tax.tax_name
+                line_view["tax_type"] = tax.tax_type.value
+
+            vat_amount = vat_by_line.get(line.line_id, Decimal("0"))
+            if vat_amount == 0 and tax and tax.tax_type in {TaxType.VAT, TaxType.GST}:
+                vat_amount = line.tax_amount
+                rate_label = (
+                    f"{(tax.tax_rate * 100).quantize(Decimal('0.01'))}%"
+                    if tax.tax_rate < 1
+                    else f"{tax.tax_rate}%"
+                )
+                vat_labels_by_line.setdefault(line.line_id, set()).add(
+                    f"{tax.tax_code} {rate_label}"
+                )
+
+            if vat_amount > 0:
+                line_view["vat_amount_raw"] = float(vat_amount)
+                line_view["vat_amount"] = format_currency(
+                    vat_amount, invoice.currency_code
+                )
+                line_view["vat_label"] = ", ".join(
+                    sorted(vat_labels_by_line[line.line_id])
+                )
+            else:
+                line_view["vat_amount_raw"] = 0.0
+                line_view["vat_amount"] = None
+                line_view["vat_label"] = None
 
         # Get attachments
         attachments = attachment_service.list_for_entity(
@@ -598,12 +680,11 @@ class InvoiceWebService:
             )
         )
 
-        lines = (
-            db.query(SupplierInvoiceLine)
-            .filter(SupplierInvoiceLine.invoice_id == inv_id)
+        lines = db.scalars(
+            select(SupplierInvoiceLine)
+            .where(SupplierInvoiceLine.invoice_id == inv_id)
             .order_by(SupplierInvoiceLine.line_number)
-            .all()
-        )
+        ).all()
 
         context["invoice"] = {
             "invoice_id": invoice.invoice_id,
@@ -619,6 +700,7 @@ class InvoiceWebService:
             "lines": [
                 {
                     "line_id": line.line_id,
+                    "item_id": line.item_id,
                     "expense_account_id": line.expense_account_id,
                     "description": line.description,
                     "quantity": line.quantity,
@@ -892,15 +974,131 @@ class InvoiceWebService:
                 status_code=303,
             )
 
+    async def add_invoice_comment_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> RedirectResponse:
+        """Append an internal comment to an AP invoice."""
+        org_id = auth.organization_id
+        user_id = auth.person_id or auth.user_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        if user_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        try:
+            invoice = supplier_invoice_service.get(
+                db, invoice_id, organization_id=org_id
+            )
+        except Exception:
+            return RedirectResponse(
+                url="/finance/ap/invoices?error=Invoice+not+found",
+                status_code=303,
+            )
+
+        form = await request.form()
+        comment_text = str(form.get("comment", "")).strip()
+        if not comment_text:
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?error=Comment+is+required#comments",
+                status_code=303,
+            )
+
+        timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+        entry = f"[{timestamp}] {user_id}: {comment_text}"
+        invoice.comments = f"{invoice.comments}\n{entry}" if invoice.comments else entry
+
+        mentioned_person_ids: set[UUID] = set()
+
+        # Support @email mentions.
+        mention_pattern = re.compile(
+            r"@([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})"
+        )
+        mentioned_emails = {m.lower() for m in mention_pattern.findall(comment_text)}
+        if mentioned_emails:
+            email_matches = db.scalars(
+                select(Person).where(
+                    Person.organization_id == org_id,
+                    func.lower(Person.email).in_(mentioned_emails),
+                )
+            ).all()
+            mentioned_person_ids.update(person.id for person in email_matches)
+
+        # Support @Display Name mentions (for inline tagging in comment text).
+        if "@" in comment_text:
+            normalized_comment = " ".join(comment_text.lower().split())
+            org_people = db.scalars(
+                select(Person).where(Person.organization_id == org_id)
+            ).all()
+            for person in org_people:
+                candidate_names = {
+                    (person.display_name or "").strip(),
+                    f"{person.first_name} {person.last_name}".strip(),
+                }
+                for candidate in candidate_names:
+                    if not candidate:
+                        continue
+                    candidate_norm = " ".join(candidate.lower().split())
+                    needle = f"@{candidate_norm}"
+                    pos = normalized_comment.find(needle)
+                    while pos != -1:
+                        end_pos = pos + len(needle)
+                        if (
+                            end_pos == len(normalized_comment)
+                            or not normalized_comment[end_pos].isalnum()
+                        ):
+                            mentioned_person_ids.add(person.id)
+                            break
+                        pos = normalized_comment.find(needle, pos + 1)
+
+        if mentioned_person_ids:
+            actor_id = coerce_uuid(user_id)
+            actor = db.get(Person, actor_id)
+            actor_name = actor.name if actor else "A teammate"
+            mentioned_people = db.scalars(
+                select(Person).where(Person.id.in_(mentioned_person_ids))
+            ).all()
+            for person in mentioned_people:
+                if person.id == actor_id:
+                    continue
+                notification_service.create(
+                    db=db,
+                    organization_id=coerce_uuid(org_id),
+                    recipient_id=person.id,
+                    entity_type=EntityType.INVOICE,
+                    entity_id=coerce_uuid(invoice.invoice_id),
+                    notification_type=NotificationType.MENTION,
+                    title=f"Mentioned on AP invoice {invoice.invoice_number}",
+                    message=(
+                        f"{actor_name} mentioned you in a comment on invoice "
+                        f"{invoice.invoice_number}."
+                    ),
+                    action_url=f"/finance/ap/invoices/{invoice_id}#comments",
+                    actor_id=actor_id,
+                )
+        db.commit()
+
+        return RedirectResponse(
+            url=f"/finance/ap/invoices/{invoice_id}?success=Comment+added#comments",
+            status_code=303,
+        )
+
     async def upload_invoice_attachment_response(
         self,
+        request: Request,
         invoice_id: str,
         file: UploadFile,
         description: str | None,
         auth: WebAuthContext,
         db: Session,
-    ) -> RedirectResponse:
+    ) -> RedirectResponse | JSONResponse:
         """Handle invoice attachment upload."""
+        wants_json = request.headers.get(
+            "x-requested-with"
+        ) == "fetch" or "application/json" in request.headers.get("accept", "")
         try:
             org_id = auth.organization_id
             user_id = auth.person_id
@@ -910,6 +1108,10 @@ class InvoiceWebService:
                 raise HTTPException(status_code=401, detail="Authentication required")
             invoice = supplier_invoice_service.get(db, invoice_id)
             if not invoice or invoice.organization_id != auth.organization_id:
+                if wants_json:
+                    return JSONResponse(
+                        status_code=404, content={"detail": "Invoice not found"}
+                    )
                 return RedirectResponse(
                     url=f"/finance/ap/invoices/{invoice_id}?error=Invoice+not+found",
                     status_code=303,
@@ -932,18 +1134,26 @@ class InvoiceWebService:
                 uploaded_by=user_id,
             )
 
+            if wants_json:
+                return JSONResponse(content={"success": True})
             return RedirectResponse(
                 url=f"/finance/ap/invoices/{invoice_id}?success=Attachment+uploaded",
                 status_code=303,
             )
 
         except ValueError as e:
+            if wants_json:
+                return JSONResponse(status_code=400, content={"detail": str(e)})
             return RedirectResponse(
                 url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
                 status_code=303,
             )
         except Exception:
             logger.exception("upload_invoice_attachment_response: failed")
+            if wants_json:
+                return JSONResponse(
+                    status_code=500, content={"detail": "Upload failed"}
+                )
             return RedirectResponse(
                 url=f"/finance/ap/invoices/{invoice_id}?error=Upload+failed",
                 status_code=303,

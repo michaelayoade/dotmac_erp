@@ -11,7 +11,7 @@ from typing import Any, TypeVar, cast
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, inspect
+from sqlalchemy import and_, inspect, select
 from sqlalchemy.orm import Session
 
 from app.services.common import coerce_uuid
@@ -120,7 +120,7 @@ def validate_unique_code(
         if pk_column is not None:
             filters.append(pk_column != coerce_uuid(exclude_id))
 
-    existing = db.query(model_class).filter(and_(*filters)).first()
+    existing = db.scalar(select(model_class).where(and_(*filters)))
 
     if existing:
         display_name = entity_name or get_entity_display_name(model_class)
@@ -207,10 +207,10 @@ def get_org_scoped_entity_by_field(
     if org_column is None:
         raise ValueError(f"Model {model_class.__name__} has no 'organization_id' field")
 
-    entity = (
-        db.query(model_class)
-        .filter(and_(org_column == org_id, field_column == field_value))
-        .first()
+    entity = db.scalar(
+        select(model_class).where(
+            and_(org_column == org_id, field_column == field_value)
+        )
     )
 
     if entity is None and raise_on_missing:

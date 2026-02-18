@@ -66,6 +66,8 @@ class SchedulingService:
     - Schedule queries
     """
 
+    VALID_WORK_DAYS = {"MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"}
+
     def __init__(self, db: Session) -> None:
         self.db = db
 
@@ -154,6 +156,8 @@ class SchedulingService:
         night_shift_type_id: UUID | None = None,
         cycle_weeks: int = 1,
         work_days: list[str] | None = None,
+        day_work_days: list[str] | None = None,
+        night_work_days: list[str] | None = None,
         description: str | None = None,
         is_active: bool = True,
     ) -> ShiftPattern:
@@ -162,6 +166,23 @@ class SchedulingService:
         if rotation_type == RotationType.ROTATING and not night_shift_type_id:
             raise SchedulingServiceError("Rotating patterns require a night shift type")
 
+        resolved_work_days = work_days or ["MON", "TUE", "WED", "THU", "FRI"]
+        resolved_day_work_days = day_work_days
+        resolved_night_work_days = night_work_days
+        if rotation_type == RotationType.ROTATING:
+            resolved_day_work_days = (
+                day_work_days or work_days or ["MON", "TUE", "WED", "THU", "FRI"]
+            )
+            resolved_night_work_days = (
+                night_work_days or work_days or ["MON", "TUE", "WED", "THU", "FRI"]
+            )
+
+        self._validate_day_codes("work_days", resolved_work_days)
+        if resolved_day_work_days is not None:
+            self._validate_day_codes("day_work_days", resolved_day_work_days)
+        if resolved_night_work_days is not None:
+            self._validate_day_codes("night_work_days", resolved_night_work_days)
+
         pattern = ShiftPattern(
             organization_id=org_id,
             pattern_code=pattern_code,
@@ -169,7 +190,9 @@ class SchedulingService:
             description=description,
             rotation_type=rotation_type,
             cycle_weeks=cycle_weeks,
-            work_days=work_days or ["MON", "TUE", "WED", "THU", "FRI"],
+            work_days=resolved_work_days,
+            day_work_days=resolved_day_work_days,
+            night_work_days=resolved_night_work_days,
             day_shift_type_id=day_shift_type_id,
             night_shift_type_id=night_shift_type_id,
             is_active=is_active,
@@ -192,7 +215,12 @@ class SchedulingService:
         return pattern
 
     # Fields that can be explicitly set to None (cleared)
-    PATTERN_CLEARABLE_FIELDS = {"description", "night_shift_type_id"}
+    PATTERN_CLEARABLE_FIELDS = {
+        "description",
+        "night_shift_type_id",
+        "day_work_days",
+        "night_work_days",
+    }
 
     def update_pattern(
         self,
@@ -218,6 +246,34 @@ class SchedulingService:
         ):
             raise SchedulingServiceError("Rotating patterns require a night shift type")
 
+        # Maintain backward compatibility for existing rotating patterns:
+        # default missing rotating day lists to generic work_days.
+        if pattern.rotation_type == RotationType.ROTATING:
+            if not pattern.day_work_days:
+                pattern.day_work_days = pattern.work_days or [
+                    "MON",
+                    "TUE",
+                    "WED",
+                    "THU",
+                    "FRI",
+                ]
+            if not pattern.night_work_days:
+                pattern.night_work_days = pattern.work_days or [
+                    "MON",
+                    "TUE",
+                    "WED",
+                    "THU",
+                    "FRI",
+                ]
+
+        self._validate_day_codes(
+            "work_days", pattern.work_days or ["MON", "TUE", "WED", "THU", "FRI"]
+        )
+        if pattern.day_work_days is not None:
+            self._validate_day_codes("day_work_days", pattern.day_work_days)
+        if pattern.night_work_days is not None:
+            self._validate_day_codes("night_work_days", pattern.night_work_days)
+
         try:
             self.db.flush()
         except IntegrityError as e:
@@ -232,6 +288,16 @@ class SchedulingService:
             raise
         logger.info("Updated shift pattern: %s", pattern.pattern_code)
         return pattern
+
+    def _validate_day_codes(self, field_name: str, day_codes: list[str]) -> None:
+        """Validate weekday codes used in shift patterns."""
+        if not day_codes:
+            raise SchedulingServiceError(f"{field_name} cannot be empty")
+        invalid_codes = [day for day in day_codes if day not in self.VALID_WORK_DAYS]
+        if invalid_codes:
+            raise SchedulingServiceError(
+                f"{field_name} contains invalid day codes: {invalid_codes}"
+            )
 
     def delete_pattern(self, org_id: UUID, pattern_id: UUID) -> None:
         """Delete a shift pattern (soft delete by deactivating)."""

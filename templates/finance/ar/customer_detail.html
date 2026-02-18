@@ -80,7 +80,7 @@
                 {{ status_badge('active' if customer.is_active else 'inactive', 'sm') }}
                 <div class="text-right">
                     <p class="text-xs uppercase tracking-wide text-slate-500">Balance</p>
-                    <p class="text-lg font-semibold text-slate-900 dark:text-white">{{ customer.balance | default("$0.00") }}</p>
+                    <p class="text-lg font-semibold font-mono tabular-nums text-slate-900 dark:text-white">{{ customer.balance | default("0.00") }}</p>
                 </div>
             </div>
         </div>
@@ -95,7 +95,7 @@
             </div>
             <div>
                 <p class="text-xs uppercase tracking-wide text-slate-500">Credit Limit</p>
-                <p class="text-sm font-medium text-slate-900 dark:text-white">{{ customer.credit_limit | default("$0.00") }}</p>
+                <p class="text-sm font-medium font-mono tabular-nums text-slate-900 dark:text-white">{{ customer.credit_limit | default("0.00") }}</p>
             </div>
         </div>
     </div>

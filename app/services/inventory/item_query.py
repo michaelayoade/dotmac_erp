@@ -36,7 +36,7 @@ def build_item_query(
     org_id = coerce_uuid(organization_id)
 
     query = (
-        db.query(Item)
+        Query([Item], session=db)
         .join(ItemCategory, Item.category_id == ItemCategory.category_id)
         .filter(Item.organization_id == org_id)
     )

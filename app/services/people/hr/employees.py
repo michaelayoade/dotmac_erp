@@ -993,21 +993,21 @@ class EmployeeService:
         if provider == AuthProvider.local and (not username or not password):
             raise ValidationError("Username and password are required for local auth")
 
-        existing = (
-            self.db.query(UserCredential)
-            .filter(UserCredential.person_id == person.id)
-            .filter(UserCredential.provider == provider)
-            .first()
+        existing = self.db.scalar(
+            select(UserCredential).where(
+                UserCredential.person_id == person.id,
+                UserCredential.provider == provider,
+            )
         )
         if existing:
             raise ValidationError("User credentials already exist for this employee")
 
         if username:
-            username_in_use = (
-                self.db.query(UserCredential)
-                .filter(UserCredential.provider == provider)
-                .filter(UserCredential.username == username)
-                .first()
+            username_in_use = self.db.scalar(
+                select(UserCredential).where(
+                    UserCredential.provider == provider,
+                    UserCredential.username == username,
+                )
             )
             if username_in_use:
                 raise ValidationError("Username is already in use")

@@ -9,6 +9,7 @@ import logging
 from decimal import Decimal
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
@@ -48,14 +49,12 @@ def create_tax_transactions(
     tax_transaction_ids: list[UUID] = []
 
     # Get fiscal period from invoice date
-    fiscal_period = (
-        db.query(FiscalPeriod)
-        .filter(
+    fiscal_period = db.scalar(
+        select(FiscalPeriod).where(
             FiscalPeriod.organization_id == organization_id,
             FiscalPeriod.start_date <= invoice.invoice_date,
             FiscalPeriod.end_date >= invoice.invoice_date,
         )
-        .first()
     )
 
     if not fiscal_period:

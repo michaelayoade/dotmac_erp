@@ -15,7 +15,7 @@ from datetime import UTC, date, datetime
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
@@ -49,6 +49,50 @@ class PeriodGuardService(ListResponseMixin):
     POSTABLE_STATUSES = {PeriodStatus.OPEN, PeriodStatus.REOPENED}
 
     @staticmethod
+    def _resolve_period_for_date(
+        db: Session,
+        organization_id: UUID,
+        target_date: date,
+        *,
+        prefer_postable: bool = False,
+        allow_adjustment: bool = False,
+    ) -> FiscalPeriod | None:
+        """
+        Resolve the best fiscal period for a date.
+
+        If multiple periods overlap, choose deterministically:
+        - Most specific period first (later start date, earlier end date).
+        - Optionally prefer postable statuses (OPEN/REOPENED) over closed periods.
+        """
+        org_id = coerce_uuid(organization_id)
+        periods = (
+            db.scalars(
+                select(FiscalPeriod)
+                .where(
+                    and_(
+                        FiscalPeriod.organization_id == org_id,
+                        FiscalPeriod.start_date <= target_date,
+                        FiscalPeriod.end_date >= target_date,
+                    )
+                )
+                .order_by(FiscalPeriod.start_date.desc(), FiscalPeriod.end_date.asc())
+            ).all()
+            or []
+        )
+        if not periods:
+            return None
+
+        if prefer_postable:
+            for period in periods:
+                if period.status not in PeriodGuardService.POSTABLE_STATUSES:
+                    continue
+                if period.is_adjustment_period and not allow_adjustment:
+                    continue
+                return period
+
+        return periods[0]
+
+    @staticmethod
     def can_post_to_date(
         db: Session,
         organization_id: UUID,
@@ -69,24 +113,20 @@ class PeriodGuardService(ListResponseMixin):
         Returns:
             PeriodGuardResult with allowed status and details
         """
-        org_id = coerce_uuid(organization_id)
-
-        # Find the period containing this date
-        period = (
-            db.query(FiscalPeriod)
-            .filter(
-                and_(
-                    FiscalPeriod.organization_id == org_id,
-                    FiscalPeriod.start_date <= posting_date,
-                    FiscalPeriod.end_date >= posting_date,
-                )
-            )
-            .first()
+        # Find the best matching period containing this date.
+        period = PeriodGuardService._resolve_period_for_date(
+            db,
+            organization_id,
+            posting_date,
+            prefer_postable=True,
+            allow_adjustment=allow_adjustment,
         )
 
         if not period:
             # Auto-create period on demand
-            period = PeriodGuardService._ensure_period_exists(db, org_id, posting_date)
+            period = PeriodGuardService._ensure_period_exists(
+                db, coerce_uuid(organization_id), posting_date
+            )
             if not period:
                 return PeriodGuardResult(
                     is_allowed=False,
@@ -184,28 +224,20 @@ class PeriodGuardService(ListResponseMixin):
         month = target_date.month
 
         # Check if period already exists (race condition guard)
-        existing = (
-            db.query(FiscalPeriod)
-            .filter(
-                and_(
-                    FiscalPeriod.organization_id == org_id,
-                    FiscalPeriod.start_date <= target_date,
-                    FiscalPeriod.end_date >= target_date,
-                )
-            )
-            .first()
+        existing = PeriodGuardService._resolve_period_for_date(
+            db,
+            org_id,
+            target_date,
         )
         if existing:
             return existing
 
         # Get or create fiscal year
-        fiscal_year = (
-            db.query(FiscalYear)
-            .filter(
+        fiscal_year = db.scalar(
+            select(FiscalYear).where(
                 FiscalYear.organization_id == org_id,
                 FiscalYear.year_code == str(year),
             )
-            .first()
         )
 
         if not fiscal_year:
@@ -296,18 +328,10 @@ class PeriodGuardService(ListResponseMixin):
         Returns:
             FiscalPeriod or None if not found
         """
-        org_id = coerce_uuid(organization_id)
-
-        return (
-            db.query(FiscalPeriod)
-            .filter(
-                and_(
-                    FiscalPeriod.organization_id == org_id,
-                    FiscalPeriod.start_date <= target_date,
-                    FiscalPeriod.end_date >= target_date,
-                )
-            )
-            .first()
+        return PeriodGuardService._resolve_period_for_date(
+            db,
+            organization_id,
+            target_date,
         )
 
     @staticmethod
@@ -333,17 +357,16 @@ class PeriodGuardService(ListResponseMixin):
         if include_reopened:
             statuses.append(PeriodStatus.REOPENED)
 
-        return (
-            db.query(FiscalPeriod)
-            .filter(
+        return db.scalars(
+            select(FiscalPeriod)
+            .where(
                 and_(
                     FiscalPeriod.organization_id == org_id,
                     FiscalPeriod.status.in_(statuses),
                 )
             )
             .order_by(FiscalPeriod.start_date)
-            .all()
-        )
+        ).all()
 
     @staticmethod
     def get_current_period(
@@ -654,23 +677,23 @@ class PeriodGuardService(ListResponseMixin):
         Returns:
             List of FiscalPeriod objects
         """
-        query = db.query(FiscalPeriod)
+        stmt = select(FiscalPeriod)
 
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 FiscalPeriod.organization_id == coerce_uuid(organization_id)
             )
 
         if fiscal_year_id:
-            query = query.filter(
+            stmt = stmt.where(
                 FiscalPeriod.fiscal_year_id == coerce_uuid(fiscal_year_id)
             )
 
         if status:
-            query = query.filter(FiscalPeriod.status == status)
+            stmt = stmt.where(FiscalPeriod.status == status)
 
-        query = query.order_by(FiscalPeriod.start_date)
-        return query.limit(limit).offset(offset).all()
+        stmt = stmt.order_by(FiscalPeriod.start_date).limit(limit).offset(offset)
+        return db.scalars(stmt).all()
 
 
 # Module-level singleton instance

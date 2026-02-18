@@ -14,6 +14,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.supplier import Supplier
@@ -163,11 +164,12 @@ class APInvoicePostingSaga(SagaOrchestrator):
             )
 
         # Load invoice lines
-        lines = (
-            db.query(SupplierInvoiceLine)
-            .filter(SupplierInvoiceLine.invoice_id == invoice_id)
-            .order_by(SupplierInvoiceLine.line_number)
-            .all()
+        lines = list(
+            db.scalars(
+                select(SupplierInvoiceLine)
+                .where(SupplierInvoiceLine.invoice_id == invoice_id)
+                .order_by(SupplierInvoiceLine.line_number)
+            ).all()
         )
 
         if not lines:
@@ -214,11 +216,12 @@ class APInvoicePostingSaga(SagaOrchestrator):
         supplier = db.get(Supplier, invoice.supplier_id)
         if not supplier:
             return StepResult(success=False, error="Supplier not found")
-        lines = (
-            db.query(SupplierInvoiceLine)
-            .filter(SupplierInvoiceLine.invoice_id == invoice_id)
-            .order_by(SupplierInvoiceLine.line_number)
-            .all()
+        lines = list(
+            db.scalars(
+                select(SupplierInvoiceLine)
+                .where(SupplierInvoiceLine.invoice_id == invoice_id)
+                .order_by(SupplierInvoiceLine.line_number)
+            ).all()
         )
 
         exchange_rate = invoice.exchange_rate or Decimal("1.0")
@@ -510,24 +513,24 @@ class APInvoicePostingSaga(SagaOrchestrator):
         supplier = db.get(Supplier, invoice.supplier_id)
         if not supplier:
             return StepResult(success=False, error="Supplier not found")
-        lines = (
-            db.query(SupplierInvoiceLine)
-            .filter(SupplierInvoiceLine.invoice_id == invoice_id)
-            .all()
+        lines = list(
+            db.scalars(
+                select(SupplierInvoiceLine).where(
+                    SupplierInvoiceLine.invoice_id == invoice_id
+                )
+            ).all()
         )
 
         exchange_rate = invoice.exchange_rate or Decimal("1.0")
         is_credit_note = invoice.invoice_type == SupplierInvoiceType.CREDIT_NOTE
 
         # Get fiscal period
-        fiscal_period = (
-            db.query(FiscalPeriod)
-            .filter(
+        fiscal_period = db.scalar(
+            select(FiscalPeriod).where(
                 FiscalPeriod.organization_id == org_id,
                 FiscalPeriod.start_date <= invoice.invoice_date,
                 FiscalPeriod.end_date >= invoice.invoice_date,
             )
-            .first()
         )
 
         if not fiscal_period:

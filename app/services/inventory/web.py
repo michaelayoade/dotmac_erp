@@ -13,7 +13,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import case, func, or_
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.core_config.numbering_sequence import (
@@ -93,8 +93,8 @@ def _get_batch_stock_quantities(
         return {}
 
     # Get on-hand quantities from transactions (grouped by item)
-    on_hand_query = (
-        db.query(
+    on_hand_stmt = (
+        select(
             InventoryTransaction.item_id,
             func.sum(
                 case(
@@ -123,7 +123,7 @@ def _get_batch_stock_quantities(
                 )
             ).label("on_hand"),
         )
-        .filter(
+        .where(
             InventoryTransaction.organization_id == organization_id,
             InventoryTransaction.item_id.in_(item_ids),
         )
@@ -131,16 +131,17 @@ def _get_batch_stock_quantities(
     )
 
     on_hand_results = {
-        row.item_id: row.on_hand or Decimal("0") for row in on_hand_query.all()
+        row.item_id: row.on_hand or Decimal("0")
+        for row in db.execute(on_hand_stmt).all()
     }
 
     # Get reserved quantities from lots (grouped by item)
-    reserved_query = (
-        db.query(
+    reserved_stmt = (
+        select(
             InventoryLot.item_id,
             func.sum(InventoryLot.quantity_allocated).label("reserved"),
         )
-        .filter(
+        .where(
             InventoryLot.organization_id == organization_id,
             InventoryLot.item_id.in_(item_ids),
         )
@@ -148,7 +149,8 @@ def _get_batch_stock_quantities(
     )
 
     reserved_results = {
-        row.item_id: row.reserved or Decimal("0") for row in reserved_query.all()
+        row.item_id: row.reserved or Decimal("0")
+        for row in db.execute(reserved_stmt).all()
     }
 
     # Build result dict
@@ -222,26 +224,24 @@ class InventoryWebService:
         item_code_preview = InventoryWebService._sequence_preview(sequence, today)
 
         # Get categories for dropdown
-        categories = (
-            db.query(ItemCategory)
-            .filter(
+        categories = db.scalars(
+            select(ItemCategory)
+            .where(
                 ItemCategory.organization_id == org_id,
                 ItemCategory.is_active.is_(True),
             )
             .order_by(ItemCategory.category_code)
-            .all()
-        )
+        ).all()
 
         # Get GL accounts for inline category creation modal
-        accounts = (
-            db.query(Account)
-            .filter(
+        accounts = db.scalars(
+            select(Account)
+            .where(
                 Account.organization_id == org_id,
                 Account.is_active.is_(True),
             )
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
 
         # Item types and costing methods for dropdowns
         from app.models.finance.ap.supplier import Supplier
@@ -257,15 +257,14 @@ class InventoryWebService:
         ]
 
         # Get suppliers list for INV → AP integration (default supplier)
-        suppliers = (
-            db.query(Supplier)
-            .filter(
+        suppliers = db.scalars(
+            select(Supplier)
+            .where(
                 Supplier.organization_id == org_id,
                 Supplier.is_active.is_(True),
             )
             .order_by(Supplier.legal_name)
-            .all()
-        )
+        ).all()
         suppliers_list = [
             {
                 "supplier_id": str(s.supplier_id),
@@ -290,14 +289,12 @@ class InventoryWebService:
         # Load existing item for edit
         if item_id:
             item_uuid = coerce_uuid(item_id)
-            item = (
-                db.query(Item)
-                .filter(
+            item = db.scalars(
+                select(Item).where(
                     Item.item_id == item_uuid,
                     Item.organization_id == org_id,
                 )
-                .first()
-            )
+            ).first()
             context["item"] = item
 
         return context
@@ -314,15 +311,14 @@ class InventoryWebService:
         org_id = coerce_uuid(organization_id)
         item_uuid = coerce_uuid(item_id)
 
-        item = (
-            db.query(Item, ItemCategory)
+        item = db.execute(
+            select(Item, ItemCategory)
             .join(ItemCategory, Item.category_id == ItemCategory.category_id)
-            .filter(
+            .where(
                 Item.item_id == item_uuid,
                 Item.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not item:
             return {
@@ -451,30 +447,33 @@ class InventoryWebService:
 
         total_pages = max(1, (total_count + limit - 1) // limit)
 
-        categories = (
-            db.query(ItemCategory)
-            .filter(
+        categories = db.scalars(
+            select(ItemCategory)
+            .where(
                 ItemCategory.organization_id == org_id,
                 ItemCategory.is_active.is_(True),
             )
             .order_by(ItemCategory.category_code)
-            .all()
-        )
+        ).all()
 
         # Pre-computed stat-card counts (across ALL items, not just the page)
         active_count = (
-            db.query(func.count(Item.item_id))
-            .filter(Item.organization_id == org_id, Item.is_active.is_(True))
-            .scalar()
-        ) or 0
-        stock_count = (
-            db.query(func.count(Item.item_id))
-            .filter(
-                Item.organization_id == org_id,
-                Item.item_type == ItemType.INVENTORY,
+            db.scalar(
+                select(func.count(Item.item_id)).where(
+                    Item.organization_id == org_id, Item.is_active.is_(True)
+                )
             )
-            .scalar()
-        ) or 0
+            or 0
+        )
+        stock_count = (
+            db.scalar(
+                select(func.count(Item.item_id)).where(
+                    Item.organization_id == org_id,
+                    Item.item_type == ItemType.INVENTORY,
+                )
+            )
+            or 0
+        )
 
         return {
             "items": items_view,
@@ -505,40 +504,48 @@ class InventoryWebService:
 
         type_value = _parse_transaction_type(transaction_type)
 
+        conditions = [InventoryTransaction.organization_id == org_id]
         query = (
-            db.query(InventoryTransaction, Item, Warehouse)
+            select(InventoryTransaction, Item, Warehouse)
             .join(Item, InventoryTransaction.item_id == Item.item_id)
             .join(
                 Warehouse, InventoryTransaction.warehouse_id == Warehouse.warehouse_id
             )
-            .filter(InventoryTransaction.organization_id == org_id)
+            .where(*conditions)
         )
 
         if type_value:
-            query = query.filter(InventoryTransaction.transaction_type == type_value)
+            conditions.append(InventoryTransaction.transaction_type == type_value)
+            query = query.where(InventoryTransaction.transaction_type == type_value)
 
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
-                or_(
-                    InventoryTransaction.reference.ilike(search_pattern),
-                    Item.item_code.ilike(search_pattern),
-                    Item.item_name.ilike(search_pattern),
-                )
+            search_filter = or_(
+                InventoryTransaction.reference.ilike(search_pattern),
+                Item.item_code.ilike(search_pattern),
+                Item.item_name.ilike(search_pattern),
             )
+            conditions.append(search_filter)
+            query = query.where(search_filter)
 
         total_count = (
-            query.with_entities(
-                func.count(InventoryTransaction.transaction_id)
-            ).scalar()
+            db.scalar(
+                select(func.count(InventoryTransaction.transaction_id))
+                .select_from(InventoryTransaction)
+                .join(Item, InventoryTransaction.item_id == Item.item_id)
+                .join(
+                    Warehouse,
+                    InventoryTransaction.warehouse_id == Warehouse.warehouse_id,
+                )
+                .where(*conditions)
+            )
             or 0
         )
-        rows = (
+        rows = db.execute(
             query.order_by(InventoryTransaction.transaction_date.desc())
             .limit(limit)
             .offset(offset)
-            .all()
-        )
+        ).all()
 
         transactions_view = []
         for txn, item, warehouse in rows:
@@ -1017,12 +1024,13 @@ class InventoryWebService:
         category_item_counts = {}
         for cat in categories:
             count = (
-                db.query(Item)
-                .filter(
-                    Item.category_id == cat.category_id,
-                    Item.is_active.is_(True),
+                db.scalar(
+                    select(func.count(Item.item_id)).where(
+                        Item.category_id == cat.category_id,
+                        Item.is_active.is_(True),
+                    )
                 )
-                .count()
+                or 0
             )
             category_item_counts[str(cat.category_id)] = count
 
@@ -1047,26 +1055,24 @@ class InventoryWebService:
         org_id = coerce_uuid(organization_id)
 
         # Get GL accounts for dropdowns
-        accounts = (
-            db.query(Account)
-            .filter(
+        accounts = db.scalars(
+            select(Account)
+            .where(
                 Account.organization_id == org_id,
                 Account.is_active.is_(True),
             )
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
 
         # Get parent categories
-        parent_categories = (
-            db.query(ItemCategory)
-            .filter(
+        parent_categories = db.scalars(
+            select(ItemCategory)
+            .where(
                 ItemCategory.organization_id == org_id,
                 ItemCategory.is_active.is_(True),
             )
             .order_by(ItemCategory.category_code)
-            .all()
-        )
+        ).all()
 
         context = {
             "accounts": accounts,
@@ -1076,14 +1082,12 @@ class InventoryWebService:
 
         if category_id:
             cat_uuid = coerce_uuid(category_id)
-            category = (
-                db.query(ItemCategory)
-                .filter(
+            category = db.scalars(
+                select(ItemCategory).where(
                     ItemCategory.category_id == cat_uuid,
                     ItemCategory.organization_id == org_id,
                 )
-                .first()
-            )
+            ).first()
             context["category"] = category
             # Filter out the current category from parent options
             context["parent_categories"] = [
@@ -1350,14 +1354,12 @@ class InventoryWebService:
 
         if warehouse_id:
             wh_uuid = coerce_uuid(warehouse_id)
-            warehouse = (
-                db.query(Warehouse)
-                .filter(
+            warehouse = db.scalars(
+                select(Warehouse).where(
                     Warehouse.warehouse_id == wh_uuid,
                     Warehouse.organization_id == org_id,
                 )
-                .first()
-            )
+            ).first()
             context["warehouse"] = warehouse
 
         return context
@@ -1372,14 +1374,12 @@ class InventoryWebService:
         org_id = coerce_uuid(organization_id)
         wh_uuid = coerce_uuid(warehouse_id)
 
-        warehouse = (
-            db.query(Warehouse)
-            .filter(
+        warehouse = db.scalars(
+            select(Warehouse).where(
                 Warehouse.warehouse_id == wh_uuid,
                 Warehouse.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not warehouse:
             return {"warehouse": None}
@@ -1762,16 +1762,15 @@ class InventoryTransactionWebService:
         org_id = coerce_uuid(organization_id)
 
         # Get items
-        items = (
-            db.query(Item)
-            .filter(
+        items = db.scalars(
+            select(Item)
+            .where(
                 Item.organization_id == org_id,
                 Item.is_active.is_(True),
                 Item.track_inventory.is_(True),
             )
             .order_by(Item.item_code)
-            .all()
-        )
+        ).all()
         items_list = [
             {
                 "item_id": str(i.item_id),
@@ -1785,15 +1784,14 @@ class InventoryTransactionWebService:
         ]
 
         # Get warehouses
-        warehouses = (
-            db.query(Warehouse)
-            .filter(
+        warehouses = db.scalars(
+            select(Warehouse)
+            .where(
                 Warehouse.organization_id == org_id,
                 Warehouse.is_active.is_(True),
             )
             .order_by(Warehouse.warehouse_code)
-            .all()
-        )
+        ).all()
         warehouses_list = [
             {
                 "warehouse_id": str(w.warehouse_id),
@@ -1886,15 +1884,13 @@ class InventoryTransactionWebService:
             txn_date = datetime.strptime(transaction_date, "%Y-%m-%d")
 
             # Get fiscal period
-            fiscal_period = (
-                db.query(FiscalPeriod)
-                .filter(
+            fiscal_period = db.scalars(
+                select(FiscalPeriod).where(
                     FiscalPeriod.organization_id == org_id,
                     FiscalPeriod.start_date <= txn_date.date(),
                     FiscalPeriod.end_date >= txn_date.date(),
                 )
-                .first()
-            )
+            ).first()
 
             if not fiscal_period:
                 return RedirectResponse(
@@ -1972,15 +1968,13 @@ class InventoryTransactionWebService:
             txn_date = datetime.strptime(transaction_date, "%Y-%m-%d")
 
             # Get fiscal period
-            fiscal_period = (
-                db.query(FiscalPeriod)
-                .filter(
+            fiscal_period = db.scalars(
+                select(FiscalPeriod).where(
                     FiscalPeriod.organization_id == org_id,
                     FiscalPeriod.start_date <= txn_date.date(),
                     FiscalPeriod.end_date >= txn_date.date(),
                 )
-                .first()
-            )
+            ).first()
 
             if not fiscal_period:
                 return RedirectResponse(
@@ -2062,15 +2056,13 @@ class InventoryTransactionWebService:
             txn_date = datetime.strptime(transaction_date, "%Y-%m-%d")
 
             # Get fiscal period
-            fiscal_period = (
-                db.query(FiscalPeriod)
-                .filter(
+            fiscal_period = db.scalars(
+                select(FiscalPeriod).where(
                     FiscalPeriod.organization_id == org_id,
                     FiscalPeriod.start_date <= txn_date.date(),
                     FiscalPeriod.end_date >= txn_date.date(),
                 )
-                .first()
-            )
+            ).first()
 
             if not fiscal_period:
                 return RedirectResponse(

@@ -12,6 +12,7 @@ from datetime import UTC, date, datetime
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
@@ -64,13 +65,11 @@ class FiscalYearService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         # Check for duplicate year code
-        existing = (
-            db.query(FiscalYear)
-            .filter(
+        existing = db.scalar(
+            select(FiscalYear).where(
                 FiscalYear.organization_id == org_id,
                 FiscalYear.year_code == input.year_code,
             )
-            .first()
         )
         if existing:
             raise HTTPException(
@@ -190,12 +189,15 @@ class FiscalYearService(ListResponseMixin):
 
         # Check all periods are hard closed
         open_periods = (
-            db.query(FiscalPeriod)
-            .filter(
-                FiscalPeriod.fiscal_year_id == year_id,
-                FiscalPeriod.status != PeriodStatus.HARD_CLOSED,
+            db.scalar(
+                select(func.count())
+                .select_from(FiscalPeriod)
+                .where(
+                    FiscalPeriod.fiscal_year_id == year_id,
+                    FiscalPeriod.status != PeriodStatus.HARD_CLOSED,
+                )
             )
-            .count()
+            or 0
         )
 
         if open_periods > 0:
@@ -263,13 +265,11 @@ class FiscalYearService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        year = (
-            db.query(FiscalYear)
-            .filter(
+        year = db.scalar(
+            select(FiscalYear).where(
                 FiscalYear.organization_id == org_id,
                 FiscalYear.year_code == year_code,
             )
-            .first()
         )
         if not year:
             raise HTTPException(status_code=404, detail="Fiscal year not found")
@@ -296,18 +296,18 @@ class FiscalYearService(ListResponseMixin):
         Returns:
             List of FiscalYear objects
         """
-        query = db.query(FiscalYear)
+        stmt = select(FiscalYear)
 
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 FiscalYear.organization_id == coerce_uuid(organization_id)
             )
 
         if is_closed is not None:
-            query = query.filter(FiscalYear.is_closed == is_closed)
+            stmt = stmt.where(FiscalYear.is_closed == is_closed)
 
-        query = query.order_by(FiscalYear.start_date.desc())
-        return query.limit(limit).offset(offset).all()
+        stmt = stmt.order_by(FiscalYear.start_date.desc()).limit(limit).offset(offset)
+        return db.scalars(stmt).all()
 
 
 # Module-level singleton instance

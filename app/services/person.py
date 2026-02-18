@@ -1,6 +1,7 @@
 import logging
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.person import Person, PersonStatus
@@ -63,15 +64,15 @@ class People(ListResponseMixin):
         limit: int,
         offset: int,
     ):
-        query = db.query(Person)
+        query = select(Person)
         if email:
-            query = query.filter(Person.email.ilike(f"%{email}%"))
+            query = query.where(Person.email.ilike(f"%{email}%"))
         if status:
-            query = query.filter(
+            query = query.where(
                 Person.status == _validate_enum(status, PersonStatus, "status")
             )
         if is_active is not None:
-            query = query.filter(Person.is_active == is_active)
+            query = query.where(Person.is_active == is_active)
         query = _apply_ordering(
             query,
             order_by,
@@ -82,7 +83,7 @@ class People(ListResponseMixin):
                 "email": Person.email,
             },
         )
-        return _apply_pagination(query, limit, offset).all()
+        return db.scalars(_apply_pagination(query, limit, offset)).all()
 
     @staticmethod
     def update(db: Session, person_id: str, payload: PersonUpdate):

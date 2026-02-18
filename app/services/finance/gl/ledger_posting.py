@@ -16,6 +16,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.account import Account
@@ -151,10 +152,10 @@ class LedgerPostingService(ListResponseMixin):
             )
 
         # 2. Check for existing batch with same idempotency key
-        existing_batch = (
-            db.query(PostingBatch)
-            .filter(PostingBatch.idempotency_key == request.idempotency_key)
-            .first()
+        existing_batch = db.scalar(
+            select(PostingBatch).where(
+                PostingBatch.idempotency_key == request.idempotency_key
+            )
         )
 
         batch: PostingBatch | None = None
@@ -268,7 +269,9 @@ class LedgerPostingService(ListResponseMixin):
 
         # Get account codes for denormalization
         account_ids = [e.account_id for e in entries]
-        accounts = db.query(Account).filter(Account.account_id.in_(account_ids)).all()
+        accounts = db.scalars(
+            select(Account).where(Account.account_id.in_(account_ids))
+        ).all()
         account_map = {a.account_id: a.account_code for a in accounts}
 
         for _i, entry in enumerate(entries):
@@ -364,12 +367,12 @@ class LedgerPostingService(ListResponseMixin):
         journal: JournalEntry,
     ) -> list[PostingEntry]:
         """Load journal lines and convert to posting entries."""
-        lines = (
-            db.query(JournalEntryLine)
-            .filter(JournalEntryLine.journal_entry_id == journal.journal_entry_id)
+        lines = db.scalars(
+            select(JournalEntryLine)
+            .where(JournalEntryLine.journal_entry_id == journal.journal_entry_id)
             .order_by(JournalEntryLine.line_number)
-            .all()
         )
+        lines = lines.all()
 
         entries = []
         for line in lines:
@@ -543,36 +546,38 @@ class LedgerPostingService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        query = db.query(PostedLedgerLine).filter(
+        stmt = select(PostedLedgerLine).where(
             PostedLedgerLine.organization_id == org_id
         )
 
         if journal_entry_id:
-            query = query.filter(
+            stmt = stmt.where(
                 PostedLedgerLine.journal_entry_id == coerce_uuid(journal_entry_id)
             )
 
         if posting_batch_id:
-            query = query.filter(
+            stmt = stmt.where(
                 PostedLedgerLine.posting_batch_id == coerce_uuid(posting_batch_id)
             )
 
         if account_id:
-            query = query.filter(PostedLedgerLine.account_id == coerce_uuid(account_id))
+            stmt = stmt.where(PostedLedgerLine.account_id == coerce_uuid(account_id))
 
         if fiscal_period_id:
-            query = query.filter(
+            stmt = stmt.where(
                 PostedLedgerLine.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
 
         if from_date:
-            query = query.filter(PostedLedgerLine.posting_date >= from_date)
+            stmt = stmt.where(PostedLedgerLine.posting_date >= from_date)
 
         if to_date:
-            query = query.filter(PostedLedgerLine.posting_date <= to_date)
+            stmt = stmt.where(PostedLedgerLine.posting_date <= to_date)
 
-        query = query.order_by(PostedLedgerLine.posted_at.desc())
-        return query.limit(limit).offset(offset).all()
+        stmt = (
+            stmt.order_by(PostedLedgerLine.posted_at.desc()).limit(limit).offset(offset)
+        )
+        return db.scalars(stmt).all()
 
     @staticmethod
     def list(
@@ -597,21 +602,23 @@ class LedgerPostingService(ListResponseMixin):
         Returns:
             List of PostingBatch objects
         """
-        query = db.query(PostingBatch)
+        stmt = select(PostingBatch)
 
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 PostingBatch.organization_id == coerce_uuid(organization_id)
             )
 
         if status:
-            query = query.filter(PostingBatch.status == status)
+            stmt = stmt.where(PostingBatch.status == status)
 
         if source_module:
-            query = query.filter(PostingBatch.source_module == source_module)
+            stmt = stmt.where(PostingBatch.source_module == source_module)
 
-        query = query.order_by(PostingBatch.submitted_at.desc())
-        return query.limit(limit).offset(offset).all()
+        stmt = (
+            stmt.order_by(PostingBatch.submitted_at.desc()).limit(limit).offset(offset)
+        )
+        return db.scalars(stmt).all()
 
     @staticmethod
     def post_entry(

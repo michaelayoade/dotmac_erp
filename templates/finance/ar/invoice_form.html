@@ -130,7 +130,9 @@
                         <input type="text" x-model="query" @focus="open = true" @input="open = true"
                                :placeholder="selectedLabel || 'Search customers...'"
                                :class="{'text-slate-400': !selectedLabel && !query}"
-                               class="form-input w-full" autocomplete="off">
+                               class="form-input w-full" autocomplete="off"
+                               aria-label="Search customers" role="combobox" aria-expanded="false"
+                               :aria-expanded="open ? 'true' : 'false'">
                         <div x-show="open && filtered.length > 0" x-cloak
                              class="absolute z-50 mt-1 w-full max-h-60 overflow-auto rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-lg">
                             <template x-for="c in filtered" :key="c.customer_id">
@@ -175,8 +177,8 @@
                     </select>
                 </div>
 
-                <!-- Exchange Rate -->
-                <div>
+                <!-- Exchange Rate (hidden when same as functional currency) -->
+                <div x-show="form.currency_code !== functionalCurrency" x-cloak>
                     <label for="exchange_rate" class="form-label">Exchange Rate</label>
                     <input type="text"
                            id="exchange_rate"
@@ -184,7 +186,6 @@
                            x-model="form.exchange_rate"
                            class="form-input font-mono tabular-nums"
                            placeholder="1.0">
-                    <p class="form-hint" x-show="form.currency_code === functionalCurrency">Same as functional currency</p>
                 </div>
 
                 <!-- Invoice Date -->
@@ -260,17 +261,17 @@
             </div>
 
             <div class="mt-8 overflow-x-auto -mx-2 px-2">
-                <table class="table min-w-[900px]">
+                <table class="table min-w-[960px]">
                     <thead>
                         <tr>
-                            <th scope="col" style="width: 20%">Item</th>
-                            <th scope="col" style="width: 20%">Revenue Account</th>
-                            <th scope="col" style="width: 22%">Description</th>
-                            <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider" style="width: 8%">Qty</th>
-                            <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider" style="width: 12%">Unit Price</th>
-                            <th scope="col" style="width: 14%">Tax Code</th>
-                            <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider" style="width: 14%">Amount</th>
-                            <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider" style="width: 10%"></th>
+                            <th scope="col" class="min-w-[140px]" style="width: 14%">Item</th>
+                            <th scope="col" class="min-w-[150px]" style="width: 16%">Revenue Account</th>
+                            <th scope="col" class="min-w-[140px]" style="width: 18%">Description</th>
+                            <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider min-w-[60px]" style="width: 7%">Qty</th>
+                            <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider min-w-[90px]" style="width: 11%">Unit Price</th>
+                            <th scope="col" class="min-w-[150px]" style="width: 16%">Tax Code</th>
+                            <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider min-w-[90px]" style="width: 11%">Amount</th>
+                            <th scope="col" class="text-center" style="width: 5%"></th>
                         </tr>
                     </thead>
                     <tbody>
@@ -530,8 +531,7 @@ function customerSearch() {
         query: '',
         open: false,
         get selectedLabel() {
-            const form = this.$root.__x_dataStack ? this.$root.__x_dataStack[0] : null;
-            const cid = form ? form.form.customer_id : '';
+            const cid = this.form ? this.form.customer_id : '';
             if (!cid) return '';
             const c = _customerList.find(x => x.customer_id === cid);
             return c ? `${c.customer_code} - ${c.customer_name}` : '';
@@ -545,15 +545,14 @@ function customerSearch() {
             ).slice(0, 50);
         },
         selectCustomer(c) {
-            const form = this.$root.__x_dataStack ? this.$root.__x_dataStack[0] : null;
-            if (form) {
-                form.form.customer_id = c.customer_id;
-                // Trigger customer change via the hidden select
-                const sel = document.getElementById('customer_id');
-                if (sel) {
-                    sel.value = c.customer_id;
-                    sel.dispatchEvent(new Event('change'));
-                }
+            if (this.form) {
+                this.form.customer_id = c.customer_id;
+            }
+            // Trigger customer change via the hidden select
+            const sel = document.getElementById('customer_id');
+            if (sel) {
+                sel.value = c.customer_id;
+                sel.dispatchEvent(new Event('change'));
             }
             this.query = '';
             this.open = false;

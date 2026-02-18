@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.account import Account, NormalBalance
@@ -75,45 +75,46 @@ class LedgerWebService:
         acct_id = coerce_uuid(account_id) if account_id else None
 
         # Build base query
-        query = db.query(PostedLedgerLine).filter(
+        stmt = select(PostedLedgerLine).where(
             PostedLedgerLine.organization_id == org_id
         )
 
         # Apply filters
         if acct_id:
-            query = query.filter(PostedLedgerLine.account_id == acct_id)
+            stmt = stmt.where(PostedLedgerLine.account_id == acct_id)
         if from_date:
-            query = query.filter(PostedLedgerLine.posting_date >= from_date)
+            stmt = stmt.where(PostedLedgerLine.posting_date >= from_date)
         if to_date:
-            query = query.filter(PostedLedgerLine.posting_date <= to_date)
+            stmt = stmt.where(PostedLedgerLine.posting_date <= to_date)
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            stmt = stmt.where(
                 (PostedLedgerLine.description.ilike(search_pattern))
                 | (PostedLedgerLine.journal_reference.ilike(search_pattern))
                 | (PostedLedgerLine.account_code.ilike(search_pattern))
             )
 
         # Get total count
-        total_count = (
-            query.with_entities(func.count(PostedLedgerLine.ledger_line_id)).scalar()
-            or 0
-        )
-        total_debit, total_credit = query.with_entities(
-            func.coalesce(func.sum(PostedLedgerLine.debit_amount), 0),
-            func.coalesce(func.sum(PostedLedgerLine.credit_amount), 0),
-        ).first() or (Decimal("0"), Decimal("0"))
+        base_subq = stmt.subquery()
+        total_count = db.scalar(select(func.count()).select_from(base_subq)) or 0
+        totals = db.execute(
+            select(
+                func.coalesce(func.sum(base_subq.c.debit_amount), 0),
+                func.coalesce(func.sum(base_subq.c.credit_amount), 0),
+            )
+        ).first()
+        total_debit, total_credit = totals or (Decimal("0"), Decimal("0"))
 
         # Fetch lines ordered by posting date and posted_at
-        lines = (
-            query.order_by(
+        lines = db.scalars(
+            stmt.order_by(
                 PostedLedgerLine.posting_date.desc(),
                 PostedLedgerLine.posted_at.desc(),
             )
             .limit(limit)
             .offset(offset)
-            .all()
         )
+        lines = lines.all()
 
         # Get account info if single account selected
         selected_account = None
@@ -121,22 +122,23 @@ class LedgerWebService:
             selected_account = db.get(Account, acct_id)
 
         # Get all accounts for dropdown
-        accounts = (
-            db.query(Account)
-            .filter(Account.organization_id == org_id, Account.is_active == True)
+        accounts = db.scalars(
+            select(Account)
+            .where(Account.organization_id == org_id, Account.is_active == True)
             .order_by(Account.account_code)
-            .all()
         )
+        accounts = accounts.all()
 
         # Get account names for display (batch lookup)
         account_ids = {line.account_id for line in lines}
         account_map = {}
         if account_ids:
-            account_rows = (
-                db.query(Account.account_id, Account.account_code, Account.account_name)
-                .filter(Account.account_id.in_(account_ids))
-                .all()
+            account_rows = db.execute(
+                select(
+                    Account.account_id, Account.account_code, Account.account_name
+                ).where(Account.account_id.in_(account_ids))
             )
+            account_rows = account_rows.all()
             account_map = {
                 row.account_id: {"code": row.account_code, "name": row.account_name}
                 for row in account_rows
@@ -146,11 +148,12 @@ class LedgerWebService:
         journal_ids = {line.journal_entry_id for line in lines}
         journal_map = {}
         if journal_ids:
-            journal_rows = (
-                db.query(JournalEntry.journal_entry_id, JournalEntry.journal_number)
-                .filter(JournalEntry.journal_entry_id.in_(journal_ids))
-                .all()
+            journal_rows = db.execute(
+                select(
+                    JournalEntry.journal_entry_id, JournalEntry.journal_number
+                ).where(JournalEntry.journal_entry_id.in_(journal_ids))
             )
+            journal_rows = journal_rows.all()
             journal_map = {
                 row.journal_entry_id: row.journal_number for row in journal_rows
             }
@@ -162,26 +165,26 @@ class LedgerWebService:
             # For a descending list, we need balance AFTER the last item on page
             if lines:
                 first_line = lines[0]
-                opening_query = db.query(
+                opening_stmt = select(
                     func.coalesce(func.sum(PostedLedgerLine.debit_amount), 0),
                     func.coalesce(func.sum(PostedLedgerLine.credit_amount), 0),
-                ).filter(
+                ).where(
                     PostedLedgerLine.organization_id == org_id,
                     PostedLedgerLine.account_id == acct_id,
                 )
 
                 # Apply same date filters
                 if from_date:
-                    opening_query = opening_query.filter(
+                    opening_stmt = opening_stmt.where(
                         PostedLedgerLine.posting_date >= from_date
                     )
                 if to_date:
-                    opening_query = opening_query.filter(
+                    opening_stmt = opening_stmt.where(
                         PostedLedgerLine.posting_date <= to_date
                     )
 
                 # Get entries AFTER this page (more recent)
-                opening_query = opening_query.filter(
+                opening_stmt = opening_stmt.where(
                     (PostedLedgerLine.posting_date > first_line.posting_date)
                     | (
                         (PostedLedgerLine.posting_date == first_line.posting_date)
@@ -189,7 +192,7 @@ class LedgerWebService:
                     )
                 )
 
-                result = opening_query.first()
+                result = db.execute(opening_stmt).first()
                 if result:
                     total_debit, total_credit = result
                     if selected_account.normal_balance == NormalBalance.DEBIT:

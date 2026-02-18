@@ -15,6 +15,7 @@ from datetime import UTC, datetime
 from typing import Any, Generic, TypeVar
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.platform.saga_execution import (
@@ -117,10 +118,10 @@ class SagaOrchestrator(ABC):
         user_id = coerce_uuid(created_by_user_id)
 
         # Check for existing saga with same idempotency key
-        existing = (
-            db.query(SagaExecution)
-            .filter(SagaExecution.idempotency_key == idempotency_key)
-            .first()
+        existing = db.scalar(
+            select(SagaExecution).where(
+                SagaExecution.idempotency_key == idempotency_key
+            )
         )
 
         if existing:
@@ -379,14 +380,12 @@ class SagaOrchestrator(ABC):
         step_number: int,
     ) -> SagaStep:
         """Get a saga step by number."""
-        return (
-            db.query(SagaStep)
-            .filter(
+        return db.scalars(
+            select(SagaStep).where(
                 SagaStep.saga_id == saga_id,
                 SagaStep.step_number == step_number,
             )
-            .one()
-        )
+        ).one()
 
     def _build_result(
         self,
@@ -414,10 +413,10 @@ class SagaOrchestrator(ABC):
         idempotency_key: str,
     ) -> SagaExecution | None:
         """Get a saga by idempotency key."""
-        return (
-            db.query(SagaExecution)
-            .filter(SagaExecution.idempotency_key == idempotency_key)
-            .first()
+        return db.scalar(
+            select(SagaExecution).where(
+                SagaExecution.idempotency_key == idempotency_key
+            )
         )
 
     @staticmethod
@@ -430,20 +429,20 @@ class SagaOrchestrator(ABC):
         offset: int = 0,
     ) -> list[SagaExecution]:
         """List sagas with optional filters."""
-        query = db.query(SagaExecution)
-
+        stmt = select(SagaExecution)
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 SagaExecution.organization_id == coerce_uuid(organization_id)
             )
         if saga_type:
-            query = query.filter(SagaExecution.saga_type == saga_type)
+            stmt = stmt.where(SagaExecution.saga_type == saga_type)
         if status:
-            query = query.filter(SagaExecution.status == status)
+            stmt = stmt.where(SagaExecution.status == status)
 
-        return (
-            query.order_by(SagaExecution.started_at.desc())
-            .limit(limit)
-            .offset(offset)
-            .all()
+        return list(
+            db.scalars(
+                stmt.order_by(SagaExecution.started_at.desc())
+                .limit(limit)
+                .offset(offset)
+            ).all()
         )

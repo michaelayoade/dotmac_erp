@@ -14,13 +14,14 @@ def _insight(
     severity: str,
     created_at: datetime,
     valid_until: date,
+    category: str = "CASH_FLOW",
 ) -> CoachInsight:
     return CoachInsight(
         insight_id=uuid.uuid4(),
         organization_id=org_id,
         audience="FINANCE",
         target_employee_id=target_employee_id,
-        category="CASH_FLOW",
+        category=category,
         severity=severity,
         title=f"{severity} title",
         summary="summary",
@@ -174,3 +175,49 @@ def test_list_insights_filters_by_audience(db_session):
     items, total = svc.list_insights(org1, scope, page=1, per_page=50)
     assert total == 0
     assert items == []
+
+
+def test_list_insights_filters_by_category(db_session):
+    org1 = uuid.uuid4()
+    emp_a = uuid.uuid4()
+    now = datetime.now(UTC)
+
+    db_session.add_all(
+        [
+            _insight(
+                org_id=org1,
+                target_employee_id=emp_a,
+                severity="INFO",
+                category="CASH_FLOW",
+                created_at=now,
+                valid_until=date.today() + timedelta(days=1),
+            ),
+            _insight(
+                org_id=org1,
+                target_employee_id=emp_a,
+                severity="WARNING",
+                category="EFFICIENCY",
+                created_at=now + timedelta(minutes=1),
+                valid_until=date.today() + timedelta(days=1),
+            ),
+        ]
+    )
+    db_session.commit()
+
+    svc = CoachService(db_session)
+    scope = CoachInsightScope(
+        include_org_wide=True, employee_ids={emp_a}, audiences=None
+    )
+
+    items, total = svc.list_insights(
+        org1, scope, page=1, per_page=50, category="cash_flow"
+    )
+    assert total == 1
+    assert len(items) == 1
+    assert items[0].category == "CASH_FLOW"
+
+    items2, total2 = svc.list_insights(
+        org1, scope, page=1, per_page=50, category="data-quality"
+    )
+    assert total2 == 0
+    assert items2 == []

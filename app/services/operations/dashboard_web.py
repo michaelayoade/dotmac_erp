@@ -9,6 +9,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.services.inventory.material_request_web import material_request_web_service
@@ -87,24 +88,27 @@ class OperationsDashboardWebService:
             from app.models.inventory.inventory_count import CountStatus, InventoryCount
 
             count_stats = {
-                "draft": db.query(InventoryCount)
-                .filter(
-                    InventoryCount.organization_id == organization_id,
-                    InventoryCount.status == CountStatus.DRAFT,
+                "draft": db.scalar(
+                    select(func.count(InventoryCount.count_id)).where(
+                        InventoryCount.organization_id == organization_id,
+                        InventoryCount.status == CountStatus.DRAFT,
+                    )
                 )
-                .count(),
-                "in_progress": db.query(InventoryCount)
-                .filter(
-                    InventoryCount.organization_id == organization_id,
-                    InventoryCount.status == CountStatus.IN_PROGRESS,
+                or 0,
+                "in_progress": db.scalar(
+                    select(func.count(InventoryCount.count_id)).where(
+                        InventoryCount.organization_id == organization_id,
+                        InventoryCount.status == CountStatus.IN_PROGRESS,
+                    )
                 )
-                .count(),
-                "completed": db.query(InventoryCount)
-                .filter(
-                    InventoryCount.organization_id == organization_id,
-                    InventoryCount.status == CountStatus.COMPLETED,
+                or 0,
+                "completed": db.scalar(
+                    select(func.count(InventoryCount.count_id)).where(
+                        InventoryCount.organization_id == organization_id,
+                        InventoryCount.status == CountStatus.COMPLETED,
+                    )
                 )
-                .count(),
+                or 0,
             }
             context["count_stats"] = count_stats
         except Exception:
@@ -117,18 +121,19 @@ class OperationsDashboardWebService:
             now = datetime.now().date()
             expiring_soon = now + timedelta(days=30)
 
-            expiring_lots = (
-                db.query(InventoryLot)
-                .filter(
-                    InventoryLot.organization_id == organization_id,
-                    InventoryLot.expiry_date != None,
-                    InventoryLot.expiry_date > now,
-                    InventoryLot.expiry_date <= expiring_soon,
-                    InventoryLot.quantity_available > 0,
-                )
-                .order_by(InventoryLot.expiry_date)
-                .limit(10)
-                .all()
+            expiring_lots = list(
+                db.scalars(
+                    select(InventoryLot)
+                    .where(
+                        InventoryLot.organization_id == organization_id,
+                        InventoryLot.expiry_date != None,
+                        InventoryLot.expiry_date > now,
+                        InventoryLot.expiry_date <= expiring_soon,
+                        InventoryLot.quantity_available > 0,
+                    )
+                    .order_by(InventoryLot.expiry_date)
+                    .limit(10)
+                ).all()
             )
 
             for lot in expiring_lots:

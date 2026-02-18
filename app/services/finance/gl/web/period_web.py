@@ -12,6 +12,7 @@ from decimal import Decimal
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -58,12 +59,12 @@ class PeriodWebService:
         org_id = coerce_uuid(organization_id)
 
         # Get fiscal years
-        years = (
-            db.query(FiscalYear)
-            .filter(FiscalYear.organization_id == org_id)
+        years = db.scalars(
+            select(FiscalYear)
+            .where(FiscalYear.organization_id == org_id)
             .order_by(FiscalYear.year_code.desc())
-            .all()
         )
+        years = years.all()
 
         if not years:
             return {
@@ -83,12 +84,12 @@ class PeriodWebService:
             selected_year = years[0]
 
         # Get periods for selected year
-        periods = (
-            db.query(FiscalPeriod)
-            .filter(FiscalPeriod.fiscal_year_id == selected_year.fiscal_year_id)
+        periods = db.scalars(
+            select(FiscalPeriod)
+            .where(FiscalPeriod.fiscal_year_id == selected_year.fiscal_year_id)
             .order_by(FiscalPeriod.period_number)
-            .all()
         )
+        periods = periods.all()
 
         return {
             "years": [fiscal_year_option_view(y) for y in years],
@@ -114,12 +115,12 @@ class PeriodWebService:
             if period and period.organization_id != org_id:
                 period = None
 
-        years = (
-            db.query(FiscalYear)
-            .filter(FiscalYear.organization_id == org_id)
+        years = db.scalars(
+            select(FiscalYear)
+            .where(FiscalYear.organization_id == org_id)
             .order_by(FiscalYear.year_code.desc())
-            .all()
         )
+        years = years.all()
 
         return {
             "period": period_option_view(period) if period else None,
@@ -141,45 +142,45 @@ class PeriodWebService:
         ref_date = parse_date(as_of_date) or date.today()
 
         # Find period for the reference date
-        period = (
-            db.query(FiscalPeriod)
-            .filter(
+        period = db.scalars(
+            select(FiscalPeriod)
+            .where(
                 FiscalPeriod.organization_id == org_id,
                 FiscalPeriod.start_date <= ref_date,
                 FiscalPeriod.end_date >= ref_date,
             )
             .order_by(FiscalPeriod.start_date.desc())
-            .first()
         )
+        period = period.first()
 
         # If no period for the date, get the latest period
         if not period:
-            period = (
-                db.query(FiscalPeriod)
-                .filter(FiscalPeriod.organization_id == org_id)
+            period = db.scalars(
+                select(FiscalPeriod)
+                .where(FiscalPeriod.organization_id == org_id)
                 .order_by(FiscalPeriod.end_date.desc())
-                .first()
             )
+            period = period.first()
 
         balances = []
         total_debit = Decimal("0")
         total_credit = Decimal("0")
 
         if period:
-            rows = (
-                db.query(AccountBalance, Account, AccountCategory)
+            rows = db.execute(
+                select(AccountBalance, Account, AccountCategory)
                 .join(Account, AccountBalance.account_id == Account.account_id)
                 .join(
                     AccountCategory, Account.category_id == AccountCategory.category_id
                 )
-                .filter(
+                .where(
                     AccountBalance.organization_id == org_id,
                     AccountBalance.fiscal_period_id == period.fiscal_period_id,
                     AccountBalance.balance_type == BalanceType.ACTUAL,
                 )
                 .order_by(Account.account_code)
-                .all()
             )
+            rows = rows.all()
 
             for balance, account, category in rows:
                 debit = balance.closing_debit or Decimal("0")
@@ -188,6 +189,7 @@ class PeriodWebService:
                 total_credit += credit
                 balances.append(
                     {
+                        "account_id": str(account.account_id),
                         "account_code": account.account_code,
                         "account_name": account.account_name,
                         "category": ifrs_label(category.ifrs_category),

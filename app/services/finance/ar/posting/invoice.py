@@ -11,6 +11,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
@@ -76,15 +77,13 @@ def _resolve_tax_accounts(
         return {}
 
     accounts_by_tax_code: dict[UUID, UUID] = {}
-    for tax_code in (
-        db.query(TaxCode)
-        .filter(
+    for tax_code in db.scalars(
+        select(TaxCode).where(
             TaxCode.organization_id == organization_id,
             TaxCode.tax_code_id.in_(tax_code_ids),
             TaxCode.tax_collected_account_id.isnot(None),
         )
-        .all()
-    ):
+    ).all():
         if tax_code.tax_collected_account_id:
             accounts_by_tax_code[tax_code.tax_code_id] = (
                 tax_code.tax_collected_account_id
@@ -155,25 +154,24 @@ def post_invoice(
         return ARPostingResult(success=False, message="Customer not found")
 
     # Load invoice lines
-    lines = (
-        db.query(InvoiceLine)
-        .filter(InvoiceLine.invoice_id == inv_id)
-        .order_by(InvoiceLine.line_number)
-        .all()
+    lines = list(
+        db.scalars(
+            select(InvoiceLine)
+            .where(InvoiceLine.invoice_id == inv_id)
+            .order_by(InvoiceLine.line_number)
+        ).all()
     )
 
     if not lines:
         return ARPostingResult(success=False, message="Invoice has no lines")
 
     # Get fiscal period for inventory transactions
-    fiscal_period = (
-        db.query(FiscalPeriod)
-        .filter(
+    fiscal_period = db.scalar(
+        select(FiscalPeriod).where(
             FiscalPeriod.organization_id == org_id,
             FiscalPeriod.start_date <= invoice.invoice_date,
             FiscalPeriod.end_date >= invoice.invoice_date,
         )
-        .first()
     )
 
     # Check if there are inventory lines
@@ -227,12 +225,13 @@ def post_invoice(
     header_total = invoice.total_amount
     line_adjustments = [Decimal("0")] * len(lines)
 
-    if invoice.status != InvoiceStatus.APPROVED and header_total != lines_total:
+    if header_total != lines_total:
         delta = header_total - lines_total
         line_adjustments = _allocate_delta_across_lines(revenue_base_totals, delta)
-        logger.info(
-            "Applying ERPNext line delta allocation for invoice %s: header=%s, lines=%s, delta=%s",
+        logger.warning(
+            "Applying header/line delta allocation for invoice %s (status=%s): header=%s, lines=%s, delta=%s",
             invoice.invoice_id,
+            invoice.status.value,
             header_total,
             lines_total,
             delta,

@@ -11,7 +11,7 @@ from typing import Any
 
 from fastapi import Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 from starlette.datastructures import UploadFile
 
@@ -72,23 +72,27 @@ class StructureWebService:
         per_page = DEFAULT_PAGE_SIZE
         offset = (page - 1) * per_page
 
-        query = db.query(SalaryStructure).filter(
-            SalaryStructure.organization_id == org_id
-        )
+        conditions: list[Any] = [SalaryStructure.organization_id == org_id]
 
         if search:
-            query = query.filter(
+            conditions.append(
                 SalaryStructure.structure_name.ilike(f"%{search}%")
                 | SalaryStructure.structure_code.ilike(f"%{search}%")
             )
 
-        total = query.count()
-        structures = (
-            query.order_by(SalaryStructure.structure_name)
+        total = (
+            db.scalar(
+                select(func.count(SalaryStructure.structure_id)).where(*conditions)
+            )
+            or 0
+        )
+        structures = db.scalars(
+            select(SalaryStructure)
+            .where(*conditions)
+            .order_by(SalaryStructure.structure_name)
             .offset(offset)
             .limit(per_page)
-            .all()
-        )
+        ).all()
         total_pages = (total + per_page - 1) // per_page
 
         context = base_context(request, auth, "Salary Structures", "payroll", db=db)
@@ -119,15 +123,14 @@ class StructureWebService:
         """Render new salary structure form."""
         org_id = coerce_uuid(auth.organization_id)
 
-        components = (
-            db.query(SalaryComponent)
-            .filter(
+        components = db.scalars(
+            select(SalaryComponent)
+            .where(
                 SalaryComponent.organization_id == org_id,
-                SalaryComponent.is_active == True,
+                SalaryComponent.is_active.is_(True),
             )
             .order_by(SalaryComponent.display_order)
-            .all()
-        )
+        ).all()
 
         context = base_context(request, auth, "New Salary Structure", "payroll", db=db)
         context["request"] = request
@@ -170,15 +173,14 @@ class StructureWebService:
                 status_code=303,
             )
 
-        components = (
-            db.query(SalaryComponent)
-            .filter(
+        components = db.scalars(
+            select(SalaryComponent)
+            .where(
                 SalaryComponent.organization_id == org_id,
-                SalaryComponent.is_active == True,
+                SalaryComponent.is_active.is_(True),
             )
             .order_by(SalaryComponent.display_order)
-            .all()
-        )
+        ).all()
 
         earnings_data = [
             {
@@ -318,15 +320,14 @@ class StructureWebService:
         except Exception as e:
             db.rollback()
 
-            components = (
-                db.query(SalaryComponent)
-                .filter(
+            components = db.scalars(
+                select(SalaryComponent)
+                .where(
                     SalaryComponent.organization_id == org_id,
-                    SalaryComponent.is_active == True,
+                    SalaryComponent.is_active.is_(True),
                 )
                 .order_by(SalaryComponent.display_order)
-                .all()
-            )
+            ).all()
 
             def _form_rows(
                 components_list: list[str], formulas_list: list[str]
@@ -515,15 +516,14 @@ class StructureWebService:
         except Exception as e:
             db.rollback()
 
-            components = (
-                db.query(SalaryComponent)
-                .filter(
+            components = db.scalars(
+                select(SalaryComponent)
+                .where(
                     SalaryComponent.organization_id == org_id,
-                    SalaryComponent.is_active == True,
+                    SalaryComponent.is_active.is_(True),
                 )
                 .order_by(SalaryComponent.display_order)
-                .all()
-            )
+            ).all()
 
             def _form_rows(
                 components_list: list[str], formulas_list: list[str]
@@ -586,13 +586,15 @@ class StructureWebService:
             )
 
         in_assignments = (
-            db.query(SalaryStructureAssignment)
-            .filter(SalaryStructureAssignment.structure_id == s_id)
-            .first()
+            db.scalar(
+                select(SalaryStructureAssignment.assignment_id).where(
+                    SalaryStructureAssignment.structure_id == s_id
+                )
+            )
             is not None
         )
         in_slips = (
-            db.query(SalarySlip).filter(SalarySlip.structure_id == s_id).first()
+            db.scalar(select(SalarySlip.slip_id).where(SalarySlip.structure_id == s_id))
             is not None
         )
 
@@ -629,13 +631,13 @@ class StructureWebService:
         per_page = DEFAULT_PAGE_SIZE
         offset = (page - 1) * per_page
 
-        query = (
-            db.query(SalaryStructureAssignment)
+        conditions: list[Any] = [SalaryStructureAssignment.organization_id == org_id]
+        stmt = (
+            select(SalaryStructureAssignment)
             .options(
                 joinedload(SalaryStructureAssignment.employee),
                 joinedload(SalaryStructureAssignment.salary_structure),
             )
-            .filter(SalaryStructureAssignment.organization_id == org_id)
             .join(
                 Employee, SalaryStructureAssignment.employee_id == Employee.employee_id
             )
@@ -643,21 +645,41 @@ class StructureWebService:
                 SalaryStructure,
                 SalaryStructureAssignment.structure_id == SalaryStructure.structure_id,
             )
+            .where(*conditions)
         )
 
         if search:
-            query = query.filter(
+            conditions.append(
+                Employee.employee_code.ilike(f"%{search}%")
+                | SalaryStructure.structure_name.ilike(f"%{search}%")
+            )
+            stmt = stmt.where(
                 Employee.employee_code.ilike(f"%{search}%")
                 | SalaryStructure.structure_name.ilike(f"%{search}%")
             )
 
-        total = query.count()
-        assignments = (
-            query.order_by(SalaryStructureAssignment.from_date.desc())
+        total = (
+            db.scalar(
+                select(func.count(SalaryStructureAssignment.assignment_id))
+                .select_from(SalaryStructureAssignment)
+                .join(
+                    Employee,
+                    SalaryStructureAssignment.employee_id == Employee.employee_id,
+                )
+                .join(
+                    SalaryStructure,
+                    SalaryStructureAssignment.structure_id
+                    == SalaryStructure.structure_id,
+                )
+                .where(*conditions)
+            )
+            or 0
+        )
+        assignments = db.scalars(
+            stmt.order_by(SalaryStructureAssignment.from_date.desc())
             .offset(offset)
             .limit(per_page)
-            .all()
-        )
+        ).all()
         total_pages = (total + per_page - 1) // per_page
 
         context = base_context(request, auth, "Salary Assignments", "payroll", db=db)
@@ -695,25 +717,23 @@ class StructureWebService:
         if employee_id:
             selected_employee = db.get(Employee, parse_uuid(employee_id))
 
-        employees = (
-            db.query(Employee)
-            .filter(
+        employees = db.scalars(
+            select(Employee)
+            .where(
                 Employee.organization_id == org_id,
                 Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]),
             )
             .order_by(Employee.employee_code)
-            .all()
-        )
+        ).all()
 
-        structures = (
-            db.query(SalaryStructure)
-            .filter(
+        structures = db.scalars(
+            select(SalaryStructure)
+            .where(
                 SalaryStructure.organization_id == org_id,
-                SalaryStructure.is_active == True,
+                SalaryStructure.is_active.is_(True),
             )
             .order_by(SalaryStructure.structure_name)
-            .all()
-        )
+        ).all()
 
         context = base_context(
             request, auth, "Assign Salary Structure", "payroll", db=db
@@ -762,15 +782,13 @@ class StructureWebService:
             to_date = parse_date(to_date_str) if to_date_str else None
 
             # End any existing current assignment
-            existing = (
-                db.query(SalaryStructureAssignment)
-                .filter(
+            existing = db.scalars(
+                select(SalaryStructureAssignment).where(
                     SalaryStructureAssignment.organization_id == org_id,
                     SalaryStructureAssignment.employee_id == parse_uuid(employee_id),
                     SalaryStructureAssignment.to_date.is_(None),
                 )
-                .first()
-            )
+            ).first()
             if existing and from_date:
                 existing.to_date = from_date - timedelta(days=1)
 
@@ -819,31 +837,28 @@ class StructureWebService:
         """Render bulk assignment form."""
         org_id = coerce_uuid(auth.organization_id)
 
-        departments = (
-            db.query(Department)
-            .filter(Department.organization_id == org_id, Department.is_active == True)
+        departments = db.scalars(
+            select(Department)
+            .where(Department.organization_id == org_id, Department.is_active.is_(True))
             .order_by(Department.department_name)
-            .all()
-        )
-        designations = (
-            db.query(Designation)
-            .filter(
+        ).all()
+        designations = db.scalars(
+            select(Designation)
+            .where(
                 Designation.organization_id == org_id,
-                Designation.is_active == True,
-                Designation.is_deleted == False,
+                Designation.is_active.is_(True),
+                Designation.is_deleted.is_(False),
             )
             .order_by(Designation.designation_name)
-            .all()
-        )
-        structures = (
-            db.query(SalaryStructure)
-            .filter(
+        ).all()
+        structures = db.scalars(
+            select(SalaryStructure)
+            .where(
                 SalaryStructure.organization_id == org_id,
-                SalaryStructure.is_active == True,
+                SalaryStructure.is_active.is_(True),
             )
             .order_by(SalaryStructure.structure_name)
-            .all()
-        )
+        ).all()
 
         context = base_context(
             request, auth, "Bulk Salary Assignment", "payroll", db=db
@@ -892,26 +907,25 @@ class StructureWebService:
             if not structure_id:
                 raise ValueError("Salary structure is required")
 
-            emp_query = db.query(Employee.employee_id).filter(
+            emp_stmt = select(Employee.employee_id).where(
                 Employee.organization_id == org_id,
                 Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]),
             )
             if department_id:
-                emp_query = emp_query.filter(
+                emp_stmt = emp_stmt.where(
                     Employee.department_id == parse_uuid(department_id)
                 )
             if designation_id:
-                emp_query = emp_query.filter(
+                emp_stmt = emp_stmt.where(
                     Employee.designation_id == parse_uuid(designation_id)
                 )
-            employee_ids = [row[0] for row in emp_query.all()]
+            employee_ids = [row[0] for row in db.execute(emp_stmt).all()]
 
             if not employee_ids:
                 raise ValueError("No employees matched the selected filters")
 
-            active_assignments = (
-                db.query(SalaryStructureAssignment.employee_id)
-                .filter(
+            active_assignments = db.execute(
+                select(SalaryStructureAssignment.employee_id).where(
                     SalaryStructureAssignment.organization_id == org_id,
                     SalaryStructureAssignment.employee_id.in_(employee_ids),
                     SalaryStructureAssignment.from_date <= from_date,
@@ -920,8 +934,7 @@ class StructureWebService:
                         SalaryStructureAssignment.to_date >= from_date,
                     ),
                 )
-                .all()
-            )
+            ).all()
             active_employee_ids = {row[0] for row in active_assignments}
 
             created = 0
@@ -976,31 +989,28 @@ class StructureWebService:
     ) -> HTMLResponse | RedirectResponse:
         org_id = coerce_uuid(auth.organization_id)
 
-        departments = (
-            db.query(Department)
-            .filter(Department.organization_id == org_id, Department.is_active == True)
+        departments = db.scalars(
+            select(Department)
+            .where(Department.organization_id == org_id, Department.is_active.is_(True))
             .order_by(Department.department_name)
-            .all()
-        )
-        designations = (
-            db.query(Designation)
-            .filter(
+        ).all()
+        designations = db.scalars(
+            select(Designation)
+            .where(
                 Designation.organization_id == org_id,
-                Designation.is_active == True,
-                Designation.is_deleted == False,
+                Designation.is_active.is_(True),
+                Designation.is_deleted.is_(False),
             )
             .order_by(Designation.designation_name)
-            .all()
-        )
-        structures = (
-            db.query(SalaryStructure)
-            .filter(
+        ).all()
+        structures = db.scalars(
+            select(SalaryStructure)
+            .where(
                 SalaryStructure.organization_id == org_id,
-                SalaryStructure.is_active == True,
+                SalaryStructure.is_active.is_(True),
             )
             .order_by(SalaryStructure.structure_name)
-            .all()
-        )
+        ).all()
 
         context = base_context(
             request, auth, "Bulk Salary Assignment", "payroll", db=db
@@ -1039,12 +1049,11 @@ class StructureWebService:
                 status_code=303,
             )
 
-        assignment = (
-            db.query(SalaryStructureAssignment)
+        assignment = db.scalars(
+            select(SalaryStructureAssignment)
             .options(joinedload(SalaryStructureAssignment.employee))
-            .filter(SalaryStructureAssignment.assignment_id == a_id)
-            .first()
-        )
+            .where(SalaryStructureAssignment.assignment_id == a_id)
+        ).first()
 
         if not assignment or assignment.organization_id != org_id:
             return RedirectResponse(
@@ -1052,25 +1061,23 @@ class StructureWebService:
                 status_code=303,
             )
 
-        employees = (
-            db.query(Employee)
-            .filter(
+        employees = db.scalars(
+            select(Employee)
+            .where(
                 Employee.organization_id == org_id,
                 Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]),
             )
             .order_by(Employee.employee_code)
-            .all()
-        )
+        ).all()
 
-        structures = (
-            db.query(SalaryStructure)
-            .filter(
+        structures = db.scalars(
+            select(SalaryStructure)
+            .where(
                 SalaryStructure.organization_id == org_id,
-                SalaryStructure.is_active == True,
+                SalaryStructure.is_active.is_(True),
             )
             .order_by(SalaryStructure.structure_name)
-            .all()
-        )
+        ).all()
 
         context = base_context(
             request, auth, "Edit Salary Assignment", "payroll", db=db
@@ -1239,25 +1246,23 @@ class StructureWebService:
         """Render assignment form with error."""
         org_id = coerce_uuid(auth.organization_id)
 
-        employees = (
-            db.query(Employee)
-            .filter(
+        employees = db.scalars(
+            select(Employee)
+            .where(
                 Employee.organization_id == org_id,
                 Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]),
             )
             .order_by(Employee.employee_code)
-            .all()
-        )
+        ).all()
 
-        structures = (
-            db.query(SalaryStructure)
-            .filter(
+        structures = db.scalars(
+            select(SalaryStructure)
+            .where(
                 SalaryStructure.organization_id == org_id,
-                SalaryStructure.is_active == True,
+                SalaryStructure.is_active.is_(True),
             )
             .order_by(SalaryStructure.structure_name)
-            .all()
-        )
+        ).all()
 
         title = "Edit Salary Assignment" if assignment else "Assign Salary Structure"
         context = base_context(request, auth, title, "payroll", db=db)

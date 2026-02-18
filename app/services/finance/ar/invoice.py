@@ -14,8 +14,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from fastapi import HTTPException
-from sqlalchemy import and_, func
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session, joinedload, selectinload
 
@@ -36,7 +35,7 @@ from app.models.finance.gl.account import Account
 from app.models.finance.tax.tax_code import TaxCode
 from app.models.inventory.item import Item
 from app.services.audit_dispatcher import fire_audit_event
-from app.services.common import coerce_uuid
+from app.services.common import NotFoundError, ValidationError, coerce_uuid
 from app.services.finance.ar.input_utils import (
     parse_date_str,
     parse_decimal,
@@ -110,7 +109,7 @@ def _require_org_match(
         return
     record = db.get(model, coerce_uuid(record_id))
     if not record or getattr(record, "organization_id", None) != organization_id:
-        raise HTTPException(status_code=404, detail=f"{label} not found")
+        raise NotFoundError(f"{label} not found")
 
 
 def _batch_validate_org_refs(
@@ -128,8 +127,8 @@ def _batch_validate_org_refs(
         organization_id: Organization scope
         validations: List of (model_class, set_of_ids, label) tuples
 
-    Raises:
-        HTTPException: If any referenced record is not found or doesn't belong to org
+        Raises:
+            NotFoundError: If any referenced record is not found or doesn't belong to org
     """
     for model, ids, label in validations:
         if not ids:
@@ -149,19 +148,21 @@ def _batch_validate_org_refs(
         pk_column = getattr(model, pk_attr)
 
         # Single query to get all records of this type
-        records: list[Any] = db.query(model).filter(pk_column.in_(uuid_ids)).all()
+        records: list[Any] = db.scalars(
+            select(model).where(pk_column.in_(uuid_ids))
+        ).all()
         found_ids = set()
 
         for record in records:
             # Check organization scope
             if getattr(record, "organization_id", None) != organization_id:
-                raise HTTPException(status_code=404, detail=f"{label} not found")
+                raise NotFoundError(f"{label} not found")
             found_ids.add(getattr(record, pk_attr))
 
         # Check for any missing IDs
         missing = uuid_ids - found_ids
         if missing:
-            raise HTTPException(status_code=404, detail=f"{label} not found")
+            raise NotFoundError(f"{label} not found")
 
 
 class ARInvoiceService(ListResponseMixin):
@@ -197,16 +198,14 @@ class ARInvoiceService(ListResponseMixin):
         # Validate customer
         customer = db.get(Customer, customer_id)
         if not customer or customer.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Customer not found")
+            raise NotFoundError("Customer not found")
 
         if not customer.is_active:
-            raise HTTPException(status_code=400, detail="Customer is not active")
+            raise ValidationError("Customer is not active")
 
         # Validate lines
         if not input.lines:
-            raise HTTPException(
-                status_code=400, detail="Invoice must have at least one line"
-            )
+            raise ValidationError("Invoice must have at least one line")
 
         # Collect all referenced IDs for batch validation (reduces N+1 queries)
         contract_ids: set[UUID] = set()
@@ -457,37 +456,34 @@ class ARInvoiceService(ListResponseMixin):
         # Get existing invoice
         invoice = db.get(Invoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
 
         if invoice.status != InvoiceStatus.DRAFT:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot edit invoice with status '{invoice.status.value}'",
+            raise ValidationError(
+                f"Cannot edit invoice with status '{invoice.status.value}'"
             )
 
         # Validate customer
         customer = db.get(Customer, customer_id)
         if not customer or customer.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Customer not found")
+            raise NotFoundError("Customer not found")
 
         if not customer.is_active:
-            raise HTTPException(status_code=400, detail="Customer is not active")
+            raise ValidationError("Customer is not active")
 
         # Validate lines
         if not input.lines:
-            raise HTTPException(
-                status_code=400, detail="Invoice must have at least one line"
-            )
+            raise ValidationError("Invoice must have at least one line")
 
         # Delete existing lines and their tax records
-        existing_lines = (
-            db.query(InvoiceLine).filter(InvoiceLine.invoice_id == inv_id).all()
-        )
+        existing_lines = db.scalars(
+            select(InvoiceLine).where(InvoiceLine.invoice_id == inv_id)
+        ).all()
         for line in existing_lines:
-            db.query(InvoiceLineTax).filter(
-                InvoiceLineTax.line_id == line.line_id
-            ).delete()
-        db.query(InvoiceLine).filter(InvoiceLine.invoice_id == inv_id).delete()
+            db.execute(
+                delete(InvoiceLineTax).where(InvoiceLineTax.line_id == line.line_id)
+            )
+        db.execute(delete(InvoiceLine).where(InvoiceLine.invoice_id == inv_id))
 
         # Calculate totals from lines
         subtotal = Decimal("0")
@@ -784,12 +780,11 @@ class ARInvoiceService(ListResponseMixin):
 
         invoice = db.get(Invoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
 
         if invoice.status != InvoiceStatus.DRAFT:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot submit invoice with status '{invoice.status.value}'",
+            raise ValidationError(
+                f"Cannot submit invoice with status '{invoice.status.value}'"
             )
 
         invoice.status = InvoiceStatus.SUBMITTED
@@ -846,19 +841,17 @@ class ARInvoiceService(ListResponseMixin):
 
         invoice = db.get(Invoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
 
         if invoice.status != InvoiceStatus.SUBMITTED:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot approve invoice with status '{invoice.status.value}'",
+            raise ValidationError(
+                f"Cannot approve invoice with status '{invoice.status.value}'"
             )
 
         # Segregation of Duties check
         if invoice.submitted_by_user_id == user_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Segregation of duties violation: submitter cannot approve",
+            raise ValidationError(
+                "Segregation of duties violation: submitter cannot approve"
             )
 
         invoice.status = InvoiceStatus.APPROVED
@@ -918,12 +911,11 @@ class ARInvoiceService(ListResponseMixin):
 
         invoice = db.get(Invoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
 
         if invoice.status != InvoiceStatus.APPROVED:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot post invoice with status '{invoice.status.value}'",
+            raise ValidationError(
+                f"Cannot post invoice with status '{invoice.status.value}'"
             )
 
         # Use ARPostingAdapter to create GL entries
@@ -936,7 +928,7 @@ class ARInvoiceService(ListResponseMixin):
         )
 
         if not result.success:
-            raise HTTPException(status_code=400, detail=result.message)
+            raise ValidationError(result.message)
 
         # Update invoice status
         invoice.status = InvoiceStatus.POSTED
@@ -1072,7 +1064,7 @@ class ARInvoiceService(ListResponseMixin):
 
         invoice = db.get(Invoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
 
         non_voidable = [
             InvoiceStatus.POSTED,
@@ -1082,9 +1074,8 @@ class ARInvoiceService(ListResponseMixin):
         ]
 
         if invoice.status in non_voidable:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot void invoice with status '{invoice.status.value}'",
+            raise ValidationError(
+                f"Cannot void invoice with status '{invoice.status.value}'"
             )
 
         old_status = invoice.status.value
@@ -1140,14 +1131,13 @@ class ARInvoiceService(ListResponseMixin):
 
         invoice = db.get(Invoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
 
         cancellable = [InvoiceStatus.SUBMITTED, InvoiceStatus.APPROVED]
 
         if invoice.status not in cancellable:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot cancel invoice with status '{invoice.status.value}'. Only SUBMITTED or APPROVED invoices can be cancelled.",
+            raise ValidationError(
+                f"Cannot cancel invoice with status '{invoice.status.value}'. Only SUBMITTED or APPROVED invoices can be cancelled."
             )
 
         old_status = invoice.status.value
@@ -1215,9 +1205,8 @@ class ARInvoiceService(ListResponseMixin):
         ref_date = as_of_date or date.today()
 
         # Find posted invoices past due date
-        invoices = (
-            db.query(Invoice)
-            .filter(
+        invoices = db.scalars(
+            select(Invoice).where(
                 and_(
                     Invoice.organization_id == org_id,
                     Invoice.status.in_(
@@ -1226,8 +1215,7 @@ class ARInvoiceService(ListResponseMixin):
                     Invoice.due_date < ref_date,
                 )
             )
-            .all()
-        )
+        ).all()
 
         count = 0
         for invoice in invoices:
@@ -1251,7 +1239,7 @@ class ARInvoiceService(ListResponseMixin):
 
         invoice = db.get(Invoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
 
         payable_statuses = [
             InvoiceStatus.POSTED,
@@ -1260,9 +1248,8 @@ class ARInvoiceService(ListResponseMixin):
         ]
 
         if invoice.status not in payable_statuses:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot pay invoice with status '{invoice.status.value}'",
+            raise ValidationError(
+                f"Cannot pay invoice with status '{invoice.status.value}'"
             )
 
         invoice.amount_paid += payment_amount
@@ -1287,7 +1274,7 @@ class ARInvoiceService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         invoice = db.get(Invoice, coerce_uuid(invoice_id))
         if not invoice or invoice.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
         return invoice
 
     @staticmethod
@@ -1302,14 +1289,13 @@ class ARInvoiceService(ListResponseMixin):
 
         invoice = db.get(Invoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
 
-        return (
-            db.query(InvoiceLine)
-            .filter(InvoiceLine.invoice_id == inv_id)
+        return db.scalars(
+            select(InvoiceLine)
+            .where(InvoiceLine.invoice_id == inv_id)
             .order_by(InvoiceLine.line_number)
-            .all()
-        )
+        ).all()
 
     @staticmethod
     def list(
@@ -1344,16 +1330,16 @@ class ARInvoiceService(ListResponseMixin):
             List of invoices with customer relationship eager-loaded
         """
         if not organization_id:
-            raise HTTPException(status_code=400, detail="organization_id is required")
+            raise ValidationError("organization_id is required")
 
         org_id = coerce_uuid(organization_id)
 
         # Build query with eager loading to prevent N+1 queries
         # joinedload for single object (customer), selectinload for collections (lines)
         query = (
-            db.query(Invoice)
+            select(Invoice)
             .options(joinedload(Invoice.customer))  # Eager load customer (1:1)
-            .filter(Invoice.organization_id == org_id)
+            .where(Invoice.organization_id == org_id)
         )
 
         # Optionally eager load lines (heavier, only when needed)
@@ -1361,22 +1347,22 @@ class ARInvoiceService(ListResponseMixin):
             query = query.options(selectinload(Invoice.lines))
 
         if customer_id:
-            query = query.filter(Invoice.customer_id == coerce_uuid(customer_id))
+            query = query.where(Invoice.customer_id == coerce_uuid(customer_id))
 
         if status:
-            query = query.filter(Invoice.status == status)
+            query = query.where(Invoice.status == status)
 
         if invoice_type:
-            query = query.filter(Invoice.invoice_type == invoice_type)
+            query = query.where(Invoice.invoice_type == invoice_type)
 
         if from_date:
-            query = query.filter(Invoice.invoice_date >= from_date)
+            query = query.where(Invoice.invoice_date >= from_date)
 
         if to_date:
-            query = query.filter(Invoice.invoice_date <= to_date)
+            query = query.where(Invoice.invoice_date <= to_date)
 
         if overdue_only:
-            query = query.filter(
+            query = query.where(
                 and_(
                     Invoice.due_date < date.today(),
                     Invoice.status.in_(
@@ -1390,7 +1376,7 @@ class ARInvoiceService(ListResponseMixin):
             )
 
         query = query.order_by(Invoice.invoice_date.desc())
-        return query.limit(limit).offset(offset).all()
+        return db.scalars(query.limit(limit).offset(offset)).all()
 
     @staticmethod
     def delete_invoice(
@@ -1404,40 +1390,38 @@ class ARInvoiceService(ListResponseMixin):
 
         invoice = db.get(Invoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
 
         if invoice.status != InvoiceStatus.DRAFT:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Cannot delete invoice with status '{invoice.status.value}'. "
-                    "Only DRAFT invoices can be deleted."
-                ),
+            raise ValidationError(
+                f"Cannot delete invoice with status '{invoice.status.value}'. "
+                "Only DRAFT invoices can be deleted."
             )
 
         allocation_count = (
-            db.query(func.count(PaymentAllocation.allocation_id))
-            .filter(PaymentAllocation.invoice_id == inv_id)
-            .scalar()
+            db.scalar(
+                select(func.count(PaymentAllocation.allocation_id)).where(
+                    PaymentAllocation.invoice_id == inv_id
+                )
+            )
             or 0
         )
         if allocation_count > 0:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot delete invoice with {allocation_count} payment allocation(s).",
+            raise ValidationError(
+                f"Cannot delete invoice with {allocation_count} payment allocation(s)."
             )
 
         line_ids = [
             line.line_id
-            for line in db.query(InvoiceLine)
-            .filter(InvoiceLine.invoice_id == inv_id)
-            .all()
+            for line in db.scalars(
+                select(InvoiceLine).where(InvoiceLine.invoice_id == inv_id)
+            ).all()
         ]
         if line_ids:
-            db.query(InvoiceLineTax).filter(
-                InvoiceLineTax.line_id.in_(line_ids)
-            ).delete()
-        db.query(InvoiceLine).filter(InvoiceLine.invoice_id == inv_id).delete()
+            db.execute(
+                delete(InvoiceLineTax).where(InvoiceLineTax.line_id.in_(line_ids))
+            )
+        db.execute(delete(InvoiceLine).where(InvoiceLine.invoice_id == inv_id))
         db.delete(invoice)
         db.flush()
 
@@ -1453,43 +1437,41 @@ class ARInvoiceService(ListResponseMixin):
 
         credit_note = db.get(Invoice, cn_id)
         if not credit_note or credit_note.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Credit note not found")
+            raise NotFoundError("Credit note not found")
 
         if credit_note.invoice_type != InvoiceType.CREDIT_NOTE:
-            raise HTTPException(status_code=400, detail="Document is not a credit note")
+            raise ValidationError("Document is not a credit note")
 
         if credit_note.status != InvoiceStatus.DRAFT:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Cannot delete credit note with status '{credit_note.status.value}'. "
-                    "Only DRAFT credit notes can be deleted."
-                ),
+            raise ValidationError(
+                f"Cannot delete credit note with status '{credit_note.status.value}'. "
+                "Only DRAFT credit notes can be deleted."
             )
 
         allocation_count = (
-            db.query(func.count(PaymentAllocation.allocation_id))
-            .filter(PaymentAllocation.invoice_id == cn_id)
-            .scalar()
+            db.scalar(
+                select(func.count(PaymentAllocation.allocation_id)).where(
+                    PaymentAllocation.invoice_id == cn_id
+                )
+            )
             or 0
         )
         if allocation_count > 0:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot delete credit note with {allocation_count} allocation(s).",
+            raise ValidationError(
+                f"Cannot delete credit note with {allocation_count} allocation(s)."
             )
 
         line_ids = [
             line.line_id
-            for line in db.query(InvoiceLine)
-            .filter(InvoiceLine.invoice_id == cn_id)
-            .all()
+            for line in db.scalars(
+                select(InvoiceLine).where(InvoiceLine.invoice_id == cn_id)
+            ).all()
         ]
         if line_ids:
-            db.query(InvoiceLineTax).filter(
-                InvoiceLineTax.line_id.in_(line_ids)
-            ).delete()
-        db.query(InvoiceLine).filter(InvoiceLine.invoice_id == cn_id).delete()
+            db.execute(
+                delete(InvoiceLineTax).where(InvoiceLineTax.line_id.in_(line_ids))
+            )
+        db.execute(delete(InvoiceLine).where(InvoiceLine.invoice_id == cn_id))
         db.delete(credit_note)
         db.flush()
 

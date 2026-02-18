@@ -14,6 +14,8 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.supplier import Supplier
+from app.models.finance.banking.bank_account import BankAccount
+from app.models.finance.gl.account import Account
 from app.models.finance.gl.journal_entry import JournalType
 from app.services.common import coerce_uuid
 from app.services.finance.ap.posting.helpers import create_wht_transaction
@@ -23,6 +25,29 @@ from app.services.finance.gl.journal import (
     JournalLineInput,
 )
 from app.services.finance.posting.base import BasePostingAdapter
+
+
+def _resolve_bank_gl_account_id(
+    db: Session,
+    organization_id: UUID,
+    bank_account_id: UUID,
+) -> UUID | None:
+    """Resolve payment bank account to a GL account ID."""
+    gl_account = db.get(Account, bank_account_id)
+    if gl_account and gl_account.organization_id == organization_id:
+        return bank_account_id
+
+    bank_account = db.get(BankAccount, bank_account_id)
+    if (
+        bank_account
+        and bank_account.organization_id == organization_id
+        and bank_account.gl_account_id
+    ):
+        mapped_gl = db.get(Account, bank_account.gl_account_id)
+        if mapped_gl and mapped_gl.organization_id == organization_id:
+            return bank_account.gl_account_id
+
+    return None
 
 
 def post_payment(
@@ -91,6 +116,17 @@ def post_payment(
     if not supplier:
         return APPostingResult(success=False, message="Supplier not found")
 
+    bank_gl_account_id = _resolve_bank_gl_account_id(
+        db=db,
+        organization_id=org_id,
+        bank_account_id=payment.bank_account_id,
+    )
+    if not bank_gl_account_id:
+        return APPostingResult(
+            success=False,
+            message="Payment bank account is not mapped to a valid GL account",
+        )
+
     exchange_rate = payment.exchange_rate or Decimal("1.0")
 
     # Determine amounts - handle WHT deduction
@@ -118,7 +154,7 @@ def post_payment(
         ),
         # Credit Bank/Cash - NET amount (what we actually pay)
         JournalLineInput(
-            account_id=payment.bank_account_id,
+            account_id=bank_gl_account_id,
             debit_amount=Decimal("0"),
             credit_amount=net_amount,
             debit_amount_functional=Decimal("0"),
@@ -129,24 +165,40 @@ def post_payment(
 
     # Add WHT Payable line if WHT is withheld
     # WHT we withhold goes to tax_collected_account (liability to remit to tax authority)
-    if wht_amount > Decimal("0") and payment.withholding_tax_code_id:
-        from app.models.finance.tax.tax_code import TaxCode
+    if wht_amount > Decimal("0"):
+        from app.models.finance.tax.tax_code import TaxCode, TaxType
 
-        wht_code = db.get(TaxCode, payment.withholding_tax_code_id)
-        # Use tax_collected_account_id for WHT payable (what we owe to tax authority)
-        wht_account_id = wht_code.tax_collected_account_id if wht_code else None
-
-        if wht_account_id:
-            journal_lines.append(
-                JournalLineInput(
-                    account_id=wht_account_id,
-                    debit_amount=Decimal("0"),
-                    credit_amount=wht_amount,
-                    debit_amount_functional=Decimal("0"),
-                    credit_amount_functional=wht_functional,
-                    description=f"WHT withheld: {payment.payment_number}",
-                )
+        if not payment.withholding_tax_code_id:
+            return APPostingResult(
+                success=False,
+                message="WHT tax code is required when withholding amount is specified",
             )
+        wht_code = db.get(TaxCode, payment.withholding_tax_code_id)
+        if not wht_code or wht_code.organization_id != org_id:
+            return APPostingResult(success=False, message="WHT tax code not found")
+        if wht_code.tax_type != TaxType.WITHHOLDING:
+            return APPostingResult(
+                success=False,
+                message="Selected tax code is not a WITHHOLDING tax code",
+            )
+        # Use tax_collected_account_id for WHT payable (what we owe to tax authority)
+        wht_account_id = wht_code.tax_collected_account_id
+
+        if not wht_account_id:
+            return APPostingResult(
+                success=False,
+                message="WHT payable account is not configured on the WHT tax code",
+            )
+        journal_lines.append(
+            JournalLineInput(
+                account_id=wht_account_id,
+                debit_amount=Decimal("0"),
+                credit_amount=wht_amount,
+                debit_amount_functional=Decimal("0"),
+                credit_amount_functional=wht_functional,
+                description=f"WHT withheld: {payment.payment_number}",
+            )
+        )
 
     # Create journal entry
     journal_input = JournalInput(

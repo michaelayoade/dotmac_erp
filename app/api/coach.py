@@ -44,6 +44,7 @@ def list_insights(
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
     include_expired: bool = Query(False),
+    category: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
     svc = CoachService(db)
@@ -60,6 +61,7 @@ def list_insights(
         page=page,
         per_page=per_page,
         include_expired=include_expired,
+        category=category,
     )
     return CoachInsightListResponse(
         items=[CoachInsightSummary.model_validate(i) for i in items],

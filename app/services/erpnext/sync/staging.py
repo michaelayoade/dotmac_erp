@@ -8,6 +8,7 @@ import logging
 import uuid
 from datetime import datetime
 
+from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.models.sync.staging import (
@@ -179,26 +180,36 @@ class StagingSyncOrchestrator:
 
     def _clear_staging_data(self):
         """Clear existing staging data for this organization."""
-        self.db.query(StagingEmployee).filter(
-            StagingEmployee.organization_id == self.organization_id,
-            StagingEmployee.validation_status != StagingStatus.IMPORTED,
-        ).delete()
-        self.db.query(StagingEmployeeGrade).filter(
-            StagingEmployeeGrade.organization_id == self.organization_id,
-            StagingEmployeeGrade.validation_status != StagingStatus.IMPORTED,
-        ).delete()
-        self.db.query(StagingEmploymentType).filter(
-            StagingEmploymentType.organization_id == self.organization_id,
-            StagingEmploymentType.validation_status != StagingStatus.IMPORTED,
-        ).delete()
-        self.db.query(StagingDesignation).filter(
-            StagingDesignation.organization_id == self.organization_id,
-            StagingDesignation.validation_status != StagingStatus.IMPORTED,
-        ).delete()
-        self.db.query(StagingDepartment).filter(
-            StagingDepartment.organization_id == self.organization_id,
-            StagingDepartment.validation_status != StagingStatus.IMPORTED,
-        ).delete()
+        self.db.execute(
+            delete(StagingEmployee).where(
+                StagingEmployee.organization_id == self.organization_id,
+                StagingEmployee.validation_status != StagingStatus.IMPORTED,
+            )
+        )
+        self.db.execute(
+            delete(StagingEmployeeGrade).where(
+                StagingEmployeeGrade.organization_id == self.organization_id,
+                StagingEmployeeGrade.validation_status != StagingStatus.IMPORTED,
+            )
+        )
+        self.db.execute(
+            delete(StagingEmploymentType).where(
+                StagingEmploymentType.organization_id == self.organization_id,
+                StagingEmploymentType.validation_status != StagingStatus.IMPORTED,
+            )
+        )
+        self.db.execute(
+            delete(StagingDesignation).where(
+                StagingDesignation.organization_id == self.organization_id,
+                StagingDesignation.validation_status != StagingStatus.IMPORTED,
+            )
+        )
+        self.db.execute(
+            delete(StagingDepartment).where(
+                StagingDepartment.organization_id == self.organization_id,
+                StagingDepartment.validation_status != StagingStatus.IMPORTED,
+            )
+        )
         self.db.flush()
 
     def _sync_departments(self, batch_id: uuid.UUID) -> StagingSyncResult:

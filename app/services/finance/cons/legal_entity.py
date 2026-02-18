@@ -14,6 +14,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.cons.legal_entity import (
@@ -95,13 +96,11 @@ class LegalEntityService(ListResponseMixin):
         grp_id = coerce_uuid(group_id)
 
         # Check for duplicate entity code
-        existing = (
-            db.query(LegalEntity)
-            .filter(
+        existing = db.scalar(
+            select(LegalEntity).where(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.entity_code == input.entity_code,
             )
-            .first()
         )
         if existing:
             raise HTTPException(
@@ -318,20 +317,20 @@ class LegalEntityService(ListResponseMixin):
         grp_id = coerce_uuid(group_id)
 
         # Get all active entities
-        query = db.query(LegalEntity).filter(
+        stmt = select(LegalEntity).where(
             LegalEntity.group_id == grp_id,
             LegalEntity.is_active == True,
         )
 
         if as_of_date:
-            query = query.filter(
+            stmt = stmt.where(
                 (LegalEntity.acquisition_date <= as_of_date)
                 | (LegalEntity.acquisition_date.is_(None)),
                 (LegalEntity.disposal_date > as_of_date)
                 | (LegalEntity.disposal_date.is_(None)),
             )
 
-        entities = query.all()
+        entities = db.scalars(stmt).all()
 
         # Build tree structure
         {e.entity_id: e for e in entities}
@@ -380,18 +379,16 @@ class LegalEntityService(ListResponseMixin):
         """
         grp_id = coerce_uuid(group_id)
 
-        query = db.query(LegalEntity).filter(
+        stmt = select(LegalEntity).where(
             LegalEntity.group_id == grp_id,
             LegalEntity.is_active == True,
             LegalEntity.consolidation_method != ConsolidationMethod.NOT_CONSOLIDATED,
         )
 
         if consolidation_method:
-            query = query.filter(
-                LegalEntity.consolidation_method == consolidation_method
-            )
+            stmt = stmt.where(LegalEntity.consolidation_method == consolidation_method)
 
-        return query.order_by(LegalEntity.entity_code).all()
+        return db.scalars(stmt.order_by(LegalEntity.entity_code)).all()
 
     @staticmethod
     def get_carrying_value_of_goodwill(
@@ -412,16 +409,16 @@ class LegalEntityService(ListResponseMixin):
         """
         grp_id = coerce_uuid(group_id)
 
-        query = db.query(LegalEntity).filter(
+        stmt = select(LegalEntity).where(
             LegalEntity.group_id == grp_id,
             LegalEntity.is_active == True,
             LegalEntity.goodwill_at_acquisition.isnot(None),
         )
 
         if entity_id:
-            query = query.filter(LegalEntity.entity_id == coerce_uuid(entity_id))
+            stmt = stmt.where(LegalEntity.entity_id == coerce_uuid(entity_id))
 
-        entities = query.all()
+        entities = db.scalars(stmt).all()
 
         total_goodwill = Decimal("0")
         for entity in entities:
@@ -460,27 +457,25 @@ class LegalEntityService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[LegalEntity]:
         """List legal entities with optional filters."""
-        query = db.query(LegalEntity)
+        stmt = select(LegalEntity)
 
         if group_id:
-            query = query.filter(LegalEntity.group_id == coerce_uuid(group_id))
+            stmt = stmt.where(LegalEntity.group_id == coerce_uuid(group_id))
 
         if entity_type:
-            query = query.filter(LegalEntity.entity_type == entity_type)
+            stmt = stmt.where(LegalEntity.entity_type == entity_type)
 
         if consolidation_method:
-            query = query.filter(
-                LegalEntity.consolidation_method == consolidation_method
-            )
+            stmt = stmt.where(LegalEntity.consolidation_method == consolidation_method)
 
         if is_active is not None:
-            query = query.filter(LegalEntity.is_active == is_active)
+            stmt = stmt.where(LegalEntity.is_active == is_active)
 
         if country_code:
-            query = query.filter(LegalEntity.country_code == country_code)
+            stmt = stmt.where(LegalEntity.country_code == country_code)
 
-        query = query.order_by(LegalEntity.entity_code)
-        return query.limit(limit).offset(offset).all()
+        stmt = stmt.order_by(LegalEntity.entity_code).limit(limit).offset(offset)
+        return db.scalars(stmt).all()
 
 
 # Module-level singleton instance

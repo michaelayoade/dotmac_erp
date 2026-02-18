@@ -120,14 +120,12 @@ class ExpensePostingAdapter:
         if inserted_action_id is not None:
             return True
 
-        existing = (
-            db.query(ExpenseClaimAction)
-            .filter(
+        existing = db.scalar(
+            select(ExpenseClaimAction).where(
                 ExpenseClaimAction.organization_id == org_id,
                 ExpenseClaimAction.claim_id == claim_id,
                 ExpenseClaimAction.action_type == action,
             )
-            .first()
         )
         if not existing:
             return False
@@ -145,14 +143,12 @@ class ExpensePostingAdapter:
         action: ExpenseClaimActionType,
         status: ExpenseClaimActionStatus,
     ) -> None:
-        record = (
-            db.query(ExpenseClaimAction)
-            .filter(
+        record = db.scalar(
+            select(ExpenseClaimAction).where(
                 ExpenseClaimAction.organization_id == org_id,
                 ExpenseClaimAction.claim_id == claim_id,
                 ExpenseClaimAction.action_type == action,
             )
-            .first()
         )
         if record:
             record.status = status
@@ -208,10 +204,7 @@ class ExpensePostingAdapter:
 
         # Allow posting for APPROVED (normal workflow) and for claims that are
         # already in a posted state but missing GL entries (sync/import backfill).
-        postable_statuses = {
-            ExpenseClaimStatus.APPROVED,
-            ExpenseClaimStatus.PAID,
-        }
+        postable_statuses = ExpenseClaimStatus.gl_impacting()
         if claim.status not in postable_statuses:
             return ExpensePostingResult(
                 success=False,

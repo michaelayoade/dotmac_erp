@@ -13,6 +13,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.lease.lease_asset import LeaseAsset
@@ -267,8 +268,8 @@ class LeaseCalculationService(ListResponseMixin):
         if not contract:
             raise HTTPException(status_code=404, detail="Lease contract not found")
 
-        liability = (
-            db.query(LeaseLiability).filter(LeaseLiability.lease_id == ls_id).first()
+        liability = db.scalar(
+            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id)
         )
 
         if not liability:
@@ -351,8 +352,8 @@ class LeaseCalculationService(ListResponseMixin):
         if not contract:
             raise HTTPException(status_code=404, detail="Lease contract not found")
 
-        liability = (
-            db.query(LeaseLiability).filter(LeaseLiability.lease_id == ls_id).first()
+        liability = db.scalar(
+            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id)
         )
 
         if not liability:
@@ -394,7 +395,7 @@ class LeaseCalculationService(ListResponseMixin):
         """
         ls_id = coerce_uuid(lease_id)
 
-        asset = db.query(LeaseAsset).filter(LeaseAsset.lease_id == ls_id).first()
+        asset = db.scalar(select(LeaseAsset).where(LeaseAsset.lease_id == ls_id))
 
         if not asset:
             raise HTTPException(status_code=404, detail="Lease asset not found")

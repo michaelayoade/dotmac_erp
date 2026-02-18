@@ -12,7 +12,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
@@ -91,25 +91,25 @@ class CreditNoteWebService:
         to_date = parse_date(end_date)
 
         query = (
-            db.query(Invoice, Customer)
+            select(Invoice, Customer)
             .join(Customer, Invoice.customer_id == Customer.customer_id)
-            .filter(
+            .where(
                 Invoice.organization_id == org_id,
                 Invoice.invoice_type == InvoiceType.CREDIT_NOTE,
             )
         )
 
         if customer_id:
-            query = query.filter(Invoice.customer_id == coerce_uuid(customer_id))
+            query = query.where(Invoice.customer_id == coerce_uuid(customer_id))
         if status_value:
-            query = query.filter(Invoice.status == status_value)
+            query = query.where(Invoice.status == status_value)
         if from_date:
-            query = query.filter(Invoice.invoice_date >= from_date)
+            query = query.where(Invoice.invoice_date >= from_date)
         if to_date:
-            query = query.filter(Invoice.invoice_date <= to_date)
+            query = query.where(Invoice.invoice_date <= to_date)
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            query = query.where(
                 or_(
                     Invoice.invoice_number.ilike(search_pattern),
                     Customer.legal_name.ilike(search_pattern),
@@ -117,41 +117,42 @@ class CreditNoteWebService:
                 )
             )
 
-        total_count = query.with_entities(func.count(Invoice.invoice_id)).scalar() or 0
-        credit_notes = (
-            query.order_by(Invoice.invoice_date.desc())
-            .limit(limit)
-            .offset(offset)
-            .all()
-        )
+        total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+        credit_notes = db.execute(
+            query.order_by(Invoice.invoice_date.desc()).limit(limit).offset(offset)
+        ).all()
 
         # Calculate stats
-        stats_query = db.query(Invoice).filter(
-            Invoice.organization_id == org_id,
-            Invoice.invoice_type == InvoiceType.CREDIT_NOTE,
-        )
+        total_credit_notes = db.scalar(
+            select(func.coalesce(func.sum(Invoice.total_amount), 0)).where(
+                Invoice.organization_id == org_id,
+                Invoice.invoice_type == InvoiceType.CREDIT_NOTE,
+            )
+        ) or Decimal("0")
 
-        total_credit_notes = stats_query.with_entities(
-            func.coalesce(func.sum(Invoice.total_amount), 0)
-        ).scalar() or Decimal("0")
+        draft_total = db.scalar(
+            select(func.coalesce(func.sum(Invoice.total_amount), 0)).where(
+                Invoice.organization_id == org_id,
+                Invoice.invoice_type == InvoiceType.CREDIT_NOTE,
+                Invoice.status == InvoiceStatus.DRAFT,
+            )
+        ) or Decimal("0")
 
-        draft_total = stats_query.filter(
-            Invoice.status == InvoiceStatus.DRAFT
-        ).with_entities(
-            func.coalesce(func.sum(Invoice.total_amount), 0)
-        ).scalar() or Decimal("0")
+        posted_total = db.scalar(
+            select(func.coalesce(func.sum(Invoice.total_amount), 0)).where(
+                Invoice.organization_id == org_id,
+                Invoice.invoice_type == InvoiceType.CREDIT_NOTE,
+                Invoice.status == InvoiceStatus.POSTED,
+            )
+        ) or Decimal("0")
 
-        posted_total = stats_query.filter(
-            Invoice.status == InvoiceStatus.POSTED
-        ).with_entities(
-            func.coalesce(func.sum(Invoice.total_amount), 0)
-        ).scalar() or Decimal("0")
-
-        applied_total = stats_query.filter(
-            Invoice.status == InvoiceStatus.PAID
-        ).with_entities(
-            func.coalesce(func.sum(Invoice.total_amount), 0)
-        ).scalar() or Decimal("0")
+        applied_total = db.scalar(
+            select(func.coalesce(func.sum(Invoice.total_amount), 0)).where(
+                Invoice.organization_id == org_id,
+                Invoice.invoice_type == InvoiceType.CREDIT_NOTE,
+                Invoice.status == InvoiceStatus.PAID,
+            )
+        ) or Decimal("0")
 
         credit_notes_view = []
         for credit_note, customer in credit_notes:
@@ -260,9 +261,9 @@ class CreditNoteWebService:
         open_invoices = []
         selected_invoice = None
         invoices_query = (
-            db.query(Invoice, Customer)
+            select(Invoice, Customer)
             .join(Customer, Invoice.customer_id == Customer.customer_id)
-            .filter(
+            .where(
                 Invoice.organization_id == org_id,
                 Invoice.invoice_type == InvoiceType.STANDARD,
                 Invoice.status.in_(open_statuses),
@@ -270,7 +271,7 @@ class CreditNoteWebService:
             .order_by(Invoice.due_date)
         )
 
-        for invoice, customer in invoices_query.all():
+        for invoice, customer in db.execute(invoices_query).all():
             balance = invoice.total_amount - invoice.amount_paid
             view = {
                 "invoice_id": invoice.invoice_id,
@@ -588,6 +589,115 @@ class CreditNoteWebService:
             url="/finance/ar/credit-notes?success=Record+deleted+successfully",
             status_code=303,
         )
+
+    # =====================================================================
+    # Credit Note Status Transitions
+    # =====================================================================
+
+    def submit_credit_note_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        credit_note_id: str,
+    ) -> RedirectResponse:
+        """Submit credit note for approval."""
+        try:
+            ar_invoice_service.submit_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(credit_note_id),
+                submitted_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ar/credit-notes/{credit_note_id}?success=Credit+note+submitted+for+approval",
+                status_code=303,
+            )
+        except Exception as e:
+            logger.exception("Failed to submit credit note %s", credit_note_id)
+            return RedirectResponse(
+                url=f"/finance/ar/credit-notes/{credit_note_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def approve_credit_note_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        credit_note_id: str,
+    ) -> RedirectResponse:
+        """Approve a submitted credit note."""
+        try:
+            ar_invoice_service.approve_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(credit_note_id),
+                approved_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ar/credit-notes/{credit_note_id}?success=Credit+note+approved",
+                status_code=303,
+            )
+        except Exception as e:
+            logger.exception("Failed to approve credit note %s", credit_note_id)
+            return RedirectResponse(
+                url=f"/finance/ar/credit-notes/{credit_note_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def post_credit_note_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        credit_note_id: str,
+    ) -> RedirectResponse:
+        """Post credit note to general ledger."""
+        try:
+            ar_invoice_service.post_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(credit_note_id),
+                posted_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ar/credit-notes/{credit_note_id}?success=Credit+note+posted+to+ledger",
+                status_code=303,
+            )
+        except Exception as e:
+            logger.exception("Failed to post credit note %s", credit_note_id)
+            return RedirectResponse(
+                url=f"/finance/ar/credit-notes/{credit_note_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def void_credit_note_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        credit_note_id: str,
+    ) -> RedirectResponse:
+        """Void a credit note."""
+        try:
+            ar_invoice_service.void_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(credit_note_id),
+                voided_by_user_id=auth.user_id,
+                reason="Voided via web interface",
+            )
+            return RedirectResponse(
+                url=f"/finance/ar/credit-notes/{credit_note_id}?success=Credit+note+voided",
+                status_code=303,
+            )
+        except Exception as e:
+            logger.exception("Failed to void credit note %s", credit_note_id)
+            return RedirectResponse(
+                url=f"/finance/ar/credit-notes/{credit_note_id}?error={str(e)}",
+                status_code=303,
+            )
 
     async def upload_credit_note_attachment_response(
         self,

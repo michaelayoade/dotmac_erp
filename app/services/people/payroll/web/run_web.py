@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.banking.bank_account import BankAccount
@@ -96,22 +96,27 @@ class RunWebService:
         effective_date: date,
     ) -> int:
         return (
-            db.query(SalaryStructureAssignment)
-            .join(
-                Employee, SalaryStructureAssignment.employee_id == Employee.employee_id
-            )
-            .filter(SalaryStructureAssignment.organization_id == org_id)
-            .filter(SalaryStructureAssignment.from_date <= effective_date)
-            .filter(
-                or_(
-                    SalaryStructureAssignment.to_date.is_(None),
-                    SalaryStructureAssignment.to_date >= effective_date,
+            db.scalar(
+                select(func.count(SalaryStructureAssignment.assignment_id))
+                .join(
+                    Employee,
+                    SalaryStructureAssignment.employee_id == Employee.employee_id,
+                )
+                .where(SalaryStructureAssignment.organization_id == org_id)
+                .where(SalaryStructureAssignment.from_date <= effective_date)
+                .where(
+                    or_(
+                        SalaryStructureAssignment.to_date.is_(None),
+                        SalaryStructureAssignment.to_date >= effective_date,
+                    )
+                )
+                .where(
+                    Employee.status.in_(
+                        [EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]
+                    )
                 )
             )
-            .filter(
-                Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE])
-            )
-            .count()
+            or 0
         )
 
     def list_runs_response(
@@ -129,43 +134,50 @@ class RunWebService:
         per_page = DEFAULT_PAGE_SIZE
         offset = (page - 1) * per_page
 
-        query = db.query(PayrollEntry).filter(PayrollEntry.organization_id == org_id)
+        conditions = [PayrollEntry.organization_id == org_id]
+        query = select(PayrollEntry).where(*conditions)
 
         status_enum = parse_entry_status(status)
         if status_enum:
-            query = query.filter(PayrollEntry.status == status_enum)
+            conditions.append(PayrollEntry.status == status_enum)
+            query = query.where(PayrollEntry.status == status_enum)
 
         if year:
-            query = query.filter(PayrollEntry.payroll_year == year)
+            conditions.append(PayrollEntry.payroll_year == year)
+            query = query.where(PayrollEntry.payroll_year == year)
 
         if month:
-            query = query.filter(PayrollEntry.payroll_month == month)
+            conditions.append(PayrollEntry.payroll_month == month)
+            query = query.where(PayrollEntry.payroll_month == month)
 
-        total = query.count()
-        entries = (
+        total = (
+            db.scalar(select(func.count(PayrollEntry.entry_id)).where(*conditions)) or 0
+        )
+        entries = db.scalars(
             query.order_by(PayrollEntry.created_at.desc())
             .offset(offset)
             .limit(per_page)
-            .all()
-        )
+        ).all()
         total_pages = (total + per_page - 1) // per_page
 
         # Get statistics
         draft_count = (
-            db.query(PayrollEntry)
-            .filter(
-                PayrollEntry.organization_id == org_id,
-                PayrollEntry.status == PayrollEntryStatus.DRAFT,
+            db.scalar(
+                select(func.count(PayrollEntry.entry_id)).where(
+                    PayrollEntry.organization_id == org_id,
+                    PayrollEntry.status == PayrollEntryStatus.DRAFT,
+                )
             )
-            .count()
+            or 0
         )
         pending_count = (
-            db.query(PayrollEntry)
-            .filter(
-                PayrollEntry.organization_id == org_id,
-                PayrollEntry.status == PayrollEntryStatus.PENDING,
+            db.scalar(
+                select(func.count(PayrollEntry.entry_id)).where(
+                    PayrollEntry.organization_id == org_id,
+                    PayrollEntry.status == PayrollEntryStatus.PENDING,
+                )
             )
-            .count()
+            or 0
         )
         status_counts = {}
         for entry_status in ENTRY_STATUSES:
@@ -173,12 +185,13 @@ class RunWebService:
                 status_enum = parse_entry_status(entry_status)
                 if status_enum:
                     status_counts[entry_status] = (
-                        db.query(PayrollEntry)
-                        .filter(
-                            PayrollEntry.organization_id == org_id,
-                            PayrollEntry.status == status_enum,
+                        db.scalar(
+                            select(func.count(PayrollEntry.entry_id)).where(
+                                PayrollEntry.organization_id == org_id,
+                                PayrollEntry.status == status_enum,
+                            )
                         )
-                        .count()
+                        or 0
                     )
             except Exception:
                 status_counts[entry_status] = 0
@@ -213,51 +226,46 @@ class RunWebService:
         """Render new payroll run form."""
         org_id = coerce_uuid(auth.organization_id)
 
-        departments = (
-            db.query(Department)
-            .filter(Department.organization_id == org_id, Department.is_active == True)
+        departments = db.scalars(
+            select(Department)
+            .where(Department.organization_id == org_id, Department.is_active.is_(True))
             .order_by(Department.department_name)
-            .all()
-        )
+        ).all()
 
-        designations = (
-            db.query(Designation)
-            .filter(
+        designations = db.scalars(
+            select(Designation)
+            .where(
                 Designation.organization_id == org_id,
-                Designation.is_active == True,
-                Designation.is_deleted == False,
+                Designation.is_active.is_(True),
+                Designation.is_deleted.is_(False),
             )
             .order_by(Designation.designation_name)
-            .all()
-        )
+        ).all()
 
-        structures = (
-            db.query(SalaryStructure)
-            .filter(
+        structures = db.scalars(
+            select(SalaryStructure)
+            .where(
                 SalaryStructure.organization_id == org_id,
-                SalaryStructure.is_active == True,
+                SalaryStructure.is_active.is_(True),
             )
             .order_by(SalaryStructure.structure_name)
-            .all()
-        )
-        bank_accounts = (
-            db.query(BankAccount)
-            .filter(BankAccount.organization_id == org_id)
+        ).all()
+        bank_accounts = db.scalars(
+            select(BankAccount)
+            .where(BankAccount.organization_id == org_id)
             .order_by(BankAccount.bank_name, BankAccount.account_name)
-            .all()
-        )
+        ).all()
 
         # Expense accounts for GL posting (account codes starting with 6)
-        expense_accounts = (
-            db.query(Account)
-            .filter(
+        expense_accounts = db.scalars(
+            select(Account)
+            .where(
                 Account.organization_id == org_id,
-                Account.is_active == True,
+                Account.is_active.is_(True),
                 Account.account_code.like("6%"),
             )
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
 
         today = date.today()
         frequency = self._get_default_frequency(db, org_id)
@@ -409,38 +417,36 @@ class RunWebService:
         status_value = self._form_text(request.query_params.get("status"))
         status_filter = parse_slip_status(status_value)
 
-        slips_query = db.query(SalarySlip).filter(SalarySlip.payroll_entry_id == e_id)
+        slips_query = select(SalarySlip).where(SalarySlip.payroll_entry_id == e_id)
         if search:
             like = f"%{search}%"
-            slips_query = slips_query.filter(
+            slips_query = slips_query.where(
                 or_(
                     SalarySlip.employee_name.ilike(like),
                     SalarySlip.slip_number.ilike(like),
                 )
             )
         if status_filter:
-            slips_query = slips_query.filter(SalarySlip.status == status_filter)
+            slips_query = slips_query.where(SalarySlip.status == status_filter)
 
-        slips = slips_query.order_by(SalarySlip.employee_name).all()
+        slips = db.scalars(slips_query.order_by(SalarySlip.employee_name)).all()
 
         slip_status_counts = {}
-        for status, count in (
-            db.query(SalarySlip.status, func.count())
-            .filter(SalarySlip.payroll_entry_id == e_id)
+        for status, count in db.execute(
+            select(SalarySlip.status, func.count())
+            .where(SalarySlip.payroll_entry_id == e_id)
             .group_by(SalarySlip.status)
-            .all()
-        ):
+        ).all():
             slip_status_counts[status.value] = count
 
         total_slips = sum(slip_status_counts.values())
 
         # Get active bank accounts for bank upload dropdown
-        bank_accounts = (
-            db.query(BankAccount)
-            .filter(BankAccount.organization_id == org_id)
+        bank_accounts = db.scalars(
+            select(BankAccount)
+            .where(BankAccount.organization_id == org_id)
             .order_by(BankAccount.bank_name, BankAccount.account_name)
-            .all()
-        )
+        ).all()
 
         context = base_context(
             request, auth, entry.entry_name or "Payroll Run", "payroll", db=db
@@ -637,9 +643,11 @@ class RunWebService:
                 and entry.status == PayrollEntryStatus.DRAFT
             ):
                 # Delete associated slips first
-                db.query(SalarySlip).filter(
-                    SalarySlip.payroll_entry_id == e_id
-                ).delete()
+                db.execute(
+                    SalarySlip.__table__.delete().where(
+                        SalarySlip.payroll_entry_id == e_id
+                    )
+                )
                 db.delete(entry)
                 db.commit()
                 return RedirectResponse(
@@ -662,51 +670,46 @@ class RunWebService:
         """Render run form with error."""
         org_id = coerce_uuid(auth.organization_id)
 
-        departments = (
-            db.query(Department)
-            .filter(Department.organization_id == org_id, Department.is_active == True)
+        departments = db.scalars(
+            select(Department)
+            .where(Department.organization_id == org_id, Department.is_active.is_(True))
             .order_by(Department.department_name)
-            .all()
-        )
+        ).all()
 
-        designations = (
-            db.query(Designation)
-            .filter(
+        designations = db.scalars(
+            select(Designation)
+            .where(
                 Designation.organization_id == org_id,
-                Designation.is_active == True,
-                Designation.is_deleted == False,
+                Designation.is_active.is_(True),
+                Designation.is_deleted.is_(False),
             )
             .order_by(Designation.designation_name)
-            .all()
-        )
+        ).all()
 
-        structures = (
-            db.query(SalaryStructure)
-            .filter(
+        structures = db.scalars(
+            select(SalaryStructure)
+            .where(
                 SalaryStructure.organization_id == org_id,
-                SalaryStructure.is_active == True,
+                SalaryStructure.is_active.is_(True),
             )
             .order_by(SalaryStructure.structure_name)
-            .all()
-        )
+        ).all()
 
-        bank_accounts = (
-            db.query(BankAccount)
-            .filter(BankAccount.organization_id == org_id)
+        bank_accounts = db.scalars(
+            select(BankAccount)
+            .where(BankAccount.organization_id == org_id)
             .order_by(BankAccount.bank_name, BankAccount.account_name)
-            .all()
-        )
+        ).all()
 
-        expense_accounts = (
-            db.query(Account)
-            .filter(
+        expense_accounts = db.scalars(
+            select(Account)
+            .where(
                 Account.organization_id == org_id,
-                Account.is_active == True,
+                Account.is_active.is_(True),
                 Account.account_code.like("6%"),
             )
             .order_by(Account.account_code)
-            .all()
-        )
+        ).all()
 
         today = date.today()
         frequency = self._get_default_frequency(db, org_id)
@@ -806,13 +809,12 @@ class RunWebService:
             )
 
         # Get all salary slips for this entry
-        slips = (
-            db.query(SalarySlip)
-            .filter(SalarySlip.payroll_entry_id == e_id)
-            .filter(SalarySlip.net_pay > 0)
+        slips = db.scalars(
+            select(SalarySlip)
+            .where(SalarySlip.payroll_entry_id == e_id)
+            .where(SalarySlip.net_pay > 0)
             .order_by(SalarySlip.employee_name)
-            .all()
-        )
+        ).all()
 
         if not slips:
             return RedirectResponse(

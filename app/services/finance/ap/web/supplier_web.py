@@ -163,8 +163,8 @@ class SupplierWebService:
             SupplierInvoiceStatus.POSTED,
             SupplierInvoiceStatus.PARTIALLY_PAID,
         ]
-        balances = (
-            db.query(
+        balances = db.execute(
+            select(
                 SupplierInvoice.supplier_id,
                 func.coalesce(
                     func.sum(
@@ -173,13 +173,12 @@ class SupplierWebService:
                     0,
                 ).label("balance"),
             )
-            .filter(
+            .where(
                 SupplierInvoice.organization_id == org_id,
                 SupplierInvoice.status.in_(open_statuses),
             )
             .group_by(SupplierInvoice.supplier_id)
-            .all()
-        )
+        ).all()
         balance_map = {row.supplier_id: row.balance for row in balances}
 
         # Use shared audit service for user names
@@ -211,33 +210,42 @@ class SupplierWebService:
 
         # Calculate stats for template header cards
         total_suppliers = (
-            db.query(func.count(Supplier.supplier_id))
-            .filter(Supplier.organization_id == org_id)
-            .scalar()
+            db.scalar(
+                select(func.count(Supplier.supplier_id)).where(
+                    Supplier.organization_id == org_id
+                )
+            )
             or 0
         )
         active_count = (
-            db.query(func.count(Supplier.supplier_id))
-            .filter(Supplier.organization_id == org_id, Supplier.is_active == True)
-            .scalar()
+            db.scalar(
+                select(func.count(Supplier.supplier_id)).where(
+                    Supplier.organization_id == org_id, Supplier.is_active == True
+                )
+            )
             or 0
         )
-        total_payables_raw = db.query(
-            func.coalesce(
-                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid), 0
-            )
-        ).filter(
-            SupplierInvoice.organization_id == org_id,
-            SupplierInvoice.status.in_(open_statuses),
-        ).scalar() or Decimal("0")
-        overdue_count = (
-            db.query(func.count(SupplierInvoice.invoice_id))
-            .filter(
+        total_payables_raw = db.scalar(
+            select(
+                func.coalesce(
+                    func.sum(
+                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
+                    ),
+                    0,
+                )
+            ).where(
                 SupplierInvoice.organization_id == org_id,
                 SupplierInvoice.status.in_(open_statuses),
-                SupplierInvoice.due_date < date.today(),
             )
-            .scalar()
+        ) or Decimal("0")
+        overdue_count = (
+            db.scalar(
+                select(func.count(SupplierInvoice.invoice_id)).where(
+                    SupplierInvoice.organization_id == org_id,
+                    SupplierInvoice.status.in_(open_statuses),
+                    SupplierInvoice.due_date < date.today(),
+                )
+            )
             or 0
         )
 
@@ -329,29 +337,32 @@ class SupplierWebService:
             SupplierInvoiceStatus.PARTIALLY_PAID,
         ]
 
-        balance = db.query(
-            func.coalesce(
-                func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid),
-                0,
+        balance = db.scalar(
+            select(
+                func.coalesce(
+                    func.sum(
+                        SupplierInvoice.total_amount - SupplierInvoice.amount_paid
+                    ),
+                    0,
+                )
+            ).where(
+                SupplierInvoice.organization_id == org_id,
+                SupplierInvoice.supplier_id == supplier.supplier_id,
+                SupplierInvoice.status.in_(open_statuses),
             )
-        ).filter(
-            SupplierInvoice.organization_id == org_id,
-            SupplierInvoice.supplier_id == supplier.supplier_id,
-            SupplierInvoice.status.in_(open_statuses),
-        ).scalar() or Decimal("0")
+        ) or Decimal("0")
 
         # All invoices (all statuses)
         today = date.today()
-        all_invoices_query = (
-            db.query(SupplierInvoice)
-            .filter(
+        all_invoices_query = db.scalars(
+            select(SupplierInvoice)
+            .where(
                 SupplierInvoice.organization_id == org_id,
                 SupplierInvoice.supplier_id == supplier.supplier_id,
             )
             .order_by(SupplierInvoice.invoice_date.desc())
             .limit(20)
-            .all()
-        )
+        ).all()
         invoices_view: list[dict] = []
         for inv in all_invoices_query:
             balance_due = inv.total_amount - inv.amount_paid
@@ -375,16 +386,15 @@ class SupplierWebService:
             )
 
         # Payments
-        payments_query = (
-            db.query(SupplierPayment)
-            .filter(
+        payments_query = db.scalars(
+            select(SupplierPayment)
+            .where(
                 SupplierPayment.organization_id == org_id,
                 SupplierPayment.supplier_id == supplier.supplier_id,
             )
             .order_by(SupplierPayment.payment_date.desc())
             .limit(20)
-            .all()
-        )
+        ).all()
         payments_view: list[dict] = []
         for p in payments_query:
             payments_view.append(
@@ -404,16 +414,15 @@ class SupplierWebService:
             )
 
         # Purchase Orders
-        pos_query = (
-            db.query(PurchaseOrder)
-            .filter(
+        pos_query = db.scalars(
+            select(PurchaseOrder)
+            .where(
                 PurchaseOrder.organization_id == org_id,
                 PurchaseOrder.supplier_id == supplier.supplier_id,
             )
             .order_by(PurchaseOrder.po_date.desc())
             .limit(20)
-            .all()
-        )
+        ).all()
         purchase_orders_view: list[dict] = []
         for po in pos_query:
             purchase_orders_view.append(
@@ -431,16 +440,15 @@ class SupplierWebService:
             )
 
         # Goods Receipts
-        receipts_query = (
-            db.query(GoodsReceipt)
-            .filter(
+        receipts_query = db.scalars(
+            select(GoodsReceipt)
+            .where(
                 GoodsReceipt.organization_id == org_id,
                 GoodsReceipt.supplier_id == supplier.supplier_id,
             )
             .order_by(GoodsReceipt.receipt_date.desc())
             .limit(20)
-            .all()
-        )
+        ).all()
         goods_receipts_view: list[dict] = []
         for gr in receipts_query:
             goods_receipts_view.append(

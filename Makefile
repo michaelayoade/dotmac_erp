@@ -1,4 +1,4 @@
-.PHONY: help test lint type-check format security check migrate dev docker-up docker-down docker-logs worker beat css coverage clean schema-skill mcp-health
+.PHONY: help test lint type-check format security semgrep check migrate dev docker-up docker-down docker-logs worker beat css coverage clean schema-skill mcp-health pg-observe-setup
 
 # Default target
 help: ## Show this help
@@ -19,7 +19,10 @@ type-check: ## Run mypy type checker
 security: ## Run bandit security scan
 	poetry run bandit -r app/ -c pyproject.toml -q
 
-check: lint type-check security ## Run all quality checks (lint + type-check + security)
+semgrep: ## Run semgrep custom rules (DotMac anti-patterns)
+	poetry run semgrep --config .semgrep/ app/ --exclude='tests/' --exclude='alembic/' --exclude='scripts/' --no-git-ignore
+
+check: lint type-check security semgrep ## Run all quality checks (lint + type-check + security + semgrep)
 
 # ─── Testing ──────────────────────────────────────────────
 
@@ -61,6 +64,9 @@ schema-skill: ## Regenerate database schema skill for Claude Code
 
 mcp-health: ## Validate MCP DB config and read-only connectivity
 	poetry run python scripts/check_mcp_db.py
+
+pg-observe-setup: ## Enable pg_stat_statements and grant monitoring permissions (run docker compose up -d db first if new)
+	docker exec -i dotmac_erp_db psql -U postgres -d dotmac_erp < scripts/setup_pg_observability.sql
 
 # ─── Development ──────────────────────────────────────────
 

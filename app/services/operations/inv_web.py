@@ -983,7 +983,7 @@ class OperationsInventoryWebService:
                 select(FiscalPeriod)
                 .where(
                     FiscalPeriod.organization_id == org_id,
-                    FiscalPeriod.status.in_([PeriodStatus.OPEN, PeriodStatus.REOPENED]),
+                    FiscalPeriod.status.in_(PeriodStatus.accepts_postings()),
                 )
                 .order_by(FiscalPeriod.start_date.desc())
             ).all()

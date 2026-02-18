@@ -52,7 +52,7 @@ def build_asset_query(
     category_id = _try_uuid(category)
 
     query = (
-        db.query(Asset)
+        Query([Asset], session=db)
         .join(AssetCategory, Asset.category_id == AssetCategory.category_id)
         .filter(Asset.organization_id == org_id)
     )

@@ -1,10 +1,10 @@
 import logging
-from typing import Any, TypeVar
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
 from sqlalchemy import select
-from sqlalchemy.orm import Query, Session
+from sqlalchemy.orm import Session
 
 from app.models.person import Person
 from app.models.rbac import Permission, PersonRole, Role, RolePermission
@@ -23,12 +23,10 @@ from app.services.response import ListResponseMixin
 
 logger = logging.getLogger(__name__)
 
-T = TypeVar("T")
-
 
 def _apply_ordering(
-    query: Query[T], order_by: str, order_dir: str, allowed_columns: dict[str, Any]
-) -> Query[T]:
+    query: Any, order_by: str, order_dir: str, allowed_columns: dict[str, Any]
+) -> Any:
     if order_by not in allowed_columns:
         raise HTTPException(
             status_code=400,
@@ -40,7 +38,7 @@ def _apply_ordering(
     return query.order_by(column.asc())
 
 
-def _apply_pagination(query: Query[T], limit: int, offset: int) -> Query[T]:
+def _apply_pagination(query: Any, limit: int, offset: int) -> Any:
     return query.limit(limit).offset(offset)
 
 
@@ -69,18 +67,18 @@ class Roles(ListResponseMixin):
         limit: int,
         offset: int,
     ) -> list[Role]:
-        query = db.query(Role)
+        query = select(Role)
         if is_active is None:
-            query = query.filter(Role.is_active.is_(True))
+            query = query.where(Role.is_active.is_(True))
         else:
-            query = query.filter(Role.is_active == is_active)
+            query = query.where(Role.is_active == is_active)
         query = _apply_ordering(
             query,
             order_by,
             order_dir,
             {"created_at": Role.created_at, "name": Role.name},
         )
-        return _apply_pagination(query, limit, offset).all()
+        return list(db.scalars(_apply_pagination(query, limit, offset)).all())
 
     @staticmethod
     def update(db: Session, role_id: str, payload: RoleUpdate) -> Role:
@@ -127,18 +125,18 @@ class Permissions(ListResponseMixin):
         limit: int,
         offset: int,
     ) -> list[Permission]:
-        query = db.query(Permission)
+        query = select(Permission)
         if is_active is None:
-            query = query.filter(Permission.is_active.is_(True))
+            query = query.where(Permission.is_active.is_(True))
         else:
-            query = query.filter(Permission.is_active == is_active)
+            query = query.where(Permission.is_active == is_active)
         query = _apply_ordering(
             query,
             order_by,
             order_dir,
             {"created_at": Permission.created_at, "key": Permission.key},
         )
-        return _apply_pagination(query, limit, offset).all()
+        return list(db.scalars(_apply_pagination(query, limit, offset)).all())
 
     @staticmethod
     def update(
@@ -194,11 +192,11 @@ class RolePermissions(ListResponseMixin):
         limit: int,
         offset: int,
     ) -> list[RolePermission]:
-        query = db.query(RolePermission)
+        query = select(RolePermission)
         if role_id:
-            query = query.filter(RolePermission.role_id == coerce_uuid(role_id))
+            query = query.where(RolePermission.role_id == coerce_uuid(role_id))
         if permission_id:
-            query = query.filter(
+            query = query.where(
                 RolePermission.permission_id == coerce_uuid(permission_id)
             )
         query = _apply_ordering(
@@ -207,7 +205,7 @@ class RolePermissions(ListResponseMixin):
             order_dir,
             {"role_id": RolePermission.role_id},
         )
-        return _apply_pagination(query, limit, offset).all()
+        return list(db.scalars(_apply_pagination(query, limit, offset)).all())
 
     @staticmethod
     def update(
@@ -300,18 +298,18 @@ class PersonRoles(ListResponseMixin):
         limit: int,
         offset: int,
     ) -> list[PersonRole]:
-        query = db.query(PersonRole)
+        query = select(PersonRole)
         if person_id:
-            query = query.filter(PersonRole.person_id == coerce_uuid(person_id))
+            query = query.where(PersonRole.person_id == coerce_uuid(person_id))
         if role_id:
-            query = query.filter(PersonRole.role_id == coerce_uuid(role_id))
+            query = query.where(PersonRole.role_id == coerce_uuid(role_id))
         query = _apply_ordering(
             query,
             order_by,
             order_dir,
             {"assigned_at": PersonRole.assigned_at},
         )
-        return _apply_pagination(query, limit, offset).all()
+        return list(db.scalars(_apply_pagination(query, limit, offset)).all())
 
     @staticmethod
     def update(db: Session, link_id: str, payload: PersonRoleUpdate) -> PersonRole:

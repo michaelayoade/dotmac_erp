@@ -229,6 +229,12 @@ class SchedulingWebService:
         work_days = [
             day for day in form_data.getlist("work_days") if isinstance(day, str)
         ]
+        day_work_days = [
+            day for day in form_data.getlist("day_work_days") if isinstance(day, str)
+        ]
+        night_work_days = [
+            day for day in form_data.getlist("night_work_days") if isinstance(day, str)
+        ]
         day_shift_type_id = SchedulingWebService._parse_uuid(
             SchedulingWebService._get_form_str(form_data, "day_shift_type_id")
         )
@@ -263,6 +269,8 @@ class SchedulingWebService:
                         "rotation_type": rotation_type,
                         "cycle_weeks": cycle_weeks,
                         "work_days": work_days,
+                        "day_work_days": day_work_days,
+                        "night_work_days": night_work_days,
                     },
                     "error": error_message,
                 }
@@ -285,6 +293,8 @@ class SchedulingWebService:
                 work_days=work_days
                 if work_days
                 else ["MON", "TUE", "WED", "THU", "FRI"],
+                day_work_days=day_work_days if day_work_days else None,
+                night_work_days=night_work_days if night_work_days else None,
                 day_shift_type_id=day_shift_type_id,
                 night_shift_type_id=night_shift_type_id,
             )
@@ -316,6 +326,8 @@ class SchedulingWebService:
                         "rotation_type": rotation_type,
                         "cycle_weeks": cycle_weeks,
                         "work_days": work_days,
+                        "day_work_days": day_work_days,
+                        "night_work_days": night_work_days,
                     },
                     "error": str(e),
                 }
@@ -352,6 +364,8 @@ class SchedulingWebService:
                     "rotation_type": pattern.rotation_type.value,
                     "cycle_weeks": pattern.cycle_weeks,
                     "work_days": pattern.work_days,
+                    "day_work_days": pattern.day_work_days or [],
+                    "night_work_days": pattern.night_work_days or [],
                     "day_shift_type_id": str(pattern.day_shift_type_id),
                     "night_shift_type_id": str(pattern.night_shift_type_id)
                     if pattern.night_shift_type_id
@@ -382,6 +396,16 @@ class SchedulingWebService:
             work_days = [
                 day for day in form_data.getlist("work_days") if isinstance(day, str)
             ]
+            day_work_days = [
+                day
+                for day in form_data.getlist("day_work_days")
+                if isinstance(day, str)
+            ]
+            night_work_days = [
+                day
+                for day in form_data.getlist("night_work_days")
+                if isinstance(day, str)
+            ]
             night_shift_type_id = SchedulingWebService._parse_uuid(
                 SchedulingWebService._get_form_str(form_data, "night_shift_type_id")
             )
@@ -408,6 +432,8 @@ class SchedulingWebService:
                     or "1"
                 ),
                 work_days=work_days if work_days else None,
+                day_work_days=day_work_days if day_work_days else None,
+                night_work_days=night_work_days if night_work_days else None,
                 day_shift_type_id=SchedulingWebService._parse_uuid(
                     SchedulingWebService._get_form_str(form_data, "day_shift_type_id")
                 ),

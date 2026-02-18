@@ -14,6 +14,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.invoice import Invoice
@@ -160,9 +161,9 @@ class ARInventoryIntegration:
         elif item.costing_method == CostingMethod.FIFO:
             # For FIFO, we need to calculate from lots
             org_uuid = coerce_uuid(organization_id)
-            lots = (
-                db.query(InventoryLot)
-                .filter(
+            lots = db.scalars(
+                select(InventoryLot)
+                .where(
                     InventoryLot.organization_id == org_uuid,
                     InventoryLot.item_id == item.item_id,
                     InventoryLot.quantity_on_hand > 0,
@@ -170,8 +171,7 @@ class ARInventoryIntegration:
                     InventoryLot.is_quarantined == False,
                 )
                 .order_by(InventoryLot.received_date.asc())
-                .all()
-            )
+            ).all()
 
             remaining = quantity
             total_cost = Decimal("0")

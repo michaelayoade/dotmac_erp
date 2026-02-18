@@ -15,7 +15,7 @@ from typing import cast
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_
+from sqlalchemy import and_, select, update
 from sqlalchemy.orm import Session
 
 from app.models.inventory.bom import BillOfMaterials, BOMComponent, BOMType
@@ -105,15 +105,13 @@ class BOMService(ListResponseMixin):
         itm_id = coerce_uuid(input.item_id)
 
         # Check for duplicate code
-        existing = (
-            db.query(BillOfMaterials)
-            .filter(
+        existing = db.scalar(
+            select(BillOfMaterials).where(
                 and_(
                     BillOfMaterials.organization_id == org_id,
                     BillOfMaterials.bom_code == input.bom_code,
                 )
             )
-            .first()
         )
 
         if existing:
@@ -129,13 +127,17 @@ class BOMService(ListResponseMixin):
 
         # If setting as default, clear other defaults for this item
         if input.is_default:
-            db.query(BillOfMaterials).filter(
-                and_(
-                    BillOfMaterials.organization_id == org_id,
-                    BillOfMaterials.item_id == itm_id,
-                    BillOfMaterials.is_default == True,
+            db.execute(
+                update(BillOfMaterials)
+                .where(
+                    and_(
+                        BillOfMaterials.organization_id == org_id,
+                        BillOfMaterials.item_id == itm_id,
+                        BillOfMaterials.is_default == True,
+                    )
                 )
-            ).update({"is_default": False})
+                .values(is_default=False)
+            )
 
         bom = BillOfMaterials(
             organization_id=org_id,
@@ -255,16 +257,14 @@ class BOMService(ListResponseMixin):
         if not bom.is_active:
             raise HTTPException(status_code=400, detail="BOM is not active")
 
-        components = (
-            db.query(BOMComponent)
-            .filter(
+        components = db.scalars(
+            select(BOMComponent).where(
                 and_(
                     BOMComponent.bom_id == b_id,
                     BOMComponent.is_active == True,
                 )
             )
-            .all()
-        )
+        ).all()
 
         if not components:
             raise HTTPException(status_code=400, detail="BOM has no components")
@@ -475,16 +475,14 @@ class BOMService(ListResponseMixin):
         )
 
         # Calculate component receipts
-        components = (
-            db.query(BOMComponent)
-            .filter(
+        components = db.scalars(
+            select(BOMComponent).where(
                 and_(
                     BOMComponent.bom_id == b_id,
                     BOMComponent.is_active == True,
                 )
             )
-            .all()
-        )
+        ).all()
 
         multiplier = input.quantity / bom.output_quantity
         total_component_cost = Decimal("0")
@@ -568,9 +566,8 @@ class BOMService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         itm_id = coerce_uuid(item_id)
 
-        return (
-            db.query(BillOfMaterials)
-            .filter(
+        return db.scalar(
+            select(BillOfMaterials).where(
                 and_(
                     BillOfMaterials.organization_id == org_id,
                     BillOfMaterials.item_id == itm_id,
@@ -578,7 +575,6 @@ class BOMService(ListResponseMixin):
                     BillOfMaterials.is_active == True,
                 )
             )
-            .first()
         )
 
     @staticmethod
@@ -592,24 +588,24 @@ class BOMService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[BillOfMaterials]:
         """List BOMs with optional filters."""
-        query = db.query(BillOfMaterials)
+        query = select(BillOfMaterials)
 
         if organization_id:
-            query = query.filter(
+            query = query.where(
                 BillOfMaterials.organization_id == coerce_uuid(organization_id)
             )
 
         if item_id:
-            query = query.filter(BillOfMaterials.item_id == coerce_uuid(item_id))
+            query = query.where(BillOfMaterials.item_id == coerce_uuid(item_id))
 
         if bom_type:
-            query = query.filter(BillOfMaterials.bom_type == bom_type)
+            query = query.where(BillOfMaterials.bom_type == bom_type)
 
         if is_active is not None:
-            query = query.filter(BillOfMaterials.is_active == is_active)
+            query = query.where(BillOfMaterials.is_active == is_active)
 
         query = query.order_by(BillOfMaterials.bom_code)
-        return query.limit(limit).offset(offset).all()
+        return db.scalars(query.limit(limit).offset(offset)).all()
 
     @staticmethod
     def list_components(
@@ -619,12 +615,11 @@ class BOMService(ListResponseMixin):
         """List components for a BOM."""
         b_id = coerce_uuid(bom_id)
 
-        return (
-            db.query(BOMComponent)
-            .filter(BOMComponent.bom_id == b_id)
+        return db.scalars(
+            select(BOMComponent)
+            .where(BOMComponent.bom_id == b_id)
             .order_by(BOMComponent.line_number)
-            .all()
-        )
+        ).all()
 
 
 # Module-level singleton instance

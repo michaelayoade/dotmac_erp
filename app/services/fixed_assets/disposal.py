@@ -13,6 +13,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.audit.audit_log import AuditAction
@@ -378,7 +379,7 @@ class AssetDisposalService(ListResponseMixin):
         if not asset or asset.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Asset not found")
 
-        return db.query(AssetDisposal).filter(AssetDisposal.asset_id == ast_id).first()
+        return db.scalar(select(AssetDisposal).where(AssetDisposal.asset_id == ast_id))
 
     @staticmethod
     def list(
@@ -394,35 +395,35 @@ class AssetDisposalService(ListResponseMixin):
         offset: int = 0,
     ) -> list[AssetDisposal]:
         """List disposals with optional filters."""
-        query = db.query(AssetDisposal)
+        query = select(AssetDisposal)
 
         if asset_id:
-            query = query.filter(AssetDisposal.asset_id == coerce_uuid(asset_id))
+            query = query.where(AssetDisposal.asset_id == coerce_uuid(asset_id))
         elif organization_id:
             # Need to join to filter by org
-            query = query.join(Asset, AssetDisposal.asset_id == Asset.asset_id).filter(
+            query = query.join(Asset, AssetDisposal.asset_id == Asset.asset_id).where(
                 Asset.organization_id == coerce_uuid(organization_id)
             )
 
         if disposal_type:
-            query = query.filter(AssetDisposal.disposal_type == disposal_type)
+            query = query.where(AssetDisposal.disposal_type == disposal_type)
 
         if fiscal_period_id:
-            query = query.filter(
+            query = query.where(
                 AssetDisposal.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
 
         if pending_approval:
-            query = query.filter(AssetDisposal.approved_by_user_id.is_(None))
+            query = query.where(AssetDisposal.approved_by_user_id.is_(None))
 
         if from_date:
-            query = query.filter(AssetDisposal.disposal_date >= from_date)
+            query = query.where(AssetDisposal.disposal_date >= from_date)
 
         if to_date:
-            query = query.filter(AssetDisposal.disposal_date <= to_date)
+            query = query.where(AssetDisposal.disposal_date <= to_date)
 
         query = query.order_by(AssetDisposal.disposal_date.desc())
-        return query.limit(limit).offset(offset).all()
+        return list(db.scalars(query.limit(limit).offset(offset)).all())
 
     @staticmethod
     def get_disposal_summary(
@@ -448,23 +449,23 @@ class AssetDisposalService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         query = (
-            db.query(AssetDisposal)
+            select(AssetDisposal)
             .join(Asset, AssetDisposal.asset_id == Asset.asset_id)
-            .filter(Asset.organization_id == org_id)
+            .where(Asset.organization_id == org_id)
         )
 
         if fiscal_period_id:
-            query = query.filter(
+            query = query.where(
                 AssetDisposal.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
 
         if from_date:
-            query = query.filter(AssetDisposal.disposal_date >= from_date)
+            query = query.where(AssetDisposal.disposal_date >= from_date)
 
         if to_date:
-            query = query.filter(AssetDisposal.disposal_date <= to_date)
+            query = query.where(AssetDisposal.disposal_date <= to_date)
 
-        disposals = query.all()
+        disposals = list(db.scalars(query).all())
 
         total_cost_disposed = Decimal("0")
         total_proceeds = Decimal("0")

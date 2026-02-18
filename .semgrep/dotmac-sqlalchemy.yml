@@ -1,0 +1,53 @@
+rules:
+  - id: orm-mode-usage
+    pattern: orm_mode = True
+    message: >
+      Use `model_config = ConfigDict(from_attributes=True)` instead of `orm_mode = True`
+      (Pydantic v2 migration).
+    languages: [python]
+    severity: ERROR
+    paths:
+      exclude:
+        - "**/tests/"
+        - "**/alembic/"
+
+  - id: old-validator-decorator
+    pattern-either:
+      - pattern: |
+          @validator(...)
+          def $FUNC(...):
+              ...
+      - pattern: |
+          @root_validator(...)
+          def $FUNC(...):
+              ...
+    message: >
+      Use `@field_validator` / `@model_validator` instead of `@validator` / `@root_validator`
+      (Pydantic v2 migration).
+    languages: [python]
+    severity: ERROR
+    paths:
+      exclude:
+        - "**/tests/"
+        - "**/alembic/"
+
+  - id: missing-org-id-filter
+    patterns:
+      - pattern: |
+          select($MODEL).where(...)
+      - pattern-not: |
+          select($MODEL).where(..., $MODEL.organization_id == ..., ...)
+      - pattern-not: |
+          select($MODEL).where($MODEL.organization_id == ...)
+    message: >
+      Query may be missing `organization_id` filter. All queries must filter by
+      organization_id for multi-tenancy isolation.
+    languages: [python]
+    severity: INFO
+    paths:
+      include:
+        - "**/app/services/"
+      exclude:
+        - "**/app/services/auth*.py"
+        - "**/app/services/rbac*.py"
+        - "**/tests/"

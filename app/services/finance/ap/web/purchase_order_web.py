@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.goods_receipt import GoodsReceipt
@@ -86,22 +86,22 @@ class PurchaseOrderWebService:
         to_date = parse_date(end_date)
 
         query = (
-            db.query(PurchaseOrder, Supplier)
+            select(PurchaseOrder, Supplier)
             .join(Supplier, PurchaseOrder.supplier_id == Supplier.supplier_id)
-            .filter(PurchaseOrder.organization_id == org_id)
+            .where(PurchaseOrder.organization_id == org_id)
         )
 
         if supplier_id:
-            query = query.filter(PurchaseOrder.supplier_id == coerce_uuid(supplier_id))
+            query = query.where(PurchaseOrder.supplier_id == coerce_uuid(supplier_id))
         if status_value:
-            query = query.filter(PurchaseOrder.status == status_value)
+            query = query.where(PurchaseOrder.status == status_value)
         if from_date:
-            query = query.filter(PurchaseOrder.po_date >= from_date)
+            query = query.where(PurchaseOrder.po_date >= from_date)
         if to_date:
-            query = query.filter(PurchaseOrder.po_date <= to_date)
+            query = query.where(PurchaseOrder.po_date <= to_date)
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            query = query.where(
                 or_(
                     PurchaseOrder.po_number.ilike(search_pattern),
                     Supplier.legal_name.ilike(search_pattern),
@@ -109,47 +109,51 @@ class PurchaseOrderWebService:
                 )
             )
 
-        total_count = query.with_entities(func.count(PurchaseOrder.po_id)).scalar() or 0
-        orders = (
-            query.order_by(PurchaseOrder.po_date.desc())
-            .limit(limit)
-            .offset(offset)
-            .all()
-        )
+        total_count = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+        orders = db.execute(
+            query.order_by(PurchaseOrder.po_date.desc()).limit(limit).offset(offset)
+        ).all()
 
         # Build stats
         draft_count = (
-            db.query(func.count(PurchaseOrder.po_id))
-            .filter(
-                PurchaseOrder.organization_id == org_id,
-                PurchaseOrder.status == POStatus.DRAFT,
+            db.scalar(
+                select(func.count(PurchaseOrder.po_id)).where(
+                    PurchaseOrder.organization_id == org_id,
+                    PurchaseOrder.status == POStatus.DRAFT,
+                )
             )
-            .scalar()
             or 0
         )
         pending_count = (
-            db.query(func.count(PurchaseOrder.po_id))
-            .filter(
-                PurchaseOrder.organization_id == org_id,
-                PurchaseOrder.status == POStatus.PENDING_APPROVAL,
+            db.scalar(
+                select(func.count(PurchaseOrder.po_id)).where(
+                    PurchaseOrder.organization_id == org_id,
+                    PurchaseOrder.status == POStatus.PENDING_APPROVAL,
+                )
             )
-            .scalar()
             or 0
         )
-        approved_total = db.query(
-            func.coalesce(func.sum(PurchaseOrder.total_amount), 0)
-        ).filter(
-            PurchaseOrder.organization_id == org_id,
-            PurchaseOrder.status == POStatus.APPROVED,
-        ).scalar() or Decimal("0")
-        open_total = db.query(
-            func.coalesce(
-                func.sum(PurchaseOrder.total_amount - PurchaseOrder.amount_received), 0
+        approved_total = db.scalar(
+            select(func.coalesce(func.sum(PurchaseOrder.total_amount), 0)).where(
+                PurchaseOrder.organization_id == org_id,
+                PurchaseOrder.status == POStatus.APPROVED,
             )
-        ).filter(
-            PurchaseOrder.organization_id == org_id,
-            PurchaseOrder.status.in_([POStatus.APPROVED, POStatus.PARTIALLY_RECEIVED]),
-        ).scalar() or Decimal("0")
+        ) or Decimal("0")
+        open_total = db.scalar(
+            select(
+                func.coalesce(
+                    func.sum(
+                        PurchaseOrder.total_amount - PurchaseOrder.amount_received
+                    ),
+                    0,
+                )
+            ).where(
+                PurchaseOrder.organization_id == org_id,
+                PurchaseOrder.status.in_(
+                    [POStatus.APPROVED, POStatus.PARTIALLY_RECEIVED]
+                ),
+            )
+        ) or Decimal("0")
 
         orders_view = []
         for po, supplier in orders:
@@ -224,12 +228,11 @@ class PurchaseOrderWebService:
 
         supplier = db.get(Supplier, po.supplier_id)
 
-        lines = (
-            db.query(PurchaseOrderLine)
-            .filter(PurchaseOrderLine.po_id == po_uuid)
+        lines = db.scalars(
+            select(PurchaseOrderLine)
+            .where(PurchaseOrderLine.po_id == po_uuid)
             .order_by(PurchaseOrderLine.line_number)
-            .all()
-        )
+        ).all()
 
         lines_view = []
         for line in lines:
@@ -269,18 +272,19 @@ class PurchaseOrderWebService:
         }
 
         # Get related goods receipts
-        goods_receipts = (
-            db.query(GoodsReceipt)
-            .filter(GoodsReceipt.po_id == po_uuid)
+        goods_receipts = db.scalars(
+            select(GoodsReceipt)
+            .where(GoodsReceipt.po_id == po_uuid)
             .order_by(GoodsReceipt.receipt_date.desc())
-            .all()
-        )
+        ).all()
         receipts_view = []
         for gr in goods_receipts:
             line_count = (
-                db.query(func.count(GoodsReceiptLine.line_id))
-                .filter(GoodsReceiptLine.receipt_id == gr.receipt_id)
-                .scalar()
+                db.scalar(
+                    select(func.count(GoodsReceiptLine.line_id)).where(
+                        GoodsReceiptLine.receipt_id == gr.receipt_id
+                    )
+                )
                 or 0
             )
             receipts_view.append(
@@ -353,17 +357,16 @@ class PurchaseOrderWebService:
         # Get inventory items for selection
         from app.models.inventory.item import Item
 
-        items = (
-            db.query(Item)
-            .filter(
+        items = db.scalars(
+            select(Item)
+            .where(
                 Item.organization_id == org_id,
                 Item.is_active.is_(True),
                 Item.is_purchaseable.is_(True),
             )
             .order_by(Item.item_code)
             .limit(500)
-            .all()
-        )
+        ).all()
         items_list = [
             {
                 "item_id": str(item.item_id),
@@ -393,12 +396,11 @@ class PurchaseOrderWebService:
                     "terms_and_conditions": po.terms_and_conditions,
                     "status": po.status.value,
                 }
-                po_lines = (
-                    db.query(PurchaseOrderLine)
-                    .filter(PurchaseOrderLine.po_id == po_uuid)
+                po_lines = db.scalars(
+                    select(PurchaseOrderLine)
+                    .where(PurchaseOrderLine.po_id == po_uuid)
                     .order_by(PurchaseOrderLine.line_number)
-                    .all()
-                )
+                ).all()
                 for line in po_lines:
                     lines.append(
                         {

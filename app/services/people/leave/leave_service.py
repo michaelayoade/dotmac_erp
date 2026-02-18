@@ -1604,7 +1604,7 @@ class LeaveService:
 
         # Get active allocations for the year
         alloc_query = (
-            self.db.query(
+            select(
                 Employee.employee_id,
                 Person.first_name,
                 Person.last_name,
@@ -1628,22 +1628,24 @@ class LeaveService:
             .join(Person, Person.id == Employee.person_id)
             .join(LeaveType, LeaveType.leave_type_id == LeaveAllocation.leave_type_id)
             .outerjoin(Department, Employee.department_id == Department.department_id)
-            .filter(
+            .where(
                 Employee.organization_id == org_id,
                 func.extract("year", LeaveAllocation.from_date) == target_year,
             )
         )
 
         if department_id:
-            alloc_query = alloc_query.filter(Employee.department_id == department_id)
+            alloc_query = alloc_query.where(Employee.department_id == department_id)
 
-        results = alloc_query.group_by(
-            Employee.employee_id,
-            Person.first_name,
-            Person.last_name,
-            Department.department_name,
-            LeaveType.leave_type_name,
-            LeaveType.leave_type_id,
+        results = self.db.execute(
+            alloc_query.group_by(
+                Employee.employee_id,
+                Person.first_name,
+                Person.last_name,
+                Department.department_name,
+                LeaveType.leave_type_name,
+                LeaveType.leave_type_id,
+            )
         ).all()
 
         # Organize by employee
@@ -1699,8 +1701,8 @@ class LeaveService:
             end_date = today
 
         # Query approved applications by leave type
-        results = (
-            self.db.query(
+        results = self.db.execute(
+            select(
                 LeaveType.leave_type_code,
                 LeaveType.leave_type_name,
                 func.count(LeaveApplication.application_id).label("application_count"),
@@ -1710,7 +1712,7 @@ class LeaveService:
                 LeaveApplication,
                 LeaveApplication.leave_type_id == LeaveType.leave_type_id,
             )
-            .filter(
+            .where(
                 LeaveApplication.organization_id == org_id,
                 LeaveApplication.status == LeaveApplicationStatus.APPROVED,
                 LeaveApplication.from_date >= start_date,
@@ -1722,8 +1724,7 @@ class LeaveService:
                 LeaveType.leave_type_name,
             )
             .order_by(func.sum(LeaveApplication.total_leave_days).desc())
-            .all()
-        )
+        ).all()
 
         leave_types = []
         total_applications = 0
@@ -1784,7 +1785,7 @@ class LeaveService:
 
         # Query approved applications
         query = (
-            self.db.query(
+            select(
                 LeaveApplication,
                 Person.first_name,
                 Person.last_name,
@@ -1795,7 +1796,7 @@ class LeaveService:
             .join(Person, Person.id == Employee.person_id)
             .outerjoin(Department, Employee.department_id == Department.department_id)
             .join(LeaveType, LeaveType.leave_type_id == LeaveApplication.leave_type_id)
-            .filter(
+            .where(
                 LeaveApplication.organization_id == org_id,
                 LeaveApplication.status == LeaveApplicationStatus.APPROVED,
                 LeaveApplication.from_date <= end_date,
@@ -1804,9 +1805,9 @@ class LeaveService:
         )
 
         if department_id:
-            query = query.filter(Employee.department_id == department_id)
+            query = query.where(Employee.department_id == department_id)
 
-        results = query.order_by(LeaveApplication.from_date).all()
+        results = self.db.execute(query.order_by(LeaveApplication.from_date)).all()
 
         leave_events = []
         for app, first_name, last_name, dept_name, leave_type_name in results:
@@ -1849,8 +1850,8 @@ class LeaveService:
 
         # Query monthly aggregates
         month_expr = func.date_trunc("month", LeaveApplication.from_date).label("month")
-        results = (
-            self.db.query(
+        results = self.db.execute(
+            select(
                 month_expr,
                 func.count(LeaveApplication.application_id).label("application_count"),
                 func.sum(LeaveApplication.total_leave_days).label("total_days"),
@@ -1871,15 +1872,14 @@ class LeaveService:
                     )
                 ).label("rejected_count"),
             )
-            .filter(
+            .where(
                 LeaveApplication.organization_id == org_id,
                 LeaveApplication.from_date >= start_date,
                 LeaveApplication.from_date <= today,
             )
             .group_by(month_expr)
             .order_by(month_expr)
-            .all()
-        )
+        ).all()
 
         # Build results dict by month
         monthly_data = {}

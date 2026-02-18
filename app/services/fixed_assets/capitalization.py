@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.supplier import Supplier
@@ -263,14 +264,15 @@ class CapitalizationService:
         if not invoice or invoice.organization_id != org_id:
             return []
 
-        return (
-            db.query(SupplierInvoiceLine)
-            .filter(
-                SupplierInvoiceLine.invoice_id == inv_id,
-                SupplierInvoiceLine.capitalize_flag == True,
-            )
-            .order_by(SupplierInvoiceLine.line_number)
-            .all()
+        return list(
+            db.scalars(
+                select(SupplierInvoiceLine)
+                .where(
+                    SupplierInvoiceLine.invoice_id == inv_id,
+                    SupplierInvoiceLine.capitalize_flag == True,
+                )
+                .order_by(SupplierInvoiceLine.line_number)
+            ).all()
         )
 
     @staticmethod
@@ -293,15 +295,16 @@ class CapitalizationService:
         org_id = coerce_uuid(organization_id)
         inv_id = coerce_uuid(invoice_id)
 
-        return (
-            db.query(Asset)
-            .filter(
-                Asset.organization_id == org_id,
-                Asset.source_type == "SUPPLIER_INVOICE",
-                Asset.source_document_id == inv_id,
-            )
-            .order_by(Asset.asset_number)
-            .all()
+        return list(
+            db.scalars(
+                select(Asset)
+                .where(
+                    Asset.organization_id == org_id,
+                    Asset.source_type == "SUPPLIER_INVOICE",
+                    Asset.source_document_id == inv_id,
+                )
+                .order_by(Asset.asset_number)
+            ).all()
         )
 
 

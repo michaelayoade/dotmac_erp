@@ -11,7 +11,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import Response
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Query, Session
 
 from app.models.finance.ar.customer import Customer
 from app.models.finance.ar.invoice import Invoice
@@ -64,7 +64,7 @@ class CustomerBulkService(BulkActionService[Customer]):
         """
         # Check for associated invoices
         invoice_count = (
-            self.db.query(Invoice)
+            Query([Invoice], session=self.db)
             .filter(Invoice.customer_id == entity.customer_id)
             .count()
         )

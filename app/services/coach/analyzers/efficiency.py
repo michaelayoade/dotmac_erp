@@ -177,7 +177,7 @@ class EfficiencyAnalyzer:
             .select_from(FiscalPeriod)
             .where(
                 FiscalPeriod.organization_id == organization_id,
-                FiscalPeriod.status.in_((PeriodStatus.OPEN, PeriodStatus.REOPENED)),
+                FiscalPeriod.status.in_(PeriodStatus.accepts_postings()),
                 FiscalPeriod.end_date < today,
             )
         )

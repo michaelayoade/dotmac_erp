@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.finance.automation.document_template import (
@@ -64,16 +65,15 @@ class OfferLetterService:
 
         Loads applicant, job opening, designation, department for context building.
         """
-        return (
-            self.db.query(JobOffer)
+        return self.db.scalar(
+            select(JobOffer)
             .options(
                 joinedload(JobOffer.applicant),
                 joinedload(JobOffer.job_opening),
                 joinedload(JobOffer.designation),
                 joinedload(JobOffer.department),
             )
-            .filter(JobOffer.offer_id == offer_id)
-            .first()
+            .where(JobOffer.offer_id == offer_id)
         )
 
     def generate_offer_letter(

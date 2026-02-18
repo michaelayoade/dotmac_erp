@@ -76,12 +76,8 @@ def insights_list(
         page=page,
         per_page=per_page,
         include_expired=include_expired,
+        category=category,
     )
-
-    # Client-side category filter
-    if category:
-        items = [i for i in items if i.category == category.upper()]
-        total = len(items)
 
     context.update(
         {

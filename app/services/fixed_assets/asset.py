@@ -15,7 +15,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.core_config.numbering_sequence import SequenceType
@@ -111,15 +111,13 @@ class AssetCategoryService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         # Check for duplicate category code
-        existing = (
-            db.query(AssetCategory)
-            .filter(
+        existing = db.scalar(
+            select(AssetCategory).where(
                 and_(
                     AssetCategory.organization_id == org_id,
                     AssetCategory.category_code == input.category_code,
                 )
             )
-            .first()
         )
 
         if existing:
@@ -179,18 +177,18 @@ class AssetCategoryService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[AssetCategory]:
         """List asset categories."""
-        query = db.query(AssetCategory)
+        query = select(AssetCategory)
 
         if organization_id:
-            query = query.filter(
+            query = query.where(
                 AssetCategory.organization_id == coerce_uuid(organization_id)
             )
 
         if is_active is not None:
-            query = query.filter(AssetCategory.is_active == is_active)
+            query = query.where(AssetCategory.is_active == is_active)
 
         query = query.order_by(AssetCategory.category_code)
-        return query.limit(limit).offset(offset).all()
+        return db.scalars(query.limit(limit).offset(offset)).all()
 
     @staticmethod
     def update_category(
@@ -209,15 +207,13 @@ class AssetCategoryService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Asset category not found")
 
         if category.category_code != input.category_code:
-            existing = (
-                db.query(AssetCategory)
-                .filter(
+            existing = db.scalar(
+                select(AssetCategory).where(
                     and_(
                         AssetCategory.organization_id == org_id,
                         AssetCategory.category_code == input.category_code,
                     )
                 )
-                .first()
             )
             if existing:
                 raise HTTPException(
@@ -547,15 +543,13 @@ class AssetService(ListResponseMixin):
         """Get an asset by asset number."""
         org_id = coerce_uuid(organization_id)
 
-        return (
-            db.query(Asset)
-            .filter(
+        return db.scalar(
+            select(Asset).where(
                 and_(
                     Asset.organization_id == org_id,
                     Asset.asset_number == asset_number,
                 )
             )
-            .first()
         )
 
     @staticmethod
@@ -578,9 +572,9 @@ class AssetService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         ref_date = as_of_date or date.today()
 
-        return (
-            db.query(Asset)
-            .filter(
+        return db.scalars(
+            select(Asset)
+            .where(
                 and_(
                     Asset.organization_id == org_id,
                     Asset.status == AssetStatus.ACTIVE,
@@ -590,8 +584,7 @@ class AssetService(ListResponseMixin):
                 )
             )
             .order_by(Asset.asset_number)
-            .all()
-        )
+        ).all()
 
     @staticmethod
     def list(
@@ -606,34 +599,36 @@ class AssetService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[Asset]:
         """List assets with optional filters."""
-        query = db.query(Asset)
+        query = select(Asset)
 
         if organization_id:
-            query = query.filter(Asset.organization_id == coerce_uuid(organization_id))
+            query = query.where(Asset.organization_id == coerce_uuid(organization_id))
 
         if category_id:
-            query = query.filter(Asset.category_id == coerce_uuid(category_id))
+            query = query.where(Asset.category_id == coerce_uuid(category_id))
 
         if status:
-            query = query.filter(Asset.status == status)
+            query = query.where(Asset.status == status)
 
         if location_id:
-            query = query.filter(Asset.location_id == coerce_uuid(location_id))
+            query = query.where(Asset.location_id == coerce_uuid(location_id))
 
         if cost_center_id:
-            query = query.filter(Asset.cost_center_id == coerce_uuid(cost_center_id))
+            query = query.where(Asset.cost_center_id == coerce_uuid(cost_center_id))
 
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
-                (Asset.asset_number.ilike(search_pattern))
-                | (Asset.asset_name.ilike(search_pattern))
-                | (Asset.serial_number.ilike(search_pattern))
-                | (Asset.barcode.ilike(search_pattern))
+            query = query.where(
+                or_(
+                    Asset.asset_number.ilike(search_pattern),
+                    Asset.asset_name.ilike(search_pattern),
+                    Asset.serial_number.ilike(search_pattern),
+                    Asset.barcode.ilike(search_pattern),
+                )
             )
 
         query = query.order_by(Asset.asset_number)
-        return query.limit(limit).offset(offset).all()
+        return db.scalars(query.limit(limit).offset(offset)).all()
 
     @staticmethod
     def get_asset_summary(
@@ -654,12 +649,12 @@ class AssetService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        query = db.query(Asset).filter(Asset.organization_id == org_id)
+        query = select(Asset).where(Asset.organization_id == org_id)
 
         if category_id:
-            query = query.filter(Asset.category_id == coerce_uuid(category_id))
+            query = query.where(Asset.category_id == coerce_uuid(category_id))
 
-        assets = query.all()
+        assets = db.scalars(query).all()
 
         total_cost = Decimal("0")
         total_accum_dep = Decimal("0")

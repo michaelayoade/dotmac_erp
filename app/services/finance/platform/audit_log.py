@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import and_
+from sqlalchemy import and_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -158,31 +158,31 @@ class AuditLogService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        query = db.query(AuditLog).filter(AuditLog.organization_id == org_id)
+        stmt = select(AuditLog).where(AuditLog.organization_id == org_id)
 
         if table_schema:
-            query = query.filter(AuditLog.table_schema == table_schema)
+            stmt = stmt.where(AuditLog.table_schema == table_schema)
 
         if table_name:
-            query = query.filter(AuditLog.table_name == table_name)
+            stmt = stmt.where(AuditLog.table_name == table_name)
 
         if record_id:
-            query = query.filter(AuditLog.record_id == record_id)
+            stmt = stmt.where(AuditLog.record_id == record_id)
 
         if user_id:
-            query = query.filter(AuditLog.user_id == coerce_uuid(user_id))
+            stmt = stmt.where(AuditLog.user_id == coerce_uuid(user_id))
 
         if correlation_id:
-            query = query.filter(AuditLog.correlation_id == correlation_id)
+            stmt = stmt.where(AuditLog.correlation_id == correlation_id)
 
         if from_date:
-            query = query.filter(AuditLog.occurred_at >= from_date)
+            stmt = stmt.where(AuditLog.occurred_at >= from_date)
 
         if to_date:
-            query = query.filter(AuditLog.occurred_at <= to_date)
+            stmt = stmt.where(AuditLog.occurred_at <= to_date)
 
-        query = query.order_by(AuditLog.occurred_at.desc())
-        return query.limit(limit).offset(offset).all()
+        stmt = stmt.order_by(AuditLog.occurred_at.desc()).limit(limit).offset(offset)
+        return db.scalars(stmt).all()
 
     @staticmethod
     def get_record_history(
@@ -207,9 +207,9 @@ class AuditLogService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        return (
-            db.query(AuditLog)
-            .filter(
+        return db.scalars(
+            select(AuditLog)
+            .where(
                 and_(
                     AuditLog.organization_id == org_id,
                     AuditLog.table_schema == table_schema,
@@ -218,8 +218,7 @@ class AuditLogService(ListResponseMixin):
                 )
             )
             .order_by(AuditLog.occurred_at.asc())
-            .all()
-        )
+        ).all()
 
     @staticmethod
     def build_hash_chain(
@@ -244,9 +243,9 @@ class AuditLogService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        records = (
-            db.query(AuditLog)
-            .filter(
+        records = db.scalars(
+            select(AuditLog)
+            .where(
                 and_(
                     AuditLog.organization_id == org_id,
                     AuditLog.occurred_at >= from_date,
@@ -254,8 +253,7 @@ class AuditLogService(ListResponseMixin):
                 )
             )
             .order_by(AuditLog.occurred_at.asc())
-            .all()
-        )
+        ).all()
 
         if not records:
             return ""
@@ -299,9 +297,9 @@ class AuditLogService(ListResponseMixin):
         """
         org_id = coerce_uuid(organization_id)
 
-        records = (
-            db.query(AuditLog)
-            .filter(
+        records = db.scalars(
+            select(AuditLog)
+            .where(
                 and_(
                     AuditLog.organization_id == org_id,
                     AuditLog.occurred_at >= from_date,
@@ -309,8 +307,7 @@ class AuditLogService(ListResponseMixin):
                 )
             )
             .order_by(AuditLog.occurred_at.asc())
-            .all()
-        )
+        ).all()
 
         if not records:
             return (True, None)
@@ -393,12 +390,12 @@ class AuditLogService(ListResponseMixin):
         organization_id: UUID,
     ) -> str | None:
         """Get the hash of the most recent audit log entry."""
-        latest = (
-            db.query(AuditLog)
-            .filter(AuditLog.organization_id == organization_id)
+        latest = db.scalars(
+            select(AuditLog)
+            .where(AuditLog.organization_id == organization_id)
             .order_by(AuditLog.occurred_at.desc())
-            .first()
         )
+        latest = latest.first()
 
         return latest.hash_chain if latest else None
 
@@ -425,21 +422,19 @@ class AuditLogService(ListResponseMixin):
         Returns:
             List of AuditLog objects
         """
-        query = db.query(AuditLog)
+        stmt = select(AuditLog)
 
         if organization_id:
-            query = query.filter(
-                AuditLog.organization_id == coerce_uuid(organization_id)
-            )
+            stmt = stmt.where(AuditLog.organization_id == coerce_uuid(organization_id))
 
         if table_schema:
-            query = query.filter(AuditLog.table_schema == table_schema)
+            stmt = stmt.where(AuditLog.table_schema == table_schema)
 
         if table_name:
-            query = query.filter(AuditLog.table_name == table_name)
+            stmt = stmt.where(AuditLog.table_name == table_name)
 
-        query = query.order_by(AuditLog.occurred_at.desc())
-        return query.limit(limit).offset(offset).all()
+        stmt = stmt.order_by(AuditLog.occurred_at.desc()).limit(limit).offset(offset)
+        return db.scalars(stmt).all()
 
 
 # Module-level singleton instance

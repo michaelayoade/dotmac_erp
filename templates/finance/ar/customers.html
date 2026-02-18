@@ -1,5 +1,5 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import compact_filters, pagination, status_badge, empty_state, action_buttons, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, bulk_icon_activate, bulk_icon_deactivate, filter_select_field, list_header_actions, sortable_th %}
+{% from "components/macros.html" import compact_filters, pagination, status_badge, empty_state, stats_card, action_buttons, bulk_select_header, bulk_select_cell, bulk_action_bar, bulk_icon_delete, bulk_icon_export, bulk_icon_activate, bulk_icon_deactivate, filter_select_field, list_header_actions, sortable_th %}
 
 {% block page_title %}Customers{% endblock %}
 
@@ -22,7 +22,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-6 page-enter">
     {% call(filter_attrs) compact_filters(
         base_url="/finance/ar/customers",
         active_filters=active_filters | default([]),
@@ -38,14 +38,12 @@
 
     <div id="results-container">
     {# Stats Summary #}
-    {% if total_count > 0 %}
-    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-        <div class="card p-4">
-            <p class="text-sm text-slate-500 dark:text-slate-400">Total Customers</p>
-            <p class="text-2xl font-bold text-slate-900 dark:text-white font-mono">{{ total_count }}</p>
-        </div>
+    <div class="grid gap-4 sm:grid-cols-4">
+        {{ stats_card("Total Customers", total_count | default(0), icon="users", color="slate") }}
+        {{ stats_card("Active", active_count | default(0), icon="check-circle", color="emerald") }}
+        {{ stats_card("Inactive", inactive_count | default(0), icon="x-circle", color="rose") }}
+        {{ stats_card("With Balance", with_balance_count | default(0), icon="currency", color="amber") }}
     </div>
-    {% endif %}
 
     {# Customers Table with Bulk Selection #}
     <div x-data="bulkActions({ entityName: 'customers' })">
@@ -83,8 +81,8 @@
                             </td>
                             <td class="hidden sm:table-cell text-slate-600 dark:text-slate-400">{{ customer.tax_id | default("—") }}</td>
                             <td class="hidden sm:table-cell text-slate-600 dark:text-slate-400">Net {{ customer.payment_terms_days | default(30) }}</td>
-                            <td class="text-right font-mono text-slate-600 dark:text-slate-400">{{ customer.credit_limit | default("—") }}</td>
-                            <td class="text-right font-mono font-medium text-slate-900 dark:text-white">{{ customer.balance | default("—") }}</td>
+                            <td class="text-right font-mono tabular-nums text-slate-600 dark:text-slate-400">{{ customer.credit_limit | default("—") }}</td>
+                            <td class="text-right font-mono tabular-nums font-medium text-slate-900 dark:text-white">{{ customer.balance | default("—") }}</td>
                             <td class="text-center">
                                 {{ status_badge('active' if customer.is_active else 'inactive', 'sm') }}
                             </td>

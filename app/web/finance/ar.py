@@ -185,11 +185,14 @@ def list_invoices(
 @router.get("/invoices/new", response_class=HTMLResponse)
 def new_invoice_form(
     request: Request,
+    customer_id: str | None = Query(None),
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
     """New AR invoice form page."""
-    return ar_web_service.invoice_new_form_response(request, auth, db)
+    return ar_web_service.invoice_new_form_response(
+        request, auth, db, customer_id=customer_id
+    )
 
 
 @router.post("/invoices/new")

@@ -168,6 +168,17 @@ def download_sample_csv(
     )
 
 
+@router.get("/transactions/{line_id}", response_class=HTMLResponse)
+def view_transaction(
+    request: Request,
+    line_id: str,
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Bank transaction line detail page."""
+    return banking_web_service.transaction_detail_response(request, auth, db, line_id)
+
+
 @router.post("/statements/bulk-delete")
 async def bulk_delete_statements(
     request: Request,

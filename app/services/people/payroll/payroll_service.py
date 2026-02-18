@@ -951,27 +951,25 @@ class PayrollService:
         self, org_id: UUID, entry: PayrollEntry
     ) -> list[SalaryStructureAssignment]:
         query = (
-            self.db.query(SalaryStructureAssignment)
+            select(SalaryStructureAssignment)
             .join(
                 Employee, SalaryStructureAssignment.employee_id == Employee.employee_id
             )
-            .filter(SalaryStructureAssignment.organization_id == org_id)
-            .filter(SalaryStructureAssignment.from_date <= entry.start_date)
-            .filter(
+            .where(
+                SalaryStructureAssignment.organization_id == org_id,
+                SalaryStructureAssignment.from_date <= entry.start_date,
                 or_(
                     SalaryStructureAssignment.to_date.is_(None),
                     SalaryStructureAssignment.to_date >= entry.start_date,
-                )
-            )
-            .filter(
-                Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE])
+                ),
+                Employee.status.in_([EmployeeStatus.ACTIVE, EmployeeStatus.ON_LEAVE]),
             )
         )
         if entry.department_id:
-            query = query.filter(Employee.department_id == entry.department_id)
+            query = query.where(Employee.department_id == entry.department_id)
         if entry.designation_id:
-            query = query.filter(Employee.designation_id == entry.designation_id)
-        return list(query.all())
+            query = query.where(Employee.designation_id == entry.designation_id)
+        return list(self.db.scalars(query).all())
 
     def _update_entry_totals(self, entry: PayrollEntry) -> None:
         slips = list(
@@ -1017,8 +1015,8 @@ class PayrollService:
             end_date = today
 
         # Aggregate by status
-        status_query = (
-            self.db.query(
+        status_results = self.db.execute(
+            select(
                 PayrollEntry.status,
                 func.count(PayrollEntry.entry_id).label("run_count"),
                 func.sum(PayrollEntry.employee_count).label("employee_count"),
@@ -1026,15 +1024,13 @@ class PayrollService:
                 func.sum(PayrollEntry.total_deductions).label("total_deductions"),
                 func.sum(PayrollEntry.total_net_pay).label("total_net"),
             )
-            .filter(
+            .where(
                 PayrollEntry.organization_id == org_id,
                 PayrollEntry.start_date >= start_date,
                 PayrollEntry.end_date <= end_date,
             )
             .group_by(PayrollEntry.status)
-        )
-
-        status_results = status_query.all()
+        ).all()
         status_breakdown = []
         total_runs = 0
         total_employees = 0
@@ -1098,8 +1094,8 @@ class PayrollService:
             end_date = today
 
         # Get salary slips grouped by department
-        results = (
-            self.db.query(
+        results = self.db.execute(
+            select(
                 Department.department_id,
                 Department.department_name.label("department_name"),
                 func.count(SalarySlip.slip_id).label("slip_count"),
@@ -1110,15 +1106,14 @@ class PayrollService:
             .select_from(SalarySlip)
             .join(Employee, SalarySlip.employee_id == Employee.employee_id)
             .outerjoin(Department, Employee.department_id == Department.department_id)
-            .filter(
+            .where(
                 SalarySlip.organization_id == org_id,
                 SalarySlip.start_date >= start_date,
                 SalarySlip.end_date <= end_date,
             )
             .group_by(Department.department_id, Department.department_name)
             .order_by(func.sum(SalarySlip.net_pay).desc())
-            .all()
-        )
+        ).all()
 
         departments = []
         total_gross = Decimal("0")
@@ -1187,8 +1182,8 @@ class PayrollService:
             end_date = today
 
         # Get deductions grouped by component
-        results = (
-            self.db.query(
+        results = self.db.execute(
+            select(
                 SalaryComponent.component_id,
                 SalaryComponent.component_name,
                 SalaryComponent.component_code,
@@ -1202,7 +1197,7 @@ class PayrollService:
                 SalaryComponent,
                 SalarySlipDeduction.component_id == SalaryComponent.component_id,
             )
-            .filter(
+            .where(
                 SalarySlip.organization_id == org_id,
                 SalarySlip.start_date >= start_date,
                 SalarySlip.end_date <= end_date,
@@ -1214,8 +1209,7 @@ class PayrollService:
                 SalaryComponent.is_statutory,
             )
             .order_by(func.sum(SalarySlipDeduction.amount).desc())
-            .all()
-        )
+        ).all()
 
         deductions = []
         statutory_total = Decimal("0")
@@ -1280,23 +1274,22 @@ class PayrollService:
             literal_column("'month'"),
             SalarySlip.start_date,
         ).label("month")
-        results = (
-            self.db.query(
+        results = self.db.execute(
+            select(
                 month_bucket,
                 func.count(SalarySlip.slip_id).label("slip_count"),
                 func.sum(SalarySlip.gross_pay).label("total_gross"),
                 func.sum(SalarySlip.total_deduction).label("total_deductions"),
                 func.sum(SalarySlip.net_pay).label("total_net"),
             )
-            .filter(
+            .where(
                 SalarySlip.organization_id == org_id,
                 SalarySlip.start_date >= start_date,
                 SalarySlip.start_date <= today,
             )
             .group_by(month_bucket)
             .order_by(month_bucket)
-            .all()
-        )
+        ).all()
 
         # Build results dict by month
         monthly_data = {}
@@ -1385,8 +1378,8 @@ class PayrollService:
         year_end = date(year, 12, 31)
 
         # Base query: Employee-level aggregates
-        base_results = (
-            self.db.query(
+        base_results = self.db.execute(
+            select(
                 SalarySlip.employee_id,
                 Employee.employee_code,
                 func.concat(Person.first_name, " ", Person.last_name).label(
@@ -1401,7 +1394,7 @@ class PayrollService:
             .select_from(SalarySlip)
             .join(Employee, SalarySlip.employee_id == Employee.employee_id)
             .join(Person, Employee.person_id == Person.id)
-            .filter(
+            .where(
                 SalarySlip.organization_id == org_id,
                 SalarySlip.start_date >= year_start,
                 SalarySlip.end_date <= year_end,
@@ -1414,12 +1407,11 @@ class PayrollService:
                 Employee.department_id,
             )
             .order_by(Person.first_name, Person.last_name)
-            .all()
-        )
+        ).all()
 
         # Query deduction breakdowns by component
-        deduction_results = (
-            self.db.query(
+        deduction_results = self.db.execute(
+            select(
                 SalarySlip.employee_id,
                 SalaryComponent.component_code.label("component_code"),
                 func.sum(SalarySlipDeduction.amount).label("total_amount"),
@@ -1430,15 +1422,14 @@ class PayrollService:
                 SalaryComponent,
                 SalarySlipDeduction.component_id == SalaryComponent.component_id,
             )
-            .filter(
+            .where(
                 SalarySlip.organization_id == org_id,
                 SalarySlip.start_date >= year_start,
                 SalarySlip.end_date <= year_end,
                 SalaryComponent.component_code.in_(["PAYE", "PENSION", "NHF"]),
             )
             .group_by(SalarySlip.employee_id, SalaryComponent.component_code)
-            .all()
-        )
+        ).all()
 
         # Build deduction lookup by employee
         deductions_by_employee: dict[str, dict[str, Decimal]] = {}

@@ -13,6 +13,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.journal_entry import JournalType
@@ -85,10 +86,12 @@ class LeasePostingAdapter:
             )
 
         # Load liability and asset
-        liability = (
-            db.query(LeaseLiability).filter(LeaseLiability.lease_id == ls_id).first()
-        )
-        asset = db.query(LeaseAsset).filter(LeaseAsset.lease_id == ls_id).first()
+        liability = db.scalars(
+            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id)
+        ).first()
+        asset = db.scalars(
+            select(LeaseAsset).where(LeaseAsset.lease_id == ls_id)
+        ).first()
 
         if not liability or not asset:
             return LeasePostingResult(
@@ -258,9 +261,9 @@ class LeasePostingAdapter:
             return LeasePostingResult(success=False, message="Lease contract not found")
 
         # Load liability
-        liability = (
-            db.query(LeaseLiability).filter(LeaseLiability.lease_id == ls_id).first()
-        )
+        liability = db.scalars(
+            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id)
+        ).first()
 
         if not liability:
             return LeasePostingResult(
@@ -406,9 +409,9 @@ class LeasePostingAdapter:
             return LeasePostingResult(success=False, message="Lease contract not found")
 
         # Load liability
-        liability = (
-            db.query(LeaseLiability).filter(LeaseLiability.lease_id == ls_id).first()
-        )
+        liability = db.scalars(
+            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id)
+        ).first()
 
         if not liability:
             return LeasePostingResult(
@@ -553,7 +556,9 @@ class LeasePostingAdapter:
             return LeasePostingResult(success=False, message="Lease contract not found")
 
         # Load asset
-        asset = db.query(LeaseAsset).filter(LeaseAsset.lease_id == ls_id).first()
+        asset = db.scalars(
+            select(LeaseAsset).where(LeaseAsset.lease_id == ls_id)
+        ).first()
 
         if not asset:
             return LeasePostingResult(
@@ -707,10 +712,12 @@ class LeasePostingAdapter:
             )
 
         # Load liability and asset
-        liability = (
-            db.query(LeaseLiability).filter(LeaseLiability.lease_id == ls_id).first()
-        )
-        asset = db.query(LeaseAsset).filter(LeaseAsset.lease_id == ls_id).first()
+        liability = db.scalars(
+            select(LeaseLiability).where(LeaseLiability.lease_id == ls_id)
+        ).first()
+        asset = db.scalars(
+            select(LeaseAsset).where(LeaseAsset.lease_id == ls_id)
+        ).first()
 
         if not liability or not asset:
             return LeasePostingResult(

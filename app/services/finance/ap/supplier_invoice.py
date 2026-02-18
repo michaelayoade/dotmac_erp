@@ -1454,9 +1454,11 @@ class SupplierInvoiceService(ListResponseMixin):
             )
 
         allocation_count = (
-            db.query(func.count(APPaymentAllocation.allocation_id))
-            .filter(APPaymentAllocation.invoice_id == inv_id)
-            .scalar()
+            db.scalar(
+                select(func.count(APPaymentAllocation.allocation_id)).where(
+                    APPaymentAllocation.invoice_id == inv_id
+                )
+            )
             or 0
         )
         if allocation_count > 0:
@@ -1464,19 +1466,22 @@ class SupplierInvoiceService(ListResponseMixin):
                 f"Cannot delete invoice with {allocation_count} payment allocation(s)."
             )
 
-        line_ids = [
-            line.line_id
-            for line in db.query(SupplierInvoiceLine)
-            .filter(SupplierInvoiceLine.invoice_id == inv_id)
-            .all()
-        ]
+        line_ids = list(
+            db.scalars(
+                select(SupplierInvoiceLine.line_id).where(
+                    SupplierInvoiceLine.invoice_id == inv_id
+                )
+            ).all()
+        )
         if line_ids:
-            db.query(SupplierInvoiceLineTax).filter(
-                SupplierInvoiceLineTax.line_id.in_(line_ids)
-            ).delete()
-        db.query(SupplierInvoiceLine).filter(
-            SupplierInvoiceLine.invoice_id == inv_id
-        ).delete()
+            db.execute(
+                delete(SupplierInvoiceLineTax).where(
+                    SupplierInvoiceLineTax.line_id.in_(line_ids)
+                )
+            )
+        db.execute(
+            delete(SupplierInvoiceLine).where(SupplierInvoiceLine.invoice_id == inv_id)
+        )
         db.delete(invoice)
         db.commit()
 

@@ -13,7 +13,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import HTTPException
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
@@ -25,7 +25,8 @@ from app.models.finance.ar.customer_payment import (
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 from app.models.finance.ar.payment_allocation import PaymentAllocation
 from app.models.finance.core_config.numbering_sequence import SequenceType
-from app.services.common import coerce_uuid
+from app.models.finance.tax.tax_code import TaxCode, TaxType
+from app.services.common import NotFoundError, ValidationError, coerce_uuid
 from app.services.finance.ar.input_utils import (
     parse_date_str,
     parse_decimal,
@@ -103,31 +104,24 @@ class CustomerPaymentService(ListResponseMixin):
         # Validate customer
         customer = db.get(Customer, customer_id)
         if not customer or customer.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Customer not found")
+            raise NotFoundError("Customer not found")
 
         if not customer.is_active:
-            raise HTTPException(status_code=400, detail="Customer is not active")
+            raise ValidationError("Customer is not active")
 
         # Validate allocations
         if input.allocations:
             allocation_total = sum(a.amount for a in input.allocations)
             if allocation_total > input.amount:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Allocation total exceeds payment amount",
-                )
+                raise ValidationError("Allocation total exceeds payment amount")
 
             for alloc in input.allocations:
                 invoice = db.get(Invoice, coerce_uuid(alloc.invoice_id))
                 if not invoice or invoice.organization_id != org_id:
-                    raise HTTPException(
-                        status_code=404,
-                        detail=f"Invoice {alloc.invoice_id} not found",
-                    )
+                    raise NotFoundError(f"Invoice {alloc.invoice_id} not found")
                 if invoice.customer_id != customer_id:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Invoice {invoice.invoice_number} belongs to different customer",
+                    raise ValidationError(
+                        f"Invoice {invoice.invoice_number} belongs to different customer"
                     )
                 payable_statuses = [
                     InvoiceStatus.POSTED,
@@ -135,14 +129,12 @@ class CustomerPaymentService(ListResponseMixin):
                     InvoiceStatus.OVERDUE,
                 ]
                 if invoice.status not in payable_statuses:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Invoice {invoice.invoice_number} is not payable",
+                    raise ValidationError(
+                        f"Invoice {invoice.invoice_number} is not payable"
                     )
                 if alloc.amount > invoice.balance_due:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Allocation exceeds balance due on {invoice.invoice_number}",
+                    raise ValidationError(
+                        f"Allocation exceeds balance due on {invoice.invoice_number}"
                     )
 
         # Handle WHT amounts (validate BEFORE generating sequence number)
@@ -160,15 +152,28 @@ class CustomerPaymentService(ListResponseMixin):
             if wht_amount > Decimal("0") and abs(expected_wht - wht_amount) > Decimal(
                 "0.01"
             ):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"WHT amount ({wht_amount}) doesn't match gross - net ({expected_wht})",
+                raise ValidationError(
+                    f"WHT amount ({wht_amount}) doesn't match gross - net ({expected_wht})"
                 )
             if wht_amount == Decimal("0") and gross_amount != net_amount:
                 wht_amount = expected_wht
         else:
             # No gross amount provided - calculate from net + WHT
             gross_amount = net_amount + wht_amount
+
+        validated_wht_code_id: UUID | None = None
+        if input.wht_code_id:
+            wht_code = db.get(TaxCode, coerce_uuid(input.wht_code_id))
+            if not wht_code or wht_code.organization_id != org_id:
+                raise NotFoundError("WHT tax code not found")
+            if wht_code.tax_type != TaxType.WITHHOLDING:
+                raise ValidationError("Selected tax code is not a WITHHOLDING tax code")
+            validated_wht_code_id = wht_code.tax_code_id
+
+        if wht_amount > Decimal("0") and not validated_wht_code_id:
+            raise ValidationError(
+                "WHT tax code is required when WHT amount is specified"
+            )
 
         # Generate payment number (after all validation passes)
         payment_number = SequenceService.get_next_number(
@@ -192,7 +197,7 @@ class CustomerPaymentService(ListResponseMixin):
             currency_code=input.currency_code,
             gross_amount=gross_amount,
             amount=net_amount,
-            wht_code_id=input.wht_code_id,
+            wht_code_id=validated_wht_code_id,
             wht_amount=wht_amount,
             wht_certificate_number=input.wht_certificate_number,
             exchange_rate=exchange_rate,
@@ -322,20 +327,16 @@ class CustomerPaymentService(ListResponseMixin):
 
         payment = db.get(CustomerPayment, pay_id)
         if not payment or payment.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Payment not found")
+            raise NotFoundError("Payment not found")
 
         if payment.status != PaymentStatus.PENDING:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot post payment with status '{payment.status.value}'",
+            raise ValidationError(
+                f"Cannot post payment with status '{payment.status.value}'"
             )
 
         # For AR payments, we need a bank account
         if not payment.bank_account_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Bank account is required to post payment",
-            )
+            raise ValidationError("Bank account is required to post payment")
 
         bank_gl_account_id = _resolve_bank_gl_account_id(
             db,
@@ -349,9 +350,8 @@ class CustomerPaymentService(ListResponseMixin):
             if getattr(payment, "allocations", None):
                 bank_gl_account_id = payment.bank_account_id
             else:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Payment bank account is not mapped to a valid GL account",
+                raise ValidationError(
+                    "Payment bank account is not mapped to a valid GL account"
                 )
 
         # Temporarily update status for posting adapter check
@@ -371,7 +371,7 @@ class CustomerPaymentService(ListResponseMixin):
 
         customer = db.get(Customer, payment.customer_id)
         if not customer:
-            raise HTTPException(status_code=404, detail="Customer not found")
+            raise NotFoundError("Customer not found")
 
         exchange_rate = payment.exchange_rate or Decimal("1.0")
         net_amount = payment.amount  # Net amount received
@@ -399,17 +399,18 @@ class CustomerPaymentService(ListResponseMixin):
             # Get WHT Receivable account from tax code or organization settings
             wht_receivable_account_id = None
             if payment.wht_code_id:
-                from app.models.finance.tax.tax_code import TaxCode
-
                 wht_code = db.get(TaxCode, payment.wht_code_id)
-                if wht_code:
+                if (
+                    wht_code
+                    and wht_code.organization_id == org_id
+                    and wht_code.tax_type == TaxType.WITHHOLDING
+                ):
                     # Use the tax_paid_account_id as WHT Receivable
                     wht_receivable_account_id = wht_code.tax_paid_account_id
 
             if not wht_receivable_account_id:
-                raise HTTPException(
-                    status_code=400,
-                    detail="WHT Receivable account not configured. Please set up the WHT tax code with a Tax Paid Account.",
+                raise ValidationError(
+                    "WHT Receivable account not configured. Please set up the WHT tax code with a Tax Paid Account."
                 )
 
             journal_lines.append(
@@ -457,11 +458,9 @@ class CustomerPaymentService(ListResponseMixin):
             JournalService.approve_journal(
                 db, org_id, journal.journal_entry_id, user_id
             )
-        except HTTPException as e:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Journal creation failed: {e.detail}",
-            )
+        except Exception as exc:
+            detail = getattr(exc, "detail", None) or str(exc)
+            raise ValidationError(f"Journal creation failed: {detail}")
 
         # Post to ledger
         idempotency_key = f"{org_id}:AR:PAY:{pay_id}:post:v1"
@@ -479,10 +478,7 @@ class CustomerPaymentService(ListResponseMixin):
         posting_result = LedgerPostingService.post_journal_entry(db, posting_request)
 
         if not posting_result.success:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Ledger posting failed: {posting_result.message}",
-            )
+            raise ValidationError(f"Ledger posting failed: {posting_result.message}")
 
         # Update payment status
         payment.status = PaymentStatus.CLEARED
@@ -494,25 +490,27 @@ class CustomerPaymentService(ListResponseMixin):
         # Create tax transaction for WHT if applicable
         if wht_amount > Decimal("0") and payment.wht_code_id:
             from app.models.finance.gl.fiscal_period import FiscalPeriod
-            from app.models.finance.tax.tax_code import TaxCode
             from app.models.finance.tax.tax_transaction import TaxTransactionType
             from app.services.finance.tax.tax_transaction import (
                 TaxTransactionInput,
                 tax_transaction_service,
             )
 
-            fiscal_period = (
-                db.query(FiscalPeriod)
-                .filter(
+            fiscal_period = db.scalar(
+                select(FiscalPeriod).where(
                     FiscalPeriod.organization_id == org_id,
                     FiscalPeriod.start_date <= payment.payment_date,
                     FiscalPeriod.end_date >= payment.payment_date,
                 )
-                .first()
             )
 
             tax_code = db.get(TaxCode, payment.wht_code_id)
-            if fiscal_period and tax_code and tax_code.organization_id == org_id:
+            if (
+                fiscal_period
+                and tax_code
+                and tax_code.organization_id == org_id
+                and tax_code.tax_type == TaxType.WITHHOLDING
+            ):
                 tax_transaction_service.create_transaction(
                     db=db,
                     organization_id=org_id,
@@ -538,11 +536,9 @@ class CustomerPaymentService(ListResponseMixin):
                 )
 
         # Apply allocations to invoices
-        allocations = (
-            db.query(PaymentAllocation)
-            .filter(PaymentAllocation.payment_id == pay_id)
-            .all()
-        )
+        allocations = db.scalars(
+            select(PaymentAllocation).where(PaymentAllocation.payment_id == pay_id)
+        ).all()
 
         for alloc in allocations:
             invoice = db.get(Invoice, alloc.invoice_id)
@@ -639,18 +635,16 @@ class CustomerPaymentService(ListResponseMixin):
 
         payment = db.get(CustomerPayment, pay_id)
         if not payment or payment.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Payment not found")
+            raise NotFoundError("Payment not found")
 
         if payment.status == PaymentStatus.VOID:
-            raise HTTPException(status_code=400, detail="Payment is already voided")
+            raise ValidationError("Payment is already voided")
 
         # Reverse allocations if payment was cleared
         if payment.status == PaymentStatus.CLEARED:
-            allocations = (
-                db.query(PaymentAllocation)
-                .filter(PaymentAllocation.payment_id == pay_id)
-                .all()
-            )
+            allocations = db.scalars(
+                select(PaymentAllocation).where(PaymentAllocation.payment_id == pay_id)
+            ).all()
 
             for alloc in allocations:
                 invoice = db.get(Invoice, alloc.invoice_id)
@@ -681,21 +675,18 @@ class CustomerPaymentService(ListResponseMixin):
 
         payment = db.get(CustomerPayment, pay_id)
         if not payment or payment.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Payment not found")
+            raise NotFoundError("Payment not found")
 
         if payment.status not in [PaymentStatus.PENDING, PaymentStatus.CLEARED]:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot mark payment as bounced with status '{payment.status.value}'",
+            raise ValidationError(
+                f"Cannot mark payment as bounced with status '{payment.status.value}'"
             )
 
         # Reverse allocations if payment was cleared
         if payment.status == PaymentStatus.CLEARED:
-            allocations = (
-                db.query(PaymentAllocation)
-                .filter(PaymentAllocation.payment_id == pay_id)
-                .all()
-            )
+            allocations = db.scalars(
+                select(PaymentAllocation).where(PaymentAllocation.payment_id == pay_id)
+            ).all()
 
             for alloc in allocations:
                 invoice = db.get(Invoice, alloc.invoice_id)
@@ -743,42 +734,34 @@ class CustomerPaymentService(ListResponseMixin):
 
         payment = db.get(CustomerPayment, pay_id)
         if not payment or payment.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Payment not found")
+            raise NotFoundError("Payment not found")
 
         if payment.status != PaymentStatus.PENDING:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot edit payment with status '{payment.status.value}'. Only PENDING payments can be edited.",
+            raise ValidationError(
+                f"Cannot edit payment with status '{payment.status.value}'. Only PENDING payments can be edited."
             )
 
         # Validate customer
         customer = db.get(Customer, customer_id)
         if not customer or customer.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Customer not found")
+            raise NotFoundError("Customer not found")
 
         if not customer.is_active:
-            raise HTTPException(status_code=400, detail="Customer is not active")
+            raise ValidationError("Customer is not active")
 
         # Validate allocations
         if input.allocations:
             allocation_total = sum(a.amount for a in input.allocations)
             if allocation_total > input.amount:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Allocation total exceeds payment amount",
-                )
+                raise ValidationError("Allocation total exceeds payment amount")
 
             for alloc in input.allocations:
                 invoice = db.get(Invoice, coerce_uuid(alloc.invoice_id))
                 if not invoice or invoice.organization_id != org_id:
-                    raise HTTPException(
-                        status_code=404,
-                        detail=f"Invoice {alloc.invoice_id} not found",
-                    )
+                    raise NotFoundError(f"Invoice {alloc.invoice_id} not found")
                 if invoice.customer_id != customer_id:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Invoice {invoice.invoice_number} belongs to different customer",
+                    raise ValidationError(
+                        f"Invoice {invoice.invoice_number} belongs to different customer"
                     )
                 payable_statuses = [
                     InvoiceStatus.POSTED,
@@ -786,14 +769,12 @@ class CustomerPaymentService(ListResponseMixin):
                     InvoiceStatus.OVERDUE,
                 ]
                 if invoice.status not in payable_statuses:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Invoice {invoice.invoice_number} is not payable",
+                    raise ValidationError(
+                        f"Invoice {invoice.invoice_number} is not payable"
                     )
                 if alloc.amount > invoice.balance_due:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Allocation exceeds balance due on {invoice.invoice_number}",
+                    raise ValidationError(
+                        f"Allocation exceeds balance due on {invoice.invoice_number}"
                     )
 
         # Handle WHT amounts
@@ -806,9 +787,8 @@ class CustomerPaymentService(ListResponseMixin):
             if wht_amount > Decimal("0") and abs(expected_wht - wht_amount) > Decimal(
                 "0.01"
             ):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"WHT amount ({wht_amount}) doesn't match gross - net ({expected_wht})",
+                raise ValidationError(
+                    f"WHT amount ({wht_amount}) doesn't match gross - net ({expected_wht})"
                 )
             if wht_amount == Decimal("0") and gross_amount != net_amount:
                 wht_amount = expected_wht
@@ -836,9 +816,9 @@ class CustomerPaymentService(ListResponseMixin):
         payment.description = input.description
 
         # Delete existing allocations and recreate
-        db.query(PaymentAllocation).filter(
-            PaymentAllocation.payment_id == pay_id
-        ).delete()
+        db.execute(
+            delete(PaymentAllocation).where(PaymentAllocation.payment_id == pay_id)
+        )
 
         # Create new allocations
         for alloc in input.allocations:
@@ -862,7 +842,7 @@ class CustomerPaymentService(ListResponseMixin):
         """Get a payment by ID."""
         payment = db.get(CustomerPayment, coerce_uuid(payment_id))
         if not payment:
-            raise HTTPException(status_code=404, detail="Payment not found")
+            raise NotFoundError("Payment not found")
         return payment
 
     @staticmethod
@@ -877,13 +857,11 @@ class CustomerPaymentService(ListResponseMixin):
 
         payment = db.get(CustomerPayment, pay_id)
         if not payment or payment.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Payment not found")
+            raise NotFoundError("Payment not found")
 
-        return (
-            db.query(PaymentAllocation)
-            .filter(PaymentAllocation.payment_id == pay_id)
-            .all()
-        )
+        return db.scalars(
+            select(PaymentAllocation).where(PaymentAllocation.payment_id == pay_id)
+        ).all()
 
     @staticmethod
     def delete_receipt(
@@ -897,20 +875,17 @@ class CustomerPaymentService(ListResponseMixin):
 
         payment = db.get(CustomerPayment, pay_id)
         if not payment or payment.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Receipt not found")
+            raise NotFoundError("Receipt not found")
 
         if payment.status != PaymentStatus.PENDING:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Cannot delete receipt with status '{payment.status.value}'. "
-                    "Only draft receipts can be deleted."
-                ),
+            raise ValidationError(
+                f"Cannot delete receipt with status '{payment.status.value}'. "
+                "Only draft receipts can be deleted."
             )
 
-        db.query(PaymentAllocation).filter(
-            PaymentAllocation.payment_id == pay_id
-        ).delete()
+        db.execute(
+            delete(PaymentAllocation).where(PaymentAllocation.payment_id == pay_id)
+        )
         db.delete(payment)
         db.flush()
         db.commit()
@@ -928,32 +903,30 @@ class CustomerPaymentService(ListResponseMixin):
         offset: int = 0,
     ) -> list[CustomerPayment]:
         """List payments with optional filters."""
-        query = db.query(CustomerPayment)
+        query = select(CustomerPayment)
 
         if organization_id:
-            query = query.filter(
+            query = query.where(
                 CustomerPayment.organization_id == coerce_uuid(organization_id)
             )
 
         if customer_id:
-            query = query.filter(
-                CustomerPayment.customer_id == coerce_uuid(customer_id)
-            )
+            query = query.where(CustomerPayment.customer_id == coerce_uuid(customer_id))
 
         if status:
-            query = query.filter(CustomerPayment.status == status)
+            query = query.where(CustomerPayment.status == status)
 
         if payment_method:
-            query = query.filter(CustomerPayment.payment_method == payment_method)
+            query = query.where(CustomerPayment.payment_method == payment_method)
 
         if from_date:
-            query = query.filter(CustomerPayment.payment_date >= from_date)
+            query = query.where(CustomerPayment.payment_date >= from_date)
 
         if to_date:
-            query = query.filter(CustomerPayment.payment_date <= to_date)
+            query = query.where(CustomerPayment.payment_date <= to_date)
 
         query = query.order_by(CustomerPayment.payment_date.desc())
-        return query.limit(limit).offset(offset).all()
+        return db.scalars(query.limit(limit).offset(offset)).all()
 
 
 # Module-level singleton instance

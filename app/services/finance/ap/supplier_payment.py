@@ -14,7 +14,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
@@ -756,9 +756,9 @@ class SupplierPaymentService(ListResponseMixin):
                 "Only draft payments can be deleted."
             )
 
-        db.query(APPaymentAllocation).filter(
-            APPaymentAllocation.payment_id == pay_id
-        ).delete()
+        db.execute(
+            delete(APPaymentAllocation).where(APPaymentAllocation.payment_id == pay_id)
+        )
         db.delete(payment)
         db.commit()
 

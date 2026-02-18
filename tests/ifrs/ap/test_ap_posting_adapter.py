@@ -937,6 +937,76 @@ class TestPostPayment:
         assert result.success is False
         assert "Supplier not found" in result.message
 
+    def test_post_payment_rejects_unmapped_bank_account(
+        self, mock_db, organization_id, user_id, mock_payment, mock_supplier
+    ):
+        """Test posting fails when bank account is not mapped to GL."""
+        mock_payment.supplier_id = mock_supplier.supplier_id
+
+        def get_side_effect(model, id):
+            if str(id) == str(mock_payment.payment_id):
+                return mock_payment
+            if str(id) == str(mock_supplier.supplier_id):
+                return mock_supplier
+            if model.__name__ in {"Account", "BankAccount"}:
+                return None
+            return None
+
+        mock_db.get.side_effect = get_side_effect
+
+        result = APPostingAdapter.post_payment(
+            db=mock_db,
+            organization_id=organization_id,
+            payment_id=mock_payment.payment_id,
+            posting_date=date.today(),
+            posted_by_user_id=user_id,
+        )
+
+        assert result.success is False
+        assert "not mapped to a valid GL account" in result.message
+
+    def test_post_payment_rejects_non_withholding_tax_code(
+        self, mock_db, organization_id, user_id, mock_payment, mock_supplier
+    ):
+        """Test posting fails when WHT tax code is not WITHHOLDING."""
+        mock_payment.supplier_id = mock_supplier.supplier_id
+        mock_payment.gross_amount = Decimal("100.00")
+        mock_payment.amount = Decimal("90.00")
+        mock_payment.withholding_tax_amount = Decimal("10.00")
+        mock_payment.withholding_tax_code_id = uuid.uuid4()
+
+        invalid_tax_code = MagicMock(
+            organization_id=organization_id,
+            tax_type="VAT",
+            tax_collected_account_id=uuid.uuid4(),
+        )
+
+        def get_side_effect(model, id):
+            if str(id) == str(mock_payment.payment_id):
+                return mock_payment
+            if str(id) == str(mock_supplier.supplier_id):
+                return mock_supplier
+            if model.__name__ == "Account" and str(id) == str(
+                mock_payment.bank_account_id
+            ):
+                return MagicMock(organization_id=organization_id)
+            if str(id) == str(mock_payment.withholding_tax_code_id):
+                return invalid_tax_code
+            return None
+
+        mock_db.get.side_effect = get_side_effect
+
+        result = APPostingAdapter.post_payment(
+            db=mock_db,
+            organization_id=organization_id,
+            payment_id=mock_payment.payment_id,
+            posting_date=date.today(),
+            posted_by_user_id=user_id,
+        )
+
+        assert result.success is False
+        assert "not a WITHHOLDING tax code" in result.message
+
     @patch("app.services.finance.posting.base.JournalService")
     @patch("app.services.finance.posting.base.LedgerPostingService")
     def test_post_payment_success(
@@ -957,6 +1027,10 @@ class TestPostPayment:
                 return mock_payment
             if str(id) == str(mock_supplier.supplier_id):
                 return mock_supplier
+            if model.__name__ == "Account" and str(id) == str(
+                mock_payment.bank_account_id
+            ):
+                return MagicMock(organization_id=organization_id)
             return None
 
         mock_db.get.side_effect = get_side_effect
@@ -1011,6 +1085,8 @@ class TestPostPayment:
                 return payment
             if str(id) == str(mock_supplier.supplier_id):
                 return mock_supplier
+            if model.__name__ == "Account" and str(id) == str(payment.bank_account_id):
+                return MagicMock(organization_id=organization_id)
             return None
 
         mock_db.get.side_effect = get_side_effect
@@ -1055,6 +1131,10 @@ class TestPostPayment:
                 return mock_payment
             if str(id) == str(mock_supplier.supplier_id):
                 return mock_supplier
+            if model.__name__ == "Account" and str(id) == str(
+                mock_payment.bank_account_id
+            ):
+                return MagicMock(organization_id=organization_id)
             return None
 
         mock_db.get.side_effect = get_side_effect
@@ -1094,6 +1174,10 @@ class TestPostPayment:
                 return mock_payment
             if str(id) == str(mock_supplier.supplier_id):
                 return mock_supplier
+            if model.__name__ == "Account" and str(id) == str(
+                mock_payment.bank_account_id
+            ):
+                return MagicMock(organization_id=organization_id)
             return None
 
         mock_db.get.side_effect = get_side_effect
@@ -1135,6 +1219,10 @@ class TestPostPayment:
                 return mock_payment
             if str(id) == str(mock_supplier.supplier_id):
                 return mock_supplier
+            if model.__name__ == "Account" and str(id) == str(
+                mock_payment.bank_account_id
+            ):
+                return MagicMock(organization_id=organization_id)
             return None
 
         mock_db.get.side_effect = get_side_effect

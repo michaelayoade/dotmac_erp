@@ -52,15 +52,14 @@ class SelfServiceWebService:
         normalized_names = {name.strip().lower() for name in role_names if name}
         if not normalized_names:
             return False
-        rows = (
-            db.query(Role.name)
+        rows = db.execute(
+            select(Role.name)
             .join(PersonRole, PersonRole.role_id == Role.id)
-            .filter(
+            .where(
                 PersonRole.person_id == person_id,
                 Role.is_active == True,  # noqa: E712
             )
-            .all()
-        )
+        ).all()
         for (raw_name,) in rows:
             if not raw_name:
                 continue
@@ -119,11 +118,11 @@ class SelfServiceWebService:
             raise HTTPException(
                 status_code=403, detail="Missing organization or person context"
             )
-        employee = (
-            db.query(Employee)
-            .filter(Employee.organization_id == org_id)
-            .filter(Employee.person_id == person_id)
-            .first()
+        employee = db.scalar(
+            select(Employee).where(
+                Employee.organization_id == org_id,
+                Employee.person_id == person_id,
+            )
         )
         if not employee:
             raise HTTPException(status_code=404, detail="Employee profile not found")
@@ -151,29 +150,26 @@ class SelfServiceWebService:
     @staticmethod
     def _get_expense_approver_options(db: Session, org_id: UUID) -> list[dict]:
         """Return active employee options with admin or expense_approver roles."""
-        roles = (
-            db.query(Role)
-            .filter(
+        roles = db.scalars(
+            select(Role).where(
                 Role.is_active == True, Role.name.in_(["admin", "expense_approver"])
             )
-            .all()
-        )
+        ).all()
         role_ids = [role.id for role in roles]
         if not role_ids:
             return []
 
-        rows = (
-            db.query(Employee, PersonRole, Person)
+        rows = db.execute(
+            select(Employee, PersonRole, Person)
             .join(PersonRole, PersonRole.person_id == Employee.person_id)
             .join(Person, Person.id == Employee.person_id)
-            .filter(
+            .where(
                 Employee.organization_id == org_id,
                 Employee.status == EmployeeStatus.ACTIVE,
                 PersonRole.role_id.in_(role_ids),
             )
             .order_by(Person.first_name, Person.last_name)
-            .all()
-        )
+        ).all()
 
         options = {}
         for employee, _, person in rows:
@@ -365,11 +361,10 @@ class SelfServiceWebService:
                 )
             raise
 
-        employee = (
-            db.query(Employee)
+        employee = db.scalar(
+            select(Employee)
             .options(joinedload(Employee.person))
-            .filter(Employee.employee_id == employee_id)
-            .first()
+            .where(Employee.employee_id == employee_id)
         )
 
         tax_profile = db.scalar(
@@ -443,11 +438,10 @@ class SelfServiceWebService:
                 status_code=303,
             )
 
-        employee = (
-            db.query(Employee)
+        employee = db.scalar(
+            select(Employee)
             .options(joinedload(Employee.person))
-            .filter(Employee.employee_id == employee_id)
-            .first()
+            .where(Employee.employee_id == employee_id)
         )
         if not employee:
             return RedirectResponse(
@@ -1752,19 +1746,14 @@ class SelfServiceWebService:
         pagination = PaginationParams.from_page(page, per_page=12)
 
         # Query salary slips for this employee
-        query = db.query(SalarySlip).filter(
+        query = select(SalarySlip).where(
             SalarySlip.organization_id == org_id,
             SalarySlip.employee_id == employee_id,
-            SalarySlip.status.in_(
-                [
-                    SalarySlipStatus.POSTED,
-                    SalarySlipStatus.PAID,
-                ]
-            ),
+            SalarySlip.status.in_(SalarySlipStatus.gl_impacting()),
         )
 
         if year:
-            query = query.filter(func.extract("year", SalarySlip.start_date) == year)
+            query = query.where(func.extract("year", SalarySlip.start_date) == year)
 
         query = query.order_by(SalarySlip.start_date.desc())
 
@@ -1773,19 +1762,21 @@ class SelfServiceWebService:
         total = db.scalar(count_query) or 0
 
         # Get paginated items
-        slips = query.offset(pagination.offset).limit(pagination.limit).all()
+        slips = db.scalars(
+            query.offset(pagination.offset).limit(pagination.limit)
+        ).all()
 
         # Get available years for filtering
         years_query = (
-            db.query(func.distinct(func.extract("year", SalarySlip.start_date)))
-            .filter(
+            select(func.distinct(func.extract("year", SalarySlip.start_date)))
+            .where(
                 SalarySlip.organization_id == org_id,
                 SalarySlip.employee_id == employee_id,
-                SalarySlip.status.in_([SalarySlipStatus.POSTED, SalarySlipStatus.PAID]),
+                SalarySlip.status.in_(SalarySlipStatus.gl_impacting()),
             )
             .order_by(func.extract("year", SalarySlip.start_date).desc())
         )
-        available_years = [int(y[0]) for y in years_query.all() if y[0]]
+        available_years = [int(y[0]) for y in db.execute(years_query).all() if y[0]]
 
         total_pages = (total + pagination.limit - 1) // pagination.limit if total else 1
 
@@ -1851,7 +1842,7 @@ class SelfServiceWebService:
             raise HTTPException(status_code=403, detail="Forbidden")
 
         # Only show posted/paid slips in self-service
-        if slip.status not in [SalarySlipStatus.POSTED, SalarySlipStatus.PAID]:
+        if slip.status not in SalarySlipStatus.gl_impacting():
             raise HTTPException(status_code=403, detail="Payslip not yet available")
 
         # Calculate PAYE breakdown for display

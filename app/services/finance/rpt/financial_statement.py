@@ -13,6 +13,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.rpt.financial_statement_line import (
@@ -112,14 +113,12 @@ class FinancialStatementService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         # Check for duplicate line code
-        existing = (
-            db.query(FinancialStatementLine)
-            .filter(
+        existing = db.scalar(
+            select(FinancialStatementLine).where(
                 FinancialStatementLine.organization_id == org_id,
                 FinancialStatementLine.statement_type == input.statement_type,
                 FinancialStatementLine.line_code == input.line_code,
             )
-            .first()
         )
         if existing:
             raise HTTPException(
@@ -319,16 +318,15 @@ class FinancialStatementService(ListResponseMixin):
         Returns:
             Ordered list of statement lines
         """
-        return (
-            db.query(FinancialStatementLine)
-            .filter(
+        return db.scalars(
+            select(FinancialStatementLine)
+            .where(
                 FinancialStatementLine.organization_id == coerce_uuid(organization_id),
                 FinancialStatementLine.statement_type == statement_type,
                 FinancialStatementLine.is_active == True,
             )
             .order_by(FinancialStatementLine.sequence_number)
-            .all()
-        )
+        ).all()
 
     @staticmethod
     def calculate_line_amount(
@@ -419,16 +417,16 @@ class FinancialStatementService(ListResponseMixin):
         tgt_org_id = coerce_uuid(target_organization_id)
 
         # Get source lines
-        source_lines = (
-            db.query(FinancialStatementLine)
-            .filter(
+        source_lines = db.scalars(
+            select(FinancialStatementLine)
+            .where(
                 FinancialStatementLine.organization_id == src_org_id,
                 FinancialStatementLine.statement_type == statement_type,
                 FinancialStatementLine.is_active == True,
             )
             .order_by(FinancialStatementLine.sequence_number)
-            .all()
         )
+        source_lines = source_lines.all()
 
         # Map old IDs to new IDs for parent references
         id_map: dict[UUID, UUID] = {}
@@ -503,28 +501,30 @@ class FinancialStatementService(ListResponseMixin):
         offset: int = 0,
     ) -> list[FinancialStatementLine]:
         """List statement lines with optional filters."""
-        query = db.query(FinancialStatementLine)
+        stmt = select(FinancialStatementLine)
 
         if organization_id:
-            query = query.filter(
+            stmt = stmt.where(
                 FinancialStatementLine.organization_id == coerce_uuid(organization_id)
             )
 
         if statement_type:
-            query = query.filter(
-                FinancialStatementLine.statement_type == statement_type
-            )
+            stmt = stmt.where(FinancialStatementLine.statement_type == statement_type)
 
         if parent_line_id:
-            query = query.filter(
+            stmt = stmt.where(
                 FinancialStatementLine.parent_line_id == coerce_uuid(parent_line_id)
             )
 
         if is_active is not None:
-            query = query.filter(FinancialStatementLine.is_active == is_active)
+            stmt = stmt.where(FinancialStatementLine.is_active == is_active)
 
-        query = query.order_by(FinancialStatementLine.sequence_number)
-        return query.limit(limit).offset(offset).all()
+        stmt = (
+            stmt.order_by(FinancialStatementLine.sequence_number)
+            .limit(limit)
+            .offset(offset)
+        )
+        return db.scalars(stmt).all()
 
 
 # Module-level singleton instance

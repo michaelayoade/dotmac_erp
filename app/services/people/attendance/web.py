@@ -15,6 +15,7 @@ from uuid import UUID
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.datastructures import UploadFile
 
@@ -387,14 +388,15 @@ class AttendanceWebService:
             is_active=True,
             pagination=PaginationParams(offset=0, limit=200),
         ).items
-        employees = (
-            db.query(Employee)
-            .filter(
-                Employee.organization_id == org_id,
-                Employee.status == EmployeeStatus.ACTIVE,
-            )
-            .order_by(Employee.employee_code)
-            .all()
+        employees = list(
+            db.scalars(
+                select(Employee)
+                .where(
+                    Employee.organization_id == org_id,
+                    Employee.status == EmployeeStatus.ACTIVE,
+                )
+                .order_by(Employee.employee_code)
+            ).all()
         )
 
         context = base_context(request, auth, "New Attendance", "attendance", db=db)
@@ -444,14 +446,15 @@ class AttendanceWebService:
                 is_active=True,
                 pagination=PaginationParams(offset=0, limit=200),
             ).items
-            employees = (
-                db.query(Employee)
-                .filter(
-                    Employee.organization_id == org_id,
-                    Employee.status == EmployeeStatus.ACTIVE,
-                )
-                .order_by(Employee.employee_code)
-                .all()
+            employees = list(
+                db.scalars(
+                    select(Employee)
+                    .where(
+                        Employee.organization_id == org_id,
+                        Employee.status == EmployeeStatus.ACTIVE,
+                    )
+                    .order_by(Employee.employee_code)
+                ).all()
             )
             context = base_context(request, auth, "New Attendance", "attendance", db=db)
             context["request"] = request
@@ -491,14 +494,15 @@ class AttendanceWebService:
                 is_active=True,
                 pagination=PaginationParams(offset=0, limit=200),
             ).items
-            employees = (
-                db.query(Employee)
-                .filter(
-                    Employee.organization_id == org_id,
-                    Employee.status == EmployeeStatus.ACTIVE,
-                )
-                .order_by(Employee.employee_code)
-                .all()
+            employees = list(
+                db.scalars(
+                    select(Employee)
+                    .where(
+                        Employee.organization_id == org_id,
+                        Employee.status == EmployeeStatus.ACTIVE,
+                    )
+                    .order_by(Employee.employee_code)
+                ).all()
             )
             context = base_context(request, auth, "New Attendance", "attendance", db=db)
             context["request"] = request

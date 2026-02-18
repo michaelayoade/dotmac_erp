@@ -378,13 +378,11 @@ class HRWebService:
         person: Person | None = None
 
         # Check if person with this email already exists
-        existing_person = (
-            db.query(Person)
-            .filter(
+        existing_person = db.scalar(
+            select(Person).where(
                 Person.email == email,
                 Person.organization_id == org_id,
             )
-            .first()
         )
 
         if existing_person:
@@ -829,11 +827,11 @@ class HRWebService:
                 request, "people/hr/employee_detail.html", context
             )
 
-        credential = (
-            db.query(UserCredential)
-            .filter(UserCredential.id == credential_id)
-            .filter(UserCredential.person_id == employee.person_id)
-            .first()
+        credential = db.scalar(
+            select(UserCredential).where(
+                UserCredential.id == credential_id,
+                UserCredential.person_id == employee.person_id,
+            )
         )
         if not credential:
             context = self._employee_detail_context(request, auth, db, employee)
@@ -852,14 +850,14 @@ class HRWebService:
         # If disabling, revoke active sessions for immediate lockout.
         if not credential.is_active:
             now = datetime.now(UTC)
-            active_sessions = (
-                db.query(AuthSession)
-                .filter(AuthSession.person_id == employee.person_id)
-                .filter(AuthSession.status == SessionStatus.active)
-                .filter(AuthSession.revoked_at.is_(None))
-                .filter(AuthSession.expires_at > now)
-                .all()
-            )
+            active_sessions = db.scalars(
+                select(AuthSession).where(
+                    AuthSession.person_id == employee.person_id,
+                    AuthSession.status == SessionStatus.active,
+                    AuthSession.revoked_at.is_(None),
+                    AuthSession.expires_at > now,
+                )
+            ).all()
             session_ids = [s.id for s in active_sessions]
             for session in active_sessions:
                 session.status = SessionStatus.revoked
@@ -948,34 +946,30 @@ class HRWebService:
 
         credentials = []
         if employee.person_id:
-            credentials = (
-                db.query(UserCredential)
-                .filter(UserCredential.person_id == employee.person_id)
+            credentials = db.scalars(
+                select(UserCredential)
+                .where(UserCredential.person_id == employee.person_id)
                 .order_by(UserCredential.created_at.asc())
-                .all()
-            )
+            ).all()
 
         # Fetch salary structure assignments for this employee (eager load structure)
-        salary_assignments = (
-            db.query(SalaryStructureAssignment)
+        salary_assignments = db.scalars(
+            select(SalaryStructureAssignment)
             .options(joinedload(SalaryStructureAssignment.salary_structure))
-            .filter(
+            .where(
                 SalaryStructureAssignment.organization_id == org_id,
                 SalaryStructureAssignment.employee_id == employee.employee_id,
             )
             .order_by(SalaryStructureAssignment.from_date.desc())
-            .all()
-        )
+        ).all()
 
         # Fetch tax profile for this employee
-        tax_profile = (
-            db.query(EmployeeTaxProfile)
-            .filter(
+        tax_profile = db.scalar(
+            select(EmployeeTaxProfile).where(
                 EmployeeTaxProfile.organization_id == org_id,
                 EmployeeTaxProfile.employee_id == employee.employee_id,
                 EmployeeTaxProfile.effective_to.is_(None),
             )
-            .first()
         )
 
         # Fetch onboarding record for this employee
@@ -1094,24 +1088,22 @@ class HRWebService:
             )
             .items
         )
-        cost_centers = (
-            db.query(CostCenter)
-            .filter(
+        cost_centers = db.scalars(
+            select(CostCenter)
+            .where(
                 CostCenter.organization_id == org_id,
                 CostCenter.is_active.is_(True),
             )
             .order_by(CostCenter.cost_center_code)
-            .all()
-        )
-        locations = (
-            db.query(Location)
-            .filter(
+        ).all()
+        locations = db.scalars(
+            select(Location)
+            .where(
                 Location.organization_id == org_id,
                 Location.is_active.is_(True),
             )
             .order_by(Location.location_name)
-            .all()
-        )
+        ).all()
         shift_types = (
             AttendanceService(db)
             .list_shift_types(
@@ -1121,13 +1113,12 @@ class HRWebService:
             )
             .items
         )
-        user_rows = (
-            db.query(UserCredential, Person)
+        user_rows = db.execute(
+            select(UserCredential, Person)
             .join(Person, UserCredential.person_id == Person.id)
-            .filter(Person.organization_id == org_id)
+            .where(Person.organization_id == org_id)
             .order_by(Person.first_name, Person.last_name)
-            .all()
-        )
+        ).all()
         user_options = {}
         for cred, user_person in user_rows:
             label = f"{user_person.name} ({user_person.email})"
@@ -1245,24 +1236,22 @@ class HRWebService:
             )
             .items
         )
-        cost_centers = (
-            db.query(CostCenter)
-            .filter(
+        cost_centers = db.scalars(
+            select(CostCenter)
+            .where(
                 CostCenter.organization_id == org_id,
                 CostCenter.is_active.is_(True),
             )
             .order_by(CostCenter.cost_center_code)
-            .all()
-        )
-        locations = (
-            db.query(Location)
-            .filter(
+        ).all()
+        locations = db.scalars(
+            select(Location)
+            .where(
                 Location.organization_id == org_id,
                 Location.is_active.is_(True),
             )
             .order_by(Location.location_name)
-            .all()
-        )
+        ).all()
         shift_types = (
             AttendanceService(db)
             .list_shift_types(
@@ -1272,13 +1261,12 @@ class HRWebService:
             )
             .items
         )
-        user_rows = (
-            db.query(UserCredential, Person)
+        user_rows = db.execute(
+            select(UserCredential, Person)
             .join(Person, UserCredential.person_id == Person.id)
-            .filter(Person.organization_id == org_id)
+            .where(Person.organization_id == org_id)
             .order_by(Person.first_name, Person.last_name)
-            .all()
-        )
+        ).all()
         user_options = {}
         for cred, user_person in user_rows:
             label = f"{user_person.name} ({user_person.email})"

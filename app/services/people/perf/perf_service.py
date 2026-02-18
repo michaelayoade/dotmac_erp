@@ -12,7 +12,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING, TypedDict
 from uuid import UUID
 
-from sqlalchemy import and_, false, func, or_, select
+from sqlalchemy import and_, delete, false, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.people.perf import (
@@ -558,9 +558,11 @@ class PerformanceService:
                 setattr(template, key, value)
 
         if kras is not None:
-            self.db.query(AppraisalTemplateKRA).filter(
-                AppraisalTemplateKRA.template_id == template_id
-            ).delete()
+            self.db.execute(
+                delete(AppraisalTemplateKRA).where(
+                    AppraisalTemplateKRA.template_id == template_id
+                )
+            )
             for idx, kra in enumerate(kras):
                 self.db.add(
                     AppraisalTemplateKRA(
@@ -578,9 +580,11 @@ class PerformanceService:
     def delete_template(self, org_id: UUID, template_id: UUID) -> None:
         """Delete an appraisal template."""
         template = self.get_template(org_id, template_id)
-        self.db.query(AppraisalTemplateKRA).filter(
-            AppraisalTemplateKRA.template_id == template_id
-        ).delete()
+        self.db.execute(
+            delete(AppraisalTemplateKRA).where(
+                AppraisalTemplateKRA.template_id == template_id
+            )
+        )
         self.db.delete(template)
         self.db.flush()
 

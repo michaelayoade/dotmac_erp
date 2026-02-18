@@ -11,6 +11,7 @@ from datetime import date
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
@@ -58,12 +59,12 @@ class SalesOrderWebService:
         org_id = coerce_uuid(organization_id)
 
         # Customers
-        customers = (
-            db.query(Customer)
-            .filter(Customer.organization_id == org_id, Customer.is_active.is_(True))
+        customers = db.scalars(
+            select(Customer)
+            .where(Customer.organization_id == org_id, Customer.is_active.is_(True))
             .order_by(Customer.legal_name)
-            .all()
         )
+        customers = customers.all()
         customer_options = [
             {
                 "customer_id": str(c.customer_id),
@@ -77,17 +78,17 @@ class SalesOrderWebService:
         ]
 
         # Revenue accounts
-        revenue_accounts = (
-            db.query(Account)
+        revenue_accounts = db.scalars(
+            select(Account)
             .join(AccountCategory)
-            .filter(
+            .where(
                 Account.organization_id == org_id,
                 Account.is_active.is_(True),
                 AccountCategory.ifrs_category == IFRSCategory.REVENUE,
             )
             .order_by(Account.account_code)
-            .all()
         )
+        revenue_accounts = revenue_accounts.all()
         revenue_options = [
             {
                 "account_id": str(a.account_id),
@@ -98,12 +99,12 @@ class SalesOrderWebService:
         ]
 
         # Tax codes
-        tax_codes = (
-            db.query(TaxCode)
-            .filter(TaxCode.organization_id == org_id, TaxCode.is_active.is_(True))
+        tax_codes = db.scalars(
+            select(TaxCode)
+            .where(TaxCode.organization_id == org_id, TaxCode.is_active.is_(True))
             .order_by(TaxCode.tax_code)
-            .all()
         )
+        tax_codes = tax_codes.all()
         tax_options = [
             {
                 "tax_code_id": str(t.tax_code_id),
@@ -114,30 +115,30 @@ class SalesOrderWebService:
         ]
 
         # Payment terms
-        payment_terms = (
-            db.query(PaymentTerms)
-            .filter(
+        payment_terms = db.scalars(
+            select(PaymentTerms)
+            .where(
                 PaymentTerms.organization_id == org_id, PaymentTerms.is_active.is_(True)
             )
             .order_by(PaymentTerms.terms_name)
-            .all()
         )
+        payment_terms = payment_terms.all()
         terms_options = [
             {"terms_id": str(t.payment_terms_id), "name": t.terms_name}
             for t in payment_terms
         ]
 
         # Items (products/services)
-        items = (
-            db.query(Item)
-            .filter(
+        items = db.scalars(
+            select(Item)
+            .where(
                 Item.organization_id == org_id,
                 Item.is_active.is_(True),
                 Item.is_saleable.is_(True),
             )
             .order_by(Item.item_code)
-            .all()
         )
+        items = items.all()
         item_options = [
             {
                 "item_id": str(i.item_id),
@@ -221,23 +222,23 @@ class SalesOrderWebService:
         # Status counts
         status_counts = {}
         for s in SOStatus:
-            count = (
-                db.query(SalesOrder)
-                .filter(
+            count = db.scalar(
+                select(func.count())
+                .select_from(SalesOrder)
+                .where(
                     SalesOrder.organization_id == org_id,
                     SalesOrder.status == s,
                 )
-                .count()
             )
-            status_counts[s.value] = count
+            status_counts[s.value] = count or 0
 
         # Customers for filter dropdown
-        customers = (
-            db.query(Customer)
-            .filter(Customer.organization_id == org_id)
+        customers = db.scalars(
+            select(Customer)
+            .where(Customer.organization_id == org_id)
             .order_by(Customer.legal_name)
-            .all()
         )
+        customers = customers.all()
         customer_options = [
             {"id": str(c.customer_id), "name": _customer_display_name(c)}
             for c in customers

@@ -32,7 +32,7 @@ def build_payment_query(
     to_date = parse_date(end_date)
 
     query = (
-        db.query(SupplierPayment)
+        Query([SupplierPayment], session=db)
         .join(Supplier, SupplierPayment.supplier_id == Supplier.supplier_id)
         .filter(SupplierPayment.organization_id == org_id)
     )

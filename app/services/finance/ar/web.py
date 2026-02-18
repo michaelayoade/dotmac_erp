@@ -111,17 +111,17 @@ def _calculate_customer_balance_trends(
             as_of_date = next_month - timedelta(days=1)
 
         # Query balance as of that date for all customers
-        balances = (
-            db.query(
+        balances = db.execute(
+            select(
                 Invoice.customer_id,
                 func.coalesce(
                     func.sum(Invoice.total_amount - Invoice.amount_paid), 0
                 ).label("balance"),
             )
-            .filter(
-                Invoice.organization_id == organization_id,
-                Invoice.customer_id.in_(customer_ids),
-                Invoice.invoice_date <= as_of_date,
+            .where(Invoice.organization_id == organization_id)
+            .where(Invoice.customer_id.in_(customer_ids))
+            .where(Invoice.invoice_date <= as_of_date)
+            .where(
                 Invoice.status.in_(
                     [
                         InvoiceStatus.POSTED,
@@ -129,11 +129,10 @@ def _calculate_customer_balance_trends(
                         InvoiceStatus.PAID,
                         InvoiceStatus.OVERDUE,
                     ]
-                ),
+                )
             )
             .group_by(Invoice.customer_id)
-            .all()
-        )
+        ).all()
 
         balance_map = {row.customer_id: float(row.balance) for row in balances}
 
@@ -371,34 +370,29 @@ def _get_accounts(
     subledger_type: str | None = None,
 ) -> list[Account]:
     query = (
-        db.query(Account)
+        select(Account)
         .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-        .filter(
-            Account.organization_id == organization_id,
-            Account.is_active.is_(True),
-            AccountCategory.ifrs_category == ifrs_category,
-        )
+        .where(Account.organization_id == organization_id)
+        .where(Account.is_active.is_(True))
+        .where(AccountCategory.ifrs_category == ifrs_category)
     )
     if subledger_type:
-        query = query.filter(Account.subledger_type == subledger_type)
-    return query.order_by(Account.account_code).all()
+        query = query.where(Account.subledger_type == subledger_type)
+    return db.scalars(query.order_by(Account.account_code)).all()
 
 
 def _get_cost_centers(db: Session, organization_id: UUID) -> list[CostCenter]:
-    return (
-        db.query(CostCenter)
-        .filter(
-            CostCenter.organization_id == organization_id,
-            CostCenter.is_active.is_(True),
-        )
+    return db.scalars(
+        select(CostCenter)
+        .where(CostCenter.organization_id == organization_id)
+        .where(CostCenter.is_active.is_(True))
         .order_by(CostCenter.cost_center_code)
-        .all()
-    )
+    ).all()
 
 
 def _get_projects(db: Session, organization_id: UUID) -> list[Project]:
-    return (
-        db.query(Project)
+    return db.scalars(
+        select(Project)
         .options(
             load_only(
                 Project.project_id,
@@ -406,10 +400,9 @@ def _get_projects(db: Session, organization_id: UUID) -> list[Project]:
                 Project.project_name,
             )
         )
-        .filter(Project.organization_id == organization_id)
+        .where(Project.organization_id == organization_id)
         .order_by(Project.project_code)
-        .all()
-    )
+    ).all()
 
 
 @dataclass
@@ -551,23 +544,24 @@ class ARWebService:
         elif status == "inactive":
             is_active = False
 
-        query = db.query(Customer).filter(Customer.organization_id == org_id)
+        conditions = [Customer.organization_id == org_id]
         if is_active is not None:
-            query = query.filter(Customer.is_active == is_active)
+            conditions.append(Customer.is_active == is_active)
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            conditions.append(
                 (Customer.customer_code.ilike(search_pattern))
                 | (Customer.legal_name.ilike(search_pattern))
                 | (Customer.trading_name.ilike(search_pattern))
                 | (Customer.tax_identification_number.ilike(search_pattern))
             )
 
+        base_stmt = select(Customer).where(*conditions)
         total_count = (
-            query.with_entities(func.count(Customer.customer_id)).scalar() or 0
+            db.scalar(select(func.count(Customer.customer_id)).where(*conditions)) or 0
         )
         query = apply_sort(
-            query,
+            base_stmt,
             sort,
             sort_dir,
             {
@@ -578,27 +572,24 @@ class ARWebService:
             },
             default=Customer.legal_name.asc(),
         )
-        customers = query.limit(limit).offset(offset).all()
+        customers = db.scalars(query.limit(limit).offset(offset)).all()
 
         open_statuses = [
             InvoiceStatus.POSTED,
             InvoiceStatus.PARTIALLY_PAID,
             InvoiceStatus.OVERDUE,
         ]
-        balances = (
-            db.query(
+        balances = db.execute(
+            select(
                 Invoice.customer_id,
                 func.coalesce(
                     func.sum(Invoice.total_amount - Invoice.amount_paid), 0
                 ).label("balance"),
             )
-            .filter(
-                Invoice.organization_id == org_id,
-                Invoice.status.in_(open_statuses),
-            )
+            .where(Invoice.organization_id == org_id)
+            .where(Invoice.status.in_(open_statuses))
             .group_by(Invoice.customer_id)
-            .all()
-        )
+        ).all()
         balance_map = {row.customer_id: row.balance for row in balances}
 
         # Use shared audit service for user names
@@ -621,6 +612,26 @@ class ARWebService:
 
         total_pages = max(1, (total_count + limit - 1) // limit)
 
+        # Stat counts (unfiltered by search/status for dashboard cards)
+        all_count = (
+            db.scalar(
+                select(func.count(Customer.customer_id)).where(
+                    Customer.organization_id == org_id
+                )
+            )
+            or 0
+        )
+        active_count = (
+            db.scalar(
+                select(func.count(Customer.customer_id))
+                .where(Customer.organization_id == org_id)
+                .where(Customer.is_active.is_(True))
+            )
+            or 0
+        )
+        inactive_count = all_count - active_count
+        with_balance_count = len(balance_map)
+
         active_filters = build_active_filters(
             params={"status": status},
         )
@@ -636,6 +647,9 @@ class ARWebService:
             "total_count": total_count,
             "total_pages": total_pages,
             "active_filters": active_filters,
+            "active_count": active_count,
+            "inactive_count": inactive_count,
+            "with_balance_count": with_balance_count,
         }
 
     @staticmethod
@@ -714,28 +728,26 @@ class ARWebService:
             InvoiceStatus.OVERDUE,
         ]
 
-        balance = db.query(
-            func.coalesce(
-                func.sum(Invoice.total_amount - Invoice.amount_paid),
-                0,
+        balance = db.scalar(
+            select(
+                func.coalesce(
+                    func.sum(Invoice.total_amount - Invoice.amount_paid),
+                    0,
+                )
             )
-        ).filter(
-            Invoice.organization_id == org_id,
-            Invoice.customer_id == customer.customer_id,
-            Invoice.status.in_(open_statuses),
-        ).scalar() or Decimal("0")
+            .where(Invoice.organization_id == org_id)
+            .where(Invoice.customer_id == customer.customer_id)
+            .where(Invoice.status.in_(open_statuses))
+        ) or Decimal("0")
 
-        invoices = (
-            db.query(Invoice)
-            .filter(
-                Invoice.organization_id == org_id,
-                Invoice.customer_id == customer.customer_id,
-                Invoice.status.in_(open_statuses),
-            )
+        invoices = db.scalars(
+            select(Invoice)
+            .where(Invoice.organization_id == org_id)
+            .where(Invoice.customer_id == customer.customer_id)
+            .where(Invoice.status.in_(open_statuses))
             .order_by(Invoice.due_date)
             .limit(10)
-            .all()
-        )
+        ).all()
 
         today = date.today()
         open_invoices = []
@@ -817,23 +829,22 @@ class ARWebService:
         from_date = _parse_date(start_date)
         to_date = _parse_date(end_date)
 
-        query = (
-            db.query(Invoice, Customer)
-            .join(Customer, Invoice.customer_id == Customer.customer_id)
-            .filter(Invoice.organization_id == org_id)
+        conditions = [Invoice.organization_id == org_id]
+        base_stmt = select(Invoice, Customer).join(
+            Customer, Invoice.customer_id == Customer.customer_id
         )
 
         if customer_id:
-            query = query.filter(Invoice.customer_id == coerce_uuid(customer_id))
+            conditions.append(Invoice.customer_id == coerce_uuid(customer_id))
         if status_value:
-            query = query.filter(Invoice.status == status_value)
+            conditions.append(Invoice.status == status_value)
         if from_date:
-            query = query.filter(Invoice.invoice_date >= from_date)
+            conditions.append(Invoice.invoice_date >= from_date)
         if to_date:
-            query = query.filter(Invoice.invoice_date <= to_date)
+            conditions.append(Invoice.invoice_date <= to_date)
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            conditions.append(
                 or_(
                     Invoice.invoice_number.ilike(search_pattern),
                     Customer.legal_name.ilike(search_pattern),
@@ -841,7 +852,16 @@ class ARWebService:
                 )
             )
 
-        total_count = query.with_entities(func.count(Invoice.invoice_id)).scalar() or 0
+        total_count = (
+            db.scalar(
+                select(func.count(Invoice.invoice_id))
+                .select_from(Invoice)
+                .join(Customer, Invoice.customer_id == Customer.customer_id)
+                .where(*conditions)
+            )
+            or 0
+        )
+        query = base_stmt.where(*conditions)
         query = apply_sort(
             query,
             sort,
@@ -856,31 +876,33 @@ class ARWebService:
             },
             default=Invoice.invoice_date.desc(),
         )
-        invoices = query.limit(limit).offset(offset).all()
+        invoices = db.execute(query.limit(limit).offset(offset)).all()
 
         open_statuses = [
             InvoiceStatus.POSTED,
             InvoiceStatus.PARTIALLY_PAID,
             InvoiceStatus.OVERDUE,
         ]
-        stats_base = query.with_entities(Invoice)
-        outstanding_filter = stats_base.filter(Invoice.status.in_(open_statuses))
+        stats_base = (
+            select(
+                func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
+            )
+            .select_from(Invoice)
+            .join(Customer, Invoice.customer_id == Customer.customer_id)
+            .where(*conditions)
+            .where(Invoice.status.in_(open_statuses))
+        )
 
-        total_outstanding = outstanding_filter.with_entities(
-            func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
-        ).scalar() or Decimal("0")
+        total_outstanding = db.scalar(stats_base) or Decimal("0")
 
-        past_due = outstanding_filter.filter(Invoice.due_date < today).with_entities(
-            func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
-        ).scalar() or Decimal("0")
+        past_due = db.scalar(stats_base.where(Invoice.due_date < today)) or Decimal("0")
 
         due_this_week_end = today + timedelta(days=7)
-        due_this_week = outstanding_filter.filter(
-            Invoice.due_date >= today,
-            Invoice.due_date <= due_this_week_end,
-        ).with_entities(
-            func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
-        ).scalar() or Decimal("0")
+        due_this_week = db.scalar(
+            stats_base.where(Invoice.due_date >= today).where(
+                Invoice.due_date <= due_this_week_end
+            )
+        ) or Decimal("0")
 
         month_start = date(today.year, today.month, 1)
         if today.month == 12:
@@ -888,12 +910,11 @@ class ARWebService:
         else:
             month_end = date(today.year, today.month + 1, 1) - timedelta(days=1)
 
-        this_month = outstanding_filter.filter(
-            Invoice.due_date >= month_start,
-            Invoice.due_date <= month_end,
-        ).with_entities(
-            func.coalesce(func.sum(Invoice.total_amount - Invoice.amount_paid), 0)
-        ).scalar() or Decimal("0")
+        this_month = db.scalar(
+            stats_base.where(Invoice.due_date >= month_start).where(
+                Invoice.due_date <= month_end
+            )
+        ) or Decimal("0")
 
         invoices_view = []
         for invoice, customer in invoices:
@@ -1005,16 +1026,13 @@ class ARWebService:
             )
         ]
 
-        items = (
-            db.query(Item)
-            .filter(
-                Item.organization_id == org_id,
-                Item.is_active.is_(True),
-                Item.is_saleable.is_(True),
-            )
+        items = db.scalars(
+            select(Item)
+            .where(Item.organization_id == org_id)
+            .where(Item.is_active.is_(True))
+            .where(Item.is_saleable.is_(True))
             .order_by(Item.item_code)
-            .all()
-        )
+        ).all()
         item_options = [
             {
                 "item_id": str(i.item_id),
@@ -1168,25 +1186,22 @@ class ARWebService:
         from_date = _parse_date(start_date)
         to_date = _parse_date(end_date)
 
-        query = (
-            db.query(CustomerPayment, Customer)
-            .join(Customer, CustomerPayment.customer_id == Customer.customer_id)
-            .filter(CustomerPayment.organization_id == org_id)
+        conditions = [CustomerPayment.organization_id == org_id]
+        base_stmt = select(CustomerPayment, Customer).join(
+            Customer, CustomerPayment.customer_id == Customer.customer_id
         )
 
         if customer_id:
-            query = query.filter(
-                CustomerPayment.customer_id == coerce_uuid(customer_id)
-            )
+            conditions.append(CustomerPayment.customer_id == coerce_uuid(customer_id))
         if status_value:
-            query = query.filter(CustomerPayment.status == status_value)
+            conditions.append(CustomerPayment.status == status_value)
         if from_date:
-            query = query.filter(CustomerPayment.payment_date >= from_date)
+            conditions.append(CustomerPayment.payment_date >= from_date)
         if to_date:
-            query = query.filter(CustomerPayment.payment_date <= to_date)
+            conditions.append(CustomerPayment.payment_date <= to_date)
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            conditions.append(
                 or_(
                     CustomerPayment.payment_number.ilike(search_pattern),
                     CustomerPayment.reference.ilike(search_pattern),
@@ -1195,8 +1210,15 @@ class ARWebService:
             )
 
         total_count = (
-            query.with_entities(func.count(CustomerPayment.payment_id)).scalar() or 0
+            db.scalar(
+                select(func.count(CustomerPayment.payment_id))
+                .select_from(CustomerPayment)
+                .join(Customer, CustomerPayment.customer_id == Customer.customer_id)
+                .where(*conditions)
+            )
+            or 0
         )
+        query = base_stmt.where(*conditions)
         query = apply_sort(
             query,
             sort,
@@ -1210,7 +1232,7 @@ class ARWebService:
             },
             default=CustomerPayment.payment_date.desc(),
         )
-        receipts = query.limit(limit).offset(offset).all()
+        receipts = db.execute(query.limit(limit).offset(offset)).all()
 
         receipts_view = []
         for payment, customer in receipts:
@@ -1373,13 +1395,12 @@ class ARWebService:
                 "tax_name": tc.tax_name,
                 "tax_rate": tc.tax_rate,
             }
-            for tc in db.query(TaxCode)
-            .filter(
-                TaxCode.organization_id == org_id,
-                TaxCode.is_active == True,
-                TaxCode.tax_type == TaxType.WITHHOLDING,
-            )
-            .all()
+            for tc in db.scalars(
+                select(TaxCode)
+                .where(TaxCode.organization_id == org_id)
+                .where(TaxCode.is_active.is_(True))
+                .where(TaxCode.tax_type == TaxType.WITHHOLDING)
+            ).all()
         ]
 
         # Get bank accounts
@@ -1392,22 +1413,20 @@ class ARWebService:
         ]
 
         query = (
-            db.query(Invoice, Customer)
+            select(Invoice, Customer)
             .join(Customer, Invoice.customer_id == Customer.customer_id)
-            .filter(
-                Invoice.organization_id == org_id,
-                Invoice.status.in_(open_statuses),
-            )
+            .where(Invoice.organization_id == org_id)
+            .where(Invoice.status.in_(open_statuses))
         )
 
         if invoice_id:
-            query = query.filter(Invoice.invoice_id == coerce_uuid(invoice_id))
+            query = query.where(Invoice.invoice_id == coerce_uuid(invoice_id))
         elif selected_customer_id:
-            query = query.filter(
+            query = query.where(
                 Invoice.customer_id == coerce_uuid(selected_customer_id)
             )
 
-        rows = query.order_by(Invoice.due_date).all()
+        rows = db.execute(query.order_by(Invoice.due_date)).all()
 
         open_invoices = []
         selected_invoice = None
@@ -1477,9 +1496,9 @@ class ARWebService:
         invoice_map: dict[UUID, Invoice] = {}
         if allocations:
             invoice_ids = [allocation.invoice_id for allocation in allocations]
-            invoices = (
-                db.query(Invoice).filter(Invoice.invoice_id.in_(invoice_ids)).all()
-            )
+            invoices = db.scalars(
+                select(Invoice).where(Invoice.invoice_id.in_(invoice_ids))
+            ).all()
             invoice_map = {invoice.invoice_id: invoice for invoice in invoices}
 
         allocations_view = [
@@ -1819,26 +1838,25 @@ class ARWebService:
         from_date = _parse_date(start_date)
         to_date = _parse_date(end_date)
 
-        query = (
-            db.query(Invoice, Customer)
-            .join(Customer, Invoice.customer_id == Customer.customer_id)
-            .filter(
-                Invoice.organization_id == org_id,
-                Invoice.invoice_type == InvoiceType.CREDIT_NOTE,
-            )
+        conditions = [
+            Invoice.organization_id == org_id,
+            Invoice.invoice_type == InvoiceType.CREDIT_NOTE,
+        ]
+        base_stmt = select(Invoice, Customer).join(
+            Customer, Invoice.customer_id == Customer.customer_id
         )
 
         if customer_id:
-            query = query.filter(Invoice.customer_id == coerce_uuid(customer_id))
+            conditions.append(Invoice.customer_id == coerce_uuid(customer_id))
         if status_value:
-            query = query.filter(Invoice.status == status_value)
+            conditions.append(Invoice.status == status_value)
         if from_date:
-            query = query.filter(Invoice.invoice_date >= from_date)
+            conditions.append(Invoice.invoice_date >= from_date)
         if to_date:
-            query = query.filter(Invoice.invoice_date <= to_date)
+            conditions.append(Invoice.invoice_date <= to_date)
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            conditions.append(
                 or_(
                     Invoice.invoice_number.ilike(search_pattern),
                     Customer.legal_name.ilike(search_pattern),
@@ -1846,41 +1864,42 @@ class ARWebService:
                 )
             )
 
-        total_count = query.with_entities(func.count(Invoice.invoice_id)).scalar() or 0
-        credit_notes = (
-            query.order_by(Invoice.invoice_date.desc())
+        total_count = (
+            db.scalar(
+                select(func.count(Invoice.invoice_id))
+                .select_from(Invoice)
+                .join(Customer, Invoice.customer_id == Customer.customer_id)
+                .where(*conditions)
+            )
+            or 0
+        )
+        credit_notes = db.execute(
+            base_stmt.where(*conditions)
+            .order_by(Invoice.invoice_date.desc())
             .limit(limit)
             .offset(offset)
-            .all()
-        )
+        ).all()
 
         # Calculate stats
-        stats_query = db.query(Invoice).filter(
-            Invoice.organization_id == org_id,
-            Invoice.invoice_type == InvoiceType.CREDIT_NOTE,
+        stats_query = (
+            select(func.coalesce(func.sum(Invoice.total_amount), 0))
+            .where(Invoice.organization_id == org_id)
+            .where(Invoice.invoice_type == InvoiceType.CREDIT_NOTE)
         )
 
-        total_credit_notes = stats_query.with_entities(
-            func.coalesce(func.sum(Invoice.total_amount), 0)
-        ).scalar() or Decimal("0")
+        total_credit_notes = db.scalar(stats_query) or Decimal("0")
 
-        draft_total = stats_query.filter(
-            Invoice.status == InvoiceStatus.DRAFT
-        ).with_entities(
-            func.coalesce(func.sum(Invoice.total_amount), 0)
-        ).scalar() or Decimal("0")
+        draft_total = db.scalar(
+            stats_query.where(Invoice.status == InvoiceStatus.DRAFT)
+        ) or Decimal("0")
 
-        posted_total = stats_query.filter(
-            Invoice.status == InvoiceStatus.POSTED
-        ).with_entities(
-            func.coalesce(func.sum(Invoice.total_amount), 0)
-        ).scalar() or Decimal("0")
+        posted_total = db.scalar(
+            stats_query.where(Invoice.status == InvoiceStatus.POSTED)
+        ) or Decimal("0")
 
-        applied_total = stats_query.filter(
-            Invoice.status == InvoiceStatus.PAID
-        ).with_entities(
-            func.coalesce(func.sum(Invoice.total_amount), 0)
-        ).scalar() or Decimal("0")
+        applied_total = db.scalar(
+            stats_query.where(Invoice.status == InvoiceStatus.PAID)
+        ) or Decimal("0")
 
         credit_notes_view = []
         for credit_note, customer in credit_notes:
@@ -2004,17 +2023,15 @@ class ARWebService:
         open_invoices = []
         selected_invoice = None
         invoices_query = (
-            db.query(Invoice, Customer)
+            select(Invoice, Customer)
             .join(Customer, Invoice.customer_id == Customer.customer_id)
-            .filter(
-                Invoice.organization_id == org_id,
-                Invoice.invoice_type == InvoiceType.STANDARD,
-                Invoice.status.in_(open_statuses),
-            )
+            .where(Invoice.organization_id == org_id)
+            .where(Invoice.invoice_type == InvoiceType.STANDARD)
+            .where(Invoice.status.in_(open_statuses))
             .order_by(Invoice.due_date)
         )
 
-        for invoice, customer in invoices_query.all():
+        for invoice, customer in db.execute(invoices_query).all():
             balance = invoice.total_amount - invoice.amount_paid
             view = {
                 "invoice_id": invoice.invoice_id,
@@ -2544,12 +2561,11 @@ class ARWebService:
 
         # Add existing invoice data
         db.get(Customer, invoice.customer_id)
-        lines = (
-            db.query(InvoiceLine)
-            .filter(InvoiceLine.invoice_id == inv_id)
+        lines = db.scalars(
+            select(InvoiceLine)
+            .where(InvoiceLine.invoice_id == inv_id)
             .order_by(InvoiceLine.line_number)
-            .all()
-        )
+        ).all()
 
         # Build invoice object for template
         context["invoice"] = {
@@ -2574,11 +2590,11 @@ class ARWebService:
                     "quantity": line.quantity,
                     "unit_price": line.unit_price,
                     "tax_amount": line.tax_amount,
-                    "line_taxes": (
-                        db.query(InvoiceLineTax)
-                        .filter(InvoiceLineTax.line_id == line.line_id)
-                        .all()
-                    ),
+                    "line_taxes": db.scalars(
+                        select(InvoiceLineTax).where(
+                            InvoiceLineTax.line_id == line.line_id
+                        )
+                    ).all(),
                 }
                 for line in lines
             ],

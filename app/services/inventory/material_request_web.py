@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import Any, TypedDict
 from uuid import UUID
 
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
@@ -58,17 +58,17 @@ class MaterialRequestWebService:
         """Get context for material request list page."""
         org_id = coerce_uuid(organization_id)
 
-        query = (
-            db.query(MaterialRequest)
+        stmt = (
+            select(MaterialRequest)
             .options(
                 joinedload(MaterialRequest.items),
             )
-            .filter(MaterialRequest.organization_id == org_id)
+            .where(MaterialRequest.organization_id == org_id)
         )
 
         if status:
             try:
-                query = query.filter(
+                stmt = stmt.where(
                     MaterialRequest.status == MaterialRequestStatus(status)
                 )
             except ValueError:
@@ -76,22 +76,24 @@ class MaterialRequestWebService:
 
         if request_type:
             try:
-                query = query.filter(
+                stmt = stmt.where(
                     MaterialRequest.request_type == MaterialRequestType(request_type)
                 )
             except ValueError:
                 pass
 
         if start_date:
-            query = query.filter(MaterialRequest.schedule_date >= start_date)
+            stmt = stmt.where(MaterialRequest.schedule_date >= start_date)
 
         if end_date:
-            query = query.filter(MaterialRequest.schedule_date <= end_date)
+            stmt = stmt.where(MaterialRequest.schedule_date <= end_date)
 
         if project_id:
-            query = query.filter(MaterialRequest.project_id == coerce_uuid(project_id))
+            stmt = stmt.where(MaterialRequest.project_id == coerce_uuid(project_id))
 
-        requests = query.order_by(MaterialRequest.created_at.desc()).limit(100).all()
+        requests = db.scalars(
+            stmt.order_by(MaterialRequest.created_at.desc()).limit(100)
+        ).all()
 
         items = []
         for req in requests:
@@ -115,12 +117,11 @@ class MaterialRequestWebService:
             # Get requested by name
             requested_by_name = None
             if req.requested_by_id:
-                emp = (
-                    db.query(Employee)
+                emp = db.scalars(
+                    select(Employee)
                     .join(Person, Person.id == Employee.person_id)
-                    .filter(Employee.employee_id == req.requested_by_id)
-                    .first()
-                )
+                    .where(Employee.employee_id == req.requested_by_id)
+                ).first()
                 if emp and emp.person:
                     requested_by_name = emp.person.name
 
@@ -144,21 +145,19 @@ class MaterialRequestWebService:
             )
 
         # Status counts
-        status_counts = (
-            db.query(MaterialRequest.status, func.count())
-            .filter(MaterialRequest.organization_id == org_id)
+        status_counts = db.execute(
+            select(MaterialRequest.status, func.count())
+            .where(MaterialRequest.organization_id == org_id)
             .group_by(MaterialRequest.status)
-            .all()
-        )
+        ).all()
         counts = {s.value: c for s, c in status_counts}
 
         # Type counts
-        type_counts = (
-            db.query(MaterialRequest.request_type, func.count())
-            .filter(MaterialRequest.organization_id == org_id)
+        type_counts = db.execute(
+            select(MaterialRequest.request_type, func.count())
+            .where(MaterialRequest.organization_id == org_id)
             .group_by(MaterialRequest.request_type)
-            .all()
-        )
+        ).all()
         type_count_dict = {t.value: c for t, c in type_counts}
 
         active_filters = build_active_filters(params={"status": status})
@@ -186,15 +185,14 @@ class MaterialRequestWebService:
         org_id = coerce_uuid(organization_id)
 
         # Get items for selection
-        items = (
-            db.query(Item)
-            .filter(
+        items = db.scalars(
+            select(Item)
+            .where(
                 Item.organization_id == org_id,
                 Item.is_active.is_(True),
             )
             .order_by(Item.item_code)
-            .all()
-        )
+        ).all()
 
         item_options = [
             {
@@ -207,15 +205,14 @@ class MaterialRequestWebService:
         ]
 
         # Get warehouses
-        warehouses = (
-            db.query(Warehouse)
-            .filter(
+        warehouses = db.scalars(
+            select(Warehouse)
+            .where(
                 Warehouse.organization_id == org_id,
                 Warehouse.is_active.is_(True),
             )
             .order_by(Warehouse.warehouse_code)
-            .all()
-        )
+        ).all()
 
         warehouse_options = [
             {
@@ -227,15 +224,14 @@ class MaterialRequestWebService:
         ]
 
         # Get active projects
-        projects = (
-            db.query(Project)
-            .filter(
+        projects = db.scalars(
+            select(Project)
+            .where(
                 Project.organization_id == org_id,
                 Project.status == ProjectStatus.ACTIVE,
             )
             .order_by(Project.project_code)
-            .all()
-        )
+        ).all()
 
         project_options = [
             {
@@ -262,19 +258,18 @@ class MaterialRequestWebService:
 
         # If editing, load request data
         if request_id:
-            material_request = (
-                db.query(MaterialRequest)
+            material_request = db.scalars(
+                select(MaterialRequest)
                 .options(
                     joinedload(MaterialRequest.items).joinedload(
                         MaterialRequestItem.request
                     ),
                 )
-                .filter(
+                .where(
                     MaterialRequest.request_id == coerce_uuid(request_id),
                     MaterialRequest.organization_id == org_id,
                 )
-                .first()
-            )
+            ).first()
             if material_request:
                 context["material_request"] = {
                     "request_id": str(material_request.request_id),
@@ -298,14 +293,11 @@ class MaterialRequestWebService:
                     "can_edit": material_request.status == MaterialRequestStatus.DRAFT,
                 }
                 if material_request.requested_by_id:
-                    emp = (
-                        db.query(Employee)
+                    emp = db.scalars(
+                        select(Employee)
                         .join(Person, Person.id == Employee.person_id)
-                        .filter(
-                            Employee.employee_id == material_request.requested_by_id
-                        )
-                        .first()
-                    )
+                        .where(Employee.employee_id == material_request.requested_by_id)
+                    ).first()
                     if emp and emp.person:
                         context["requested_by_name"] = emp.person.name
                 if material_request.ticket_id:
@@ -325,16 +317,15 @@ class MaterialRequestWebService:
                 context["items_json"] = json.dumps(request_items)
 
         # Load ticket options (active + recent, non-deleted)
-        tickets = (
-            db.query(Ticket)
-            .filter(
+        tickets = db.scalars(
+            select(Ticket)
+            .where(
                 Ticket.organization_id == org_id,
                 Ticket.is_deleted.is_(False),
             )
             .order_by(Ticket.opening_date.desc())
             .limit(200)
-            .all()
-        )
+        ).all()
         ticket_options = [
             {
                 "ticket_id": str(t.ticket_id),
@@ -346,14 +337,12 @@ class MaterialRequestWebService:
         if context.get("material_request", {}).get("ticket_id"):
             current_id = context["material_request"]["ticket_id"]
             if current_id and all(t["ticket_id"] != current_id for t in ticket_options):
-                current_ticket = (
-                    db.query(Ticket)
-                    .filter(
+                current_ticket = db.scalars(
+                    select(Ticket).where(
                         Ticket.ticket_id == coerce_uuid(current_id),
                         Ticket.organization_id == org_id,
                     )
-                    .first()
-                )
+                ).first()
                 if current_ticket:
                     ticket_options.append(
                         {
@@ -426,27 +415,24 @@ class MaterialRequestWebService:
         """Get context for material request detail page."""
         org_id = coerce_uuid(organization_id)
         req_id = coerce_uuid(request_id)
-        request = (
-            db.query(MaterialRequest)
-            .filter(
+        request = db.scalars(
+            select(MaterialRequest).where(
                 MaterialRequest.request_id == req_id,
                 MaterialRequest.organization_id == org_id,
             )
-            .first()
-        )
+        ).first()
 
         if not request:
             return {"material_request": None}
 
-        request_items = (
-            db.query(MaterialRequestItem)
-            .filter(
+        request_items = db.scalars(
+            select(MaterialRequestItem)
+            .where(
                 MaterialRequestItem.request_id == req_id,
                 MaterialRequestItem.organization_id == org_id,
             )
             .order_by(MaterialRequestItem.sequence.asc())
-            .all()
-        )
+        ).all()
 
         # Get related data for items
         item_ids = [item.inventory_item_id for item in request_items]
@@ -455,67 +441,58 @@ class MaterialRequestWebService:
         ]
         items_map = {}
         if item_ids:
-            inv_items = (
-                db.query(Item)
-                .filter(
+            inv_items = db.scalars(
+                select(Item).where(
                     Item.item_id.in_(item_ids),
                     Item.organization_id == org_id,
                 )
-                .all()
-            )
+            ).all()
             items_map = {i.item_id: i for i in inv_items}
 
         warehouses_map = {}
         if warehouse_ids:
-            wh_list = (
-                db.query(Warehouse)
-                .filter(
+            wh_list = db.scalars(
+                select(Warehouse).where(
                     Warehouse.warehouse_id.in_(warehouse_ids),
                     Warehouse.organization_id == org_id,
                 )
-                .all()
-            )
+            ).all()
             warehouses_map = {w.warehouse_id: w for w in wh_list}
 
         # Get default warehouse and requested by names
         default_warehouse_name = None
         if request.default_warehouse_id:
-            wh = (
-                db.query(Warehouse)
-                .filter(
+            wh = db.scalars(
+                select(Warehouse).where(
                     Warehouse.warehouse_id == request.default_warehouse_id,
                     Warehouse.organization_id == org_id,
                 )
-                .first()
-            )
+            ).first()
             if wh:
                 default_warehouse_name = f"{wh.warehouse_code} - {wh.warehouse_name}"
 
         requested_by_name = None
         if request.requested_by_id:
-            emp = (
-                db.query(Employee)
+            emp = db.scalars(
+                select(Employee)
                 .join(Person, Person.id == Employee.person_id)
-                .filter(
+                .where(
                     Employee.employee_id == request.requested_by_id,
                     Employee.organization_id == org_id,
                 )
-                .first()
-            )
+            ).first()
             if emp and emp.person:
                 requested_by_name = emp.person.name
 
         project_code = None
         project_name = None
         if request.project_id:
-            proj = (
-                db.query(Project)
-                .filter(
+            proj = db.scalars(
+                select(Project).where(
                     Project.project_id == request.project_id,
                     Project.organization_id == org_id,
                 )
-                .first()
-            )
+            ).first()
             if proj:
                 project_code = proj.project_code
                 project_name = proj.project_name
@@ -523,14 +500,12 @@ class MaterialRequestWebService:
         ticket_number = None
         ticket_subject = None
         if request.ticket_id:
-            ticket = (
-                db.query(Ticket)
-                .filter(
+            ticket = db.scalars(
+                select(Ticket).where(
                     Ticket.ticket_id == request.ticket_id,
                     Ticket.organization_id == org_id,
                 )
-                .first()
-            )
+            ).first()
             if ticket:
                 ticket_number = ticket.ticket_number
                 ticket_subject = ticket.subject
@@ -619,20 +594,18 @@ class MaterialRequestWebService:
         """Get context for material request report page."""
         org_id = coerce_uuid(organization_id)
 
-        query = db.query(MaterialRequest).filter(
-            MaterialRequest.organization_id == org_id
-        )
+        stmt = select(MaterialRequest).where(MaterialRequest.organization_id == org_id)
 
         if start_date:
-            query = query.filter(MaterialRequest.schedule_date >= start_date)
+            stmt = stmt.where(MaterialRequest.schedule_date >= start_date)
         if end_date:
-            query = query.filter(MaterialRequest.schedule_date <= end_date)
+            stmt = stmt.where(MaterialRequest.schedule_date <= end_date)
 
-        requests = (
-            query.options(joinedload(MaterialRequest.items))
-            .order_by(MaterialRequest.created_at.desc())
-            .all()
-        )
+        requests = db.scalars(
+            stmt.options(joinedload(MaterialRequest.items)).order_by(
+                MaterialRequest.created_at.desc()
+            )
+        ).all()
 
         # Calculate totals
         total_requests = len(requests)
@@ -732,12 +705,11 @@ class MaterialRequestWebService:
             # Get requested by name
             requested_by_name = None
             if req.requested_by_id:
-                emp = (
-                    db.query(Employee)
+                emp = db.scalars(
+                    select(Employee)
                     .join(Person, Person.id == Employee.person_id)
-                    .filter(Employee.employee_id == req.requested_by_id)
-                    .first()
-                )
+                    .where(Employee.employee_id == req.requested_by_id)
+                ).first()
                 if emp and emp.person:
                     requested_by_name = emp.person.name
 
@@ -1071,15 +1043,14 @@ class MaterialRequestWebService:
 
         logger = logging.getLogger(__name__)
 
-        request = (
-            db.query(MaterialRequest)
+        request = db.scalars(
+            select(MaterialRequest)
             .options(joinedload(MaterialRequest.items))
-            .filter(
+            .where(
                 MaterialRequest.request_id == coerce_uuid(request_id),
                 MaterialRequest.organization_id == organization_id,
             )
-            .first()
-        )
+        ).first()
         if not request:
             raise ValueError("Material request not found")
 
@@ -1100,15 +1071,13 @@ class MaterialRequestWebService:
         txn_date = now
 
         # Find fiscal period for today
-        fiscal_period = (
-            db.query(FiscalPeriod)
-            .filter(
+        fiscal_period = db.scalars(
+            select(FiscalPeriod).where(
                 FiscalPeriod.organization_id == organization_id,
                 FiscalPeriod.start_date <= now.date(),
                 FiscalPeriod.end_date >= now.date(),
             )
-            .first()
-        )
+        ).first()
         if not fiscal_period:
             raise ValueError(
                 "No fiscal period found for today. "
@@ -1234,12 +1203,11 @@ class MaterialRequestWebService:
         org_id = coerce_uuid(organization_id)
 
         # Status counts
-        status_counts = (
-            db.query(MaterialRequest.status, func.count())
-            .filter(MaterialRequest.organization_id == org_id)
+        status_counts = db.execute(
+            select(MaterialRequest.status, func.count())
+            .where(MaterialRequest.organization_id == org_id)
             .group_by(MaterialRequest.status)
-            .all()
-        )
+        ).all()
         counts = {s.value: c for s, c in status_counts}
 
         # Calculate totals
@@ -1256,9 +1224,9 @@ class MaterialRequestWebService:
         )
 
         # Get recent pending requests (draft or submitted)
-        recent_pending = (
-            db.query(MaterialRequest)
-            .filter(
+        recent_pending = db.scalars(
+            select(MaterialRequest)
+            .where(
                 MaterialRequest.organization_id == org_id,
                 MaterialRequest.status.in_(
                     [
@@ -1270,15 +1238,14 @@ class MaterialRequestWebService:
             )
             .order_by(MaterialRequest.created_at.desc())
             .limit(5)
-            .all()
-        )
+        ).all()
 
         recent_pending_list = []
         for req in recent_pending:
-            item_count = (
-                db.query(func.count())
-                .filter(MaterialRequestItem.request_id == req.request_id)
-                .scalar()
+            item_count = db.scalar(
+                select(func.count()).where(
+                    MaterialRequestItem.request_id == req.request_id
+                )
             )
             recent_pending_list.append(
                 {

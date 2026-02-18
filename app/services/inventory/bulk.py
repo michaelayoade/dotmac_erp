@@ -11,7 +11,7 @@ from datetime import datetime
 from uuid import UUID
 
 from fastapi import Response
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Query, Session
 
 from app.models.inventory.inventory_transaction import InventoryTransaction
 from app.models.inventory.item import Item
@@ -61,7 +61,7 @@ class ItemBulkService(BulkActionService[Item]):
         """
         # Check for transactions
         transaction_count = (
-            self.db.query(InventoryTransaction)
+            Query([InventoryTransaction], session=self.db)
             .filter(InventoryTransaction.item_id == entity.item_id)
             .count()
         )

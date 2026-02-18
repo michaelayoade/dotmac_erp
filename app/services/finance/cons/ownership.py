@@ -14,6 +14,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.cons.legal_entity import ConsolidationMethod, LegalEntity
@@ -119,14 +120,12 @@ class OwnershipService(ListResponseMixin):
             )
 
         # Mark previous ownership as non-current
-        existing = (
-            db.query(OwnershipInterest)
-            .filter(
+        existing = db.scalar(
+            select(OwnershipInterest).where(
                 OwnershipInterest.investor_entity_id == input.investor_entity_id,
                 OwnershipInterest.investee_entity_id == input.investee_entity_id,
                 OwnershipInterest.is_current == True,
             )
-            .first()
         )
 
         if existing:
@@ -197,13 +196,11 @@ class OwnershipService(ListResponseMixin):
             return Decimal("100")
 
         # Find ownership from its parent
-        ownership = (
-            db.query(OwnershipInterest)
-            .filter(
+        ownership = db.scalar(
+            select(OwnershipInterest).where(
                 OwnershipInterest.investee_entity_id == investor_entity_id,
                 OwnershipInterest.is_current == True,
             )
-            .first()
         )
 
         if ownership:
@@ -248,27 +245,26 @@ class OwnershipService(ListResponseMixin):
         grp_id = coerce_uuid(group_id)
 
         # Get all entities
-        entities = (
-            db.query(LegalEntity)
-            .filter(
+        entities = db.scalars(
+            select(LegalEntity).where(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.is_active == True,
             )
-            .all()
         )
+        entities = entities.all()
 
         # Get current ownership interests
-        ownership_query = db.query(OwnershipInterest).filter(
+        ownership_stmt = select(OwnershipInterest).where(
             OwnershipInterest.is_current == True,
         )
         if as_of_date:
-            ownership_query = ownership_query.filter(
+            ownership_stmt = ownership_stmt.where(
                 OwnershipInterest.effective_from <= as_of_date,
                 (OwnershipInterest.effective_to > as_of_date)
                 | (OwnershipInterest.effective_to.is_(None)),
             )
 
-        ownerships = ownership_query.all()
+        ownerships = db.scalars(ownership_stmt).all()
 
         # Build ownership map: investee -> (investor, percentage)
         ownership_map: dict[UUID, tuple[UUID, Decimal, bool]] = {}
@@ -360,25 +356,22 @@ class OwnershipService(ListResponseMixin):
         grp_id = coerce_uuid(group_id)
 
         # Get subsidiaries with current ownership
-        subsidiaries = (
-            db.query(LegalEntity)
-            .filter(
+        subsidiaries = db.scalars(
+            select(LegalEntity).where(
                 LegalEntity.group_id == grp_id,
                 LegalEntity.is_active == True,
                 LegalEntity.consolidation_method == ConsolidationMethod.FULL,
             )
-            .all()
         )
+        subsidiaries = subsidiaries.all()
 
         results = []
         for sub in subsidiaries:
-            ownership = (
-                db.query(OwnershipInterest)
-                .filter(
+            ownership = db.scalar(
+                select(OwnershipInterest).where(
                     OwnershipInterest.investee_entity_id == sub.entity_id,
                     OwnershipInterest.is_current == True,
                 )
-                .first()
             )
 
             if ownership and ownership.nci_percentage > 0:
@@ -479,26 +472,30 @@ class OwnershipService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[OwnershipInterest]:
         """List ownership interests with optional filters."""
-        query = db.query(OwnershipInterest)
+        stmt = select(OwnershipInterest)
 
         if investor_entity_id:
-            query = query.filter(
+            stmt = stmt.where(
                 OwnershipInterest.investor_entity_id == coerce_uuid(investor_entity_id)
             )
 
         if investee_entity_id:
-            query = query.filter(
+            stmt = stmt.where(
                 OwnershipInterest.investee_entity_id == coerce_uuid(investee_entity_id)
             )
 
         if is_current is not None:
-            query = query.filter(OwnershipInterest.is_current == is_current)
+            stmt = stmt.where(OwnershipInterest.is_current == is_current)
 
         if has_control is not None:
-            query = query.filter(OwnershipInterest.has_control == has_control)
+            stmt = stmt.where(OwnershipInterest.has_control == has_control)
 
-        query = query.order_by(OwnershipInterest.effective_from.desc())
-        return query.limit(limit).offset(offset).all()
+        stmt = (
+            stmt.order_by(OwnershipInterest.effective_from.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        return db.scalars(stmt).all()
 
 
 # Module-level singleton instance

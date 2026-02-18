@@ -164,17 +164,9 @@ class TaxCalculationService:
         else:
             # Tax is additional - straightforward calculation
             net_base = base_amount
-            # Check if rate is a percentage (< 1) or fixed amount (>= 1)
-            if tax_code.tax_rate < Decimal("1"):
-                # Percentage rate
-                tax_amount = (base_amount * tax_code.tax_rate).quantize(
-                    Decimal("0.01"), rounding=ROUND_HALF_UP
-                )
-            else:
-                # Fixed amount per unit/transaction
-                tax_amount = tax_code.tax_rate.quantize(
-                    Decimal("0.01"), rounding=ROUND_HALF_UP
-                )
+            tax_amount = (base_amount * tax_code.tax_rate).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
 
         return net_base, tax_amount
 
@@ -396,17 +388,10 @@ class TaxCalculationService:
         org_id = coerce_uuid(organization_id)
         tax_code = cls.get_effective_tax_code(db, org_id, wht_code_id, transaction_date)
 
-        # WHT is always calculated as a percentage of the base
-        if tax_code.tax_rate < Decimal("1"):
-            # Percentage rate
-            wht_amount = (base_amount * tax_code.tax_rate).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
-        else:
-            # Fixed amount
-            wht_amount = tax_code.tax_rate.quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
+        # WHT is calculated as a percentage of the base.
+        wht_amount = (base_amount * tax_code.tax_rate).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
 
         net_received = base_amount - wht_amount
 

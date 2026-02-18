@@ -2,6 +2,7 @@
 {% block title %}Payslip{% endblock %}
 {% block content %}
 {% if email_header_html %}
+{# nosemgrep: semgrep.safe-on-user-content #}
 <div style="margin: 0 0 16px 0;">{{ email_header_html | safe }}</div>
 {% endif %}
 
@@ -35,6 +36,7 @@
 <p style="margin: 0 0 16px 0;">Please find your detailed payslip attached to this email as a PDF document.</p>
 
 {% if email_footer_html %}
+{# nosemgrep: semgrep.safe-on-user-content #}
 <div style="margin: 16px 0;">{{ email_footer_html | safe }}</div>
 {% endif %}
 

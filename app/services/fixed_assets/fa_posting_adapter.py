@@ -13,6 +13,7 @@ from datetime import date
 from decimal import Decimal
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.finance.gl.journal_entry import JournalType
@@ -212,11 +213,9 @@ class FAPostingAdapter:
             )
 
         # Load schedules
-        schedules = (
-            db.query(DepreciationSchedule)
-            .filter(DepreciationSchedule.run_id == r_id)
-            .all()
-        )
+        schedules = db.scalars(
+            select(DepreciationSchedule).where(DepreciationSchedule.run_id == r_id)
+        ).all()
 
         if not schedules:
             return FAPostingResult(

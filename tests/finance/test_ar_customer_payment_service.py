@@ -357,7 +357,7 @@ def test_void_and_bounce_reverse_allocations():
         return None
 
     db.get.side_effect = _get
-    db.query.return_value.filter.return_value.all.return_value = [allocation]
+    db.scalars.return_value.all.return_value = [allocation]
 
     voided = CustomerPaymentService.void_payment(
         db, org_id, payment.payment_id, voided_by_user_id=uuid4(), reason="err"

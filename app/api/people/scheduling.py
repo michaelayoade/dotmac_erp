@@ -149,6 +149,8 @@ def create_pattern(
             rotation_type=payload.rotation_type,
             cycle_weeks=payload.cycle_weeks,
             work_days=payload.work_days,
+            day_work_days=payload.day_work_days,
+            night_work_days=payload.night_work_days,
             day_shift_type_id=payload.day_shift_type_id,
             night_shift_type_id=payload.night_shift_type_id,
             is_active=payload.is_active,

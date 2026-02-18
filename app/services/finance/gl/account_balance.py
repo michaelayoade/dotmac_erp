@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, func
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -102,9 +102,8 @@ class AccountBalanceService(ListResponseMixin):
             currency_code = org_context_service.get_functional_currency(db, org_id)
 
         # Find existing balance
-        balance = (
-            db.query(AccountBalance)
-            .filter(
+        balance = db.scalar(
+            select(AccountBalance).where(
                 and_(
                     AccountBalance.organization_id == org_id,
                     AccountBalance.account_id == acct_id,
@@ -121,7 +120,6 @@ class AccountBalanceService(ListResponseMixin):
                     == (coerce_uuid(segment_id) if segment_id else None),
                 )
             )
-            .first()
         )
 
         if balance:
@@ -199,9 +197,8 @@ class AccountBalanceService(ListResponseMixin):
         if not currency_code:
             currency_code = org_context_service.get_functional_currency(db, org_id)
 
-        return (
-            db.query(AccountBalance)
-            .filter(
+        return db.scalar(
+            select(AccountBalance).where(
                 and_(
                     AccountBalance.organization_id == org_id,
                     AccountBalance.account_id == coerce_uuid(account_id),
@@ -218,7 +215,6 @@ class AccountBalanceService(ListResponseMixin):
                     == (coerce_uuid(segment_id) if segment_id else None),
                 )
             )
-            .first()
         )
 
     @staticmethod
@@ -250,7 +246,7 @@ class AccountBalanceService(ListResponseMixin):
         if aggregate_dimensions:
             # Aggregate balances across dimensions
             query = (
-                db.query(
+                select(
                     AccountBalance.account_id,
                     func.sum(
                         AccountBalance.opening_debit - AccountBalance.opening_credit
@@ -265,7 +261,7 @@ class AccountBalanceService(ListResponseMixin):
                         "transaction_count"
                     ),
                 )
-                .filter(
+                .where(
                     and_(
                         AccountBalance.organization_id == org_id,
                         AccountBalance.fiscal_period_id == period_id,
@@ -276,15 +272,17 @@ class AccountBalanceService(ListResponseMixin):
             )
 
             if account_ids:
-                query = query.filter(
+                query = query.where(
                     AccountBalance.account_id.in_([coerce_uuid(a) for a in account_ids])
                 )
 
-            results = query.all()
+            results = db.execute(query).all()
 
             # Get account codes
             acct_ids = [r.account_id for r in results]
-            accounts = db.query(Account).filter(Account.account_id.in_(acct_ids)).all()
+            accounts = db.scalars(
+                select(Account).where(Account.account_id.in_(acct_ids))
+            ).all()
             acct_map = {a.account_id: a.account_code for a in accounts}
 
             return [
@@ -307,7 +305,7 @@ class AccountBalanceService(ListResponseMixin):
             ]
         else:
             # Return individual balance records
-            balance_query = db.query(AccountBalance).filter(
+            balance_query = select(AccountBalance).where(
                 and_(
                     AccountBalance.organization_id == org_id,
                     AccountBalance.fiscal_period_id == period_id,
@@ -316,15 +314,17 @@ class AccountBalanceService(ListResponseMixin):
             )
 
             if account_ids:
-                balance_query = balance_query.filter(
+                balance_query = balance_query.where(
                     AccountBalance.account_id.in_([coerce_uuid(a) for a in account_ids])
                 )
 
-            balances = balance_query.all()
+            balances = db.scalars(balance_query).all()
 
             # Get account codes
             acct_ids = [b.account_id for b in balances]
-            accounts = db.query(Account).filter(Account.account_id.in_(acct_ids)).all()
+            accounts = db.scalars(
+                select(Account).where(Account.account_id.in_(acct_ids))
+            ).all()
             acct_map = {a.account_id: a.account_code for a in accounts}
 
             return [
@@ -369,17 +369,19 @@ class AccountBalanceService(ListResponseMixin):
         period_id = coerce_uuid(fiscal_period_id)
 
         # 1. Delete existing balances for this period
-        db.query(AccountBalance).filter(
-            and_(
-                AccountBalance.organization_id == org_id,
-                AccountBalance.fiscal_period_id == period_id,
-                AccountBalance.balance_type == balance_type,
+        db.execute(
+            delete(AccountBalance).where(
+                and_(
+                    AccountBalance.organization_id == org_id,
+                    AccountBalance.fiscal_period_id == period_id,
+                    AccountBalance.balance_type == balance_type,
+                )
             )
-        ).delete()
+        )
 
         # 2. Aggregate from posted_ledger_line
-        results = (
-            db.query(
+        results = db.execute(
+            select(
                 PostedLedgerLine.account_id,
                 PostedLedgerLine.business_unit_id,
                 PostedLedgerLine.cost_center_id,
@@ -389,7 +391,7 @@ class AccountBalanceService(ListResponseMixin):
                 func.sum(PostedLedgerLine.credit_amount).label("total_credit"),
                 func.count().label("tx_count"),
             )
-            .filter(
+            .where(
                 and_(
                     PostedLedgerLine.organization_id == org_id,
                     PostedLedgerLine.fiscal_period_id == period_id,
@@ -402,8 +404,7 @@ class AccountBalanceService(ListResponseMixin):
                 PostedLedgerLine.project_id,
                 PostedLedgerLine.segment_id,
             )
-            .all()
-        )
+        ).all()
 
         # 3. Create balance records
         count = 0
@@ -473,24 +474,21 @@ class AccountBalanceService(ListResponseMixin):
         to_id = coerce_uuid(to_period_id)
 
         # Get source period closing balances
-        source_balances = (
-            db.query(AccountBalance)
-            .filter(
+        source_balances = db.scalars(
+            select(AccountBalance).where(
                 and_(
                     AccountBalance.organization_id == org_id,
                     AccountBalance.fiscal_period_id == from_id,
                     AccountBalance.balance_type == balance_type,
                 )
             )
-            .all()
-        )
+        ).all()
 
         count = 0
         for source in source_balances:
             # Find or create target balance
-            target = (
-                db.query(AccountBalance)
-                .filter(
+            target = db.scalar(
+                select(AccountBalance).where(
                     and_(
                         AccountBalance.organization_id == org_id,
                         AccountBalance.account_id == source.account_id,
@@ -503,7 +501,6 @@ class AccountBalanceService(ListResponseMixin):
                         AccountBalance.segment_id == source.segment_id,
                     )
                 )
-                .first()
             )
 
             if target:
@@ -574,24 +571,21 @@ class AccountBalanceService(ListResponseMixin):
             return Decimal("0")
 
         # Get all periods in the year up to target
-        periods = (
-            db.query(FiscalPeriod)
-            .filter(
+        periods = db.scalars(
+            select(FiscalPeriod).where(
                 and_(
                     FiscalPeriod.fiscal_year_id == year_id,
                     FiscalPeriod.organization_id == org_id,
                     FiscalPeriod.period_number <= target_period.period_number,
                 )
             )
-            .all()
-        )
+        ).all()
 
         period_ids = [p.fiscal_period_id for p in periods]
 
         # Sum balances across periods
-        result = (
-            db.query(func.sum(AccountBalance.net_balance))
-            .filter(
+        result = db.scalar(
+            select(func.sum(AccountBalance.net_balance)).where(
                 and_(
                     AccountBalance.organization_id == org_id,
                     AccountBalance.account_id == acct_id,
@@ -599,7 +593,6 @@ class AccountBalanceService(ListResponseMixin):
                     AccountBalance.balance_type == balance_type,
                 )
             )
-            .scalar()
         )
 
         return result or Decimal("0")
@@ -629,26 +622,26 @@ class AccountBalanceService(ListResponseMixin):
         Returns:
             List of AccountBalance objects
         """
-        query = db.query(AccountBalance)
+        query = select(AccountBalance)
 
         if organization_id:
-            query = query.filter(
+            query = query.where(
                 AccountBalance.organization_id == coerce_uuid(organization_id)
             )
 
         if fiscal_period_id:
-            query = query.filter(
+            query = query.where(
                 AccountBalance.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
 
         if account_id:
-            query = query.filter(AccountBalance.account_id == coerce_uuid(account_id))
+            query = query.where(AccountBalance.account_id == coerce_uuid(account_id))
 
         if balance_type:
-            query = query.filter(AccountBalance.balance_type == balance_type)
+            query = query.where(AccountBalance.balance_type == balance_type)
 
         query = query.order_by(AccountBalance.last_updated_at.desc())
-        return query.limit(limit).offset(offset).all()
+        return db.scalars(query.limit(limit).offset(offset)).all()
 
     @staticmethod
     def get_trial_balance(
@@ -690,7 +683,9 @@ class AccountBalanceService(ListResponseMixin):
 
         # Get account details for all accounts
         acct_ids = [b.account_id for b in balances]
-        accounts = db.query(Account).filter(Account.account_id.in_(acct_ids)).all()
+        accounts = db.scalars(
+            select(Account).where(Account.account_id.in_(acct_ids))
+        ).all()
         acct_map = {a.account_id: a for a in accounts}
 
         # Build trial balance lines

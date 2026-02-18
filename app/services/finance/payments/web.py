@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.domain_settings import SettingDomain
@@ -29,10 +30,8 @@ class PaymentWebService:
         from app.models.finance.payments import PaymentIntent, PaymentIntentStatus
 
         ref = reference or trxref or ""
-        intent = (
-            db.query(PaymentIntent)
-            .filter(PaymentIntent.paystack_reference == ref)
-            .first()
+        intent = db.scalar(
+            select(PaymentIntent).where(PaymentIntent.paystack_reference == ref)
         )
 
         status = "unknown"
@@ -151,14 +150,12 @@ class PaymentWebService:
 
         # Check for existing active payment intent to prevent duplicate payments
         active_statuses = [PaymentIntentStatus.PENDING, PaymentIntentStatus.PROCESSING]
-        active_intent = (
-            db.query(PaymentIntent)
-            .filter(
+        active_intent = db.scalar(
+            select(PaymentIntent).where(
                 PaymentIntent.source_type == "EXPENSE_CLAIM",
                 PaymentIntent.source_id == expense_claim.claim_id,
                 PaymentIntent.status.in_(active_statuses),
             )
-            .first()
         )
 
         can_reimburse = (
@@ -216,8 +213,6 @@ class PaymentWebService:
         page: int,
         per_page: int = 25,
     ) -> dict:
-        from sqlalchemy import func, or_
-
         from app.models.finance.payments import (
             PaymentDirection,
             PaymentIntent,
@@ -233,36 +228,60 @@ class PaymentWebService:
         ]
 
         # Stat card counts (unfiltered by search/status)
-        stat_query = db.query(PaymentIntent).filter(*base_filter)
-        total_count = stat_query.count()
-        total_amount = (
-            db.query(func.coalesce(func.sum(PaymentIntent.amount), 0))
-            .filter(*base_filter)
-            .scalar()
+        total_count = (
+            db.scalar(
+                select(func.count()).select_from(PaymentIntent).where(*base_filter)
+            )
+            or 0
         )
-        pending_count = stat_query.filter(
-            PaymentIntent.status == PaymentIntentStatus.PENDING
-        ).count()
-        processing_count = stat_query.filter(
-            PaymentIntent.status == PaymentIntentStatus.PROCESSING
-        ).count()
-        completed_count = stat_query.filter(
-            PaymentIntent.status == PaymentIntentStatus.COMPLETED
-        ).count()
-        failed_count = stat_query.filter(
-            PaymentIntent.status == PaymentIntentStatus.FAILED
-        ).count()
+        total_amount = db.scalar(
+            select(func.coalesce(func.sum(PaymentIntent.amount), 0)).where(*base_filter)
+        )
+        pending_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(PaymentIntent)
+                .where(
+                    *base_filter, PaymentIntent.status == PaymentIntentStatus.PENDING
+                )
+            )
+            or 0
+        )
+        processing_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(PaymentIntent)
+                .where(
+                    *base_filter, PaymentIntent.status == PaymentIntentStatus.PROCESSING
+                )
+            )
+            or 0
+        )
+        completed_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(PaymentIntent)
+                .where(
+                    *base_filter, PaymentIntent.status == PaymentIntentStatus.COMPLETED
+                )
+            )
+            or 0
+        )
+        failed_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(PaymentIntent)
+                .where(*base_filter, PaymentIntent.status == PaymentIntentStatus.FAILED)
+            )
+            or 0
+        )
 
         # Filtered query for listing
-        query = (
-            db.query(PaymentIntent)
-            .filter(*base_filter)
-            .order_by(PaymentIntent.created_at.desc())
-        )
+        stmt = select(PaymentIntent).where(*base_filter)
 
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            stmt = stmt.where(
                 or_(
                     PaymentIntent.paystack_reference.ilike(search_pattern),
                     PaymentIntent.recipient_account_name.ilike(search_pattern),
@@ -274,12 +293,18 @@ class PaymentWebService:
         if status:
             try:
                 status_enum = PaymentIntentStatus(status.upper())
-                query = query.filter(PaymentIntent.status == status_enum)
+                stmt = stmt.where(PaymentIntent.status == status_enum)
             except ValueError:
                 pass
 
-        filtered_total = query.count()
-        intents = query.limit(per_page).offset(offset).all()
+        filtered_total = (
+            db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+        )
+        intents = db.scalars(
+            stmt.order_by(PaymentIntent.created_at.desc())
+            .limit(per_page)
+            .offset(offset)
+        ).all()
         total_pages = max(1, (filtered_total + per_page - 1) // per_page)
 
         from app.services.formatters import format_currency
@@ -320,21 +345,23 @@ class PaymentWebService:
 
         offset = (page - 1) * per_page
 
-        query = (
-            db.query(PaymentIntent)
-            .filter(PaymentIntent.organization_id == organization_id)
-            .order_by(PaymentIntent.created_at.desc())
+        stmt = select(PaymentIntent).where(
+            PaymentIntent.organization_id == organization_id
         )
 
         if status:
             try:
                 status_enum = PaymentIntentStatus(status.upper())
-                query = query.filter(PaymentIntent.status == status_enum)
+                stmt = stmt.where(PaymentIntent.status == status_enum)
             except ValueError:
                 pass
 
-        total = query.count()
-        intents = query.limit(per_page).offset(offset).all()
+        total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+        intents = db.scalars(
+            stmt.order_by(PaymentIntent.created_at.desc())
+            .limit(per_page)
+            .offset(offset)
+        ).all()
 
         return {
             "intents": intents,

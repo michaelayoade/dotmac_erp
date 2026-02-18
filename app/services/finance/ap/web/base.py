@@ -15,7 +15,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, load_only
 
 from app.models.finance.ap.ap_payment_allocation import APPaymentAllocation
@@ -216,6 +216,8 @@ def invoice_line_view(line: SupplierInvoiceLine, currency_code: str) -> dict:
         "quantity": line.quantity,
         "unit_price": format_currency(line.unit_price, currency_code),
         "tax_amount": format_currency(line.tax_amount, currency_code),
+        "tax_amount_raw": float(line.tax_amount),
+        "tax_code_id": line.tax_code_id,
         "line_amount": format_currency(line.line_amount, currency_code),
         "expense_account_id": line.expense_account_id,
         "asset_account_id": line.asset_account_id,
@@ -247,7 +249,16 @@ def invoice_detail_view(invoice: SupplierInvoice, supplier: Supplier | None) -> 
         "amount_paid_raw": float(invoice.amount_paid),
         "balance": format_currency(balance, invoice.currency_code),
         "balance_raw": float(balance),
+        "withholding_tax": format_currency(
+            invoice.withholding_tax_amount, invoice.currency_code
+        )
+        if invoice.withholding_tax_amount
+        else None,
+        "withholding_tax_raw": float(invoice.withholding_tax_amount)
+        if invoice.withholding_tax_amount
+        else 0,
         "status": invoice_status_label(invoice.status),
+        "comments": getattr(invoice, "comments", None),
         "is_overdue": (
             invoice.due_date < today
             and invoice.status
@@ -261,7 +272,11 @@ def invoice_detail_view(invoice: SupplierInvoice, supplier: Supplier | None) -> 
 # ==============================================================================
 
 
-def payment_detail_view(payment: SupplierPayment, supplier: Supplier | None) -> dict:
+def payment_detail_view(
+    payment: SupplierPayment,
+    supplier: Supplier | None,
+    bank_account_name: str = "",
+) -> dict:
     """Transform payment to detail view."""
     return {
         "payment_id": payment.payment_id,
@@ -275,6 +290,7 @@ def payment_detail_view(payment: SupplierPayment, supplier: Supplier | None) -> 
         "amount_raw": float(payment.amount),
         "status": payment_status_label(payment.status),
         "currency_code": payment.currency_code,
+        "bank_account_name": bank_account_name,
     }
 
 
@@ -311,46 +327,48 @@ def get_accounts(
 ) -> list[Account]:
     """Get accounts filtered by IFRS category and optional subledger type."""
     query = (
-        db.query(Account)
+        select(Account)
         .join(AccountCategory, Account.category_id == AccountCategory.category_id)
-        .filter(
+        .where(
             Account.organization_id == organization_id,
             Account.is_active.is_(True),
             AccountCategory.ifrs_category == ifrs_category,
         )
     )
     if subledger_type:
-        query = query.filter(Account.subledger_type == subledger_type)
-    return query.order_by(Account.account_code).all()
+        query = query.where(Account.subledger_type == subledger_type)
+    return list(db.scalars(query.order_by(Account.account_code)).all())
 
 
 def get_cost_centers(db: Session, organization_id: UUID) -> list[CostCenter]:
     """Get active cost centers for organization."""
-    return (
-        db.query(CostCenter)
-        .filter(
-            CostCenter.organization_id == organization_id,
-            CostCenter.is_active.is_(True),
-        )
-        .order_by(CostCenter.cost_center_code)
-        .all()
+    return list(
+        db.scalars(
+            select(CostCenter)
+            .where(
+                CostCenter.organization_id == organization_id,
+                CostCenter.is_active.is_(True),
+            )
+            .order_by(CostCenter.cost_center_code)
+        ).all()
     )
 
 
 def get_projects(db: Session, organization_id: UUID) -> list[Project]:
     """Get projects for organization."""
-    return (
-        db.query(Project)
-        .options(
-            load_only(
-                Project.project_id,
-                Project.project_code,
-                Project.project_name,
+    return list(
+        db.scalars(
+            select(Project)
+            .options(
+                load_only(
+                    Project.project_id,
+                    Project.project_code,
+                    Project.project_name,
+                )
             )
-        )
-        .filter(Project.organization_id == organization_id)
-        .order_by(Project.project_code)
-        .all()
+            .where(Project.organization_id == organization_id)
+            .order_by(Project.project_code)
+        ).all()
     )
 
 
@@ -381,8 +399,8 @@ def calculate_supplier_balance_trends(
             next_month = month_start + relativedelta(months=1)
             as_of_date = next_month - timedelta(days=1)
 
-        balances = (
-            db.query(
+        balances = db.execute(
+            select(
                 SupplierInvoice.supplier_id,
                 func.coalesce(
                     func.sum(
@@ -391,7 +409,7 @@ def calculate_supplier_balance_trends(
                     0,
                 ).label("balance"),
             )
-            .filter(
+            .where(
                 SupplierInvoice.organization_id == organization_id,
                 SupplierInvoice.supplier_id.in_(supplier_ids),
                 SupplierInvoice.invoice_date <= as_of_date,
@@ -404,8 +422,7 @@ def calculate_supplier_balance_trends(
                 ),
             )
             .group_by(SupplierInvoice.supplier_id)
-            .all()
-        )
+        ).all()
 
         balance_map = {row.supplier_id: float(row.balance) for row in balances}
 

@@ -1,0 +1,56 @@
+rules:
+  - id: db-query-usage
+    pattern: $DB.query(...)
+    message: >
+      Use `select()` + `db.scalars()` (SQLAlchemy 2.0) instead of `db.query()`.
+      See: https://docs.sqlalchemy.org/en/20/changelog/migration_20.html
+    languages: [python]
+    severity: WARNING
+    paths:
+      exclude:
+        - "**/tests/"
+        - "**/alembic/"
+        - "**/scripts/"
+
+  - id: async-route-handler
+    patterns:
+      - pattern: |
+          @router.$METHOD(...)
+          async def $FUNC(...):
+              ...
+    message: >
+      Route handlers should be sync (`def`, not `async def`). SQLAlchemy sessions
+      are sync. Use Celery for background work.
+    languages: [python]
+    severity: WARNING
+    paths:
+      include:
+        - "**/app/web/"
+
+  - id: service-raises-http-exception
+    pattern: raise HTTPException(...)
+    message: >
+      Services should raise domain exceptions (ValueError, RuntimeError, NotFoundError),
+      not HTTPException. Routes translate exceptions to HTTP responses.
+    languages: [python]
+    severity: WARNING
+    paths:
+      include:
+        - "**/app/services/"
+      exclude:
+        - "**/app/services/*/web.py"
+        - "**/app/services/*/web/*.py"
+
+  - id: commit-in-service
+    pattern: $DB.commit()
+    message: >
+      Services should use `db.flush()`, not `db.commit()`. The caller (route/task)
+      controls the transaction boundary.
+    languages: [python]
+    severity: INFO
+    paths:
+      include:
+        - "**/app/services/"
+      exclude:
+        - "**/app/services/scheduler_config.py"
+        - "**/tests/"

@@ -16,7 +16,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.tax.tax_code import TaxCode
@@ -413,64 +413,49 @@ class TaxTransactionService(ListResponseMixin):
         period_id = coerce_uuid(fiscal_period_id)
 
         # Output tax
-        output_result = (
-            db.query(func.sum(TaxTransaction.functional_tax_amount))
-            .filter(
-                TaxTransaction.organization_id == org_id,
-                TaxTransaction.fiscal_period_id == period_id,
-                TaxTransaction.transaction_type == TaxTransactionType.OUTPUT,
-            )
-            .scalar()
+        output_result = db.scalar(
+            select(func.sum(TaxTransaction.functional_tax_amount))
+            .where(TaxTransaction.organization_id == org_id)
+            .where(TaxTransaction.fiscal_period_id == period_id)
+            .where(TaxTransaction.transaction_type == TaxTransactionType.OUTPUT)
         )
         output_tax = output_result or Decimal("0")
 
         # Input tax (recoverable)
-        input_rec_result = (
-            db.query(func.sum(TaxTransaction.recoverable_amount))
-            .filter(
-                TaxTransaction.organization_id == org_id,
-                TaxTransaction.fiscal_period_id == period_id,
-                TaxTransaction.transaction_type == TaxTransactionType.INPUT,
-            )
-            .scalar()
+        input_rec_result = db.scalar(
+            select(func.sum(TaxTransaction.recoverable_amount))
+            .where(TaxTransaction.organization_id == org_id)
+            .where(TaxTransaction.fiscal_period_id == period_id)
+            .where(TaxTransaction.transaction_type == TaxTransactionType.INPUT)
         )
         input_recoverable = input_rec_result or Decimal("0")
 
         # Input tax (non-recoverable)
-        input_non_rec_result = (
-            db.query(func.sum(TaxTransaction.non_recoverable_amount))
-            .filter(
-                TaxTransaction.organization_id == org_id,
-                TaxTransaction.fiscal_period_id == period_id,
-                TaxTransaction.transaction_type == TaxTransactionType.INPUT,
-            )
-            .scalar()
+        input_non_rec_result = db.scalar(
+            select(func.sum(TaxTransaction.non_recoverable_amount))
+            .where(TaxTransaction.organization_id == org_id)
+            .where(TaxTransaction.fiscal_period_id == period_id)
+            .where(TaxTransaction.transaction_type == TaxTransactionType.INPUT)
         )
         input_non_recoverable = input_non_rec_result or Decimal("0")
 
         # Withholding tax
-        wht_result = (
-            db.query(func.sum(TaxTransaction.functional_tax_amount))
-            .filter(
-                TaxTransaction.organization_id == org_id,
-                TaxTransaction.fiscal_period_id == period_id,
-                TaxTransaction.transaction_type == TaxTransactionType.WITHHOLDING,
-            )
-            .scalar()
+        wht_result = db.scalar(
+            select(func.sum(TaxTransaction.functional_tax_amount))
+            .where(TaxTransaction.organization_id == org_id)
+            .where(TaxTransaction.fiscal_period_id == period_id)
+            .where(TaxTransaction.transaction_type == TaxTransactionType.WITHHOLDING)
         )
         withholding_tax = wht_result or Decimal("0")
 
         # Transaction count
-        count_result = (
-            db.query(func.count(TaxTransaction.transaction_id))
-            .filter(
-                TaxTransaction.organization_id == org_id,
-                TaxTransaction.fiscal_period_id == period_id,
-            )
-            .scalar()
+        count_result = db.scalar(
+            select(func.count(TaxTransaction.transaction_id))
+            .where(TaxTransaction.organization_id == org_id)
+            .where(TaxTransaction.fiscal_period_id == period_id)
         )
 
-        net_payable = output_tax - input_recoverable
+        net_payable = output_tax - input_recoverable - withholding_tax
 
         return TaxReturnSummary(
             period=str(period_id),
@@ -505,7 +490,7 @@ class TaxTransactionService(ListResponseMixin):
         period_id = coerce_uuid(fiscal_period_id)
 
         query = (
-            db.query(
+            select(
                 TaxTransaction.tax_code_id,
                 TaxCode.tax_code,
                 TaxCode.tax_name,
@@ -514,10 +499,8 @@ class TaxTransactionService(ListResponseMixin):
                 func.count(TaxTransaction.transaction_id).label("txn_count"),
             )
             .join(TaxCode)
-            .filter(
-                TaxTransaction.organization_id == org_id,
-                TaxTransaction.fiscal_period_id == period_id,
-            )
+            .where(TaxTransaction.organization_id == org_id)
+            .where(TaxTransaction.fiscal_period_id == period_id)
             .group_by(
                 TaxTransaction.tax_code_id,
                 TaxCode.tax_code,
@@ -526,9 +509,9 @@ class TaxTransactionService(ListResponseMixin):
         )
 
         if transaction_type:
-            query = query.filter(TaxTransaction.transaction_type == transaction_type)
+            query = query.where(TaxTransaction.transaction_type == transaction_type)
 
-        results = query.all()
+        results = db.execute(query).all()
 
         return [
             TaxByCodeSummary(
@@ -562,19 +545,16 @@ class TaxTransactionService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(fiscal_period_id)
 
-        results = (
-            db.query(
+        results = db.execute(
+            select(
                 TaxTransaction.tax_return_box,
                 func.sum(TaxTransaction.functional_tax_amount).label("tax_amount"),
             )
-            .filter(
-                TaxTransaction.organization_id == org_id,
-                TaxTransaction.fiscal_period_id == period_id,
-                TaxTransaction.tax_return_box.isnot(None),
-            )
+            .where(TaxTransaction.organization_id == org_id)
+            .where(TaxTransaction.fiscal_period_id == period_id)
+            .where(TaxTransaction.tax_return_box.isnot(None))
             .group_by(TaxTransaction.tax_return_box)
-            .all()
-        )
+        ).all()
 
         return {row.tax_return_box: row.tax_amount or Decimal("0") for row in results}
 
@@ -608,37 +588,37 @@ class TaxTransactionService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[TaxTransaction]:
         """List tax transactions with optional filters."""
-        query = db.query(TaxTransaction)
+        query = select(TaxTransaction)
 
         if organization_id:
-            query = query.filter(
+            query = query.where(
                 TaxTransaction.organization_id == coerce_uuid(organization_id)
             )
 
         if fiscal_period_id:
-            query = query.filter(
+            query = query.where(
                 TaxTransaction.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
 
         if tax_code_id:
-            query = query.filter(TaxTransaction.tax_code_id == coerce_uuid(tax_code_id))
+            query = query.where(TaxTransaction.tax_code_id == coerce_uuid(tax_code_id))
 
         if transaction_type:
-            query = query.filter(TaxTransaction.transaction_type == transaction_type)
+            query = query.where(TaxTransaction.transaction_type == transaction_type)
 
         if is_included_in_return is not None:
-            query = query.filter(
+            query = query.where(
                 TaxTransaction.is_included_in_return == is_included_in_return
             )
 
         if start_date:
-            query = query.filter(TaxTransaction.transaction_date >= start_date)
+            query = query.where(TaxTransaction.transaction_date >= start_date)
 
         if end_date:
-            query = query.filter(TaxTransaction.transaction_date <= end_date)
+            query = query.where(TaxTransaction.transaction_date <= end_date)
 
         query = query.order_by(TaxTransaction.transaction_date.desc())
-        return query.limit(limit).offset(offset).all()
+        return db.scalars(query.limit(limit).offset(offset)).all()
 
     @staticmethod
     def get_unreported_transactions(
@@ -650,16 +630,13 @@ class TaxTransactionService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         period_id = coerce_uuid(fiscal_period_id)
 
-        return (
-            db.query(TaxTransaction)
-            .filter(
-                TaxTransaction.organization_id == org_id,
-                TaxTransaction.fiscal_period_id == period_id,
-                TaxTransaction.is_included_in_return == False,
-            )
+        return db.scalars(
+            select(TaxTransaction)
+            .where(TaxTransaction.organization_id == org_id)
+            .where(TaxTransaction.fiscal_period_id == period_id)
+            .where(TaxTransaction.is_included_in_return == False)
             .order_by(TaxTransaction.transaction_date)
-            .all()
-        )
+        ).all()
 
     @staticmethod
     def get_vat_register(
@@ -693,31 +670,28 @@ class TaxTransactionService(ListResponseMixin):
 
         # Base query with join to tax code
         query = (
-            db.query(TaxTransaction, TaxCode)
+            select(TaxTransaction, TaxCode)
             .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
-            .filter(
-                TaxTransaction.organization_id == org_id,
-                TaxTransaction.transaction_date >= start_date,
-                TaxTransaction.transaction_date <= end_date,
-            )
+            .where(TaxTransaction.organization_id == org_id)
+            .where(TaxTransaction.transaction_date >= start_date)
+            .where(TaxTransaction.transaction_date <= end_date)
         )
 
         if transaction_type:
-            query = query.filter(TaxTransaction.transaction_type == transaction_type)
+            query = query.where(TaxTransaction.transaction_type == transaction_type)
 
         if tax_code_id:
-            query = query.filter(TaxTransaction.tax_code_id == coerce_uuid(tax_code_id))
+            query = query.where(TaxTransaction.tax_code_id == coerce_uuid(tax_code_id))
 
         # Get total count
-        total = query.count()
+        total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
 
         # Get paginated results
-        results = (
+        results = db.execute(
             query.order_by(TaxTransaction.transaction_date.desc())
             .offset(offset)
             .limit(limit)
-            .all()
-        )
+        ).all()
 
         transactions = []
         for txn, code in results:
@@ -780,25 +754,22 @@ class TaxTransactionService(ListResponseMixin):
         if group_by == "month":
             period_expr = func.date_trunc("month", TaxTransaction.transaction_date)
             # Group by year-month
-            results = (
-                db.query(
+            results = db.execute(
+                select(
                     period_expr.label("period"),
                     TaxTransaction.transaction_type,
                     func.sum(TaxTransaction.functional_tax_amount).label("tax_amount"),
                     func.sum(TaxTransaction.recoverable_amount).label("recoverable"),
                 )
-                .filter(
-                    TaxTransaction.organization_id == org_id,
-                    TaxTransaction.transaction_date >= start_date,
-                    TaxTransaction.transaction_date <= end_date,
-                )
+                .where(TaxTransaction.organization_id == org_id)
+                .where(TaxTransaction.transaction_date >= start_date)
+                .where(TaxTransaction.transaction_date <= end_date)
                 .group_by(
                     period_expr,
                     TaxTransaction.transaction_type,
                 )
                 .order_by(period_expr)
-                .all()
-            )
+            ).all()
 
             # Aggregate by period
             period_data: dict = {}
@@ -838,8 +809,8 @@ class TaxTransactionService(ListResponseMixin):
 
         elif group_by == "tax_code":
             # Group by tax code
-            results = (
-                db.query(
+            results = db.execute(
+                select(
                     TaxCode.tax_code,
                     TaxCode.tax_name,
                     TaxTransaction.transaction_type,
@@ -847,19 +818,16 @@ class TaxTransactionService(ListResponseMixin):
                     func.sum(TaxTransaction.recoverable_amount).label("recoverable"),
                 )
                 .join(TaxCode, TaxTransaction.tax_code_id == TaxCode.tax_code_id)
-                .filter(
-                    TaxTransaction.organization_id == org_id,
-                    TaxTransaction.transaction_date >= start_date,
-                    TaxTransaction.transaction_date <= end_date,
-                )
+                .where(TaxTransaction.organization_id == org_id)
+                .where(TaxTransaction.transaction_date >= start_date)
+                .where(TaxTransaction.transaction_date <= end_date)
                 .group_by(
                     TaxCode.tax_code,
                     TaxCode.tax_name,
                     TaxTransaction.transaction_type,
                 )
                 .order_by(TaxCode.tax_code)
-                .all()
-            )
+            ).all()
 
             # Aggregate by tax code
             code_data: dict = {}
@@ -895,37 +863,28 @@ class TaxTransactionService(ListResponseMixin):
 
         else:
             # Default: overall summary for the period
-            output_result = (
-                db.query(func.sum(TaxTransaction.functional_tax_amount))
-                .filter(
-                    TaxTransaction.organization_id == org_id,
-                    TaxTransaction.transaction_date >= start_date,
-                    TaxTransaction.transaction_date <= end_date,
-                    TaxTransaction.transaction_type == TaxTransactionType.OUTPUT,
-                )
-                .scalar()
+            output_result = db.scalar(
+                select(func.sum(TaxTransaction.functional_tax_amount))
+                .where(TaxTransaction.organization_id == org_id)
+                .where(TaxTransaction.transaction_date >= start_date)
+                .where(TaxTransaction.transaction_date <= end_date)
+                .where(TaxTransaction.transaction_type == TaxTransactionType.OUTPUT)
             ) or Decimal("0")
 
-            input_result = (
-                db.query(func.sum(TaxTransaction.functional_tax_amount))
-                .filter(
-                    TaxTransaction.organization_id == org_id,
-                    TaxTransaction.transaction_date >= start_date,
-                    TaxTransaction.transaction_date <= end_date,
-                    TaxTransaction.transaction_type == TaxTransactionType.INPUT,
-                )
-                .scalar()
+            input_result = db.scalar(
+                select(func.sum(TaxTransaction.functional_tax_amount))
+                .where(TaxTransaction.organization_id == org_id)
+                .where(TaxTransaction.transaction_date >= start_date)
+                .where(TaxTransaction.transaction_date <= end_date)
+                .where(TaxTransaction.transaction_type == TaxTransactionType.INPUT)
             ) or Decimal("0")
 
-            recoverable_result = (
-                db.query(func.sum(TaxTransaction.recoverable_amount))
-                .filter(
-                    TaxTransaction.organization_id == org_id,
-                    TaxTransaction.transaction_date >= start_date,
-                    TaxTransaction.transaction_date <= end_date,
-                    TaxTransaction.transaction_type == TaxTransactionType.INPUT,
-                )
-                .scalar()
+            recoverable_result = db.scalar(
+                select(func.sum(TaxTransaction.recoverable_amount))
+                .where(TaxTransaction.organization_id == org_id)
+                .where(TaxTransaction.transaction_date >= start_date)
+                .where(TaxTransaction.transaction_date <= end_date)
+                .where(TaxTransaction.transaction_type == TaxTransactionType.INPUT)
             ) or Decimal("0")
 
             net_payable = output_result - recoverable_result

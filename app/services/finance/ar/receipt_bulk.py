@@ -12,7 +12,7 @@ from uuid import UUID
 
 from fastapi import Response
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Query, Session
 
 from app.models.finance.ar.customer_payment import CustomerPayment, PaymentStatus
 from app.services.bulk_actions import BulkActionService
@@ -104,10 +104,13 @@ class ARReceiptBulkService(BulkActionService[CustomerPayment]):
             from app.models.finance.ar.customer import Customer
 
             rows = (
-                self.db.query(
-                    Customer.customer_id,
-                    Customer.trading_name,
-                    Customer.legal_name,
+                Query(
+                    [
+                        Customer.customer_id,
+                        Customer.trading_name,
+                        Customer.legal_name,
+                    ],
+                    session=self.db,
                 )
                 .filter(Customer.organization_id == self.organization_id)
                 .all()

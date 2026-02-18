@@ -38,6 +38,7 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
@@ -466,9 +467,9 @@ class PAYECalculator:
         self, organization_id: UUID, employee_id: UUID, as_of_date: date
     ) -> EmployeeTaxProfile | None:
         """Get the active tax profile for an employee."""
-        return (
-            self.db.query(EmployeeTaxProfile)
-            .filter(
+        return self.db.scalar(
+            select(EmployeeTaxProfile)
+            .where(
                 EmployeeTaxProfile.organization_id == organization_id,
                 EmployeeTaxProfile.employee_id == employee_id,
                 EmployeeTaxProfile.effective_from <= as_of_date,
@@ -478,24 +479,24 @@ class PAYECalculator:
                 ),
             )
             .order_by(EmployeeTaxProfile.effective_from.desc())
-            .first()
         )
 
     def _get_tax_bands(self, organization_id: UUID, as_of_date: date) -> list[TaxBand]:
         """Get active tax bands for the organization."""
-        bands = (
-            self.db.query(TaxBand)
-            .filter(
-                TaxBand.organization_id == organization_id,
-                TaxBand.is_active.is_(True),
-                TaxBand.effective_from <= as_of_date,
-                (
-                    (TaxBand.effective_to.is_(None))
-                    | (TaxBand.effective_to >= as_of_date)
-                ),
-            )
-            .order_by(TaxBand.sequence)
-            .all()
+        bands = list(
+            self.db.scalars(
+                select(TaxBand)
+                .where(
+                    TaxBand.organization_id == organization_id,
+                    TaxBand.is_active.is_(True),
+                    TaxBand.effective_from <= as_of_date,
+                    (
+                        (TaxBand.effective_to.is_(None))
+                        | (TaxBand.effective_to >= as_of_date)
+                    ),
+                )
+                .order_by(TaxBand.sequence)
+            ).all()
         )
 
         # If no bands configured, use defaults (but warn)
@@ -539,13 +540,11 @@ class PAYECalculator:
         eff_date = effective_from or date(2026, 1, 1)
 
         # Check if bands already exist
-        existing = (
-            self.db.query(TaxBand)
-            .filter(
+        existing = self.db.scalar(
+            select(TaxBand).where(
                 TaxBand.organization_id == org_id,
                 TaxBand.is_active.is_(True),
             )
-            .first()
         )
 
         if existing:
@@ -574,12 +573,12 @@ class PAYECalculator:
             List of TaxBand objects
         """
         org_id = coerce_uuid(organization_id)
-        query = self.db.query(TaxBand).filter(TaxBand.organization_id == org_id)
+        query = select(TaxBand).where(TaxBand.organization_id == org_id)
 
         if active_only:
-            query = query.filter(TaxBand.is_active.is_(True))
+            query = query.where(TaxBand.is_active.is_(True))
 
-        return query.order_by(TaxBand.sequence).all()
+        return list(self.db.scalars(query.order_by(TaxBand.sequence)).all())
 
 
 # Module-level convenience function

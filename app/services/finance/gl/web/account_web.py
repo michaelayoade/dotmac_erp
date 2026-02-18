@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -48,8 +48,8 @@ def _calculate_account_balances(
         return {}
 
     # Get latest closed period for each account
-    balances = (
-        db.query(
+    balances = db.execute(
+        select(
             AccountBalance.account_id,
             AccountBalance.net_balance,
         )
@@ -57,7 +57,7 @@ def _calculate_account_balances(
             FiscalPeriod,
             AccountBalance.fiscal_period_id == FiscalPeriod.fiscal_period_id,
         )
-        .filter(
+        .where(
             AccountBalance.account_id.in_(account_ids),
             AccountBalance.balance_type == BalanceType.ACTUAL,
             FiscalPeriod.status.in_(
@@ -65,8 +65,7 @@ def _calculate_account_balances(
             ),
         )
         .order_by(FiscalPeriod.end_date.desc())
-        .all()
-    )
+    ).all()
 
     result = {}
     for account_id, net_balance in balances:
@@ -87,17 +86,18 @@ def _calculate_account_balance_trends(
         return {}
 
     # Get recent closed periods
-    recent_periods = (
-        db.query(FiscalPeriod)
-        .filter(
-            FiscalPeriod.organization_id == coerce_uuid(organization_id),
-            FiscalPeriod.status.in_(
-                [PeriodStatus.SOFT_CLOSED, PeriodStatus.HARD_CLOSED]
-            ),
-        )
-        .order_by(FiscalPeriod.end_date.desc())
-        .limit(periods)
-        .all()
+    recent_periods = list(
+        db.scalars(
+            select(FiscalPeriod)
+            .where(
+                FiscalPeriod.organization_id == coerce_uuid(organization_id),
+                FiscalPeriod.status.in_(
+                    [PeriodStatus.SOFT_CLOSED, PeriodStatus.HARD_CLOSED]
+                ),
+            )
+            .order_by(FiscalPeriod.end_date.desc())
+            .limit(periods)
+        ).all()
     )
 
     if not recent_periods:
@@ -105,19 +105,17 @@ def _calculate_account_balance_trends(
 
     period_ids = [p.fiscal_period_id for p in recent_periods]
 
-    balances = (
-        db.query(
+    balances = db.execute(
+        select(
             AccountBalance.account_id,
             AccountBalance.fiscal_period_id,
             AccountBalance.net_balance,
-        )
-        .filter(
+        ).where(
             AccountBalance.account_id.in_(account_ids),
             AccountBalance.fiscal_period_id.in_(period_ids),
             AccountBalance.balance_type == BalanceType.ACTUAL,
         )
-        .all()
-    )
+    ).all()
 
     # Build trend data
     result = {aid: [0.0] * periods for aid in account_ids}

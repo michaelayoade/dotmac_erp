@@ -10,7 +10,7 @@ import logging
 from decimal import Decimal
 
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Query, Session
 
 from app.models.finance.lease.lease_asset import LeaseAsset
 from app.models.finance.lease.lease_contract import (
@@ -245,7 +245,9 @@ class LeaseWebService:
         status_value = _parse_status(status)
         classification = _parse_classification(lease_type)
 
-        query = db.query(LeaseContract).filter(LeaseContract.organization_id == org_id)
+        query = Query([LeaseContract], session=db).filter(
+            LeaseContract.organization_id == org_id
+        )
 
         if status_value:
             query = query.filter(LeaseContract.status == status_value)

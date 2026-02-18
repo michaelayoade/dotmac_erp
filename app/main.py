@@ -388,7 +388,11 @@ _include_api_router(auth_flow_router)
 _include_api_router(rbac_router, dependencies=[Depends(require_tenant_auth)])
 _include_api_router(me_router)
 _include_api_router(workflow_tasks_router, dependencies=[Depends(require_tenant_auth)])
-_include_api_router(coach_router, dependencies=[Depends(require_tenant_auth)])
+app.include_router(
+    coach_router,
+    prefix="/api/v1",
+    dependencies=[Depends(require_tenant_auth)],
+)
 app.include_router(
     people_router,
     prefix="/api/v1",

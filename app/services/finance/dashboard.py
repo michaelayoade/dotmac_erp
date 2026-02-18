@@ -11,7 +11,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import and_, case, extract, func, or_
+from sqlalchemy import and_, case, extract, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.supplier import Supplier
@@ -50,6 +50,8 @@ def _apply_year_filter(query, column, year: int | None):
     if year is None:
         return query
     start_date, end_date = _year_bounds(year)
+    if hasattr(query, "where"):
+        return query.where(column >= start_date, column <= end_date)
     return query.filter(column >= start_date, column <= end_date)
 
 
@@ -140,12 +142,11 @@ class DashboardService:
         years: set[int] = set()
         for model, column in sources:
             org_col = cast(Any, model).organization_id
-            rows = (
-                db.query(extract("year", column))
-                .filter(org_col == org_id, column.isnot(None))
+            rows = db.execute(
+                select(extract("year", column))
+                .where(org_col == org_id, column.isnot(None))
                 .distinct()
-                .all()
-            )
+            ).all()
             for (year_value,) in rows:
                 if year_value is not None:
                     years.add(int(year_value))
@@ -160,8 +161,8 @@ class DashboardService:
         org_id = coerce_uuid(organization_id)
         cogs_match = _cogs_match_clause()
 
-        spend_query = (
-            db.query(
+        spend_stmt = (
+            select(
                 func.coalesce(
                     func.sum(
                         case(
@@ -199,12 +200,10 @@ class DashboardService:
             )
             .join(Account, Account.account_id == PostedLedgerLine.account_id)
             .join(AccountCategory, AccountCategory.category_id == Account.category_id)
-            .filter(PostedLedgerLine.organization_id == org_id)
+            .where(PostedLedgerLine.organization_id == org_id)
         )
-        spend_query = _apply_year_filter(
-            spend_query, PostedLedgerLine.posting_date, year
-        )
-        cogs_spend, opex_spend = spend_query.one()
+        spend_stmt = _apply_year_filter(spend_stmt, PostedLedgerLine.posting_date, year)
+        cogs_spend, opex_spend = db.execute(spend_stmt).one()
         return _safe_decimal(cogs_spend), _safe_decimal(opex_spend)
 
     @staticmethod
@@ -214,8 +213,8 @@ class DashboardService:
         year: int | None = None,
     ) -> tuple[Decimal, Decimal]:
         org_id = coerce_uuid(organization_id)
-        revenue_expense_query = (
-            db.query(
+        revenue_expense_stmt = (
+            select(
                 func.coalesce(
                     func.sum(
                         case(
@@ -245,16 +244,16 @@ class DashboardService:
             )
             .join(Account, Account.account_id == PostedLedgerLine.account_id)
             .join(AccountCategory, AccountCategory.category_id == Account.category_id)
-            .filter(
+            .where(
                 PostedLedgerLine.organization_id == org_id,
                 AccountCategory.organization_id == org_id,
-                Account.is_active == True,
+                Account.is_active.is_(True),
             )
         )
-        revenue_expense_query = _apply_year_filter(
-            revenue_expense_query, PostedLedgerLine.posting_date, year
+        revenue_expense_stmt = _apply_year_filter(
+            revenue_expense_stmt, PostedLedgerLine.posting_date, year
         )
-        revenue_total, expense_total = revenue_expense_query.one()
+        revenue_total, expense_total = db.execute(revenue_expense_stmt).one()
         return _safe_decimal(revenue_total), _safe_decimal(expense_total)
 
     @staticmethod
@@ -265,8 +264,8 @@ class DashboardService:
     ) -> tuple[Decimal, Decimal]:
         org_id = coerce_uuid(organization_id)
 
-        ar_query = (
-            db.query(
+        ar_stmt = (
+            select(
                 func.coalesce(
                     func.sum(
                         PostedLedgerLine.debit_amount - PostedLedgerLine.credit_amount
@@ -275,17 +274,17 @@ class DashboardService:
                 )
             )
             .join(Account, Account.account_id == PostedLedgerLine.account_id)
-            .filter(
+            .where(
                 PostedLedgerLine.organization_id == org_id,
                 Account.subledger_type == "AR",
-                Account.is_active == True,
+                Account.is_active.is_(True),
             )
         )
-        ar_query = _apply_year_filter(ar_query, PostedLedgerLine.posting_date, year)
-        ar_balance = _safe_decimal(ar_query.scalar())
+        ar_stmt = _apply_year_filter(ar_stmt, PostedLedgerLine.posting_date, year)
+        ar_balance = _safe_decimal(db.scalar(ar_stmt))
 
-        ap_query = (
-            db.query(
+        ap_stmt = (
+            select(
                 func.coalesce(
                     func.sum(
                         PostedLedgerLine.credit_amount - PostedLedgerLine.debit_amount
@@ -294,14 +293,14 @@ class DashboardService:
                 )
             )
             .join(Account, Account.account_id == PostedLedgerLine.account_id)
-            .filter(
+            .where(
                 PostedLedgerLine.organization_id == org_id,
                 Account.subledger_type == "AP",
-                Account.is_active == True,
+                Account.is_active.is_(True),
             )
         )
-        ap_query = _apply_year_filter(ap_query, PostedLedgerLine.posting_date, year)
-        ap_balance = _safe_decimal(ap_query.scalar())
+        ap_stmt = _apply_year_filter(ap_stmt, PostedLedgerLine.posting_date, year)
+        ap_balance = _safe_decimal(db.scalar(ap_stmt))
 
         return ar_balance, ap_balance
 
@@ -316,8 +315,8 @@ class DashboardService:
         today = date.today()
         start_date = today - timedelta(days=days)
 
-        cash_query = (
-            db.query(
+        cash_stmt = (
+            select(
                 func.coalesce(func.sum(PostedLedgerLine.debit_amount), 0).label(
                     "inflow"
                 ),
@@ -326,19 +325,19 @@ class DashboardService:
                 ),
             )
             .join(Account, Account.account_id == PostedLedgerLine.account_id)
-            .filter(
+            .where(
                 PostedLedgerLine.organization_id == org_id,
                 PostedLedgerLine.posting_date >= start_date,
                 PostedLedgerLine.posting_date <= today,
-                Account.is_cash_equivalent == True,
-                Account.is_active == True,
+                Account.is_cash_equivalent.is_(True),
+                Account.is_active.is_(True),
             )
         )
         if year is not None:
-            cash_query = _apply_year_filter(
-                cash_query, PostedLedgerLine.posting_date, year
+            cash_stmt = _apply_year_filter(
+                cash_stmt, PostedLedgerLine.posting_date, year
             )
-        inflow, outflow = cash_query.one()
+        inflow, outflow = db.execute(cash_stmt).one()
         inflow = _safe_decimal(inflow)
         outflow = _safe_decimal(outflow)
         return inflow, outflow, inflow - outflow
@@ -361,19 +360,19 @@ class DashboardService:
             InvoiceStatus.APPROVED.value,
             InvoiceStatus.PARTIALLY_PAID.value,
         ]
-        ar_subledger_query = db.query(
+        ar_subledger_stmt = select(
             func.coalesce(
                 func.sum(Invoice.total_amount - Invoice.amount_paid),
                 0,
             )
-        ).filter(
+        ).where(
             Invoice.organization_id == org_id,
             Invoice.status.in_(open_ar_statuses),
         )
-        ar_subledger_query = _apply_year_filter(
-            ar_subledger_query, Invoice.invoice_date, year
+        ar_subledger_stmt = _apply_year_filter(
+            ar_subledger_stmt, Invoice.invoice_date, year
         )
-        ar_subledger_balance = _safe_decimal(ar_subledger_query.scalar())
+        ar_subledger_balance = _safe_decimal(db.scalar(ar_subledger_stmt))
 
         open_ap_statuses = [
             SupplierInvoiceStatus.DRAFT.value,
@@ -381,19 +380,19 @@ class DashboardService:
             SupplierInvoiceStatus.APPROVED.value,
             SupplierInvoiceStatus.PARTIALLY_PAID.value,
         ]
-        ap_subledger_query = db.query(
+        ap_subledger_stmt = select(
             func.coalesce(
                 func.sum(SupplierInvoice.total_amount - SupplierInvoice.amount_paid),
                 0,
             )
-        ).filter(
+        ).where(
             SupplierInvoice.organization_id == org_id,
             SupplierInvoice.status.in_(open_ap_statuses),
         )
-        ap_subledger_query = _apply_year_filter(
-            ap_subledger_query, SupplierInvoice.invoice_date, year
+        ap_subledger_stmt = _apply_year_filter(
+            ap_subledger_stmt, SupplierInvoice.invoice_date, year
         )
-        ap_subledger_balance = _safe_decimal(ap_subledger_query.scalar())
+        ap_subledger_balance = _safe_decimal(db.scalar(ap_subledger_stmt))
 
         tolerance = Decimal("0.01")
         ar_diff = (gl_ar_balance - ar_subledger_balance).copy_abs()
@@ -500,18 +499,15 @@ class DashboardService:
         """
         org_id = coerce_uuid(organization_id)
 
-        journals_query = db.query(JournalEntry).filter(
+        journals_stmt = select(JournalEntry).where(
             JournalEntry.organization_id == org_id,
             JournalEntry.status == JournalStatus.POSTED,
         )
-        journals_query = _apply_year_filter(
-            journals_query, JournalEntry.posting_date, year
+        journals_stmt = _apply_year_filter(
+            journals_stmt, JournalEntry.posting_date, year
         )
-        if year is None:
-            journals_query = journals_query.order_by(JournalEntry.posting_date.desc())
-        else:
-            journals_query = journals_query.order_by(JournalEntry.posting_date.desc())
-        journals = journals_query.limit(limit).all()
+        journals_stmt = journals_stmt.order_by(JournalEntry.posting_date.desc())
+        journals = db.scalars(journals_stmt.limit(limit)).all()
 
         result = []
         for journal in journals:
@@ -561,13 +557,13 @@ class DashboardService:
         """
         org_id = coerce_uuid(organization_id)
 
-        periods_query = db.query(FiscalPeriod).filter(
+        periods_stmt = select(FiscalPeriod).where(
             FiscalPeriod.organization_id == org_id
         )
-        periods_query = _apply_year_filter(periods_query, FiscalPeriod.start_date, year)
-        periods = (
-            periods_query.order_by(FiscalPeriod.start_date.desc()).limit(limit).all()
-        )
+        periods_stmt = _apply_year_filter(periods_stmt, FiscalPeriod.start_date, year)
+        periods = db.scalars(
+            periods_stmt.order_by(FiscalPeriod.start_date.desc()).limit(limit)
+        ).all()
 
         result = []
         for period in periods:
@@ -613,8 +609,8 @@ class DashboardService:
         else:
             start_date, end_date = _year_bounds(year)
 
-        monthly_rows = (
-            db.query(
+        monthly_rows = db.execute(
+            select(
                 extract("year", PostedLedgerLine.posting_date).label("year"),
                 extract("month", PostedLedgerLine.posting_date).label("month"),
                 func.coalesce(
@@ -646,19 +642,18 @@ class DashboardService:
             )
             .join(Account, Account.account_id == PostedLedgerLine.account_id)
             .join(AccountCategory, AccountCategory.category_id == Account.category_id)
-            .filter(
+            .where(
                 PostedLedgerLine.organization_id == org_id,
                 PostedLedgerLine.posting_date >= start_date,
                 PostedLedgerLine.posting_date <= end_date,
                 AccountCategory.organization_id == org_id,
-                Account.is_active == True,
+                Account.is_active.is_(True),
             )
             .group_by(
                 extract("year", PostedLedgerLine.posting_date),
                 extract("month", PostedLedgerLine.posting_date),
             )
-            .all()
-        )
+        ).all()
 
         monthly_dict = {
             (int(r.year), int(r.month)): {
@@ -710,8 +705,8 @@ class DashboardService:
         org_id = coerce_uuid(organization_id)
 
         # Join accounts with categories to get IFRS classification
-        balances_query = (
-            db.query(
+        balances_stmt = (
+            select(
                 AccountCategory.ifrs_category,
                 func.coalesce(func.sum(AccountBalance.net_balance), 0).label("total"),
             )
@@ -727,25 +722,23 @@ class DashboardService:
         )
         if year is not None:
             start_date, end_date = _year_bounds(year)
-            balances_query = balances_query.join(
+            balances_stmt = balances_stmt.join(
                 FiscalPeriod,
                 FiscalPeriod.fiscal_period_id == AccountBalance.fiscal_period_id,
-            ).filter(
+            ).where(
                 FiscalPeriod.start_date >= start_date,
                 FiscalPeriod.start_date <= end_date,
             )
 
-        results = (
-            balances_query.filter(
+        results = db.execute(
+            balances_stmt.where(
                 AccountCategory.organization_id == org_id,
-                Account.is_active == True,
-            )
-            .group_by(AccountCategory.ifrs_category)
-            .all()
-        )
+                Account.is_active.is_(True),
+            ).group_by(AccountCategory.ifrs_category)
+        ).all()
         if not results:
-            ledger_query = (
-                db.query(
+            ledger_stmt = (
+                select(
                     AccountCategory.ifrs_category,
                     func.coalesce(
                         func.sum(
@@ -759,16 +752,18 @@ class DashboardService:
                 .join(
                     AccountCategory, AccountCategory.category_id == Account.category_id
                 )
-                .filter(
+                .where(
                     PostedLedgerLine.organization_id == org_id,
                     AccountCategory.organization_id == org_id,
-                    Account.is_active == True,
+                    Account.is_active.is_(True),
                 )
             )
-            ledger_query = _apply_year_filter(
-                ledger_query, PostedLedgerLine.posting_date, year
+            ledger_stmt = _apply_year_filter(
+                ledger_stmt, PostedLedgerLine.posting_date, year
             )
-            results = ledger_query.group_by(AccountCategory.ifrs_category).all()
+            results = db.execute(
+                ledger_stmt.group_by(AccountCategory.ifrs_category)
+            ).all()
         if not results:
             results = []
 
@@ -820,18 +815,8 @@ class DashboardService:
         """
         org_id = coerce_uuid(organization_id)
 
-        customers_query = db.query(
-            Customer.legal_name,
-            Customer.trading_name,
-            func.coalesce(func.sum(Invoice.total_amount), 0).label("total"),
-        ).join(Invoice, Invoice.customer_id == Customer.customer_id, isouter=True)
-        if year is not None:
-            customers_query = _apply_year_filter(
-                customers_query, Invoice.invoice_date, year
-            )
-
-        customers_query = (
-            db.query(
+        customers_stmt = (
+            select(
                 Customer.legal_name,
                 Customer.trading_name,
                 func.coalesce(
@@ -845,19 +830,19 @@ class DashboardService:
             .join(Customer, Customer.customer_id == Invoice.customer_id)
             .join(Account, Account.account_id == PostedLedgerLine.account_id)
             .join(AccountCategory, AccountCategory.category_id == Account.category_id)
-            .filter(
+            .where(
                 Customer.organization_id == org_id,
                 PostedLedgerLine.organization_id == org_id,
                 PostedLedgerLine.source_document_type == "INVOICE",
                 AccountCategory.ifrs_category == IFRSCategory.REVENUE,
             )
         )
-        customers_query = _apply_year_filter(
-            customers_query, PostedLedgerLine.posting_date, year
+        customers_stmt = _apply_year_filter(
+            customers_stmt, PostedLedgerLine.posting_date, year
         )
 
-        results = (
-            customers_query.group_by(
+        results = db.execute(
+            customers_stmt.group_by(
                 Customer.customer_id, Customer.legal_name, Customer.trading_name
             )
             .order_by(
@@ -866,8 +851,7 @@ class DashboardService:
                 .nullslast()
             )
             .limit(limit)
-            .all()
-        )
+        ).all()
 
         return [
             {
@@ -900,8 +884,8 @@ class DashboardService:
         org_id = coerce_uuid(organization_id)
 
         cogs_match = _cogs_match_clause()
-        suppliers_query = (
-            db.query(
+        suppliers_stmt = (
+            select(
                 Supplier.legal_name,
                 Supplier.trading_name,
                 func.coalesce(
@@ -918,7 +902,7 @@ class DashboardService:
             .join(Supplier, Supplier.supplier_id == SupplierInvoice.supplier_id)
             .join(Account, Account.account_id == PostedLedgerLine.account_id)
             .join(AccountCategory, AccountCategory.category_id == Account.category_id)
-            .filter(
+            .where(
                 Supplier.organization_id == org_id,
                 PostedLedgerLine.organization_id == org_id,
                 PostedLedgerLine.source_document_type == "SUPPLIER_INVOICE",
@@ -926,12 +910,12 @@ class DashboardService:
                 cogs_match,
             )
         )
-        suppliers_query = _apply_year_filter(
-            suppliers_query, PostedLedgerLine.posting_date, year
+        suppliers_stmt = _apply_year_filter(
+            suppliers_stmt, PostedLedgerLine.posting_date, year
         )
 
-        results = (
-            suppliers_query.group_by(
+        results = db.execute(
+            suppliers_stmt.group_by(
                 Supplier.supplier_id, Supplier.legal_name, Supplier.trading_name
             )
             .order_by(
@@ -940,8 +924,7 @@ class DashboardService:
                 .nullslast()
             )
             .limit(limit)
-            .all()
-        )
+        ).all()
 
         return [
             {
@@ -980,8 +963,8 @@ class DashboardService:
         else:
             start_date, end_date = _year_bounds(year)
 
-        cash_rows = (
-            db.query(
+        cash_rows = db.execute(
+            select(
                 extract("year", PostedLedgerLine.posting_date).label("year"),
                 extract("month", PostedLedgerLine.posting_date).label("month"),
                 func.coalesce(func.sum(PostedLedgerLine.debit_amount), 0).label(
@@ -992,19 +975,18 @@ class DashboardService:
                 ),
             )
             .join(Account, Account.account_id == PostedLedgerLine.account_id)
-            .filter(
+            .where(
                 PostedLedgerLine.organization_id == org_id,
                 PostedLedgerLine.posting_date >= start_date,
                 PostedLedgerLine.posting_date <= end_date,
-                Account.is_cash_equivalent == True,
-                Account.is_active == True,
+                Account.is_cash_equivalent.is_(True),
+                Account.is_active.is_(True),
             )
             .group_by(
                 extract("year", PostedLedgerLine.posting_date),
                 extract("month", PostedLedgerLine.posting_date),
             )
-            .all()
-        )
+        ).all()
 
         cash_dict = {
             (int(r.year), int(r.month)): {
@@ -1066,15 +1048,15 @@ class DashboardService:
             InvoiceStatus.PARTIALLY_PAID.value,
         ]
 
-        invoices_query = db.query(
+        invoices_stmt = select(
             Invoice.due_date,
             (Invoice.total_amount - Invoice.amount_paid).label("outstanding"),
-        ).filter(
+        ).where(
             Invoice.organization_id == org_id,
             Invoice.status.in_(open_statuses),
         )
-        invoices_query = _apply_year_filter(invoices_query, Invoice.invoice_date, year)
-        invoices = invoices_query.all()
+        invoices_stmt = _apply_year_filter(invoices_stmt, Invoice.invoice_date, year)
+        invoices = db.execute(invoices_stmt).all()
 
         # Initialize buckets
         current = Decimal("0")
@@ -1161,8 +1143,8 @@ class DashboardService:
 
         def get_period_totals(start: date, end: date) -> tuple[Decimal, Decimal]:
             """Get revenue and expenses for a date range."""
-            result = (
-                db.query(
+            result = db.execute(
+                select(
                     func.coalesce(
                         func.sum(
                             case(
@@ -1196,15 +1178,14 @@ class DashboardService:
                 .join(
                     AccountCategory, AccountCategory.category_id == Account.category_id
                 )
-                .filter(
+                .where(
                     PostedLedgerLine.organization_id == org_id,
                     PostedLedgerLine.posting_date >= start,
                     PostedLedgerLine.posting_date <= end,
                     AccountCategory.organization_id == org_id,
-                    Account.is_active == True,
+                    Account.is_active.is_(True),
                 )
-                .one()
-            )
+            ).one()
             return _safe_decimal(result.revenue), _safe_decimal(result.expenses)
 
         current_revenue, current_expenses = get_period_totals(
@@ -1246,8 +1227,8 @@ class DashboardService:
         org_id = coerce_uuid(organization_id)
 
         # AR posting status breakdown (GL journal status)
-        ar_status_query = (
-            db.query(
+        ar_status_stmt = (
+            select(
                 JournalEntry.status,
                 func.count(func.distinct(JournalEntry.journal_entry_id)).label("count"),
                 func.coalesce(
@@ -1263,21 +1244,21 @@ class DashboardService:
             )
             .join(Account, Account.account_id == PostedLedgerLine.account_id)
             .join(AccountCategory, AccountCategory.category_id == Account.category_id)
-            .filter(
+            .where(
                 PostedLedgerLine.organization_id == org_id,
                 PostedLedgerLine.source_document_type == "INVOICE",
                 AccountCategory.ifrs_category == IFRSCategory.REVENUE,
             )
             .group_by(JournalEntry.status)
         )
-        ar_status_query = _apply_year_filter(
-            ar_status_query, PostedLedgerLine.posting_date, year
+        ar_status_stmt = _apply_year_filter(
+            ar_status_stmt, PostedLedgerLine.posting_date, year
         )
-        ar_status = ar_status_query.all()
+        ar_status = db.execute(ar_status_stmt).all()
 
         # AP posting status breakdown (GL journal status)
-        ap_status_query = (
-            db.query(
+        ap_status_stmt = (
+            select(
                 JournalEntry.status,
                 func.count(func.distinct(JournalEntry.journal_entry_id)).label("count"),
                 func.coalesce(
@@ -1293,17 +1274,17 @@ class DashboardService:
             )
             .join(Account, Account.account_id == PostedLedgerLine.account_id)
             .join(AccountCategory, AccountCategory.category_id == Account.category_id)
-            .filter(
+            .where(
                 PostedLedgerLine.organization_id == org_id,
                 PostedLedgerLine.source_document_type == "SUPPLIER_INVOICE",
                 AccountCategory.ifrs_category == IFRSCategory.EXPENSES,
             )
             .group_by(JournalEntry.status)
         )
-        ap_status_query = _apply_year_filter(
-            ap_status_query, PostedLedgerLine.posting_date, year
+        ap_status_stmt = _apply_year_filter(
+            ap_status_stmt, PostedLedgerLine.posting_date, year
         )
-        ap_status = ap_status_query.all()
+        ap_status = db.execute(ap_status_stmt).all()
 
         return {
             "ar_status": [

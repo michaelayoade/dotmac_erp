@@ -540,7 +540,7 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     // Chart data from backend
-    const chartData = {{ chart_data_json | safe }};
+    const chartData = JSON.parse({{ chart_data_json | tojson }});
     const stats = {
         total_revenue: {{ (stats.total_revenue | replace(',', '') | replace(currency_prefix, '') | float) if stats.total_revenue else 0 }},
         total_expenses: {{ (stats.total_expenses | replace(',', '') | replace(currency_prefix, '') | float) if stats.total_expenses else 0 }},

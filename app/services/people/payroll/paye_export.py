@@ -113,7 +113,7 @@ class PAYEExportService:
             )
             .where(
                 SalarySlip.organization_id == organization_id,
-                SalarySlip.status.in_([SalarySlipStatus.POSTED, SalarySlipStatus.PAID]),
+                SalarySlip.status.in_(SalarySlipStatus.gl_impacting()),
                 SalarySlip.start_date >= start_date,
                 SalarySlip.start_date < end_date,
             )

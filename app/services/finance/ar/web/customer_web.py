@@ -12,7 +12,7 @@ from uuid import UUID
 
 from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ar.customer import Customer
@@ -119,20 +119,20 @@ class CustomerWebService:
             InvoiceStatus.PARTIALLY_PAID,
             InvoiceStatus.OVERDUE,
         ]
-        balances = (
-            db.query(
+        balances = db.execute(
+            select(
                 Invoice.customer_id,
                 func.coalesce(
                     func.sum(Invoice.total_amount - Invoice.amount_paid), 0
                 ).label("balance"),
             )
-            .filter(
+            .where(
                 Invoice.organization_id == org_id,
                 Invoice.status.in_(open_statuses),
             )
             .group_by(Invoice.customer_id)
-            .all()
         )
+        balances = balances.all()
         balance_map = {row.customer_id: row.balance for row in balances}
 
         # Use shared audit service for user names
@@ -274,32 +274,34 @@ class CustomerWebService:
             InvoiceStatus.OVERDUE,
         ]
 
-        balance = db.query(
-            func.coalesce(
-                func.sum(Invoice.total_amount - Invoice.amount_paid),
-                0,
+        balance = db.scalar(
+            select(
+                func.coalesce(
+                    func.sum(Invoice.total_amount - Invoice.amount_paid),
+                    0,
+                )
+            ).where(
+                Invoice.organization_id == org_id,
+                Invoice.customer_id == customer.customer_id,
+                Invoice.status.in_(open_statuses),
             )
-        ).filter(
-            Invoice.organization_id == org_id,
-            Invoice.customer_id == customer.customer_id,
-            Invoice.status.in_(open_statuses),
-        ).scalar() or Decimal("0")
+        ) or Decimal("0")
 
         from datetime import date
 
         today = date.today()
 
         # All invoices (all statuses)
-        all_invoices_query = (
-            db.query(Invoice)
-            .filter(
+        all_invoices_query = db.scalars(
+            select(Invoice)
+            .where(
                 Invoice.organization_id == org_id,
                 Invoice.customer_id == customer.customer_id,
             )
             .order_by(Invoice.invoice_date.desc())
             .limit(20)
-            .all()
         )
+        all_invoices_query = all_invoices_query.all()
         invoices_view: list[dict] = []
         for inv in all_invoices_query:
             balance_due = inv.total_amount - inv.amount_paid
@@ -322,16 +324,16 @@ class CustomerWebService:
             )
 
         # Receipts
-        receipts_query = (
-            db.query(CustomerPayment)
-            .filter(
+        receipts_query = db.scalars(
+            select(CustomerPayment)
+            .where(
                 CustomerPayment.organization_id == org_id,
                 CustomerPayment.customer_id == customer.customer_id,
             )
             .order_by(CustomerPayment.payment_date.desc())
             .limit(20)
-            .all()
         )
+        receipts_query = receipts_query.all()
         receipts_view: list[dict] = []
         for r in receipts_query:
             receipts_view.append(
@@ -351,16 +353,16 @@ class CustomerWebService:
             )
 
         # Quotes
-        quotes_query = (
-            db.query(Quote)
-            .filter(
+        quotes_query = db.scalars(
+            select(Quote)
+            .where(
                 Quote.organization_id == org_id,
                 Quote.customer_id == customer.customer_id,
             )
             .order_by(Quote.quote_date.desc())
             .limit(20)
-            .all()
         )
+        quotes_query = quotes_query.all()
         quotes_view: list[dict] = []
         for q in quotes_query:
             quotes_view.append(
@@ -379,16 +381,16 @@ class CustomerWebService:
             )
 
         # Sales Orders
-        sales_orders_query = (
-            db.query(SalesOrder)
-            .filter(
+        sales_orders_query = db.scalars(
+            select(SalesOrder)
+            .where(
                 SalesOrder.organization_id == org_id,
                 SalesOrder.customer_id == customer.customer_id,
             )
             .order_by(SalesOrder.order_date.desc())
             .limit(20)
-            .all()
         )
+        sales_orders_query = sales_orders_query.all()
         sales_orders_view: list[dict] = []
         for so in sales_orders_query:
             sales_orders_view.append(

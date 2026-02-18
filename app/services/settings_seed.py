@@ -1,5 +1,6 @@
 import os
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.domain_settings import SettingValueType
@@ -565,10 +566,10 @@ def seed_scheduled_tasks(db: Session) -> None:
 
     for task_def in default_tasks:
         # Check if task already exists by task_name
-        existing = (
-            db.query(ScheduledTask)
-            .filter(ScheduledTask.task_name == task_def["task_name"])
-            .first()
+        existing = db.scalar(
+            select(ScheduledTask).where(
+                ScheduledTask.task_name == task_def["task_name"]
+            )
         )
         if existing:
             continue  # Don't overwrite existing configuration

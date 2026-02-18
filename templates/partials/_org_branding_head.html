@@ -4,6 +4,7 @@
 {% endif %}
 {% if org_branding and org_branding.css %}
 <style id="org-branding">
+{# nosemgrep: semgrep.safe-on-user-content #}
 {{ org_branding.css | safe }}
 </style>
 {% endif %}

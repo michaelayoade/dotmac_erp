@@ -839,6 +839,34 @@
             </div>
         </div>
 
+        {% if invoice %}
+        <!-- Comments (existing invoices only) -->
+        <div class="form-card fade-up delay-3">
+            <h2 class="section-title">Comments</h2>
+            <p class="section-subtitle">Add internal notes after invoice creation.</p>
+
+            <form action="/finance/ap/invoices/{{ invoice.invoice_id }}/comments" method="POST" class="mt-6 space-y-4">
+                {{ request.state.csrf_form | safe }}
+                <div>
+                    <label for="comment" class="form-label">Add Comment</label>
+                    <textarea id="comment"
+                              name="comment"
+                              rows="3"
+                              required
+                              placeholder="Add internal comment..."
+                              class="form-input"></textarea>
+                </div>
+                <div class="flex justify-end">
+                    <button type="submit" class="btn-primary">Add Comment</button>
+                </div>
+            </form>
+
+            {% if invoice.comments %}
+            <div class="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300 whitespace-pre-wrap">{{ invoice.comments }}</div>
+            {% endif %}
+        </div>
+        {% endif %}
+
         <!-- Form Actions -->
         <div class="fade-up delay-4 flex items-center justify-between py-4">
             <div class="text-sm text-[var(--ink-muted)] dark:text-white/50">

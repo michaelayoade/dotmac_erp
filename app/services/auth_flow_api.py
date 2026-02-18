@@ -10,6 +10,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException, UploadFile
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.auth import AuthProvider, SessionStatus, UserCredential
@@ -107,15 +108,17 @@ class AuthFlowApiService:
     def list_sessions(self, auth: dict, db: Session) -> SessionListResponse:
         person_id = coerce_uuid(auth["person_id"])
         now = datetime.now(UTC)
-        sessions = (
-            db.query(AuthSession)
-            .filter(AuthSession.person_id == person_id)
-            .filter(AuthSession.status == SessionStatus.active)
-            .filter(AuthSession.revoked_at.is_(None))
-            .filter(AuthSession.expires_at > now)
+        sessions = db.scalars(
+            select(AuthSession)
+            .where(
+                AuthSession.person_id == person_id,
+                AuthSession.status == SessionStatus.active,
+                AuthSession.revoked_at.is_(None),
+                AuthSession.expires_at > now,
+            )
             .order_by(AuthSession.created_at.desc())
-            .all()
         )
+        sessions = sessions.all()
 
         current_session_id = auth.get("session_id")
 
@@ -140,14 +143,14 @@ class AuthFlowApiService:
         self, session_id: str, auth: dict, db: Session
     ) -> SessionRevokeResponse:
         now = datetime.now(UTC)
-        session = (
-            db.query(AuthSession)
-            .filter(AuthSession.id == coerce_uuid(session_id))
-            .filter(AuthSession.person_id == coerce_uuid(auth["person_id"]))
-            .filter(AuthSession.status == SessionStatus.active)
-            .filter(AuthSession.revoked_at.is_(None))
-            .filter(AuthSession.expires_at > now)
-            .first()
+        session = db.scalar(
+            select(AuthSession).where(
+                AuthSession.id == coerce_uuid(session_id),
+                AuthSession.person_id == coerce_uuid(auth["person_id"]),
+                AuthSession.status == SessionStatus.active,
+                AuthSession.revoked_at.is_(None),
+                AuthSession.expires_at > now,
+            )
         )
 
         if not session:
@@ -167,15 +170,16 @@ class AuthFlowApiService:
             current_session_id = coerce_uuid(current_session_id)
 
         now = datetime.now(UTC)
-        sessions = (
-            db.query(AuthSession)
-            .filter(AuthSession.person_id == coerce_uuid(auth["person_id"]))
-            .filter(AuthSession.status == SessionStatus.active)
-            .filter(AuthSession.revoked_at.is_(None))
-            .filter(AuthSession.expires_at > now)
-            .filter(AuthSession.id != current_session_id)
-            .all()
+        sessions = db.scalars(
+            select(AuthSession).where(
+                AuthSession.person_id == coerce_uuid(auth["person_id"]),
+                AuthSession.status == SessionStatus.active,
+                AuthSession.revoked_at.is_(None),
+                AuthSession.expires_at > now,
+                AuthSession.id != current_session_id,
+            )
         )
+        sessions = sessions.all()
 
         for session in sessions:
             session.status = SessionStatus.revoked
@@ -188,11 +192,11 @@ class AuthFlowApiService:
     def change_password(
         self, payload, auth: dict, db: Session
     ) -> PasswordChangeResponse:
-        credential = (
-            db.query(UserCredential)
-            .filter(UserCredential.person_id == coerce_uuid(auth["person_id"]))
-            .filter(UserCredential.is_active.is_(True))
-            .first()
+        credential = db.scalar(
+            select(UserCredential).where(
+                UserCredential.person_id == coerce_uuid(auth["person_id"]),
+                UserCredential.is_active.is_(True),
+            )
         )
 
         if not credential:
@@ -221,12 +225,12 @@ class AuthFlowApiService:
         db: Session,
     ) -> PasswordResetRequiredResponse:
         username = payload.username.strip()
-        credential = (
-            db.query(UserCredential)
-            .filter(UserCredential.username == username)
-            .filter(UserCredential.provider == AuthProvider.local)
-            .filter(UserCredential.is_active.is_(True))
-            .first()
+        credential = db.scalar(
+            select(UserCredential).where(
+                UserCredential.username == username,
+                UserCredential.provider == AuthProvider.local,
+                UserCredential.is_active.is_(True),
+            )
         )
         if not credential:
             raise HTTPException(status_code=401, detail="Invalid credentials")

@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.auth import MFAMethod, MFAMethodType, SessionStatus, UserCredential
@@ -30,12 +31,11 @@ class ProfileWebService:
         auth: WebAuthContext,
         db: Session,
     ) -> HTMLResponse:
-        mfa_methods = (
-            db.query(MFAMethod)
-            .filter(MFAMethod.person_id == auth.person_id)
+        mfa_methods = db.scalars(
+            select(MFAMethod)
+            .where(MFAMethod.person_id == auth.person_id)
             .order_by(MFAMethod.created_at.desc())
-            .all()
-        )
+        ).all()
 
         has_totp = any(
             method.method_type == MFAMethodType.totp and method.enabled
@@ -67,15 +67,16 @@ class ProfileWebService:
     ) -> HTMLResponse:
         now = datetime.now(UTC)
 
-        sessions = (
-            db.query(AuthSession)
-            .filter(AuthSession.person_id == auth.person_id)
-            .filter(AuthSession.status == SessionStatus.active)
-            .filter(AuthSession.revoked_at.is_(None))
-            .filter(AuthSession.expires_at > now)
+        sessions = db.scalars(
+            select(AuthSession)
+            .where(
+                AuthSession.person_id == auth.person_id,
+                AuthSession.status == SessionStatus.active,
+                AuthSession.revoked_at.is_(None),
+                AuthSession.expires_at > now,
+            )
             .order_by(AuthSession.last_seen_at.desc().nullsfirst())
-            .all()
-        )
+        ).all()
 
         access_token = request.cookies.get("access_token")
         current_session_id = None
@@ -103,11 +104,11 @@ class ProfileWebService:
         auth: WebAuthContext,
         db: Session,
     ) -> HTMLResponse:
-        credential = (
-            db.query(UserCredential)
-            .filter(UserCredential.person_id == auth.person_id)
-            .filter(UserCredential.is_active.is_(True))
-            .first()
+        credential = db.scalar(
+            select(UserCredential).where(
+                UserCredential.person_id == auth.person_id,
+                UserCredential.is_active.is_(True),
+            )
         )
 
         context = base_context(request, auth, "Change Password", "settings")
@@ -132,40 +133,49 @@ class ProfileWebService:
         if not person:
             return RedirectResponse(url="/logout", status_code=302)
 
-        credential = (
-            db.query(UserCredential)
-            .filter(UserCredential.person_id == auth.person_id)
-            .filter(UserCredential.is_active.is_(True))
-            .first()
+        credential = db.scalar(
+            select(UserCredential).where(
+                UserCredential.person_id == auth.person_id,
+                UserCredential.is_active.is_(True),
+            )
         )
 
         now = datetime.now(UTC)
         active_sessions = (
-            db.query(AuthSession)
-            .filter(AuthSession.person_id == auth.person_id)
-            .filter(AuthSession.status == SessionStatus.active)
-            .filter(AuthSession.revoked_at.is_(None))
-            .filter(AuthSession.expires_at > now)
-            .count()
+            db.scalar(
+                select(func.count())
+                .select_from(AuthSession)
+                .where(
+                    AuthSession.person_id == auth.person_id,
+                    AuthSession.status == SessionStatus.active,
+                    AuthSession.revoked_at.is_(None),
+                    AuthSession.expires_at > now,
+                )
+            )
+            or 0
         )
 
-        current_session = (
-            db.query(AuthSession)
-            .filter(AuthSession.person_id == auth.person_id)
-            .filter(AuthSession.status == SessionStatus.active)
-            .filter(AuthSession.revoked_at.is_(None))
-            .filter(AuthSession.expires_at > now)
+        current_session = db.scalar(
+            select(AuthSession)
+            .where(
+                AuthSession.person_id == auth.person_id,
+                AuthSession.status == SessionStatus.active,
+                AuthSession.revoked_at.is_(None),
+                AuthSession.expires_at > now,
+            )
             .order_by(AuthSession.last_seen_at.desc())
-            .first()
         )
 
         has_2fa = (
-            db.query(MFAMethod)
-            .filter(MFAMethod.person_id == auth.person_id)
-            .filter(MFAMethod.enabled.is_(True))
-            .filter(MFAMethod.method_type == MFAMethodType.totp)
-            .first()
-        ) is not None
+            db.scalar(
+                select(MFAMethod).where(
+                    MFAMethod.person_id == auth.person_id,
+                    MFAMethod.enabled.is_(True),
+                    MFAMethod.method_type == MFAMethodType.totp,
+                )
+            )
+            is not None
+        )
 
         context = base_context(request, auth, "Profile", "settings")
         context.update(

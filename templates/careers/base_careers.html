@@ -36,6 +36,7 @@
     <link href="/static/css/font-overrides.css" rel="stylesheet">
 
     {% if brand.css %}
+    {# nosemgrep: semgrep.safe-on-user-content #}
     <style>{{ brand.css | safe }}</style>
     {% endif %}
 

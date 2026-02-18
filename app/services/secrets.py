@@ -4,6 +4,7 @@ from urllib.parse import urlparse
 
 import httpx
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.domain_settings import DomainSetting, SettingDomain
@@ -35,12 +36,12 @@ def _coerce_bool(value: object | None, default: bool = False) -> bool:
 def _openbao_allow_insecure(db: Session | None) -> bool:
     if db is not None:
         try:
-            setting = (
-                db.query(DomainSetting)
-                .filter(DomainSetting.domain == SettingDomain.automation)
-                .filter(DomainSetting.key == "openbao_allow_insecure")
-                .filter(DomainSetting.is_active.is_(True))
-                .first()
+            setting = db.scalar(
+                select(DomainSetting).where(
+                    DomainSetting.domain == SettingDomain.automation,
+                    DomainSetting.key == "openbao_allow_insecure",
+                    DomainSetting.is_active.is_(True),
+                )
             )
             if setting:
                 raw = (

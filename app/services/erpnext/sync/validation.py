@@ -9,6 +9,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.sync.staging import (
@@ -123,14 +124,11 @@ class StagingValidationService:
 
     def _validate_departments(self, batch_id: uuid.UUID, report: ValidationReport):
         """Validate department records."""
-        records = (
-            self.db.query(StagingDepartment)
-            .filter(
-                StagingDepartment.batch_id == batch_id,
-                StagingDepartment.organization_id == self.organization_id,
-            )
-            .all()
-        )
+        records = self.db.scalars(
+            select(StagingDepartment)
+            .where(StagingDepartment.batch_id == batch_id)
+            .where(StagingDepartment.organization_id == self.organization_id)
+        ).all()
 
         valid = 0
         invalid = 0
@@ -153,13 +151,10 @@ class StagingValidationService:
 
             # Check parent reference exists
             if dept.parent_department_name:
-                parent_exists = (
-                    self.db.query(StagingDepartment)
-                    .filter(
-                        StagingDepartment.batch_id == batch_id,
-                        StagingDepartment.source_name == dept.parent_department_name,
-                    )
-                    .first()
+                parent_exists = self.db.scalar(
+                    select(StagingDepartment)
+                    .where(StagingDepartment.batch_id == batch_id)
+                    .where(StagingDepartment.source_name == dept.parent_department_name)
                 )
                 if not parent_exists:
                     warnings.append(
@@ -210,14 +205,11 @@ class StagingValidationService:
 
     def _validate_designations(self, batch_id: uuid.UUID, report: ValidationReport):
         """Validate designation records."""
-        records = (
-            self.db.query(StagingDesignation)
-            .filter(
-                StagingDesignation.batch_id == batch_id,
-                StagingDesignation.organization_id == self.organization_id,
-            )
-            .all()
-        )
+        records = self.db.scalars(
+            select(StagingDesignation)
+            .where(StagingDesignation.batch_id == batch_id)
+            .where(StagingDesignation.organization_id == self.organization_id)
+        ).all()
 
         valid = 0
         invalid = 0
@@ -260,14 +252,11 @@ class StagingValidationService:
 
     def _validate_employment_types(self, batch_id: uuid.UUID, report: ValidationReport):
         """Validate employment type records."""
-        records = (
-            self.db.query(StagingEmploymentType)
-            .filter(
-                StagingEmploymentType.batch_id == batch_id,
-                StagingEmploymentType.organization_id == self.organization_id,
-            )
-            .all()
-        )
+        records = self.db.scalars(
+            select(StagingEmploymentType)
+            .where(StagingEmploymentType.batch_id == batch_id)
+            .where(StagingEmploymentType.organization_id == self.organization_id)
+        ).all()
 
         valid = 0
         invalid = 0
@@ -300,14 +289,11 @@ class StagingValidationService:
 
     def _validate_employee_grades(self, batch_id: uuid.UUID, report: ValidationReport):
         """Validate employee grade records."""
-        records = (
-            self.db.query(StagingEmployeeGrade)
-            .filter(
-                StagingEmployeeGrade.batch_id == batch_id,
-                StagingEmployeeGrade.organization_id == self.organization_id,
-            )
-            .all()
-        )
+        records = self.db.scalars(
+            select(StagingEmployeeGrade)
+            .where(StagingEmployeeGrade.batch_id == batch_id)
+            .where(StagingEmployeeGrade.organization_id == self.organization_id)
+        ).all()
 
         valid = 0
         invalid = 0
@@ -340,42 +326,47 @@ class StagingValidationService:
 
     def _validate_employees(self, batch_id: uuid.UUID, report: ValidationReport):
         """Validate employee records - the main validation target."""
-        records = (
-            self.db.query(StagingEmployee)
-            .filter(
-                StagingEmployee.batch_id == batch_id,
-                StagingEmployee.organization_id == self.organization_id,
-            )
-            .all()
-        )
+        records = self.db.scalars(
+            select(StagingEmployee)
+            .where(StagingEmployee.batch_id == batch_id)
+            .where(StagingEmployee.organization_id == self.organization_id)
+        ).all()
 
         valid = 0
         invalid = 0
 
         # Build lookup sets for reference validation
         dept_names = set(
-            r.source_name
-            for r in self.db.query(StagingDepartment.source_name)
-            .filter(StagingDepartment.batch_id == batch_id)
-            .all()
+            r
+            for r in self.db.scalars(
+                select(StagingDepartment.source_name).where(
+                    StagingDepartment.batch_id == batch_id
+                )
+            ).all()
         )
         desg_names = set(
-            r.source_name
-            for r in self.db.query(StagingDesignation.source_name)
-            .filter(StagingDesignation.batch_id == batch_id)
-            .all()
+            r
+            for r in self.db.scalars(
+                select(StagingDesignation.source_name).where(
+                    StagingDesignation.batch_id == batch_id
+                )
+            ).all()
         )
         emptype_names = set(
-            r.source_name
-            for r in self.db.query(StagingEmploymentType.source_name)
-            .filter(StagingEmploymentType.batch_id == batch_id)
-            .all()
+            r
+            for r in self.db.scalars(
+                select(StagingEmploymentType.source_name).where(
+                    StagingEmploymentType.batch_id == batch_id
+                )
+            ).all()
         )
         grade_names = set(
-            r.source_name
-            for r in self.db.query(StagingEmployeeGrade.source_name)
-            .filter(StagingEmployeeGrade.batch_id == batch_id)
-            .all()
+            r
+            for r in self.db.scalars(
+                select(StagingEmployeeGrade.source_name).where(
+                    StagingEmployeeGrade.batch_id == batch_id
+                )
+            ).all()
         )
         emp_names = set(r.source_name for r in records)
 
@@ -500,14 +491,11 @@ class StagingValidationService:
         - email: The duplicate email
         - employees: List of employee records sharing this email
         """
-        records = (
-            self.db.query(StagingEmployee)
-            .filter(
-                StagingEmployee.batch_id == batch_id,
-                StagingEmployee.organization_id == self.organization_id,
-            )
-            .all()
-        )
+        records = self.db.scalars(
+            select(StagingEmployee)
+            .where(StagingEmployee.batch_id == batch_id)
+            .where(StagingEmployee.organization_id == self.organization_id)
+        ).all()
 
         email_groups: dict[str, list[dict]] = {}
         for emp in records:
@@ -548,14 +536,11 @@ class StagingValidationService:
         Returns dict with missing references by type.
         """
         # Get all referenced values from employees
-        employees = (
-            self.db.query(StagingEmployee)
-            .filter(
-                StagingEmployee.batch_id == batch_id,
-                StagingEmployee.organization_id == self.organization_id,
-            )
-            .all()
-        )
+        employees = self.db.scalars(
+            select(StagingEmployee)
+            .where(StagingEmployee.batch_id == batch_id)
+            .where(StagingEmployee.organization_id == self.organization_id)
+        ).all()
 
         referenced_depts = set(
             e.department_name for e in employees if e.department_name
@@ -573,28 +558,36 @@ class StagingValidationService:
 
         # Get existing staging records
         staged_depts = set(
-            r.source_name
-            for r in self.db.query(StagingDepartment.source_name)
-            .filter(StagingDepartment.batch_id == batch_id)
-            .all()
+            r
+            for r in self.db.scalars(
+                select(StagingDepartment.source_name).where(
+                    StagingDepartment.batch_id == batch_id
+                )
+            ).all()
         )
         staged_desgs = set(
-            r.source_name
-            for r in self.db.query(StagingDesignation.source_name)
-            .filter(StagingDesignation.batch_id == batch_id)
-            .all()
+            r
+            for r in self.db.scalars(
+                select(StagingDesignation.source_name).where(
+                    StagingDesignation.batch_id == batch_id
+                )
+            ).all()
         )
         staged_types = set(
-            r.source_name
-            for r in self.db.query(StagingEmploymentType.source_name)
-            .filter(StagingEmploymentType.batch_id == batch_id)
-            .all()
+            r
+            for r in self.db.scalars(
+                select(StagingEmploymentType.source_name).where(
+                    StagingEmploymentType.batch_id == batch_id
+                )
+            ).all()
         )
         staged_grades = set(
-            r.source_name
-            for r in self.db.query(StagingEmployeeGrade.source_name)
-            .filter(StagingEmployeeGrade.batch_id == batch_id)
-            .all()
+            r
+            for r in self.db.scalars(
+                select(StagingEmployeeGrade.source_name).where(
+                    StagingEmployeeGrade.batch_id == batch_id
+                )
+            ).all()
         )
         staged_emps = set(e.source_name for e in employees)
 

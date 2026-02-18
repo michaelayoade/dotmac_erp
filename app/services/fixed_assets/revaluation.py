@@ -13,7 +13,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.models.fixed_assets.asset import Asset, AssetStatus
@@ -109,16 +109,17 @@ class AssetRevaluationService(ListResponseMixin):
         prior_surplus_reversed = Decimal("0")
 
         # Get cumulative revaluation history
-        prior_revals = (
-            db.query(AssetRevaluation)
-            .filter(
-                and_(
-                    AssetRevaluation.asset_id == ast_id,
-                    AssetRevaluation.revaluation_date < input.revaluation_date,
+        prior_revals = list(
+            db.scalars(
+                select(AssetRevaluation)
+                .where(
+                    and_(
+                        AssetRevaluation.asset_id == ast_id,
+                        AssetRevaluation.revaluation_date < input.revaluation_date,
+                    )
                 )
-            )
-            .order_by(AssetRevaluation.revaluation_date.desc())
-            .all()
+                .order_by(AssetRevaluation.revaluation_date.desc())
+            ).all()
         )
 
         # Calculate cumulative prior surplus in equity
@@ -336,11 +337,12 @@ class AssetRevaluationService(ListResponseMixin):
         if not asset or asset.organization_id != org_id:
             raise HTTPException(status_code=404, detail="Asset not found")
 
-        return (
-            db.query(AssetRevaluation)
-            .filter(AssetRevaluation.asset_id == ast_id)
-            .order_by(AssetRevaluation.revaluation_date.desc())
-            .all()
+        return list(
+            db.scalars(
+                select(AssetRevaluation)
+                .where(AssetRevaluation.asset_id == ast_id)
+                .order_by(AssetRevaluation.revaluation_date.desc())
+            ).all()
         )
 
     @staticmethod
@@ -354,26 +356,26 @@ class AssetRevaluationService(ListResponseMixin):
         offset: int = 0,
     ) -> list[AssetRevaluation]:
         """List revaluations with optional filters."""
-        query = db.query(AssetRevaluation)
+        query = select(AssetRevaluation)
 
         if asset_id:
-            query = query.filter(AssetRevaluation.asset_id == coerce_uuid(asset_id))
+            query = query.where(AssetRevaluation.asset_id == coerce_uuid(asset_id))
         elif organization_id:
             # Need to join to filter by org
             query = query.join(
                 Asset, AssetRevaluation.asset_id == Asset.asset_id
-            ).filter(Asset.organization_id == coerce_uuid(organization_id))
+            ).where(Asset.organization_id == coerce_uuid(organization_id))
 
         if fiscal_period_id:
-            query = query.filter(
+            query = query.where(
                 AssetRevaluation.fiscal_period_id == coerce_uuid(fiscal_period_id)
             )
 
         if pending_approval:
-            query = query.filter(AssetRevaluation.approved_by_user_id.is_(None))
+            query = query.where(AssetRevaluation.approved_by_user_id.is_(None))
 
         query = query.order_by(AssetRevaluation.revaluation_date.desc())
-        return query.limit(limit).offset(offset).all()
+        return list(db.scalars(query.limit(limit).offset(offset)).all())
 
 
 # Module-level singleton instance

@@ -14,7 +14,7 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.inventory.inventory_transaction import (
@@ -109,15 +109,13 @@ class WarehouseService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
 
         # Check for duplicate
-        existing = (
-            db.query(Warehouse)
-            .filter(
+        existing = db.scalar(
+            select(Warehouse).where(
                 and_(
                     Warehouse.organization_id == org_id,
                     Warehouse.warehouse_code == input.warehouse_code,
                 )
             )
-            .first()
         )
 
         if existing:
@@ -176,15 +174,13 @@ class WarehouseService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Warehouse not found")
 
         # Check for duplicate
-        existing = (
-            db.query(WarehouseLocation)
-            .filter(
+        existing = db.scalar(
+            select(WarehouseLocation).where(
                 and_(
                     WarehouseLocation.warehouse_id == wh_id,
                     WarehouseLocation.location_code == input.location_code,
                 )
             )
-            .first()
         )
 
         if existing:
@@ -243,7 +239,7 @@ class WarehouseService(ListResponseMixin):
 
         # Calculate running balance from transactions
         query = (
-            db.query(
+            select(
                 InventoryTransaction.warehouse_id,
                 func.sum(
                     func.case(
@@ -282,7 +278,7 @@ class WarehouseService(ListResponseMixin):
                     )
                 ).label("quantity_on_hand"),
             )
-            .filter(
+            .where(
                 and_(
                     InventoryTransaction.organization_id == org_id,
                     InventoryTransaction.item_id == itm_id,
@@ -292,11 +288,11 @@ class WarehouseService(ListResponseMixin):
         )
 
         if warehouse_id:
-            query = query.filter(
+            query = query.where(
                 InventoryTransaction.warehouse_id == coerce_uuid(warehouse_id)
             )
 
-        results = query.all()
+        results = db.execute(query).all()
 
         balances = []
         for wh_id, qty in results:
@@ -346,17 +342,16 @@ class WarehouseService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Warehouse not found")
 
         # Get distinct items in warehouse
-        item_ids = (
-            db.query(InventoryTransaction.item_id)
-            .filter(
+        item_ids = db.execute(
+            select(InventoryTransaction.item_id)
+            .where(
                 and_(
                     InventoryTransaction.organization_id == org_id,
                     InventoryTransaction.warehouse_id == wh_id,
                 )
             )
             .distinct()
-            .all()
-        )
+        ).all()
 
         balances = []
         for (itm_id,) in item_ids:
@@ -395,31 +390,33 @@ class WarehouseService(ListResponseMixin):
         offset: int = 0,
     ) -> builtins.list[Warehouse]:
         """List warehouses with optional filters."""
-        query = db.query(Warehouse)
+        query = select(Warehouse)
 
         if organization_id:
-            query = query.filter(
+            query = query.where(
                 Warehouse.organization_id == coerce_uuid(organization_id)
             )
 
         if is_active is not None:
-            query = query.filter(Warehouse.is_active == is_active)
+            query = query.where(Warehouse.is_active == is_active)
 
         if is_receiving is not None:
-            query = query.filter(Warehouse.is_receiving == is_receiving)
+            query = query.where(Warehouse.is_receiving == is_receiving)
 
         if is_shipping is not None:
-            query = query.filter(Warehouse.is_shipping == is_shipping)
+            query = query.where(Warehouse.is_shipping == is_shipping)
 
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
-                (Warehouse.warehouse_code.ilike(search_pattern))
-                | (Warehouse.warehouse_name.ilike(search_pattern))
+            query = query.where(
+                or_(
+                    Warehouse.warehouse_code.ilike(search_pattern),
+                    Warehouse.warehouse_name.ilike(search_pattern),
+                )
             )
 
         query = query.order_by(Warehouse.warehouse_code)
-        return query.limit(limit).offset(offset).all()
+        return db.scalars(query.limit(limit).offset(offset)).all()
 
     @staticmethod
     def list_locations(
@@ -432,15 +429,13 @@ class WarehouseService(ListResponseMixin):
         """List locations in a warehouse."""
         wh_id = coerce_uuid(warehouse_id)
 
-        query = db.query(WarehouseLocation).filter(
-            WarehouseLocation.warehouse_id == wh_id
-        )
+        query = select(WarehouseLocation).where(WarehouseLocation.warehouse_id == wh_id)
 
         if is_active is not None:
-            query = query.filter(WarehouseLocation.is_active == is_active)
+            query = query.where(WarehouseLocation.is_active == is_active)
 
         query = query.order_by(WarehouseLocation.location_code)
-        return query.limit(limit).offset(offset).all()
+        return db.scalars(query.limit(limit).offset(offset)).all()
 
     @staticmethod
     def update_warehouse(
@@ -493,24 +488,26 @@ class WarehouseService(ListResponseMixin):
         search: str | None = None,
     ) -> int:
         """Count warehouses with filters."""
-        query = db.query(Warehouse)
+        query = select(Warehouse)
 
         if organization_id:
-            query = query.filter(
+            query = query.where(
                 Warehouse.organization_id == coerce_uuid(organization_id)
             )
 
         if is_active is not None:
-            query = query.filter(Warehouse.is_active == is_active)
+            query = query.where(Warehouse.is_active == is_active)
 
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
-                (Warehouse.warehouse_code.ilike(search_pattern))
-                | (Warehouse.warehouse_name.ilike(search_pattern))
+            query = query.where(
+                or_(
+                    Warehouse.warehouse_code.ilike(search_pattern),
+                    Warehouse.warehouse_name.ilike(search_pattern),
+                )
             )
 
-        return query.count()
+        return db.scalar(select(func.count()).select_from(query.subquery())) or 0
 
     @staticmethod
     def deactivate_warehouse(

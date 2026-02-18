@@ -485,6 +485,62 @@ class TestPostInvoice:
         assert journal_input.lines[1].credit_amount == Decimal("107.50")
 
     @patch(
+        "app.services.finance.ar.posting.invoice.BasePostingAdapter.create_and_approve_journal"
+    )
+    @patch("app.services.finance.ar.posting.invoice.BasePostingAdapter.post_to_ledger")
+    def test_post_invoice_approved_delta_allocation_balances_journal(
+        self,
+        mock_post_to_ledger,
+        mock_create_and_approve,
+        mock_db,
+        organization_id,
+        user_id,
+        mock_customer,
+    ):
+        """Approved invoices with header/line deltas should still balance."""
+        invoice = MockInvoice(
+            organization_id=organization_id,
+            customer_id=mock_customer.customer_id,
+            total_amount=Decimal("18812.50"),
+            functional_currency_amount=Decimal("18812.50"),
+            status=InvoiceStatus.APPROVED,
+        )
+        line = MockInvoiceLine(
+            invoice_id=invoice.invoice_id,
+            line_amount=Decimal("17500.00"),
+            tax_amount=Decimal("0"),
+        )
+
+        def get_side_effect(model, id):
+            if str(id) == str(invoice.invoice_id):
+                return invoice
+            if str(id) == str(mock_customer.customer_id):
+                return mock_customer
+            return None
+
+        mock_db.get.side_effect = get_side_effect
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+            line
+        ]
+
+        journal = MockJournal()
+        mock_create_and_approve.return_value = (journal, None)
+        mock_post_to_ledger.return_value = MockPostingResult(success=True)
+
+        result = ARPostingAdapter.post_invoice(
+            db=mock_db,
+            organization_id=organization_id,
+            invoice_id=invoice.invoice_id,
+            posting_date=date.today(),
+            posted_by_user_id=user_id,
+        )
+
+        assert result.success is True
+        journal_input = mock_create_and_approve.call_args[0][2]
+        assert journal_input.lines[0].debit_amount == Decimal("18812.50")
+        assert journal_input.lines[1].credit_amount == Decimal("18812.50")
+
+    @patch(
         "app.services.finance.ar.posting.invoice._resolve_tax_accounts",
         return_value={},
     )

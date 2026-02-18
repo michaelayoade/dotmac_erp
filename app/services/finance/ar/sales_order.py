@@ -9,7 +9,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Query, Session
 
 from app.config import settings
 from app.models.finance.ar.invoice import Invoice, InvoiceStatus, InvoiceType
@@ -767,7 +767,9 @@ class SalesOrderService:
 
         org_id = coerce_uuid(organization_id)
 
-        query = db.query(SalesOrder).filter(SalesOrder.organization_id == org_id)
+        query = Query([SalesOrder], session=db).filter(
+            SalesOrder.organization_id == org_id
+        )
 
         if customer_id:
             query = query.filter(SalesOrder.customer_id == coerce_uuid(customer_id))
