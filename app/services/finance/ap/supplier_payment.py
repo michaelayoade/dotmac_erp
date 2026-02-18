@@ -14,7 +14,6 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -31,8 +30,9 @@ from app.models.finance.ap.supplier_payment import (
 )
 from app.models.finance.audit.audit_log import AuditAction
 from app.models.finance.core_config.numbering_sequence import SequenceType
+from app.models.finance.tax.tax_code import TaxCode, TaxType
 from app.services.audit_dispatcher import fire_audit_event
-from app.services.common import coerce_uuid
+from app.services.common import NotFoundError, ValidationError, coerce_uuid
 from app.services.finance.ap.input_utils import (
     parse_date_str,
     parse_decimal,
@@ -180,10 +180,10 @@ class SupplierPaymentService(ListResponseMixin):
         # Validate supplier
         supplier = db.get(Supplier, supplier_id)
         if not supplier or supplier.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Supplier not found")
+            raise NotFoundError("Supplier not found")
 
         if not supplier.is_active:
-            raise HTTPException(status_code=400, detail="Supplier is not active")
+            raise ValidationError("Supplier is not active")
 
         # Resolve WHT amount (support legacy field)
         wht_amount = input.wht_amount
@@ -200,9 +200,8 @@ class SupplierPaymentService(ListResponseMixin):
             # Validate the amounts match (with small tolerance for rounding)
             expected_net = gross_amount - wht_amount
             if abs(expected_net - input.amount) > Decimal("0.01"):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Amount mismatch: gross ({gross_amount}) - WHT ({wht_amount}) != net ({input.amount})",
+                raise ValidationError(
+                    f"Amount mismatch: gross ({gross_amount}) - WHT ({wht_amount}) != net ({input.amount})"
                 )
 
         wht_code_id: UUID | None = None
@@ -213,47 +212,45 @@ class SupplierPaymentService(ListResponseMixin):
             if supplier.withholding_tax_applicable and supplier.withholding_tax_code_id:
                 wht_code_id = supplier.withholding_tax_code_id
             else:
-                raise HTTPException(
-                    status_code=400,
-                    detail="WHT tax code is required when withholding tax amount is specified",
+                raise ValidationError(
+                    "WHT tax code is required when withholding tax amount is specified"
                 )
         else:
             wht_code_id = input.wht_code_id
+
+        if wht_code_id:
+            wht_code = db.get(TaxCode, coerce_uuid(wht_code_id))
+            if not wht_code or wht_code.organization_id != org_id:
+                raise NotFoundError("WHT tax code not found")
+            if wht_code.tax_type != TaxType.WITHHOLDING:
+                raise ValidationError("Selected tax code is not a WITHHOLDING tax code")
+            wht_code_id = wht_code.tax_code_id
 
         # Validate allocations total - should match GROSS amount (invoice amount before WHT)
         if input.allocations:
             allocation_total = sum(a.amount for a in input.allocations)
             if allocation_total > gross_amount:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Allocation total exceeds gross payment amount",
-                )
+                raise ValidationError("Allocation total exceeds gross payment amount")
 
             # Validate invoices exist and are payable
             for alloc in input.allocations:
                 invoice = db.get(SupplierInvoice, coerce_uuid(alloc.invoice_id))
                 if not invoice or invoice.organization_id != org_id:
-                    raise HTTPException(
-                        status_code=404,
-                        detail=f"Invoice {alloc.invoice_id} not found",
-                    )
+                    raise NotFoundError(f"Invoice {alloc.invoice_id} not found")
                 if invoice.supplier_id != supplier_id:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Invoice {invoice.invoice_number} belongs to different supplier",
+                    raise ValidationError(
+                        f"Invoice {invoice.invoice_number} belongs to different supplier"
                     )
                 if invoice.status not in [
                     SupplierInvoiceStatus.POSTED,
                     SupplierInvoiceStatus.PARTIALLY_PAID,
                 ]:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Invoice {invoice.invoice_number} is not payable",
+                    raise ValidationError(
+                        f"Invoice {invoice.invoice_number} is not payable"
                     )
                 if alloc.amount > invoice.balance_due:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=f"Allocation exceeds balance due on {invoice.invoice_number}",
+                    raise ValidationError(
+                        f"Allocation exceeds balance due on {invoice.invoice_number}"
                     )
 
         # Generate payment number
@@ -346,19 +343,17 @@ class SupplierPaymentService(ListResponseMixin):
 
         payment = db.get(SupplierPayment, pay_id)
         if not payment or payment.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Payment not found")
+            raise NotFoundError("Payment not found")
 
         if payment.status not in [APPaymentStatus.DRAFT, APPaymentStatus.PENDING]:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot approve payment with status '{payment.status.value}'",
+            raise ValidationError(
+                f"Cannot approve payment with status '{payment.status.value}'"
             )
 
         # Segregation of Duties check
         if payment.created_by_user_id == user_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Segregation of duties violation: creator cannot approve",
+            raise ValidationError(
+                "Segregation of duties violation: creator cannot approve"
             )
 
         old_status = payment.status.value
@@ -434,12 +429,11 @@ class SupplierPaymentService(ListResponseMixin):
 
         payment = db.get(SupplierPayment, pay_id)
         if not payment or payment.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Payment not found")
+            raise NotFoundError("Payment not found")
 
         if payment.status != APPaymentStatus.APPROVED:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot post payment with status '{payment.status.value}'",
+            raise ValidationError(
+                f"Cannot post payment with status '{payment.status.value}'"
             )
 
         # Post via adapter
@@ -452,7 +446,7 @@ class SupplierPaymentService(ListResponseMixin):
         )
 
         if not result.success:
-            raise HTTPException(status_code=400, detail=result.message)
+            raise ValidationError(result.message)
 
         # Update payment status
         payment.status = APPaymentStatus.SENT
@@ -599,12 +593,11 @@ class SupplierPaymentService(ListResponseMixin):
 
         payment = db.get(SupplierPayment, pay_id)
         if not payment or payment.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Payment not found")
+            raise NotFoundError("Payment not found")
 
         if payment.status in [APPaymentStatus.CLEARED, APPaymentStatus.VOID]:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot void payment with status '{payment.status.value}'",
+            raise ValidationError(
+                f"Cannot void payment with status '{payment.status.value}'"
             )
 
         # If payment was posted, reverse the allocations
@@ -670,12 +663,11 @@ class SupplierPaymentService(ListResponseMixin):
 
         payment = db.get(SupplierPayment, pay_id)
         if not payment or payment.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Payment not found")
+            raise NotFoundError("Payment not found")
 
         if payment.status != APPaymentStatus.SENT:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot clear payment with status '{payment.status.value}'",
+            raise ValidationError(
+                f"Cannot clear payment with status '{payment.status.value}'"
             )
 
         payment.status = APPaymentStatus.CLEARED
@@ -707,9 +699,9 @@ class SupplierPaymentService(ListResponseMixin):
         """
         payment = db.get(SupplierPayment, coerce_uuid(payment_id))
         if not payment:
-            raise HTTPException(status_code=404, detail="Payment not found")
+            raise NotFoundError("Payment not found")
         if organization_id is not None and payment.organization_id != organization_id:
-            raise HTTPException(status_code=404, detail="Payment not found")
+            raise NotFoundError("Payment not found")
         return payment
 
     @staticmethod
@@ -734,7 +726,7 @@ class SupplierPaymentService(ListResponseMixin):
 
         payment = db.get(SupplierPayment, pay_id)
         if not payment or payment.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Payment not found")
+            raise NotFoundError("Payment not found")
 
         return list(
             db.scalars(
@@ -756,15 +748,12 @@ class SupplierPaymentService(ListResponseMixin):
 
         payment = db.get(SupplierPayment, pay_id)
         if not payment or payment.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Payment not found")
+            raise NotFoundError("Payment not found")
 
         if payment.status != APPaymentStatus.DRAFT:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Cannot delete payment with status '{payment.status.value}'. "
-                    "Only draft payments can be deleted."
-                ),
+            raise ValidationError(
+                f"Cannot delete payment with status '{payment.status.value}'. "
+                "Only draft payments can be deleted."
             )
 
         db.query(APPaymentAllocation).filter(
@@ -776,7 +765,7 @@ class SupplierPaymentService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: str | None = None,
+        organization_id: str,
         supplier_id: str | None = None,
         status: APPaymentStatus | None = None,
         payment_method: APPaymentMethod | None = None,
@@ -802,12 +791,9 @@ class SupplierPaymentService(ListResponseMixin):
         Returns:
             List of SupplierPayment objects
         """
-        stmt = select(SupplierPayment)
-
-        if organization_id:
-            stmt = stmt.where(
-                SupplierPayment.organization_id == coerce_uuid(organization_id)
-            )
+        stmt = select(SupplierPayment).where(
+            SupplierPayment.organization_id == coerce_uuid(organization_id)
+        )
 
         if supplier_id:
             stmt = stmt.where(SupplierPayment.supplier_id == coerce_uuid(supplier_id))

@@ -14,7 +14,6 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from fastapi import HTTPException
 from sqlalchemy import and_, delete, func, select
 from sqlalchemy.orm import Session
 
@@ -40,7 +39,7 @@ from app.models.finance.gl.account import Account
 from app.models.finance.tax.tax_code import TaxCode
 from app.models.inventory.item import CostingMethod, Item
 from app.services.audit_dispatcher import fire_audit_event
-from app.services.common import coerce_uuid
+from app.services.common import NotFoundError, ValidationError, coerce_uuid
 from app.services.finance.ap.input_utils import (
     parse_date_str,
     parse_decimal,
@@ -140,6 +139,9 @@ class SupplierInvoiceService(ListResponseMixin):
                     description=line.get("description", ""),
                     quantity=parse_decimal(line.get("quantity", 1), "Quantity"),
                     unit_price=parse_decimal(line.get("unit_price", 0), "Unit price"),
+                    item_id=coerce_uuid(line.get("item_id"))
+                    if line.get("item_id")
+                    else None,
                     expense_account_id=coerce_uuid(line.get("expense_account_id"))
                     if line.get("expense_account_id")
                     else None,
@@ -177,7 +179,7 @@ class SupplierInvoiceService(ListResponseMixin):
                 db, org_id, payload.get("currency_code")
             ),
             exchange_rate=exchange_rate,
-            supplier_invoice_number=payload.get("invoice_number"),
+            supplier_invoice_number=payload.get("invoice_number") or None,
             lines=lines,
         )
 
@@ -194,7 +196,7 @@ class SupplierInvoiceService(ListResponseMixin):
             return
         record = db.get(model, coerce_uuid(record_id))
         if not record or getattr(record, "organization_id", None) != organization_id:
-            raise HTTPException(status_code=404, detail=f"{label} not found")
+            raise NotFoundError(f"{label} not found")
 
     @staticmethod
     def _require_po_line_org(
@@ -206,10 +208,10 @@ class SupplierInvoiceService(ListResponseMixin):
             return
         line = db.get(PurchaseOrderLine, coerce_uuid(po_line_id))
         if not line:
-            raise HTTPException(status_code=404, detail="Purchase order line not found")
+            raise NotFoundError("Purchase order line not found")
         po = db.get(PurchaseOrder, line.po_id)
         if not po or po.organization_id != organization_id:
-            raise HTTPException(status_code=404, detail="Purchase order line not found")
+            raise NotFoundError("Purchase order line not found")
 
     @staticmethod
     def _require_gr_line_org(
@@ -221,10 +223,10 @@ class SupplierInvoiceService(ListResponseMixin):
             return
         line = db.get(GoodsReceiptLine, coerce_uuid(gr_line_id))
         if not line:
-            raise HTTPException(status_code=404, detail="Goods receipt line not found")
+            raise NotFoundError("Goods receipt line not found")
         receipt = db.get(GoodsReceipt, line.receipt_id)
         if not receipt or receipt.organization_id != organization_id:
-            raise HTTPException(status_code=404, detail="Goods receipt line not found")
+            raise NotFoundError("Goods receipt line not found")
 
     @staticmethod
     def create_invoice(
@@ -246,8 +248,8 @@ class SupplierInvoiceService(ListResponseMixin):
             Created SupplierInvoice
 
         Raises:
-            HTTPException(400): If validation fails
-            HTTPException(404): If supplier not found
+            ValidationError: If validation fails
+            NotFoundError: If supplier not found
         """
         org_id = coerce_uuid(organization_id)
         user_id = coerce_uuid(created_by_user_id)
@@ -256,16 +258,14 @@ class SupplierInvoiceService(ListResponseMixin):
         # Validate supplier exists and is active
         supplier = db.get(Supplier, supplier_id)
         if not supplier or supplier.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Supplier not found")
+            raise NotFoundError("Supplier not found")
 
         if not supplier.is_active:
-            raise HTTPException(status_code=400, detail="Supplier is not active")
+            raise ValidationError("Supplier is not active")
 
         # Validate lines
         if not input.lines:
-            raise HTTPException(
-                status_code=400, detail="Invoice must have at least one line"
-            )
+            raise ValidationError("Invoice must have at least one line")
 
         for line in input.lines:
             SupplierInvoiceService._require_org_match(
@@ -487,20 +487,19 @@ class SupplierInvoiceService(ListResponseMixin):
             Updated SupplierInvoice
 
         Raises:
-            HTTPException(404): If invoice not found
-            HTTPException(400): If invoice not in DRAFT status
+            NotFoundError: If invoice not found
+            ValidationError: If invoice not in DRAFT status
         """
         org_id = coerce_uuid(organization_id)
         inv_id = coerce_uuid(invoice_id)
 
         invoice = db.get(SupplierInvoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
 
         if invoice.status != SupplierInvoiceStatus.DRAFT:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot update invoice with status '{invoice.status.value}'",
+            raise ValidationError(
+                f"Cannot update invoice with status '{invoice.status.value}'"
             )
 
         # Delete existing line tax and line records
@@ -580,7 +579,7 @@ class SupplierInvoiceService(ListResponseMixin):
         # Re-create lines
         supplier = db.get(Supplier, invoice.supplier_id)
         if not supplier or supplier.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Supplier not found")
+            raise NotFoundError("Supplier not found")
 
         for line in input.lines:
             SupplierInvoiceService._require_org_match(
@@ -707,8 +706,8 @@ class SupplierInvoiceService(ListResponseMixin):
             Updated SupplierInvoice
 
         Raises:
-            HTTPException(404): If invoice not found
-            HTTPException(400): If invoice cannot be submitted
+            NotFoundError: If invoice not found
+            ValidationError: If invoice cannot be submitted
         """
         org_id = coerce_uuid(organization_id)
         inv_id = coerce_uuid(invoice_id)
@@ -716,12 +715,11 @@ class SupplierInvoiceService(ListResponseMixin):
 
         invoice = db.get(SupplierInvoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
 
         if invoice.status != SupplierInvoiceStatus.DRAFT:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot submit invoice with status '{invoice.status.value}'",
+            raise ValidationError(
+                f"Cannot submit invoice with status '{invoice.status.value}'"
             )
 
         invoice.status = SupplierInvoiceStatus.SUBMITTED
@@ -785,8 +783,8 @@ class SupplierInvoiceService(ListResponseMixin):
             Updated SupplierInvoice
 
         Raises:
-            HTTPException(404): If invoice not found
-            HTTPException(400): If invoice cannot be approved or SoD violation
+            NotFoundError: If invoice not found
+            ValidationError: If invoice cannot be approved or SoD violation
         """
         org_id = coerce_uuid(organization_id)
         inv_id = coerce_uuid(invoice_id)
@@ -794,22 +792,20 @@ class SupplierInvoiceService(ListResponseMixin):
 
         invoice = db.get(SupplierInvoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
 
         if invoice.status not in [
             SupplierInvoiceStatus.SUBMITTED,
             SupplierInvoiceStatus.PENDING_APPROVAL,
         ]:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot approve invoice with status '{invoice.status.value}'",
+            raise ValidationError(
+                f"Cannot approve invoice with status '{invoice.status.value}'"
             )
 
         # Segregation of Duties check
         if invoice.submitted_by_user_id == user_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Segregation of duties violation: submitter cannot approve",
+            raise ValidationError(
+                "Segregation of duties violation: submitter cannot approve"
             )
 
         invoice.status = SupplierInvoiceStatus.APPROVED
@@ -875,8 +871,8 @@ class SupplierInvoiceService(ListResponseMixin):
             Updated SupplierInvoice
 
         Raises:
-            HTTPException(404): If invoice not found
-            HTTPException(400): If invoice cannot be posted
+            NotFoundError: If invoice not found
+            ValidationError: If invoice cannot be posted
         """
         from app.services.finance.ap.ap_posting_adapter import APPostingAdapter
 
@@ -886,12 +882,11 @@ class SupplierInvoiceService(ListResponseMixin):
 
         invoice = db.get(SupplierInvoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
 
         if invoice.status != SupplierInvoiceStatus.APPROVED:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot post invoice with status '{invoice.status.value}'",
+            raise ValidationError(
+                f"Cannot post invoice with status '{invoice.status.value}'"
             )
 
         # Use APPostingAdapter to create GL entries
@@ -904,7 +899,7 @@ class SupplierInvoiceService(ListResponseMixin):
         )
 
         if not result.success:
-            raise HTTPException(status_code=400, detail=result.message)
+            raise ValidationError(result.message)
 
         # Update invoice status
         invoice.status = SupplierInvoiceStatus.POSTED
@@ -1051,15 +1046,15 @@ class SupplierInvoiceService(ListResponseMixin):
             Updated SupplierInvoice
 
         Raises:
-            HTTPException(404): If invoice not found
-            HTTPException(400): If invoice cannot be voided
+            NotFoundError: If invoice not found
+            ValidationError: If invoice cannot be voided
         """
         org_id = coerce_uuid(organization_id)
         inv_id = coerce_uuid(invoice_id)
 
         invoice = db.get(SupplierInvoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
 
         # Can void DRAFT, SUBMITTED, PENDING_APPROVAL, APPROVED
         non_voidable = [
@@ -1070,9 +1065,8 @@ class SupplierInvoiceService(ListResponseMixin):
         ]
 
         if invoice.status in non_voidable:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot void invoice with status '{invoice.status.value}'",
+            raise ValidationError(
+                f"Cannot void invoice with status '{invoice.status.value}'"
             )
 
         old_status = invoice.status.value
@@ -1120,15 +1114,14 @@ class SupplierInvoiceService(ListResponseMixin):
 
         invoice = db.get(SupplierInvoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
 
         if invoice.status in [
             SupplierInvoiceStatus.PAID,
             SupplierInvoiceStatus.VOID,
         ]:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot put on hold invoice with status '{invoice.status.value}'",
+            raise ValidationError(
+                f"Cannot put on hold invoice with status '{invoice.status.value}'"
             )
 
         invoice.status = SupplierInvoiceStatus.ON_HOLD
@@ -1160,10 +1153,10 @@ class SupplierInvoiceService(ListResponseMixin):
 
         invoice = db.get(SupplierInvoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
 
         if invoice.status != SupplierInvoiceStatus.ON_HOLD:
-            raise HTTPException(status_code=400, detail="Invoice is not on hold")
+            raise ValidationError("Invoice is not on hold")
 
         # Return to APPROVED if it was posted-eligible, else SUBMITTED
         if invoice.approved_by_user_id:
@@ -1200,15 +1193,14 @@ class SupplierInvoiceService(ListResponseMixin):
 
         invoice = db.get(SupplierInvoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
 
         if invoice.status not in [
             SupplierInvoiceStatus.POSTED,
             SupplierInvoiceStatus.PARTIALLY_PAID,
         ]:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot pay invoice with status '{invoice.status.value}'",
+            raise ValidationError(
+                f"Cannot pay invoice with status '{invoice.status.value}'"
             )
 
         invoice.amount_paid += payment_amount
@@ -1227,7 +1219,7 @@ class SupplierInvoiceService(ListResponseMixin):
     def get(
         db: Session,
         invoice_id: str,
-        organization_id: UUID | None = None,
+        organization_id: UUID | str | None = None,
     ) -> SupplierInvoice:
         """
         Get an invoice by ID.
@@ -1241,13 +1233,15 @@ class SupplierInvoiceService(ListResponseMixin):
             SupplierInvoice
 
         Raises:
-            HTTPException(404): If not found or not in organization
+            NotFoundError: If not found or not in organization
         """
         invoice = db.get(SupplierInvoice, coerce_uuid(invoice_id))
         if not invoice:
-            raise HTTPException(status_code=404, detail="Invoice not found")
-        if organization_id is not None and invoice.organization_id != organization_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
+        if organization_id is not None and invoice.organization_id != coerce_uuid(
+            organization_id
+        ):
+            raise NotFoundError("Invoice not found")
         return invoice
 
     @staticmethod
@@ -1272,7 +1266,7 @@ class SupplierInvoiceService(ListResponseMixin):
 
         invoice = db.get(SupplierInvoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
 
         return list(
             db.scalars(
@@ -1285,7 +1279,7 @@ class SupplierInvoiceService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: str | None = None,
+        organization_id: str,
         supplier_id: str | None = None,
         status: SupplierInvoiceStatus | None = None,
         invoice_type: SupplierInvoiceType | None = None,
@@ -1300,7 +1294,7 @@ class SupplierInvoiceService(ListResponseMixin):
 
         Args:
             db: Database session
-            organization_id: Filter by organization
+            organization_id: Organization scope for multi-tenant isolation
             supplier_id: Filter by supplier
             status: Filter by status
             invoice_type: Filter by type
@@ -1313,12 +1307,9 @@ class SupplierInvoiceService(ListResponseMixin):
         Returns:
             List of SupplierInvoice objects
         """
-        stmt = select(SupplierInvoice)
-
-        if organization_id:
-            stmt = stmt.where(
-                SupplierInvoice.organization_id == coerce_uuid(organization_id)
-            )
+        stmt = select(SupplierInvoice).where(
+            SupplierInvoice.organization_id == coerce_uuid(organization_id)
+        )
 
         if supplier_id:
             stmt = stmt.where(SupplierInvoice.supplier_id == coerce_uuid(supplier_id))
@@ -1454,15 +1445,12 @@ class SupplierInvoiceService(ListResponseMixin):
 
         invoice = db.get(SupplierInvoice, inv_id)
         if not invoice or invoice.organization_id != org_id:
-            raise HTTPException(status_code=404, detail="Invoice not found")
+            raise NotFoundError("Invoice not found")
 
         if invoice.status != SupplierInvoiceStatus.DRAFT:
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    f"Cannot delete invoice with status '{invoice.status.value}'. "
-                    "Only DRAFT invoices can be deleted."
-                ),
+            raise ValidationError(
+                f"Cannot delete invoice with status '{invoice.status.value}'. "
+                "Only DRAFT invoices can be deleted."
             )
 
         allocation_count = (
@@ -1472,9 +1460,8 @@ class SupplierInvoiceService(ListResponseMixin):
             or 0
         )
         if allocation_count > 0:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot delete invoice with {allocation_count} payment allocation(s).",
+            raise ValidationError(
+                f"Cannot delete invoice with {allocation_count} payment allocation(s)."
             )
 
         line_ids = [

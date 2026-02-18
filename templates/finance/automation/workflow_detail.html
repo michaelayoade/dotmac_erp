@@ -243,7 +243,10 @@ function testRule() {
 
     fetch("/automation/workflows/{{ rule.rule_id }}/test", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.content || '',
+        },
         body: JSON.stringify(sampleData),
     })
     .then(r => r.json())

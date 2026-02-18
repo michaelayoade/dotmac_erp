@@ -675,7 +675,7 @@ class GoodsReceiptService(ListResponseMixin):
     @staticmethod
     def list(
         db: Session,
-        organization_id: str | None = None,
+        organization_id: str,
         supplier_id: str | None = None,
         po_id: str | None = None,
         status: ReceiptStatus | None = None,
@@ -700,12 +700,9 @@ class GoodsReceiptService(ListResponseMixin):
         Returns:
             List of GoodsReceipt objects
         """
-        stmt = select(GoodsReceipt)
-
-        if organization_id:
-            stmt = stmt.where(
-                GoodsReceipt.organization_id == coerce_uuid(organization_id)
-            )
+        stmt = select(GoodsReceipt).where(
+            GoodsReceipt.organization_id == coerce_uuid(organization_id)
+        )
 
         if supplier_id:
             stmt = stmt.where(GoodsReceipt.supplier_id == coerce_uuid(supplier_id))

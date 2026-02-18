@@ -713,6 +713,9 @@ function importWizard(accounts, serverFormData) {
             formData.append('statement_file', fileInput.files[0]);
             fetch('/finance/banking/statements/import/preview', {
                 method: 'POST',
+                headers: {
+                    'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                },
                 body: formData,
             })
                 .then(async (resp) => {

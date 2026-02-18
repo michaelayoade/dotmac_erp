@@ -371,10 +371,13 @@ class ExpenseService:
         db: Session,
         expense_id: str,
         voided_by: str,
+        organization_id: str | None = None,
     ) -> ExpenseEntry:
         """Void an expense entry."""
         expense = db.get(ExpenseEntry, coerce_uuid(expense_id))
-        if not expense:
+        if not expense or (
+            organization_id and expense.organization_id != coerce_uuid(organization_id)
+        ):
             raise ValueError("Expense not found")
 
         if expense.status == ExpenseStatus.POSTED:

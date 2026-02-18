@@ -283,6 +283,7 @@ class ExpenseClaimsWebService:
             has_active_payment = (
                 db.scalars(
                     select(PaymentIntent).where(
+                        PaymentIntent.organization_id == org_id,
                         PaymentIntent.source_type == "EXPENSE_CLAIM",
                         PaymentIntent.source_id == claim_uuid,
                         PaymentIntent.status.in_(active_statuses),

@@ -4,6 +4,7 @@ Expense Web Routes.
 HTML template routes for expense management.
 """
 
+import logging
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Form, Query, Request
@@ -23,6 +24,8 @@ from app.web.deps import (
     require_web_permission,
 )
 from app.web.finance.exp_limits import router as limits_router
+
+logger = logging.getLogger(__name__)
 
 # Permission dependencies for action-specific routes
 _require_claim_approve = require_web_permission("expense:claims:approve:tier1")
@@ -588,6 +591,7 @@ def submit_expense(
         )
         db.commit()
     except Exception:
+        logger.exception("Failed to submit expense %s", expense_id)
         db.rollback()
     return RedirectResponse(f"/expense/{expense_id}", status_code=303)
 
@@ -606,6 +610,7 @@ def approve_expense(
         )
         db.commit()
     except Exception:
+        logger.exception("Failed to approve expense %s", expense_id)
         db.rollback()
     return RedirectResponse(f"/expense/{expense_id}", status_code=303)
 
@@ -624,6 +629,7 @@ def reject_expense(
         )
         db.commit()
     except Exception:
+        logger.exception("Failed to reject expense %s", expense_id)
         db.rollback()
     return RedirectResponse(f"/expense/{expense_id}", status_code=303)
 
@@ -647,6 +653,7 @@ def post_expense(
         )
         db.commit()
     except Exception:
+        logger.exception("Failed to post expense %s", expense_id)
         db.rollback()
     return RedirectResponse(f"/expense/{expense_id}", status_code=303)
 
@@ -660,9 +667,12 @@ def void_expense(
 ):
     """Void expense."""
     try:
-        expense_service.void(db, expense_id, str(auth.user_id))
+        expense_service.void(
+            db, expense_id, str(auth.user_id), organization_id=str(auth.organization_id)
+        )
         db.commit()
     except Exception:
+        logger.exception("Failed to void expense %s", expense_id)
         db.rollback()
     return RedirectResponse(f"/expense/{expense_id}", status_code=303)
 

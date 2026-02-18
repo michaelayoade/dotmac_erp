@@ -704,7 +704,9 @@ class SalesOrderWebService:
     ) -> RedirectResponse:
         """Handle submit sales order action."""
         try:
-            sales_order_service.submit(db, so_id, str(auth.user_id))
+            sales_order_service.submit(
+                db, so_id, str(auth.user_id), organization_id=str(auth.organization_id)
+            )
         except Exception:
             logger.exception("submit_response: failed")
         return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
@@ -714,7 +716,9 @@ class SalesOrderWebService:
     ) -> RedirectResponse:
         """Handle approve sales order action."""
         try:
-            sales_order_service.approve(db, so_id, str(auth.user_id))
+            sales_order_service.approve(
+                db, so_id, str(auth.user_id), organization_id=str(auth.organization_id)
+            )
         except Exception:
             logger.exception("approve_response: failed")
         return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
@@ -724,7 +728,9 @@ class SalesOrderWebService:
     ) -> RedirectResponse:
         """Handle confirm sales order action."""
         try:
-            sales_order_service.confirm(db, so_id)
+            sales_order_service.confirm(
+                db, so_id, organization_id=str(auth.organization_id)
+            )
         except Exception:
             logger.exception("confirm_response: failed")
         return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
@@ -739,7 +745,13 @@ class SalesOrderWebService:
     ) -> RedirectResponse:
         """Handle cancel sales order action."""
         try:
-            sales_order_service.cancel(db, so_id, str(auth.user_id), reason)
+            sales_order_service.cancel(
+                db,
+                so_id,
+                str(auth.user_id),
+                reason,
+                organization_id=str(auth.organization_id),
+            )
         except Exception:
             logger.exception("cancel_response: failed")
         return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
@@ -749,7 +761,9 @@ class SalesOrderWebService:
     ) -> RedirectResponse:
         """Handle hold sales order action."""
         try:
-            sales_order_service.hold(db, so_id, str(auth.user_id))
+            sales_order_service.hold(
+                db, so_id, str(auth.user_id), organization_id=str(auth.organization_id)
+            )
         except Exception:
             logger.exception("hold_response: failed")
         return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
@@ -759,7 +773,9 @@ class SalesOrderWebService:
     ) -> RedirectResponse:
         """Handle release sales order from hold action."""
         try:
-            sales_order_service.release_hold(db, so_id, str(auth.user_id))
+            sales_order_service.release_hold(
+                db, so_id, str(auth.user_id), organization_id=str(auth.organization_id)
+            )
         except Exception:
             logger.exception("release_response: failed")
         return RedirectResponse(url=f"/sales-orders/{so_id}?saved=1", status_code=303)
@@ -770,7 +786,7 @@ class SalesOrderWebService:
         """Handle create invoice from sales order action."""
         try:
             invoice = sales_order_service.create_invoice_from_so(
-                db, so_id, str(auth.user_id)
+                db, so_id, str(auth.user_id), organization_id=str(auth.organization_id)
             )
             return RedirectResponse(
                 url=f"/ar/invoices/{invoice.invoice_id}?saved=1", status_code=303
@@ -836,7 +852,9 @@ class SalesOrderWebService:
     ) -> RedirectResponse:
         """Handle mark shipment as delivered action."""
         try:
-            shipment = sales_order_service.mark_delivered(db, shipment_id)
+            shipment = sales_order_service.mark_delivered(
+                db, shipment_id, organization_id=str(auth.organization_id)
+            )
             return RedirectResponse(
                 url=f"/sales-orders/{shipment.so_id}?saved=1", status_code=303
             )

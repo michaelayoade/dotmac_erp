@@ -51,6 +51,15 @@
         overflow: hidden;
     }
 
+    /* Allow typeahead menus in line rows to escape card/table clipping */
+    .form-card-lines {
+        overflow: visible;
+    }
+
+    .line-table-wrap {
+        overflow-y: visible;
+    }
+
     .form-card::before {
         content: '';
         position: absolute;
@@ -565,17 +574,16 @@
                 <!-- Invoice Number -->
                 <div>
                     <label for="invoice_number" class="form-label">
-                        Supplier Invoice # <span class="required">*</span>
+                        Supplier Invoice # (Optional)
                     </label>
                     <input type="text"
                            id="invoice_number"
                            name="invoice_number"
                            x-model="form.invoice_number"
-                           required
                            maxlength="50"
                            placeholder="e.g., INV-2024-001"
                            class="form-input">
-                    <p class="form-help">The supplier's invoice number</p>
+                    <p class="form-help">Leave blank to use only the system-generated invoice number.</p>
                 </div>
 
                 <!-- Currency -->
@@ -646,11 +654,22 @@
                            required
                            class="form-input">
                 </div>
+
+                <!-- Attachments -->
+                <div class="sm:col-span-2 lg:col-span-3">
+                    <label for="attachments" class="form-label">Attachments</label>
+                    <input type="file"
+                           id="attachments"
+                           x-ref="attachments"
+                           multiple
+                           class="form-input">
+                    <p class="form-help">You can select multiple files. Files upload after invoice save.</p>
+                </div>
             </div>
         </div>
 
         <!-- Invoice Lines -->
-        <div class="form-card fade-up delay-2">
+        <div class="form-card form-card-lines fade-up delay-2">
             <div class="flex items-center justify-between">
                 <div>
                     <h2 class="section-title">Invoice Lines</h2>
@@ -664,12 +683,13 @@
                 </button>
             </div>
 
-            <div class="mt-8 overflow-x-auto -mx-2 px-2">
-                <table class="lines-table min-w-[900px]">
+            <div class="line-table-wrap mt-8 overflow-x-auto -mx-2 px-2">
+                <table class="lines-table min-w-[1100px]">
                     <thead>
                         <tr>
-                            <th scope="col" style="width: 22%">Expense Account</th>
-                            <th scope="col" style="width: 20%">Description</th>
+                            <th scope="col" style="width: 20%">Item</th>
+                            <th scope="col" style="width: 20%">Expense Account</th>
+                            <th scope="col" style="width: 18%">Description</th>
                             <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider" style="width: 8%">Qty</th>
                             <th scope="col" class="text-right text-xs font-semibold uppercase tracking-wider" style="width: 12%">Unit Price</th>
                             <th scope="col" style="width: 15%">Tax Code</th>
@@ -680,6 +700,47 @@
                     <tbody>
                         <template x-for="(line, index) in form.lines" :key="index">
                             <tr>
+                                <td>
+                                    <div class="relative" @click.outside="line.item_open = false">
+                                        <div class="relative">
+                                            <input type="text"
+                                                   x-model="line.item_search"
+                                                   @input="onItemSearch(line)"
+                                                   @focus="line.item_open = true"
+                                                   @keydown.escape.prevent="line.item_open = false"
+                                                   placeholder="Search item..."
+                                                   class="table-input pr-8"
+                                                   role="combobox"
+                                                   aria-expanded="false"
+                                                   aria-haspopup="listbox">
+                                            <button type="button"
+                                                    @click="line.item_open = !line.item_open"
+                                                    class="absolute inset-y-0 right-2 flex items-center text-[var(--ink-muted)] hover:text-[var(--ink)]">
+                                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                                </svg>
+                                            </button>
+                                        </div>
+                                        <input type="hidden" x-model="line.item_id">
+                                        <div x-cloak
+                                             x-show="line.item_open"
+                                             x-transition
+                                             class="absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-lg border border-slate-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-900"
+                                             role="listbox">
+                                            <template x-for="item in filteredItems(line.item_search)" :key="item.item_id">
+                                                <button type="button"
+                                                        class="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                                                        @click="selectItem(line, item, index)">
+                                                    <span x-text="item.item_code + ' - ' + item.item_name"></span>
+                                                    <span class="text-xs text-slate-400" x-text="item.unit_price ? formatCurrency(item.unit_price) : ''"></span>
+                                                </button>
+                                            </template>
+                                            <div x-show="filteredItems(line.item_search).length === 0" class="px-3 py-2 text-sm text-slate-500">
+                                                No items match your search.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
                                 <td>
                                     <select x-model="line.expense_account_id"
                                             required
@@ -822,8 +883,10 @@ function invoiceForm() {
     const selectedSupplier = {{ selected_supplier | tojson | safe if selected_supplier else 'null' }};
     const selectedPO = {{ selected_po | tojson | safe if selected_po else 'null' }};
     const poLines = {{ po_lines | tojson | safe if po_lines else '[]' }};
+    const items = {{ items_list | tojson | safe if items_list else '[]' }};
 
     return {
+        items,
         form: {
             invoice_id: '{{ invoice.invoice_id if invoice else "" }}',
             supplier_id: '{{ invoice.supplier_id if invoice else "" }}' || (selectedSupplier?.supplier_id || ''),
@@ -836,7 +899,7 @@ function invoiceForm() {
             exchange_rate: '{{ invoice.exchange_rate if invoice and invoice.exchange_rate else "1" }}',
             po_id: selectedPO?.po_id || '',
             lines: [
-                { expense_account_id: '', description: '', quantity: 1, unit_price: 0, amount: 0, tax_code_id: '', tax_amount: 0 }
+                { item_id: '', item_search: '', item_open: false, expense_account_id: '', description: '', quantity: 1, unit_price: 0, amount: 0, tax_code_id: '', tax_amount: 0 }
             ]
         },
         functionalCurrency: '{{ default_currency_code }}',
@@ -854,6 +917,7 @@ function invoiceForm() {
             this.form.lines = [
                 {% for line in invoice.lines %}
                 {
+                    item_id: '{{ line.item_id or "" }}',
                     expense_account_id: '{{ line.expense_account_id }}',
                     description: '{{ line.description }}',
                     quantity: {{ line.quantity }},
@@ -868,6 +932,7 @@ function invoiceForm() {
             // Pre-populate lines from PO if available
             if (poLines && poLines.length > 0) {
                 this.form.lines = poLines.map(line => ({
+                    item_id: line.item_id || '',
                     expense_account_id: line.expense_account_id || '',
                     description: line.description,
                     quantity: line.quantity,
@@ -878,6 +943,7 @@ function invoiceForm() {
                 }));
             }
             {% endif %}
+            this.form.lines = this.form.lines.map((line) => this.normalizeLine(line));
         },
 
         get subtotal() {
@@ -926,6 +992,9 @@ function invoiceForm() {
 
         addLine() {
             this.form.lines.push({
+                item_id: '',
+                item_search: '',
+                item_open: false,
                 expense_account_id: '',
                 description: '',
                 quantity: 1,
@@ -934,6 +1003,53 @@ function invoiceForm() {
                 tax_code_id: '',
                 tax_amount: 0
             });
+        },
+
+        normalizeLine(line) {
+            const normalized = {
+                item_id: '',
+                item_search: '',
+                item_open: false,
+                ...line,
+            };
+
+            if (normalized.item_id) {
+                const item = this.items.find(i => i.item_id === normalized.item_id);
+                if (item) {
+                    normalized.item_search = `${item.item_code} - ${item.item_name}`;
+                }
+            }
+
+            return normalized;
+        },
+
+        filteredItems(search) {
+            const query = (search || '').toLowerCase().trim();
+            const source = query
+                ? this.items.filter((item) => {
+                    const label = `${item.item_code} ${item.item_name}`.toLowerCase();
+                    return label.includes(query);
+                })
+                : this.items;
+            return source.slice(0, 20);
+        },
+
+        onItemSearch(line) {
+            line.item_open = true;
+            line.item_id = '';
+        },
+
+        selectItem(line, item, index) {
+            line.item_id = item.item_id;
+            line.item_search = `${item.item_code} - ${item.item_name}`;
+            if (!line.description) {
+                line.description = item.item_name;
+            }
+            if (!line.unit_price || line.unit_price === 0) {
+                line.unit_price = parseFloat(item.unit_price) || 0;
+            }
+            line.item_open = false;
+            this.calculateLineAmount(index);
         },
 
         removeLine(index) {
@@ -980,7 +1096,7 @@ function invoiceForm() {
                 this.form.supplier_name = supplierNameEl.value;
             }
 
-            if (!this.form.supplier_id || !this.form.invoice_number || !this.form.invoice_date || !this.form.received_date || !this.form.due_date) {
+            if (!this.form.supplier_id || !this.form.invoice_date || !this.form.received_date || !this.form.due_date) {
                 window.dispatchEvent(new CustomEvent('show-toast', {
                     detail: { message: 'Please fill in all required fields', type: 'error' }
                 }));
@@ -1002,11 +1118,17 @@ function invoiceForm() {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '',
                     },
                     body: JSON.stringify(this.form)
                 });
 
                 if (response.ok) {
+                    const data = await response.json().catch(() => ({}));
+                    const invoiceId = data.invoice_id || this.form.invoice_id;
+                    if (invoiceId) {
+                        await this.uploadAttachments(invoiceId);
+                    }
                     window.dispatchEvent(new CustomEvent('show-toast', {
                         detail: { message: 'Invoice saved successfully', type: 'success' }
                     }));
@@ -1022,6 +1144,40 @@ function invoiceForm() {
             } catch (error) {
                 window.dispatchEvent(new CustomEvent('show-toast', {
                     detail: { message: 'Error saving invoice', type: 'error' }
+                }));
+            }
+        },
+
+        async uploadAttachments(invoiceId) {
+            const input = this.$refs.attachments;
+            const files = input && input.files ? Array.from(input.files) : [];
+            if (!files.length) return;
+
+            const failed = [];
+            for (const file of files) {
+                const formData = new FormData();
+                formData.append('file', file);
+                try {
+                    const uploadResponse = await fetch(`/finance/ap/invoices/${invoiceId}/attachments`, {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'fetch',
+                            'Accept': 'application/json',
+                            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '',
+                        },
+                        body: formData
+                    });
+                    if (!uploadResponse.ok) {
+                        failed.push(file.name);
+                    }
+                } catch (e) {
+                    failed.push(file.name);
+                }
+            }
+
+            if (failed.length > 0) {
+                window.dispatchEvent(new CustomEvent('show-toast', {
+                    detail: { message: `Invoice saved, but some attachments failed: ${failed.join(', ')}`, type: 'warning' }
                 }));
             }
         }

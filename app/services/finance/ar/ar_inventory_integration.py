@@ -142,8 +142,6 @@ class ARInventoryIntegration:
         """
         from app.models.inventory.inventory_lot import InventoryLot
 
-        coerce_uuid(organization_id)
-
         # Determine cost based on costing method
         if item.costing_method == CostingMethod.STANDARD_COST:
             unit_cost = item.standard_cost or Decimal("0")
@@ -161,9 +159,11 @@ class ARInventoryIntegration:
 
         elif item.costing_method == CostingMethod.FIFO:
             # For FIFO, we need to calculate from lots
+            org_uuid = coerce_uuid(organization_id)
             lots = (
                 db.query(InventoryLot)
                 .filter(
+                    InventoryLot.organization_id == org_uuid,
                     InventoryLot.item_id == item.item_id,
                     InventoryLot.quantity_on_hand > 0,
                     InventoryLot.is_active == True,

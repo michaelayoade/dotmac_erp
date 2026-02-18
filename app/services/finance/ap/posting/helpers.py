@@ -196,7 +196,7 @@ def create_wht_transaction(
         Transaction ID if created, None otherwise
     """
     from app.models.finance.gl.fiscal_period import FiscalPeriod
-    from app.models.finance.tax.tax_code import TaxCode
+    from app.models.finance.tax.tax_code import TaxCode, TaxType
     from app.models.finance.tax.tax_transaction import TaxTransactionType
     from app.services.finance.tax.tax_transaction import TaxTransactionInput
 
@@ -223,7 +223,11 @@ def create_wht_transaction(
             return None
 
         tax_code = db.get(TaxCode, tax_code_id)
-        if not tax_code or tax_code.organization_id != organization_id:
+        if (
+            not tax_code
+            or tax_code.organization_id != organization_id
+            or tax_code.tax_type != TaxType.WITHHOLDING
+        ):
             return None
 
         tax_txn = tax_transaction_service.create_transaction(
@@ -251,7 +255,9 @@ def create_wht_transaction(
         )
         return tax_txn.transaction_id
     except Exception:
-        # Log error but don't fail the posting
+        logger.exception(
+            "WHT transaction creation failed for payment %s", payment.payment_id
+        )
         return None
 
 
@@ -300,5 +306,9 @@ def create_assets_for_capitalizable_lines(
     # Log errors but don't fail the posting
     # (Assets are supplementary - invoice posting should still succeed)
     if result.errors:
-        # In production, log these errors
-        pass
+        for err in result.errors:
+            logger.error(
+                "Asset capitalization error for invoice %s: %s",
+                invoice.invoice_id,
+                err,
+            )
