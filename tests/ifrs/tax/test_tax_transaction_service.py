@@ -493,8 +493,8 @@ class TestGetReturnSummary:
         """Test tax return summary calculation."""
         fiscal_period_id = uuid4()
 
-        # Mock query results
-        mock_db.query.return_value.filter.return_value.scalar.side_effect = [
+        # Service now uses db.scalar(select(...).where(...)) for each aggregate
+        mock_db.scalar.side_effect = [
             Decimal("5000.00"),  # output_tax
             Decimal("2000.00"),  # input_recoverable
             Decimal("500.00"),  # input_non_recoverable
@@ -511,12 +511,12 @@ class TestGetReturnSummary:
         assert result.input_tax_recoverable == Decimal("2000.00")
         assert result.input_tax_non_recoverable == Decimal("500.00")
         assert result.withholding_tax == Decimal("300.00")
-        assert result.net_payable == Decimal("3000.00")  # 5000 - 2000
+        assert result.net_payable == Decimal("2700.00")  # 5000 - 2000 - 300
         assert result.transaction_count == 10
 
     def test_return_summary_zero_values(self, mock_db, org_id):
         """Test return summary with no transactions."""
-        mock_db.query.return_value.filter.return_value.scalar.return_value = None
+        mock_db.scalar.return_value = None
 
         result = TaxTransactionService.get_return_summary(mock_db, org_id, uuid4())
 
@@ -556,13 +556,8 @@ class TestListTransactions:
         """Test listing all transactions."""
         transactions = [MockTaxTransaction() for _ in range(3)]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = transactions
-        mock_db.query.return_value = mock_query
+        # Service now uses db.scalars(select(...).where(...).order_by(...).limit().offset()).all()
+        mock_db.scalars.return_value.all.return_value = transactions
 
         result = TaxTransactionService.list(mock_db, organization_id=str(org_id))
 
@@ -570,13 +565,7 @@ class TestListTransactions:
 
     def test_list_with_date_filter(self, mock_db, org_id):
         """Test listing with date filters."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = []
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = []
 
         result = TaxTransactionService.list(
             mock_db,
@@ -589,13 +578,7 @@ class TestListTransactions:
 
     def test_list_with_type_filter(self, mock_db, org_id):
         """Test listing with transaction type filter."""
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.all.return_value = []
-        mock_db.query.return_value = mock_query
+        mock_db.scalars.return_value.all.return_value = []
 
         result = TaxTransactionService.list(
             mock_db,
@@ -616,11 +599,8 @@ class TestGetUnreportedTransactions:
             MockTaxTransaction(is_included_in_return=False),
         ]
 
-        mock_query = MagicMock()
-        mock_query.filter.return_value = mock_query
-        mock_query.order_by.return_value = mock_query
-        mock_query.all.return_value = transactions
-        mock_db.query.return_value = mock_query
+        # Service now uses db.scalars(select(...).where(...).order_by(...)).all()
+        mock_db.scalars.return_value.all.return_value = transactions
 
         result = TaxTransactionService.get_unreported_transactions(
             mock_db, str(org_id), str(uuid4())
@@ -637,15 +617,10 @@ class TestGetVatRegister:
         tax_code = MockTaxCode()
         transaction = MockTaxTransaction()
 
-        mock_query = MagicMock()
-        mock_query.join.return_value = mock_query
-        mock_query.filter.return_value = mock_query
-        mock_query.count.return_value = 1
-        mock_query.order_by.return_value = mock_query
-        mock_query.offset.return_value = mock_query
-        mock_query.limit.return_value = mock_query
-        mock_query.all.return_value = [(transaction, tax_code)]
-        mock_db.query.return_value = mock_query
+        # Service uses db.scalar(select(func.count())...) for total
+        mock_db.scalar.return_value = 1
+        # Service uses db.execute(select(TaxTransaction, TaxCode)...).all() for results
+        mock_db.execute.return_value.all.return_value = [(transaction, tax_code)]
 
         transactions, total = TaxTransactionService.get_vat_register(
             mock_db,
@@ -664,7 +639,8 @@ class TestGetTaxLiabilitySummary:
 
     def test_liability_summary_default(self, mock_db, org_id):
         """Test default liability summary (overall period)."""
-        mock_db.query.return_value.filter.return_value.scalar.side_effect = [
+        # Service now uses db.scalar(select(func.sum(...)).where(...)) for each aggregate
+        mock_db.scalar.side_effect = [
             Decimal("5000.00"),  # output
             Decimal("2000.00"),  # input
             Decimal("1800.00"),  # recoverable

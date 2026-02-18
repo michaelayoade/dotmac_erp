@@ -114,9 +114,8 @@ class TestCreateCustomerPayment:
 
     def test_create_payment_invalid_customer_fails(self, mock_db, org_id, user_id):
         """Test that invalid customer fails validation."""
-        from fastapi import HTTPException
-
         from app.models.finance.ar.customer_payment import PaymentMethod
+        from app.services.common import NotFoundError
         from app.services.finance.ar.customer_payment import (
             CustomerPaymentInput,
             CustomerPaymentService,
@@ -135,12 +134,10 @@ class TestCreateCustomerPayment:
         )
 
         with patch("app.services.finance.ar.customer_payment.Customer"):
-            with pytest.raises(HTTPException) as exc:
+            with pytest.raises(NotFoundError):
                 CustomerPaymentService.create_payment(
                     mock_db, org_id, payment_input, user_id
                 )
-
-        assert exc.value.status_code == 404
 
 
 class TestPostPayment:
@@ -304,9 +301,8 @@ class TestVoidCustomerPayment:
 
     def test_void_already_void_fails(self, mock_db, org_id, user_id):
         """Test that voiding already voided payment fails."""
-        from fastapi import HTTPException
-
         from app.models.finance.ar.customer_payment import PaymentStatus
+        from app.services.common import ValidationError
         from app.services.finance.ar.customer_payment import CustomerPaymentService
 
         payment = MockCustomerPayment(
@@ -316,12 +312,10 @@ class TestVoidCustomerPayment:
         mock_db.get.return_value = payment
 
         with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
-            with pytest.raises(HTTPException) as exc:
+            with pytest.raises(ValidationError, match="already voided"):
                 CustomerPaymentService.void_payment(
                     mock_db, org_id, payment.payment_id, user_id, "Error"
                 )
-
-        assert exc.value.status_code == 400
 
 
 class TestGetCustomerPayment:
@@ -341,17 +335,14 @@ class TestGetCustomerPayment:
 
     def test_get_nonexistent_raises(self, mock_db):
         """Test getting non-existent payment raises exception."""
-        from fastapi import HTTPException
-
+        from app.services.common import NotFoundError
         from app.services.finance.ar.customer_payment import CustomerPaymentService
 
         mock_db.get.return_value = None
 
         with patch("app.services.finance.ar.customer_payment.CustomerPayment"):
-            with pytest.raises(HTTPException) as exc:
+            with pytest.raises(NotFoundError):
                 CustomerPaymentService.get(mock_db, str(uuid4()))
-
-        assert exc.value.status_code == 404
 
 
 class TestListCustomerPayments:

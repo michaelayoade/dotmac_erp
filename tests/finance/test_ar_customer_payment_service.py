@@ -7,10 +7,11 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException
 
 from app.models.finance.ar.customer_payment import PaymentMethod, PaymentStatus
 from app.models.finance.ar.invoice import InvoiceStatus
+from app.models.finance.tax.tax_code import TaxType
+from app.services.common import ValidationError
 from app.services.finance.ar.customer_payment import (
     CustomerPaymentInput,
     CustomerPaymentService,
@@ -35,7 +36,7 @@ def test_create_payment_allocation_exceeds_amount():
     customer = _make_customer(org_id)
     db.get.return_value = customer
 
-    with pytest.raises(HTTPException) as excinfo:
+    with pytest.raises(ValidationError, match="exceeds"):
         CustomerPaymentService.create_payment(
             db,
             org_id,
@@ -52,8 +53,6 @@ def test_create_payment_allocation_exceeds_amount():
             created_by_user_id=uuid4(),
         )
 
-    assert excinfo.value.status_code == 400
-
 
 def test_create_payment_wht_mismatch():
     db = MagicMock()
@@ -61,7 +60,7 @@ def test_create_payment_wht_mismatch():
     customer = _make_customer(org_id)
     db.get.return_value = customer
 
-    with pytest.raises(HTTPException) as excinfo:
+    with pytest.raises(ValidationError):
         CustomerPaymentService.create_payment(
             db,
             org_id,
@@ -77,14 +76,26 @@ def test_create_payment_wht_mismatch():
             created_by_user_id=uuid4(),
         )
 
-    assert excinfo.value.status_code == 400
-
 
 def test_create_payment_calculates_gross_from_wht():
     db = MagicMock()
     org_id = uuid4()
     customer = _make_customer(org_id)
-    db.get.return_value = customer
+    wht_code_id = uuid4()
+    wht_code = SimpleNamespace(
+        tax_code_id=wht_code_id,
+        organization_id=org_id,
+        tax_type=TaxType.WITHHOLDING,
+    )
+
+    def _get(model, _id):
+        if model.__name__ == "Customer":
+            return customer
+        if model.__name__ == "TaxCode":
+            return wht_code
+        return None
+
+    db.get.side_effect = _get
 
     with (
         patch(
@@ -102,12 +113,49 @@ def test_create_payment_calculates_gross_from_wht():
                 currency_code="NGN",
                 amount=Decimal("90.00"),
                 wht_amount=Decimal("10.00"),
+                wht_code_id=wht_code_id,
             ),
             created_by_user_id=uuid4(),
         )
 
     assert payment.gross_amount == Decimal("100.00")
     assert payment.amount == Decimal("90.00")
+
+
+def test_create_payment_rejects_non_withholding_tax_code():
+    db = MagicMock()
+    org_id = uuid4()
+    customer = _make_customer(org_id)
+    non_wht_code = SimpleNamespace(
+        tax_code_id=uuid4(),
+        organization_id=org_id,
+        tax_type=TaxType.VAT,
+    )
+
+    def _get(model, _id):
+        if model.__name__ == "Customer":
+            return customer
+        if model.__name__ == "TaxCode":
+            return non_wht_code
+        return None
+
+    db.get.side_effect = _get
+
+    with pytest.raises(ValidationError, match="WITHHOLDING"):
+        CustomerPaymentService.create_payment(
+            db,
+            org_id,
+            CustomerPaymentInput(
+                customer_id=customer.customer_id,
+                payment_date=date.today(),
+                payment_method=PaymentMethod.CARD,
+                currency_code="NGN",
+                amount=Decimal("90.00"),
+                wht_amount=Decimal("10.00"),
+                wht_code_id=non_wht_code.tax_code_id,
+            ),
+            created_by_user_id=uuid4(),
+        )
 
 
 def test_post_payment_requires_bank_account():
@@ -121,11 +169,10 @@ def test_post_payment_requires_bank_account():
     )
     db.get.return_value = payment
 
-    with pytest.raises(HTTPException) as excinfo:
+    with pytest.raises(ValidationError, match="[Bb]ank account"):
         CustomerPaymentService.post_payment(
             db, org_id, payment.payment_id, posted_by_user_id=uuid4()
         )
-    assert excinfo.value.status_code == 400
 
 
 def test_post_payment_wht_requires_receivable_account():
@@ -169,11 +216,10 @@ def test_post_payment_wht_requires_receivable_account():
 
     db.get.side_effect = _get
 
-    with pytest.raises(HTTPException) as excinfo:
+    with pytest.raises(ValidationError, match="WHT"):
         CustomerPaymentService.post_payment(
             db, org_id, payment.payment_id, posted_by_user_id=uuid4()
         )
-    assert excinfo.value.status_code == 400
 
 
 def test_post_payment_success_without_wht():
@@ -282,13 +328,10 @@ def test_post_payment_rejects_unmapped_bank_account():
 
     db.get.side_effect = _get
 
-    with pytest.raises(HTTPException) as excinfo:
+    with pytest.raises(ValidationError, match="not mapped to a valid GL account"):
         CustomerPaymentService.post_payment(
             db, org_id, payment.payment_id, posted_by_user_id=uuid4()
         )
-
-    assert excinfo.value.status_code == 400
-    assert "not mapped to a valid GL account" in excinfo.value.detail
 
 
 def test_void_and_bounce_reverse_allocations():

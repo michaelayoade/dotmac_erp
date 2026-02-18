@@ -115,9 +115,8 @@ class TestCreateSupplierPayment:
 
     def test_create_payment_invalid_supplier_fails(self, mock_db, org_id, user_id):
         """Test that invalid supplier fails validation."""
-        from fastapi import HTTPException
-
         from app.models.finance.ap.supplier_payment import APPaymentMethod
+        from app.services.common import NotFoundError
         from app.services.finance.ap.supplier_payment import (
             SupplierPaymentInput,
             SupplierPaymentService,
@@ -136,12 +135,10 @@ class TestCreateSupplierPayment:
         )
 
         with patch("app.services.finance.ap.supplier_payment.Supplier"):
-            with pytest.raises(HTTPException) as exc:
+            with pytest.raises(NotFoundError):
                 SupplierPaymentService.create_payment(
                     mock_db, org_id, payment_input, user_id
                 )
-
-        assert exc.value.status_code == 404
 
 
 class TestApproveSupplierPayment:
@@ -170,9 +167,8 @@ class TestApproveSupplierPayment:
 
     def test_self_approval_fails_sod(self, mock_db, org_id):
         """Test that self-approval fails segregation of duties."""
-        from fastapi import HTTPException
-
         from app.models.finance.ap.supplier_payment import APPaymentStatus
+        from app.services.common import ValidationError
         from app.services.finance.ap.supplier_payment import SupplierPaymentService
 
         creator_id = uuid4()
@@ -184,13 +180,11 @@ class TestApproveSupplierPayment:
         mock_db.get.return_value = payment
 
         with patch("app.services.finance.ap.supplier_payment.SupplierPayment"):
-            with pytest.raises(HTTPException) as exc:
+            with pytest.raises(ValidationError, match="[Ss]egregation"):
                 # Same user tries to approve
                 SupplierPaymentService.approve_payment(
                     mock_db, org_id, payment.payment_id, creator_id
                 )
-
-        assert exc.value.status_code == 400
 
 
 class TestPostSupplierPayment:
@@ -246,9 +240,8 @@ class TestVoidSupplierPayment:
 
     def test_void_cleared_payment_fails(self, mock_db, org_id, user_id):
         """Test that voiding cleared payment fails."""
-        from fastapi import HTTPException
-
         from app.models.finance.ap.supplier_payment import APPaymentStatus
+        from app.services.common import ValidationError
         from app.services.finance.ap.supplier_payment import SupplierPaymentService
 
         payment = MockSupplierPayment(
@@ -258,12 +251,10 @@ class TestVoidSupplierPayment:
         mock_db.get.return_value = payment
 
         with patch("app.services.finance.ap.supplier_payment.SupplierPayment"):
-            with pytest.raises(HTTPException) as exc:
+            with pytest.raises(ValidationError, match="[Cc]annot void"):
                 SupplierPaymentService.void_payment(
                     mock_db, org_id, payment.payment_id, user_id, "Error"
                 )
-
-        assert exc.value.status_code == 400
 
 
 class TestGetSupplierPayment:
@@ -283,17 +274,14 @@ class TestGetSupplierPayment:
 
     def test_get_nonexistent_raises(self, mock_db):
         """Test getting non-existent payment raises exception."""
-        from fastapi import HTTPException
-
+        from app.services.common import NotFoundError
         from app.services.finance.ap.supplier_payment import SupplierPaymentService
 
         mock_db.get.return_value = None
 
         with patch("app.services.finance.ap.supplier_payment.SupplierPayment"):
-            with pytest.raises(HTTPException) as exc:
+            with pytest.raises(NotFoundError):
                 SupplierPaymentService.get(mock_db, str(uuid4()))
-
-        assert exc.value.status_code == 404
 
 
 class TestListSupplierPayments:

@@ -7,10 +7,11 @@ from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from fastapi import HTTPException
 
 from app.models.finance.ap.supplier_invoice import SupplierInvoiceStatus
 from app.models.finance.ap.supplier_payment import APPaymentMethod, APPaymentStatus
+from app.models.finance.tax.tax_code import TaxType
+from app.services.common import NotFoundError, ValidationError
 from app.services.finance.ap.supplier_payment import (
     PaymentAllocationInput,
     SupplierPaymentInput,
@@ -33,7 +34,7 @@ def test_create_payment_requires_supplier_and_valid_amounts():
     org_id = uuid4()
     db.get.return_value = None
 
-    with pytest.raises(HTTPException):
+    with pytest.raises(NotFoundError):
         SupplierPaymentService.create_payment(
             db,
             org_id,
@@ -50,7 +51,7 @@ def test_create_payment_requires_supplier_and_valid_amounts():
 
     supplier = _make_supplier(org_id, active=False)
     db.get.return_value = supplier
-    with pytest.raises(HTTPException):
+    with pytest.raises(ValidationError):
         SupplierPaymentService.create_payment(
             db,
             org_id,
@@ -72,7 +73,7 @@ def test_create_payment_wht_requires_code():
     supplier = _make_supplier(org_id, active=True, with_wht=False)
     db.get.return_value = supplier
 
-    with pytest.raises(HTTPException) as excinfo:
+    with pytest.raises(ValidationError, match="WHT tax code"):
         SupplierPaymentService.create_payment(
             db,
             org_id,
@@ -87,7 +88,43 @@ def test_create_payment_wht_requires_code():
             ),
             created_by_user_id=uuid4(),
         )
-    assert excinfo.value.status_code == 400
+
+
+def test_create_payment_rejects_non_withholding_tax_code():
+    db = MagicMock()
+    org_id = uuid4()
+    supplier = _make_supplier(org_id, active=True, with_wht=False)
+    non_wht_code = SimpleNamespace(
+        tax_code_id=uuid4(),
+        organization_id=org_id,
+        tax_type=TaxType.VAT,
+    )
+
+    def _get(model, _id):
+        if model.__name__ == "Supplier":
+            return supplier
+        if model.__name__ == "TaxCode":
+            return non_wht_code
+        return None
+
+    db.get.side_effect = _get
+
+    with pytest.raises(ValidationError, match="WITHHOLDING"):
+        SupplierPaymentService.create_payment(
+            db,
+            org_id,
+            SupplierPaymentInput(
+                supplier_id=supplier.supplier_id,
+                payment_date=date.today(),
+                payment_method=APPaymentMethod.BANK_TRANSFER,
+                currency_code="NGN",
+                amount=Decimal("90.00"),
+                bank_account_id=uuid4(),
+                wht_amount=Decimal("10.00"),
+                wht_code_id=non_wht_code.tax_code_id,
+            ),
+            created_by_user_id=uuid4(),
+        )
 
 
 def test_create_payment_allocation_checks():
@@ -96,7 +133,7 @@ def test_create_payment_allocation_checks():
     supplier = _make_supplier(org_id, active=True)
     db.get.return_value = supplier
 
-    with pytest.raises(HTTPException):
+    with pytest.raises(ValidationError, match="exceeds"):
         SupplierPaymentService.create_payment(
             db,
             org_id,
@@ -127,7 +164,7 @@ def test_approve_and_post_payment():
     )
     db.get.return_value = payment
 
-    with pytest.raises(HTTPException):
+    with pytest.raises(ValidationError, match="[Ss]egregation"):
         SupplierPaymentService.approve_payment(
             db, org_id, payment.payment_id, payment.created_by_user_id
         )
