@@ -48,6 +48,16 @@ class PayrollEntryStatus(str, enum.Enum):
     POSTED = "POSTED"
     CANCELLED = "CANCELLED"
 
+    @classmethod
+    def gl_impacting(cls) -> frozenset["PayrollEntryStatus"]:
+        """Statuses where the payroll entry has been posted to the General Ledger."""
+        return frozenset({cls.POSTED})
+
+    @classmethod
+    def terminal(cls) -> frozenset["PayrollEntryStatus"]:
+        """Statuses where the payroll entry is finalized."""
+        return frozenset({cls.POSTED, cls.CANCELLED})
+
 
 class PayrollEntry(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
     """

@@ -10,8 +10,8 @@ import logging
 from datetime import date
 from decimal import Decimal
 
-from fastapi import Request
-from fastapi.responses import HTMLResponse
+from fastapi import HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -22,7 +22,10 @@ from app.models.finance.gl.fiscal_period import FiscalPeriod, PeriodStatus
 from app.models.finance.gl.fiscal_year import FiscalYear
 from app.services.common import coerce_uuid
 from app.services.common_filters import build_active_filters
-from app.services.finance.gl.fiscal_period import fiscal_period_service
+from app.services.finance.gl.fiscal_period import (
+    FiscalPeriodInput,
+    fiscal_period_service,
+)
 from app.services.finance.gl.web.base import (
     fiscal_year_option_view,
     format_currency,
@@ -259,10 +262,17 @@ class PeriodWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
+        year_id: str | None = None,
     ) -> HTMLResponse:
         """Render fiscal periods list page."""
         context = base_context(request, auth, "Fiscal Periods", "gl")
-        context.update(self.periods_context(db, str(auth.organization_id)))
+        context.update(
+            self.periods_context(
+                db,
+                str(auth.organization_id),
+                year_id=year_id,
+            )
+        )
         return templates.TemplateResponse(request, "finance/gl/periods.html", context)
 
     def new_period_form_response(
@@ -270,13 +280,205 @@ class PeriodWebService:
         request: Request,
         auth: WebAuthContext,
         db: Session,
+        error_message: str | None = None,
+        form_data: dict | None = None,
     ) -> HTMLResponse:
         """Render new fiscal period form page."""
-        context = base_context(request, auth, "New Fiscal Year", "gl")
+        context = base_context(request, auth, "New Fiscal Period", "gl")
         context.update(self.period_form_context(db, str(auth.organization_id)))
+        context["error_message"] = error_message
+        context["form_data"] = form_data or {}
         return templates.TemplateResponse(
             request, "finance/gl/period_form.html", context
         )
+
+    def create_period_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        fiscal_year_id: str,
+        period_number: int,
+        period_name: str,
+        start_date: str,
+        end_date: str,
+        is_adjustment_period: bool,
+        is_closing_period: bool,
+    ) -> HTMLResponse | RedirectResponse:
+        """Create a fiscal period from the web form."""
+        form_data = {
+            "fiscal_year_id": fiscal_year_id,
+            "period_number": period_number,
+            "period_name": period_name,
+            "start_date": start_date,
+            "end_date": end_date,
+            "is_adjustment_period": is_adjustment_period,
+            "is_closing_period": is_closing_period,
+        }
+
+        if not period_name.strip():
+            return self.new_period_form_response(
+                request,
+                auth,
+                db,
+                error_message="Period name is required",
+                form_data=form_data,
+            )
+
+        start = parse_date(start_date)
+        end = parse_date(end_date)
+        if not start or not end:
+            return self.new_period_form_response(
+                request,
+                auth,
+                db,
+                error_message="Start date and end date are required",
+                form_data=form_data,
+            )
+        if end < start:
+            return self.new_period_form_response(
+                request,
+                auth,
+                db,
+                error_message="End date must be on or after start date",
+                form_data=form_data,
+            )
+
+        org_id = coerce_uuid(auth.organization_id)
+        year = db.get(FiscalYear, coerce_uuid(fiscal_year_id))
+        if not year or year.organization_id != org_id:
+            return self.new_period_form_response(
+                request,
+                auth,
+                db,
+                error_message="Fiscal year not found",
+                form_data=form_data,
+            )
+
+        if start < year.start_date or end > year.end_date:
+            return self.new_period_form_response(
+                request,
+                auth,
+                db,
+                error_message=(
+                    "Period dates must be within the selected fiscal year range"
+                ),
+                form_data=form_data,
+            )
+
+        try:
+            fiscal_period_service.create_period(
+                db,
+                org_id,
+                FiscalPeriodInput(
+                    fiscal_year_id=year.fiscal_year_id,
+                    period_number=period_number,
+                    period_name=period_name.strip(),
+                    start_date=start,
+                    end_date=end,
+                    is_adjustment_period=is_adjustment_period,
+                    is_closing_period=is_closing_period,
+                ),
+            )
+        except HTTPException as exc:
+            return self.new_period_form_response(
+                request,
+                auth,
+                db,
+                error_message=str(exc.detail),
+                form_data=form_data,
+            )
+        except Exception as exc:
+            logger.exception("create_period_response: failed to create period")
+            return self.new_period_form_response(
+                request,
+                auth,
+                db,
+                error_message=str(exc),
+                form_data=form_data,
+            )
+
+        return RedirectResponse(url="/finance/gl/periods?saved=1", status_code=303)
+
+    def open_period_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        period_id: str,
+        year_id: str | None = None,
+    ) -> RedirectResponse:
+        """Open a fiscal period and redirect back to period list."""
+        if not auth.user_id:
+            return RedirectResponse(
+                url="/finance/gl/periods?error=User+is+not+associated+with+a+person",
+                status_code=303,
+            )
+
+        try:
+            fiscal_period_service.open_period(
+                db=db,
+                organization_id=coerce_uuid(auth.organization_id),
+                fiscal_period_id=coerce_uuid(period_id),
+                opened_by_user_id=coerce_uuid(auth.user_id),
+            )
+        except HTTPException as exc:
+            msg = str(exc.detail).replace(" ", "+")
+            if year_id:
+                return RedirectResponse(
+                    url=f"/finance/gl/periods?year_id={year_id}&error={msg}",
+                    status_code=303,
+                )
+            return RedirectResponse(
+                url=f"/finance/gl/periods?error={msg}",
+                status_code=303,
+            )
+
+        if year_id:
+            return RedirectResponse(
+                url=f"/finance/gl/periods?year_id={year_id}&saved=1", status_code=303
+            )
+        return RedirectResponse(url="/finance/gl/periods?saved=1", status_code=303)
+
+    def close_period_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        period_id: str,
+        year_id: str | None = None,
+    ) -> RedirectResponse:
+        """Soft-close a fiscal period and redirect back to period list."""
+        if not auth.user_id:
+            return RedirectResponse(
+                url="/finance/gl/periods?error=User+is+not+associated+with+a+person",
+                status_code=303,
+            )
+
+        try:
+            fiscal_period_service.close_period(
+                db=db,
+                organization_id=coerce_uuid(auth.organization_id),
+                fiscal_period_id=coerce_uuid(period_id),
+                closed_by_user_id=coerce_uuid(auth.user_id),
+            )
+        except HTTPException as exc:
+            msg = str(exc.detail).replace(" ", "+")
+            if year_id:
+                return RedirectResponse(
+                    url=f"/finance/gl/periods?year_id={year_id}&error={msg}",
+                    status_code=303,
+                )
+            return RedirectResponse(
+                url=f"/finance/gl/periods?error={msg}",
+                status_code=303,
+            )
+
+        if year_id:
+            return RedirectResponse(
+                url=f"/finance/gl/periods?year_id={year_id}&saved=1", status_code=303
+            )
+        return RedirectResponse(url="/finance/gl/periods?saved=1", status_code=303)
 
     def trial_balance_response(
         self,

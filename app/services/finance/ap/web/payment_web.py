@@ -28,6 +28,7 @@ from app.models.finance.banking.bank_account import BankAccountStatus
 from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.finance.ap.ap_aging import ap_aging_service
 from app.services.finance.ap.payment_batch import payment_batch_service
 from app.services.finance.ap.supplier import supplier_service
@@ -82,6 +83,8 @@ class PaymentWebService:
         start_date: str | None,
         end_date: str | None,
         page: int,
+        sort: str | None = None,
+        sort_dir: str | None = None,
         limit: int = 50,
     ) -> dict:
         """Get context for payment listing page."""
@@ -110,9 +113,23 @@ class PaymentWebService:
         total_count = (
             query.with_entities(func.count(SupplierPayment.payment_id)).scalar() or 0
         )
+
+        sort_dir_norm = (sort_dir or "desc").lower()
+        if sort_dir_norm not in {"asc", "desc"}:
+            sort_dir_norm = "desc"
+
+        order_map = {
+            "payment_date": SupplierPayment.payment_date,
+            "payment_number": SupplierPayment.payment_number,
+            "amount": SupplierPayment.amount,
+            "status": SupplierPayment.status,
+        }
+        order_col = order_map.get(sort or "", SupplierPayment.payment_date)
+        order_expr = order_col.asc() if sort_dir_norm == "asc" else order_col.desc()
+
         payments = (
             query.with_entities(SupplierPayment, Supplier)
-            .order_by(SupplierPayment.payment_date.desc())
+            .order_by(order_expr, SupplierPayment.payment_date.desc())
             .limit(limit)
             .offset(offset)
             .all()
@@ -147,6 +164,15 @@ class PaymentWebService:
 
         logger.debug("list_payments_context: found %d payments", total_count)
 
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "supplier_id": supplier_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            labels={"start_date": "From", "end_date": "To"},
+        )
         return {
             "payments": payments_view,
             "suppliers_list": suppliers_list,
@@ -160,6 +186,9 @@ class PaymentWebService:
             "offset": offset,
             "total_count": total_count,
             "total_pages": total_pages,
+            "active_filters": active_filters,
+            "sort": sort or "",
+            "sort_dir": sort_dir_norm,
         }
 
     @staticmethod
@@ -528,6 +557,8 @@ class PaymentWebService:
         end_date: str | None,
         page: int,
         db: Session,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> HTMLResponse:
         """Render payment list page."""
         context = base_context(request, auth, "AP Payments", "ap")
@@ -541,6 +572,8 @@ class PaymentWebService:
                 start_date=start_date,
                 end_date=end_date,
                 page=page,
+                sort=sort,
+                sort_dir=sort_dir,
             )
         )
         return templates.TemplateResponse(request, "finance/ap/payments.html", context)

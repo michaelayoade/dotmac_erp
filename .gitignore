@@ -51,6 +51,9 @@ htmlcov/
 # Playwright / MCP artifacts
 .playwright-mcp/
 
+# Auto-generated Claude Code skill (regenerate with: make schema-skill)
+.claude/skills/db-schema/SCHEMA_REF.md
+
 # Celery
 celerybeat-schedule
 celerybeat.pid
@@ -83,7 +86,7 @@ test_statement_*.xlsx
 Thumbs.db
 
 # Poetry
-poetry.lock
+# poetry.lock is committed for reproducible builds (required by Dockerfile + CI)
 
 # Docker
 .docker/

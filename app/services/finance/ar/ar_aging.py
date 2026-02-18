@@ -103,19 +103,13 @@ class ARAgingService(ListResponseMixin):
             raise ValueError("Customer not found")
 
         # Get outstanding invoices
-        outstanding_statuses = [
-            InvoiceStatus.POSTED,
-            InvoiceStatus.PARTIALLY_PAID,
-            InvoiceStatus.OVERDUE,
-        ]
-
         invoices = (
             db.query(Invoice)
             .filter(
                 and_(
                     Invoice.customer_id == cust_id,
                     Invoice.organization_id == org_id,
-                    Invoice.status.in_(outstanding_statuses),
+                    Invoice.status.in_(InvoiceStatus.outstanding()),
                 )
             )
             .all()
@@ -161,18 +155,12 @@ class ARAgingService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         ref_date = as_of_date or date.today()
 
-        outstanding_statuses = [
-            InvoiceStatus.POSTED,
-            InvoiceStatus.PARTIALLY_PAID,
-            InvoiceStatus.OVERDUE,
-        ]
-
         invoices = (
             db.query(Invoice)
             .filter(
                 and_(
                     Invoice.organization_id == org_id,
-                    Invoice.status.in_(outstanding_statuses),
+                    Invoice.status.in_(InvoiceStatus.outstanding()),
                 )
             )
             .all()
@@ -224,18 +212,12 @@ class ARAgingService(ListResponseMixin):
         ref_date = as_of_date or date.today()
 
         # Get all customers with outstanding invoices
-        outstanding_statuses = [
-            InvoiceStatus.POSTED,
-            InvoiceStatus.PARTIALLY_PAID,
-            InvoiceStatus.OVERDUE,
-        ]
-
         customer_ids = (
             db.query(Invoice.customer_id)
             .filter(
                 and_(
                     Invoice.organization_id == org_id,
-                    Invoice.status.in_(outstanding_statuses),
+                    Invoice.status.in_(InvoiceStatus.outstanding()),
                 )
             )
             .distinct()
@@ -338,16 +320,10 @@ class ARAgingService(ListResponseMixin):
         ref_date = as_of_date or date.today()
         cutoff_date = ref_date
 
-        outstanding_statuses = [
-            InvoiceStatus.POSTED,
-            InvoiceStatus.PARTIALLY_PAID,
-            InvoiceStatus.OVERDUE,
-        ]
-
         query = db.query(Invoice).filter(
             and_(
                 Invoice.organization_id == org_id,
-                Invoice.status.in_(outstanding_statuses),
+                Invoice.status.in_(InvoiceStatus.outstanding()),
                 Invoice.due_date < cutoff_date,
             )
         )

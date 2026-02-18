@@ -40,9 +40,7 @@ def build_payment_query(
     if supplier_id:
         query = query.filter(SupplierPayment.supplier_id == coerce_uuid(supplier_id))
     if status == "POSTED":
-        query = query.filter(
-            SupplierPayment.status.in_([APPaymentStatus.SENT, APPaymentStatus.CLEARED])
-        )
+        query = query.filter(SupplierPayment.status.in_(APPaymentStatus.effective()))
     elif status_value:
         query = query.filter(SupplierPayment.status == status_value)
     if from_date:

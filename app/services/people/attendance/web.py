@@ -191,6 +191,18 @@ class AttendanceWebService:
         employees = AttendanceWebService._get_employees(db, org_id)
         shifts = svc.list_shift_types(org_id, is_active=True).items
 
+        employee_options = {str(emp.employee_id): emp.full_name for emp in employees}
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "employee_id": employee_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            labels={"start_date": "From", "end_date": "To"},
+            options={"employee_id": employee_options},
+        )
+
         context = base_context(request, auth, "Attendance", "attendance", db=db)
         context["request"] = request
         context.update(
@@ -204,6 +216,7 @@ class AttendanceWebService:
                 "start_date": start_date,
                 "end_date": end_date,
                 "employee_id": employee_id,
+                "active_filters": active_filters,
                 "page": result.page,
                 "total_pages": result.total_pages,
                 "total": result.total,

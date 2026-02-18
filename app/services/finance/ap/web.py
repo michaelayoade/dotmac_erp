@@ -3973,17 +3973,10 @@ class APWebService:
                 url="/finance/ap/invoices?error=Attachment+not+found", status_code=303
             )
 
-        file_path = attachment_service.get_file_path(attachment)
-
-        if not file_path.exists():
-            return RedirectResponse(
-                url="/finance/ap/invoices?error=File+not+found", status_code=303
-            )
-
-        return FileResponse(
-            path=str(file_path),
-            filename=attachment.file_name,
-            media_type=attachment.content_type,
+        # Files are stored in S3; stream through authenticated /files endpoint.
+        return RedirectResponse(
+            url=f"/files/attachments/{attachment_id}",
+            status_code=302,
         )
 
     def delete_attachment_response(

@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import compact_filters, filter_select_field, pagination %}
+{% from "components/macros.html" import compact_filters, filter_select_field, pagination as render_pagination %}
 
 {% block page_title %}Job Descriptions{% endblock %}
 
@@ -138,7 +138,7 @@
     </div>
 
             {# Pagination #}
-            {{ pagination(
+            {{ render_pagination(
                 page=page,
                 total_pages=total_pages,
                 total_count=total_count,

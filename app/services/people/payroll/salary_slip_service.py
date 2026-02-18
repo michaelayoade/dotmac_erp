@@ -14,7 +14,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from uuid import UUID
 
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.hr.employment_type import EmploymentType
@@ -1058,11 +1058,21 @@ class SalarySlipService:
         to_date: date | None = None,
         limit: int = 50,
         offset: int = 0,
+        include_lines: bool = False,
     ) -> list[SalarySlip]:
         """List salary slips with filters."""
         org_id = coerce_uuid(organization_id)
 
         query = db.query(SalarySlip).filter(SalarySlip.organization_id == org_id)
+        if include_lines:
+            query = query.options(
+                selectinload(SalarySlip.earnings).joinedload(
+                    SalarySlipEarning.component
+                ),
+                selectinload(SalarySlip.deductions).joinedload(
+                    SalarySlipDeduction.component
+                ),
+            )
 
         if employee_id:
             query = query.filter(SalarySlip.employee_id == coerce_uuid(employee_id))

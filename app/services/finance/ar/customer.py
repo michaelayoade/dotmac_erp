@@ -587,19 +587,13 @@ class CustomerService(ListResponseMixin):
             return (True, Decimal("0"), Decimal("999999999"))
 
         # Get outstanding balance
-        outstanding_statuses = [
-            InvoiceStatus.POSTED,
-            InvoiceStatus.PARTIALLY_PAID,
-            InvoiceStatus.OVERDUE,
-        ]
-
         invoices = (
             db.query(Invoice)
             .filter(
                 and_(
                     Invoice.organization_id == org_id,
                     Invoice.customer_id == cust_id,
-                    Invoice.status.in_(outstanding_statuses),
+                    Invoice.status.in_(InvoiceStatus.outstanding()),
                 )
             )
             .all()
@@ -720,19 +714,13 @@ class CustomerService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Customer not found")
 
         # Get outstanding invoices
-        outstanding_statuses = [
-            InvoiceStatus.POSTED,
-            InvoiceStatus.PARTIALLY_PAID,
-            InvoiceStatus.OVERDUE,
-        ]
-
         invoices = (
             db.query(Invoice)
             .filter(
                 and_(
                     Invoice.organization_id == org_id,
                     Invoice.customer_id == cust_id,
-                    Invoice.status.in_(outstanding_statuses),
+                    Invoice.status.in_(InvoiceStatus.outstanding()),
                 )
             )
             .all()

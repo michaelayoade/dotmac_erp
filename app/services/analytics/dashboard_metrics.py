@@ -14,6 +14,7 @@ from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.orm import Session
 
 from app.services.analytics.metric_store import MetricStore, MetricValue
@@ -83,6 +84,21 @@ ALL_DASHBOARD_METRICS = (
 _MAX_STALE_HOURS = 24
 
 
+def _is_missing_snapshot_table_error(exc: Exception) -> bool:
+    """Return True when DB error indicates org_metric_snapshot table is missing."""
+    original = getattr(exc, "orig", exc)
+    message = str(original).lower()
+    sqlstate = getattr(original, "sqlstate", None)
+
+    if sqlstate == "42P01":
+        return True
+
+    if "org_metric_snapshot" not in message:
+        return False
+
+    return "does not exist" in message or "no such table" in message
+
+
 def _numeric(mv: MetricValue | None) -> Decimal | None:
     """Extract numeric value from a MetricValue, or None."""
     return mv.value_numeric if mv else None
@@ -128,7 +144,16 @@ class DashboardMetricsService:
         Returns a structured dict grouped by domain, or ``None`` if
         no fresh metrics are available (caller should fall back to live queries).
         """
-        metrics = self._store.get_latest(organization_id, ALL_DASHBOARD_METRICS)
+        try:
+            metrics = self._store.get_latest(organization_id, ALL_DASHBOARD_METRICS)
+        except (ProgrammingError, OperationalError) as exc:
+            if _is_missing_snapshot_table_error(exc):
+                logger.warning(
+                    "Dashboard metric snapshot table missing; using live fallback for org %s",
+                    organization_id,
+                )
+                return None
+            raise
 
         if not metrics:
             logger.debug("No pre-computed metrics for org %s", organization_id)

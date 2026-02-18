@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import mimetypes
+import re
 from datetime import date as date_type
 from decimal import Decimal
 from pathlib import Path
@@ -16,7 +17,12 @@ from typing import Any
 from urllib.parse import quote, urlparse
 
 from fastapi import Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    RedirectResponse,
+    StreamingResponse,
+)
 from sqlalchemy import and_, false, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -38,6 +44,7 @@ from app.services.expense.expense_service import (
 from app.services.file_upload import get_expense_receipt_upload, resolve_safe_path
 from app.services.finance.platform.authorization import AuthorizationService
 from app.services.settings_spec import resolve_value
+from app.services.storage import get_storage
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
 
@@ -46,6 +53,9 @@ logger = logging.getLogger(__name__)
 
 class ExpenseClaimsWebService:
     """Web service methods for expense claims, categories, and reports."""
+
+    # Characters unsafe in Content-Disposition filenames
+    _UNSAFE_FILENAME_RE = re.compile(r'[\x00-\x1f\x7f"\\]')
 
     @staticmethod
     def _form_str(form: Any, key: str) -> str:
@@ -412,9 +422,59 @@ class ExpenseClaimsWebService:
         if parsed.scheme in {"http", "https"} and parsed.netloc:
             return RedirectResponse(receipt_url, status_code=302)
 
+        # S3-backed receipts are stored as object keys like:
+        #   expense_receipts/{org_id}/{filename}
+        # Stream via app so the user doesn't need direct MinIO access.
+        org_prefix = f"expense_receipts/{org_id}/"
+        if receipt_url.startswith("expense_receipts/"):
+            # Defensive: allow case differences in UUID string formatting, but do NOT
+            # relax the org scoping requirement.
+            if not receipt_url.lower().startswith(org_prefix.lower()):
+                logger.warning(
+                    "Receipt key org mismatch",
+                    extra={
+                        "claim_id": claim_id,
+                        "item_id": item_id,
+                        "organization_id": str(org_id),
+                        "receipt_url": receipt_url,
+                    },
+                )
+                return RedirectResponse(
+                    f"/expense/claims/{claim_id}?error=Receipt+file+is+unavailable",
+                    status_code=303,
+                )
+
+            storage = get_storage()
+            if not storage.exists(receipt_url):
+                return RedirectResponse(
+                    f"/expense/claims/{claim_id}?error=Receipt+not+found",
+                    status_code=303,
+                )
+
+            chunks, content_type, content_length = storage.stream(receipt_url)
+            filename = Path(receipt_url).name
+            safe_name = ExpenseClaimsWebService._UNSAFE_FILENAME_RE.sub("_", filename)
+
+            headers: dict[str, str] = {}
+            if content_length is not None:
+                headers["Content-Length"] = str(content_length)
+            # Render in browser where possible (PDF/images)
+            headers["Content-Disposition"] = f'inline; filename="{safe_name}"'
+
+            return StreamingResponse(
+                chunks,
+                media_type=content_type or "application/octet-stream",
+                headers=headers,
+            )
+
         try:
             receipt_path = ExpenseClaimsWebService._resolve_claim_receipt_path(
                 receipt_url
+            )
+        except FileNotFoundError:
+            return RedirectResponse(
+                f"/expense/claims/{claim_id}?error=Receipt+not+found",
+                status_code=303,
             )
         except Exception:
             logger.warning(

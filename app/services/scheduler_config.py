@@ -240,6 +240,11 @@ def _builtin_beat_schedule() -> dict[str, dict]:
             "task": "app.tasks.splynx.run_splynx_full_reconciliation",
             "schedule": crontab(hour=2, minute=0, day_of_week=0),  # Sunday 2 AM
         },
+        "splynx-stale-history-cleanup": {
+            "task": "app.tasks.splynx.cleanup_stale_splynx_sync_history",
+            "schedule": crontab(minute=17),  # Hourly at :17
+            "kwargs": {"stale_after_minutes": 180, "limit": 500},
+        },
     }
 
 

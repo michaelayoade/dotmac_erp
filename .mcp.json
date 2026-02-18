@@ -1,12 +1,10 @@
 {
   "mcpServers": {
     "erp-db": {
-      "command": "npx",
+      "command": "/bin/bash",
       "args": [
-        "-y",
-        "@bytebase/dbhub",
-        "--dsn",
-        "postgresql://dotmac_erp:dotmac_erp_pass@localhost:5435/dotmac_erp"
+        "-lc",
+        "set -a; [ -f .env ] && . .env; set +a; if [ -z \"${DOTMAC_ERP_DB_DSN:-}\" ]; then echo \"DOTMAC_ERP_DB_DSN is required (export it or set it in .env). Example: postgresql://claude_readonly:<password>@localhost:5437/dotmac_erp\" >&2; exit 1; fi; exec npx -y @bytebase/dbhub --dsn \"$DOTMAC_ERP_DB_DSN\""
       ],
       "description": "DotMac ERP database - read-only queries for debugging and analysis"
     }

@@ -31,6 +31,21 @@
                 button.addEventListener("click", function () {
                     input.value = item.label || item.name || "";
                     hidden.value = item.ref || item.id || "";
+                    // Allow consumers (e.g. Alpine forms) to read the selected item metadata.
+                    try {
+                        hidden.setAttribute("data-typeahead-item", JSON.stringify(item));
+                    } catch (e) {
+                        hidden.removeAttribute("data-typeahead-item");
+                    }
+                    // Trigger input/change so frameworks (e.g. Alpine x-model) can react.
+                    try {
+                        hidden.dispatchEvent(new Event("input", { bubbles: true }));
+                        hidden.dispatchEvent(new Event("change", { bubbles: true }));
+                        input.dispatchEvent(new Event("input", { bubbles: true }));
+                        input.dispatchEvent(new Event("change", { bubbles: true }));
+                    } catch (e) {
+                        // Ignore: older browsers / non-DOM contexts.
+                    }
                     clearResults();
                 });
                 menu.appendChild(button);

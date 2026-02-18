@@ -45,6 +45,21 @@ class SupplierInvoiceStatus(str, enum.Enum):
     VOID = "VOID"
     DISPUTED = "DISPUTED"
 
+    @classmethod
+    def gl_impacting(cls) -> frozenset["SupplierInvoiceStatus"]:
+        """Statuses where the invoice has been posted to the General Ledger."""
+        return frozenset({cls.POSTED, cls.PARTIALLY_PAID, cls.PAID})
+
+    @classmethod
+    def outstanding(cls) -> frozenset["SupplierInvoiceStatus"]:
+        """Statuses where the invoice has an unpaid balance."""
+        return frozenset({cls.POSTED, cls.PARTIALLY_PAID, cls.ON_HOLD})
+
+    @classmethod
+    def terminal(cls) -> frozenset["SupplierInvoiceStatus"]:
+        """Statuses where the invoice is fully settled or cancelled."""
+        return frozenset({cls.PAID, cls.VOID})
+
 
 class SupplierInvoice(Base, VersionedMixin):
     """

@@ -374,16 +374,6 @@ if (claimForm) {
     claimForm.addEventListener('submit', function(e) {
         const select = document.getElementById('category_id');
         const option = select.options[select.selectedIndex];
-        const requiresReceipt = categoryRequiresReceipt(option);
-
-        const receiptUrl = document.getElementById('receipt_url').value.trim();
-        const receiptFile = document.getElementById('receipt_file').files.length > 0;
-
-        if (requiresReceipt && !receiptUrl && !receiptFile) {
-            e.preventDefault();
-            window.dispatchEvent(new CustomEvent('show-toast', { detail: { message: 'This category requires a receipt. Please provide a receipt URL or upload a receipt file.', type: 'warning' } }));
-            return false;
-        }
 
         const maxAmount = option.dataset.maxAmount;
         const amount = parseFloat(document.getElementById('claimed_amount').value);

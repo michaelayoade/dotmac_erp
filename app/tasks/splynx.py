@@ -277,6 +277,94 @@ def _handle_sync_failure(
 
 
 # ---------------------------------------------------------------------------
+# Maintenance — stale RUNNING row cleanup
+# ---------------------------------------------------------------------------
+
+
+@shared_task
+def cleanup_stale_splynx_sync_history(
+    stale_after_minutes: int = 180,
+    limit: int = 500,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """
+    Mark stale Splynx SyncHistory rows as FAILED.
+
+    This prevents dashboards from showing long-dead RUNNING entries after
+    worker crashes/restarts.
+
+    Args:
+        stale_after_minutes: RUNNING rows older than this threshold are stale.
+        limit: Max number of rows to process per invocation.
+        dry_run: If True, report candidates without persisting changes.
+    """
+    stale_after_minutes = max(stale_after_minutes, 1)
+    limit = max(limit, 1)
+    now_utc = datetime.now(UTC)
+    cutoff = now_utc - timedelta(minutes=stale_after_minutes)
+
+    with SessionLocal() as db:
+        stmt = (
+            select(SyncHistory)
+            .where(
+                SyncHistory.source_system == "splynx",
+                SyncHistory.status == SyncJobStatus.RUNNING,
+                SyncHistory.started_at.is_not(None),
+                SyncHistory.started_at < cutoff,
+            )
+            .order_by(SyncHistory.started_at.asc())
+            .limit(limit)
+        )
+        stale_rows = list(db.scalars(stmt).all())
+
+        if not stale_rows:
+            return {
+                "success": True,
+                "dry_run": dry_run,
+                "stale_after_minutes": stale_after_minutes,
+                "checked": 0,
+                "marked_failed": 0,
+                "history_ids": [],
+            }
+
+        marked_ids: list[str] = []
+        for row in stale_rows:
+            started_at = row.started_at or now_utc
+            age_minutes = int((now_utc - started_at).total_seconds() // 60)
+            row.fail(
+                "Marked FAILED by maintenance task: stale RUNNING sync history row "
+                f"(age={age_minutes} minutes, threshold={stale_after_minutes} minutes)."
+            )
+            marked_ids.append(str(row.history_id))
+
+        if dry_run:
+            db.rollback()
+            return {
+                "success": True,
+                "dry_run": True,
+                "stale_after_minutes": stale_after_minutes,
+                "checked": len(stale_rows),
+                "marked_failed": 0,
+                "would_mark_failed": len(stale_rows),
+                "history_ids": marked_ids,
+            }
+
+        db.commit()
+        logger.info(
+            "Marked %d stale Splynx RUNNING sync_history rows as FAILED",
+            len(marked_ids),
+        )
+        return {
+            "success": True,
+            "dry_run": False,
+            "stale_after_minutes": stale_after_minutes,
+            "checked": len(stale_rows),
+            "marked_failed": len(marked_ids),
+            "history_ids": marked_ids,
+        }
+
+
+# ---------------------------------------------------------------------------
 # Tier 1 — Incremental sync (every 30 minutes)
 # ---------------------------------------------------------------------------
 

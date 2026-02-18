@@ -66,6 +66,7 @@ def require_expense_reimburse_access(
         "payments:read",
         "payments:expense:initialize",
         "payments:transfer:initiate",
+        "expense:claims:reimburse",
         "expense:claims:approve:tier1",
         "expense:claims:approve:tier2",
         "expense:claims:approve:tier3",

@@ -45,12 +45,19 @@ def get_redis_client() -> redis.Redis | None:
         return None
 
     try:
-        client = redis.Redis.from_url(url, decode_responses=True)
+        # Avoid page-level hangs if Redis is down/misconfigured.
+        client = redis.Redis.from_url(
+            url,
+            decode_responses=True,
+            socket_connect_timeout=1,
+            socket_timeout=1,
+            retry_on_timeout=False,
+        )
         client.ping()
         _REDIS_CLIENT = client
         logger.info("Redis cache connected")
         return _REDIS_CLIENT
-    except redis.ConnectionError as e:
+    except (redis.RedisError, ValueError) as e:
         logger.warning("Failed to connect to Redis: %s", e)
         return None
 

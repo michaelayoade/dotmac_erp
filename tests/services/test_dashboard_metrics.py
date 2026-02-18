@@ -7,6 +7,8 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+from sqlalchemy.exc import OperationalError, ProgrammingError
+
 from app.services.analytics.dashboard_metrics import (
     ALL_DASHBOARD_METRICS,
     DashboardMetricsService,
@@ -206,6 +208,42 @@ class TestGetOrgSnapshot:
             "supply_chain",
         }
         assert set(result.keys()) == expected_domains
+
+    @patch("app.services.analytics.dashboard_metrics.MetricStore")
+    def test_returns_none_when_snapshot_table_missing_postgres(
+        self, MockStore: MagicMock
+    ) -> None:
+        """Missing Postgres table should trigger live fallback (None), not raise."""
+        db = MagicMock()
+        store_instance = MockStore.return_value
+        store_instance.get_latest.side_effect = ProgrammingError(
+            "SELECT ...",
+            {},
+            Exception('relation "org_metric_snapshot" does not exist'),
+        )
+
+        svc = DashboardMetricsService(db)
+        result = svc.get_org_snapshot(DEFAULT_ORG)
+
+        assert result is None
+
+    @patch("app.services.analytics.dashboard_metrics.MetricStore")
+    def test_returns_none_when_snapshot_table_missing_sqlite(
+        self, MockStore: MagicMock
+    ) -> None:
+        """Missing SQLite table should trigger live fallback (None), not raise."""
+        db = MagicMock()
+        store_instance = MockStore.return_value
+        store_instance.get_latest.side_effect = OperationalError(
+            "SELECT ...",
+            {},
+            Exception("no such table: org_metric_snapshot"),
+        )
+
+        svc = DashboardMetricsService(db)
+        result = svc.get_org_snapshot(DEFAULT_ORG)
+
+        assert result is None
 
 
 class TestAllDashboardMetrics:

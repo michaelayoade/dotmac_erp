@@ -479,11 +479,14 @@ def download_document(
     db: Session = Depends(get_db),
 ):
     """Download a document from a disciplinary case."""
-    from fastapi.responses import FileResponse
+    import re
+
+    from fastapi.responses import StreamingResponse
 
     from app.services.people.discipline.attachment_service import (
         DisciplineAttachmentService,
     )
+    from app.services.storage import get_storage
 
     service = DisciplineAttachmentService(db)
     document = service.get_document(auth.organization_id, document_id)
@@ -494,18 +497,32 @@ def download_document(
     if document.case_id != case_id:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    try:
-        file_path = service.get_file_path(document)
-        if not file_path.exists():
-            raise HTTPException(status_code=404, detail="File not found on server")
+    if not document.file_path:
+        raise HTTPException(status_code=404, detail="Document file not available")
 
-        return FileResponse(
-            path=str(file_path),
-            filename=document.file_name,
-            media_type=document.mime_type or "application/octet-stream",
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    s3_key = document.file_path
+    if not s3_key.startswith("discipline/"):
+        s3_key = f"discipline/{s3_key}"
+
+    storage = get_storage()
+    if not storage.exists(s3_key):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    chunks, content_type, content_length = storage.stream(s3_key)
+    safe_name = re.sub(
+        r'[\\x00-\\x1f\\x7f"\\\\]', "_", document.file_name or "document"
+    )
+    headers: dict[str, str] = {
+        "Content-Disposition": f'attachment; filename="{safe_name}"'
+    }
+    if content_length is not None:
+        headers["Content-Length"] = str(content_length)
+
+    return StreamingResponse(
+        chunks,
+        media_type=content_type or document.mime_type or "application/octet-stream",
+        headers=headers,
+    )
 
 
 @router.post("/{case_id}/documents/{document_id}/delete")

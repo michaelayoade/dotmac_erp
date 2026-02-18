@@ -17,8 +17,8 @@ from app.services.file_upload import (
     FileUploadError,
     FileUploadService,
     get_resume_upload,
-    resolve_safe_path,
 )
+from app.services.storage import get_storage
 
 logger = logging.getLogger(__name__)
 
@@ -144,31 +144,45 @@ class ResumeService:
 
         return file_id, upload_result.relative_path
 
+    def _find_s3_key(self, org_id: uuid.UUID, file_id: str) -> str | None:
+        """Find the S3 key for a resume by checking each allowed extension.
+
+        Returns:
+            The S3 key string if found, None otherwise.
+        """
+
+        storage = get_storage()
+        s3_prefix = self.upload_service.config.effective_s3_prefix
+        for ext in self.allowed_extensions:
+            s3_key = f"{s3_prefix}/{org_id}/{file_id}{ext}"
+            if storage.exists(s3_key):
+                return s3_key
+        return None
+
     def get_resume_path(self, org_id: uuid.UUID, file_id: str) -> Path | None:
         """
-        Get the full path to a resume file.
+        Get the path to a resume file.
+
+        Checks S3 for the file and returns a Path derived from the S3 key.
+        The returned Path may not exist on local disk — it represents the
+        logical file location.
 
         Args:
             org_id: Organization UUID
             file_id: File UUID (without extension)
 
         Returns:
-            Path to file if found, None otherwise
+            Path derived from S3 key if found, None otherwise
         """
-        for ext in self.allowed_extensions:
-            try:
-                file_path = resolve_safe_path(
-                    self.upload_service.base_path, f"{org_id}/{file_id}{ext}"
-                )
-            except ValueError:
-                continue
-            if file_path.exists():
-                return file_path
+        s3_key = self._find_s3_key(org_id, file_id)
+        if s3_key:
+            # Return a Path from the S3 key so callers can use .name
+            return Path(s3_key)
         return None
 
     def delete_resume(self, org_id: uuid.UUID, file_id: str) -> bool:
         """
-        Delete a resume file.
+        Delete a resume file from S3.
 
         Args:
             org_id: Organization UUID
@@ -177,9 +191,9 @@ class ResumeService:
         Returns:
             True if deleted, False if not found
         """
-        file_path = self.get_resume_path(org_id, file_id)
-        if file_path and file_path.exists():
-            file_path.unlink()
+        s3_key = self._find_s3_key(org_id, file_id)
+        if s3_key:
+            get_storage().delete(s3_key)
             logger.info("Resume deleted: %s for org %s", file_id, org_id)
             return True
         return False
@@ -188,8 +202,7 @@ class ResumeService:
         """
         Get the URL for accessing a resume file.
 
-        This returns an internal path - actual serving should go through
-        an authenticated endpoint for security.
+        Returns an authenticated download URL that proxies from S3.
 
         Args:
             org_id: Organization UUID
@@ -198,7 +211,7 @@ class ResumeService:
         Returns:
             URL path if file exists, None otherwise
         """
-        file_path = self.get_resume_path(org_id, file_id)
-        if file_path:
-            return f"/uploads/resumes/{org_id}/{file_path.name}"
+        path = self.get_resume_path(org_id, file_id)
+        if path:
+            return f"/files/resumes/{org_id}/{path.name}"
         return None

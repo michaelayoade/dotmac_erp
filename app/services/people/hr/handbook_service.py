@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.config import settings
-from app.models.people.hr import Employee
+from app.models.people.hr import Employee, EmployeeStatus
 from app.models.people.hr.handbook import (
     DocumentCategory,
     DocumentStatus,
@@ -641,7 +641,7 @@ class HRDocumentService:
             self.db.scalar(
                 select(func.count(Employee.employee_id)).where(
                     Employee.organization_id == org_id,
-                    Employee.status == "active",
+                    Employee.status == EmployeeStatus.ACTIVE,
                     Employee.is_deleted == False,
                 )
             )
@@ -696,7 +696,7 @@ class HRDocumentService:
             self.db.scalar(
                 select(func.count(Employee.employee_id)).where(
                     Employee.organization_id == org_id,
-                    Employee.status == "active",
+                    Employee.status == EmployeeStatus.ACTIVE,
                     Employee.is_deleted == False,
                 )
             )
@@ -756,7 +756,7 @@ class HRDocumentService:
         # Get active employees not in acknowledged list
         query = select(Employee).where(
             Employee.organization_id == org_id,
-            Employee.status == "active",
+            Employee.status == EmployeeStatus.ACTIVE,
             Employee.is_deleted == False,
         )
 

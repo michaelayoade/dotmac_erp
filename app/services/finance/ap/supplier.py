@@ -375,11 +375,6 @@ class SupplierService(ListResponseMixin):
     @staticmethod
     def _check_no_outstanding_balance(db: Session, supplier: Supplier) -> None:
         """Pre-check for deactivation: ensure no outstanding balance."""
-        outstanding_statuses = [
-            SupplierInvoiceStatus.POSTED,
-            SupplierInvoiceStatus.PARTIALLY_PAID,
-        ]
-
         # Note: balance_due is a @property, so we compute it inline for SQL
         outstanding_balance = db.scalar(
             select(
@@ -393,7 +388,7 @@ class SupplierService(ListResponseMixin):
                 and_(
                     SupplierInvoice.supplier_id == supplier.supplier_id,
                     SupplierInvoice.organization_id == supplier.organization_id,
-                    SupplierInvoice.status.in_(outstanding_statuses),
+                    SupplierInvoice.status.in_(SupplierInvoiceStatus.outstanding()),
                 )
             )
         )
@@ -662,18 +657,13 @@ class SupplierService(ListResponseMixin):
             raise HTTPException(status_code=404, detail="Supplier not found")
 
         # Get outstanding invoices
-        outstanding_statuses = [
-            SupplierInvoiceStatus.POSTED,
-            SupplierInvoiceStatus.PARTIALLY_PAID,
-        ]
-
         invoices = list(
             db.scalars(
                 select(SupplierInvoice).where(
                     and_(
                         SupplierInvoice.supplier_id == sup_id,
                         SupplierInvoice.organization_id == coerce_uuid(organization_id),
-                        SupplierInvoice.status.in_(outstanding_statuses),
+                        SupplierInvoice.status.in_(SupplierInvoiceStatus.outstanding()),
                     )
                 )
             ).all()

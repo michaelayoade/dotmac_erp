@@ -103,10 +103,7 @@ class APAgingService(ListResponseMixin):
             raise ValueError("Supplier not found")
 
         # Get outstanding invoices
-        outstanding_statuses = [
-            SupplierInvoiceStatus.POSTED,
-            SupplierInvoiceStatus.PARTIALLY_PAID,
-        ]
+        outstanding_statuses = SupplierInvoiceStatus.outstanding()
 
         invoices = list(
             db.scalars(
@@ -160,10 +157,7 @@ class APAgingService(ListResponseMixin):
         org_id = coerce_uuid(organization_id)
         ref_date = as_of_date or date.today()
 
-        outstanding_statuses = [
-            SupplierInvoiceStatus.POSTED,
-            SupplierInvoiceStatus.PARTIALLY_PAID,
-        ]
+        outstanding_statuses = SupplierInvoiceStatus.outstanding()
 
         invoices = list(
             db.scalars(
@@ -222,10 +216,7 @@ class APAgingService(ListResponseMixin):
         ref_date = as_of_date or date.today()
 
         # Get all active suppliers with outstanding invoices
-        outstanding_statuses = [
-            SupplierInvoiceStatus.POSTED,
-            SupplierInvoiceStatus.PARTIALLY_PAID,
-        ]
+        outstanding_statuses = SupplierInvoiceStatus.outstanding()
 
         supplier_ids = list(
             db.scalars(
@@ -335,10 +326,7 @@ class APAgingService(ListResponseMixin):
         ref_date = as_of_date or date.today()
         cutoff_date = ref_date
 
-        outstanding_statuses = [
-            SupplierInvoiceStatus.POSTED,
-            SupplierInvoiceStatus.PARTIALLY_PAID,
-        ]
+        outstanding_statuses = SupplierInvoiceStatus.outstanding()
 
         stmt = select(SupplierInvoice).where(
             and_(

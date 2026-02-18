@@ -8,7 +8,7 @@ import json
 import logging
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 from uuid import UUID
 
 from fastapi import HTTPException, Request
@@ -1147,8 +1147,46 @@ class SelfServiceWebService:
         ):
             upload_files.append(receipt_file)
 
-        for upload in upload_files:
-            resolved_receipt_urls.append(self._save_receipt_file(org_id, upload))
+        if upload_files:
+            # File uploads can fail validation (e.g. unsupported MIME type).
+            # For self-service web flows, redirect back with a user-visible error
+            # toast instead of raising an unhandled exception (500).
+            from app.services.file_upload import (
+                FileUploadError,
+                get_expense_receipt_upload,
+            )
+
+            upload_svc = get_expense_receipt_upload()
+            uploaded_paths: list[str] = []
+            try:
+                for upload in upload_files:
+                    # Note: UploadFile.file is a SpooledTemporaryFile; reading consumes it.
+                    file_data = upload.file.read()
+                    result = upload_svc.save(
+                        file_data=file_data,
+                        content_type=upload.content_type,
+                        subdirs=(str(org_id),),
+                        original_filename=upload.filename,
+                    )
+                    uploaded_paths.append(str(result.file_path))
+                    resolved_receipt_urls.append(str(result.file_path))
+            except FileUploadError as exc:
+                # Best-effort cleanup of any earlier uploads in this request.
+                for path in uploaded_paths:
+                    try:
+                        upload_svc.delete(path)
+                    except Exception:
+                        logger.exception(
+                            "Failed to cleanup orphaned receipt upload",
+                            extra={
+                                "organization_id": str(org_id),
+                                "path": path,
+                            },
+                        )
+                return RedirectResponse(
+                    url=f"/people/self/expenses?error={quote(str(exc))}",
+                    status_code=303,
+                )
 
         resolved_receipt_url: str | None
         if not resolved_receipt_urls:
@@ -1188,9 +1226,9 @@ class SelfServiceWebService:
             ],
         )
         if submit_now:
-            svc.submit_claim(org_id, claim.claim_id)
+            svc.submit_claim(org_id, claim.claim_id, skip_receipt_validation=True)
         db.commit()
-        return RedirectResponse(url="/people/self/expenses", status_code=302)
+        return RedirectResponse(url="/people/self/expenses", status_code=303)
 
     def expense_claim_edit_response(
         self,
@@ -1271,7 +1309,7 @@ class SelfServiceWebService:
                 status_code=400, detail="Only draft claims can be submitted"
             )
 
-        svc.submit_claim(org_id, claim_id)
+        svc.submit_claim(org_id, claim_id, skip_receipt_validation=True)
         db.commit()
         return RedirectResponse(url="/people/self/expenses", status_code=302)
 

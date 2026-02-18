@@ -22,6 +22,7 @@ from app.tasks.splynx import (
     _INCREMENTAL_FALLBACK_DAYS,
     _INCREMENTAL_OVERLAP_HOURS,
     _build_sync_context,
+    cleanup_stale_splynx_sync_history,
     run_splynx_daily_reconciliation,
     run_splynx_full_reconciliation,
     run_splynx_incremental_sync,
@@ -446,3 +447,53 @@ class TestLegacyAlias:
             batch_size=1000,
         )
         assert result == {"success": True}
+
+
+# ---------------------------------------------------------------------------
+# Maintenance cleanup task
+# ---------------------------------------------------------------------------
+
+
+class TestStaleHistoryCleanup:
+    """Tests for cleanup_stale_splynx_sync_history."""
+
+    def test_marks_stale_rows_as_failed(self) -> None:
+        mock_db = MagicMock()
+        row1 = MagicMock(history_id=uuid.uuid4(), started_at=datetime.now(UTC))
+        row2 = MagicMock(history_id=uuid.uuid4(), started_at=datetime.now(UTC))
+        mock_db.scalars.return_value.all.return_value = [row1, row2]
+
+        with patch(f"{_MODULE}.SessionLocal", lambda: _mock_session_local(mock_db)):
+            result = cleanup_stale_splynx_sync_history()
+
+        assert result["success"] is True
+        assert result["marked_failed"] == 2
+        row1.fail.assert_called_once()
+        row2.fail.assert_called_once()
+        mock_db.commit.assert_called_once()
+        mock_db.rollback.assert_not_called()
+
+    def test_dry_run_does_not_commit(self) -> None:
+        mock_db = MagicMock()
+        row = MagicMock(history_id=uuid.uuid4(), started_at=datetime.now(UTC))
+        mock_db.scalars.return_value.all.return_value = [row]
+
+        with patch(f"{_MODULE}.SessionLocal", lambda: _mock_session_local(mock_db)):
+            result = cleanup_stale_splynx_sync_history(dry_run=True)
+
+        assert result["success"] is True
+        assert result["dry_run"] is True
+        assert result["would_mark_failed"] == 1
+        mock_db.rollback.assert_called_once()
+        mock_db.commit.assert_not_called()
+
+    def test_no_stale_rows(self) -> None:
+        mock_db = MagicMock()
+        mock_db.scalars.return_value.all.return_value = []
+
+        with patch(f"{_MODULE}.SessionLocal", lambda: _mock_session_local(mock_db)):
+            result = cleanup_stale_splynx_sync_history()
+
+        assert result["success"] is True
+        assert result["marked_failed"] == 0
+        mock_db.commit.assert_not_called()

@@ -1,11 +1,24 @@
 """Tests for avatar service - type validation, size limits, and file cleanup."""
 
+from __future__ import annotations
+
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException, UploadFile
 
 from app.services import avatar as avatar_service
+
+
+@pytest.fixture(autouse=True)
+def _mock_storage():
+    """Mock S3 storage to avoid real MinIO connections in all avatar tests."""
+    mock = MagicMock()
+    with patch(
+        "app.services.file_upload.FileUploadService._get_storage",
+        return_value=mock,
+    ):
+        yield mock
 
 
 class TestAvatarValidation:
@@ -85,7 +98,7 @@ class TestAvatarSizeLimits:
             ),
         ):
             url = await avatar_service.save_avatar(file, "person-123")
-            assert url.startswith("/static/avatars/")
+            assert url.startswith("/files/avatars/")
             assert "person-123" in url
 
     @pytest.mark.asyncio
@@ -109,91 +122,49 @@ class TestAvatarSizeLimits:
             assert exc.value.status_code == 400
             assert "too large" in exc.value.detail.lower()
 
-    @pytest.mark.asyncio
-    async def test_save_avatar_creates_directory(self, tmp_path):
-        """Test that save_avatar creates upload directory if it doesn't exist."""
-        upload_dir = tmp_path / "avatars" / "nested"
-        content = b"x" * 100
-        file = MagicMock(spec=UploadFile)
-        file.content_type = "image/png"
-        file.filename = "pic.png"
-        file.read = AsyncMock(return_value=content)
-
-        with patch.object(avatar_service.settings, "avatar_allowed_types", "image/png"):
-            with patch.object(
-                avatar_service.settings, "avatar_max_size_bytes", 1024 * 1024
-            ):
-                with patch.object(
-                    avatar_service.settings, "avatar_upload_dir", str(upload_dir)
-                ):
-                    with patch.object(
-                        avatar_service.settings, "avatar_url_prefix", "/static/avatars"
-                    ):
-                        await avatar_service.save_avatar(file, "person-456")
-                        assert upload_dir.exists()
-
 
 class TestAvatarFileCleanup:
     """Tests for avatar file deletion and cleanup."""
 
-    def test_delete_avatar_existing_file(self, tmp_path):
-        """Test deleting an existing avatar file."""
-        # Create a test file
-        avatar_file = tmp_path / "test_avatar.jpg"
-        avatar_file.write_bytes(b"fake image content")
-        assert avatar_file.exists()
+    def test_delete_avatar_via_new_url(self, _mock_storage):
+        """Test deleting an avatar via /files/avatars/ URL."""
+        avatar_url = "/files/avatars/test_avatar.jpg"
 
+        with patch.object(
+            avatar_service.settings, "avatar_url_prefix", "/static/avatars"
+        ):
+            avatar_service.delete_avatar(avatar_url)
+            _mock_storage.delete.assert_called_once()
+
+    def test_delete_avatar_via_legacy_url(self, _mock_storage):
+        """Test deleting an avatar via legacy /static/avatars/ URL."""
         avatar_url = "/static/avatars/test_avatar.jpg"
 
-        with (
-            patch.object(
-                avatar_service.settings, "avatar_url_prefix", "/static/avatars"
-            ),
-            patch.object(avatar_service.settings, "avatar_upload_dir", str(tmp_path)),
+        with patch.object(
+            avatar_service.settings, "avatar_url_prefix", "/static/avatars"
         ):
             avatar_service.delete_avatar(avatar_url)
-            assert not avatar_file.exists()
+            _mock_storage.delete.assert_called_once()
 
-    def test_delete_avatar_nonexistent_file(self, tmp_path):
-        """Test deleting a non-existent avatar file doesn't raise."""
-        avatar_url = "/static/avatars/nonexistent.jpg"
-
-        with (
-            patch.object(
-                avatar_service.settings, "avatar_url_prefix", "/static/avatars"
-            ),
-            patch.object(avatar_service.settings, "avatar_upload_dir", str(tmp_path)),
-        ):
-            # Should not raise
-            avatar_service.delete_avatar(avatar_url)
-
-    def test_delete_avatar_none_url(self):
+    def test_delete_avatar_none_url(self, _mock_storage):
         """Test delete_avatar handles None gracefully."""
-        # Should not raise
         avatar_service.delete_avatar(None)
+        _mock_storage.delete.assert_not_called()
 
-    def test_delete_avatar_empty_url(self):
+    def test_delete_avatar_empty_url(self, _mock_storage):
         """Test delete_avatar handles empty string gracefully."""
-        # Should not raise
         avatar_service.delete_avatar("")
+        _mock_storage.delete.assert_not_called()
 
-    def test_delete_avatar_external_url(self, tmp_path):
+    def test_delete_avatar_external_url(self, _mock_storage):
         """Test that external URLs are not deleted (security)."""
-        # Create a file that shouldn't be deleted
-        test_file = tmp_path / "should_not_delete.jpg"
-        test_file.write_bytes(b"important data")
-
         external_url = "https://example.com/avatar.jpg"
 
-        with (
-            patch.object(
-                avatar_service.settings, "avatar_url_prefix", "/static/avatars"
-            ),
-            patch.object(avatar_service.settings, "avatar_upload_dir", str(tmp_path)),
+        with patch.object(
+            avatar_service.settings, "avatar_url_prefix", "/static/avatars"
         ):
             avatar_service.delete_avatar(external_url)
-            # File should still exist since external URL was passed
-            assert test_file.exists()
+            _mock_storage.delete.assert_not_called()
 
 
 class TestAvatarExtensions:

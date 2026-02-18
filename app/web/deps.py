@@ -783,10 +783,19 @@ class WebAuthContext:
         """Get list of modules the user can access."""
         modules = []
         scopes_set = set(self.scopes)
+        roles_set = {r.strip().lower() for r in self.roles if r and r.strip()}
 
         if self.is_admin or "finance:access" in scopes_set:
             modules.append("finance")
-        if self.is_admin or "hr:access" in scopes_set:
+        # HR/People: allow either scope-based access or named HR roles.
+        # Role names come from JWT claims (Role.name in DB, e.g. "hr_manager").
+        if (
+            self.is_admin
+            or "hr:access" in scopes_set
+            or roles_set.intersection(
+                {"hr_manager", "hr_director", "payroll_admin", "payroll_approver"}
+            )
+        ):
             modules.append("people")
         if self.is_admin or "inventory:access" in scopes_set:
             modules.append("inventory")
@@ -802,6 +811,16 @@ class WebAuthContext:
             modules.append("settings")
         if self.is_admin or "expense:access" in scopes_set:
             modules.append("expense")
+        if self.is_admin or scopes_set.intersection(
+            {
+                "coach:insights:read",
+                "coach:insights:read_team",
+                "coach:insights:read_all",
+                "coach:reports:read",
+                "coach:reports:read_all",
+            }
+        ):
+            modules.append("coach")
         if "self:access" in scopes_set:
             modules.append("self_service")
 
@@ -821,6 +840,7 @@ class WebAuthContext:
             "settings": "settings",
             "expense": "expense",
             "expenses": "expense",
+            "coach": "coach",
             "self": "self_service",
             "self-service": "self_service",
             "self_service": "self_service",
@@ -878,6 +898,8 @@ class WebAuthContext:
                 return "/settings"
             if module == "expense":
                 return "/expense"
+            if module == "coach":
+                return "/coach/"
             if module == "self_service":
                 return "/people/self/attendance"
             return f"/{module}/dashboard"

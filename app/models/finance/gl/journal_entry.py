@@ -50,6 +50,16 @@ class JournalStatus(str, enum.Enum):
     REVERSED = "REVERSED"
     VOID = "VOID"
 
+    @classmethod
+    def gl_impacting(cls) -> frozenset["JournalStatus"]:
+        """Statuses where the journal entry affects GL balances."""
+        return frozenset({cls.POSTED})
+
+    @classmethod
+    def terminal(cls) -> frozenset["JournalStatus"]:
+        """Statuses where the journal is finalized."""
+        return frozenset({cls.POSTED, cls.REVERSED, cls.VOID})
+
 
 class JournalEntry(Base, VersionedMixin):
     """

@@ -1,7 +1,10 @@
 """Tests for the Resume Service."""
 
+from __future__ import annotations
+
 import uuid
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -16,7 +19,43 @@ class TestResumeService:
     """Test cases for ResumeService."""
 
     @pytest.fixture
-    def resume_service(self, tmp_path: Path) -> ResumeService:
+    def _mock_storage(self, tmp_path: Path):
+        """Mock S3 storage with key tracking for exists/delete behaviour."""
+        mock = MagicMock()
+        _keys: dict[str, bytes] = {}
+
+        def _upload(key: str, data: bytes, content_type: str | None = None) -> None:
+            _keys[key] = data
+            # Also write to disk so save_resume disk assertions still work
+            relative = "/".join(key.split("/")[1:])
+            path = tmp_path / "resumes" / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+
+        def _exists(key: str) -> bool:
+            return key in _keys
+
+        def _delete(key: str) -> None:
+            _keys.pop(key, None)
+
+        mock.upload.side_effect = _upload
+        mock.exists.side_effect = _exists
+        mock.delete.side_effect = _delete
+
+        with (
+            patch(
+                "app.services.file_upload.FileUploadService._get_storage",
+                return_value=mock,
+            ),
+            patch(
+                "app.services.careers.resume_service.get_storage",
+                return_value=mock,
+            ),
+        ):
+            yield mock
+
+    @pytest.fixture
+    def resume_service(self, tmp_path: Path, _mock_storage: MagicMock) -> ResumeService:
         """Create a ResumeService with a temp directory."""
         service = ResumeService()
         service.upload_dir = tmp_path / "resumes"
@@ -26,13 +65,11 @@ class TestResumeService:
     @pytest.fixture
     def valid_pdf_content(self) -> bytes:
         """Create valid PDF-like content."""
-        # PDF magic bytes + minimal content
         return b"%PDF-1.4\n%test content\n%%EOF"
 
     @pytest.fixture
     def valid_docx_content(self) -> bytes:
         """Create valid DOCX-like content (ZIP header)."""
-        # DOCX is a ZIP file
         return b"PK\x03\x04" + b"\x00" * 100
 
     def test_validate_file_valid_pdf(self, resume_service: ResumeService):
@@ -67,12 +104,11 @@ class TestResumeService:
 
     def test_validate_file_too_large(self, resume_service: ResumeService):
         """Test validation rejects files that are too large."""
-        # Set a small max size for testing
         resume_service.max_size = 1024
 
         is_valid, error = resume_service.validate_file(
             "resume.pdf",
-            2048,  # Larger than max
+            2048,
             None,
         )
         assert is_valid is False
@@ -104,7 +140,7 @@ class TestResumeService:
         assert str(org_id) in relative_path
         assert relative_path.endswith(".pdf")
 
-        # Verify file exists
+        # Verify file was written via the bridge mock
         file_path = resume_service.upload_dir / relative_path
         assert file_path.exists()
         assert file_path.read_bytes() == valid_pdf_content
@@ -135,7 +171,7 @@ class TestResumeService:
     def test_get_resume_path(
         self, resume_service: ResumeService, valid_pdf_content: bytes
     ):
-        """Test retrieving resume path."""
+        """Test retrieving resume path via S3 lookup."""
         org_id = uuid.uuid4()
 
         file_id, _ = resume_service.save_resume(
@@ -146,7 +182,7 @@ class TestResumeService:
 
         path = resume_service.get_resume_path(org_id, file_id)
         assert path is not None
-        assert path.exists()
+        assert path.name.endswith(".pdf")
 
         # Non-existent file
         path = resume_service.get_resume_path(org_id, "nonexistent")
@@ -159,7 +195,7 @@ class TestResumeService:
     def test_delete_resume(
         self, resume_service: ResumeService, valid_pdf_content: bytes
     ):
-        """Test deleting a resume."""
+        """Test deleting a resume from S3."""
         org_id = uuid.uuid4()
 
         file_id, _ = resume_service.save_resume(
@@ -175,7 +211,7 @@ class TestResumeService:
         result = resume_service.delete_resume(org_id, file_id)
         assert result is True
 
-        # Verify deleted
+        # Verify deleted (S3 key no longer found)
         assert resume_service.get_resume_path(org_id, file_id) is None
 
         # Delete non-existent
@@ -196,7 +232,7 @@ class TestResumeService:
 
         url = resume_service.get_resume_url(org_id, file_id)
         assert url is not None
-        assert "/uploads/resumes/" in url
+        assert "/files/resumes/" in url
         assert str(org_id) in url
 
         # Non-existent

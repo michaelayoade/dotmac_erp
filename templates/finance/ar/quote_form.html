@@ -248,7 +248,8 @@
 
 {% block content %}
 <div x-data="quoteForm()" class="max-w-5xl mx-auto space-y-8">
-    <form @submit.prevent="submitForm" class="space-y-6">
+    <form action="/finance/quotes/new" method="post" class="space-y-6">
+        {{ request.state.csrf_form | safe }}
         <!-- Page Header -->
         <div>
             <h1 class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">
@@ -751,47 +752,8 @@ function quoteForm() {
             }
 
             line.line_total = afterDiscount + line.tax_amount;
-        },
-
-        submitForm() {
-            // Update lines_json hidden field
-            document.querySelector('input[name="lines_json"]').value = JSON.stringify(this.form.lines);
-
-            // Submit via standard form
-            const form = document.querySelector('form');
-            form.action = '/finance/quotes/new';
-            form.method = 'POST';
-
-            // Create FormData from Alpine data
-            const formData = new FormData();
-            formData.append('customer_id', this.form.customer_id);
-            formData.append('quote_date', this.form.quote_date);
-            formData.append('valid_until', this.form.valid_until);
-            formData.append('currency_code', this.form.currency_code);
-            formData.append('contact_name', this.form.contact_name);
-            formData.append('contact_email', this.form.contact_email);
-            formData.append('payment_terms_id', this.form.payment_terms_id);
-            formData.append('customer_notes', this.form.customer_notes);
-            formData.append('internal_notes', this.form.internal_notes);
-            formData.append('terms_and_conditions', this.form.terms_and_conditions);
-            formData.append('lines_json', JSON.stringify(this.form.lines));
-
-            // Create a hidden form and submit
-            const hiddenForm = document.createElement('form');
-            hiddenForm.method = 'POST';
-            hiddenForm.action = '/finance/quotes/new';
-
-            for (const [key, value] of formData.entries()) {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = key;
-                input.value = value;
-                hiddenForm.appendChild(input);
-            }
-
-            document.body.appendChild(hiddenForm);
-            hiddenForm.submit();
         }
+
     }
 }
 </script>

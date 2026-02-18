@@ -539,24 +539,27 @@
             <div class="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
                 <!-- Supplier -->
                 <div>
-                    <label for="supplier_id" class="form-label">
+                    <label for="supplier_name" class="form-label">
                         Supplier <span class="required">*</span>
                     </label>
-                    <select id="supplier_id"
-                            name="supplier_id"
-                            x-model="form.supplier_id"
-                            @change="onSupplierChange"
-                            required
-                            class="form-input">
-                        <option value="">Select supplier</option>
-                        {% for supplier in suppliers_list %}
-                        <option value="{{ supplier.supplier_id }}"
-                                data-currency="{{ supplier.currency_code }}"
-                                data-terms="{{ supplier.payment_terms_days }}">
-                            {{ supplier.supplier_code }} - {{ supplier.supplier_name }}
-                        </option>
-                        {% endfor %}
-                    </select>
+                    <div class="relative" data-typeahead-url="/finance/ap/suppliers/search" data-typeahead-min="2" data-typeahead-limit="8">
+                        <input type="text"
+                               id="supplier_name"
+                               name="supplier_name"
+                               x-model="form.supplier_name"
+                               required
+                               autocomplete="off"
+                               placeholder="Search supplier..."
+                               class="form-input"
+                               data-typeahead-input>
+                        <input type="hidden"
+                               id="supplier_id"
+                               name="supplier_id"
+                               x-model="form.supplier_id"
+                               @change="onSupplierSelected"
+                               data-typeahead-hidden>
+                        <div data-typeahead-results></div>
+                    </div>
                 </div>
 
                 <!-- Invoice Number -->
@@ -822,7 +825,9 @@ function invoiceForm() {
 
     return {
         form: {
+            invoice_id: '{{ invoice.invoice_id if invoice else "" }}',
             supplier_id: '{{ invoice.supplier_id if invoice else "" }}' || (selectedSupplier?.supplier_id || ''),
+            supplier_name: (selectedSupplier ? `${selectedSupplier.supplier_code || ''} - ${selectedSupplier.supplier_name || ''}`.trim().replace(/^-\s*/, '') : ''),
             invoice_number: '{{ invoice.invoice_number if invoice else "" }}',
             invoice_date: '{{ invoice.invoice_date if invoice else "" }}',
             received_date: '{{ invoice.received_date if invoice else "" }}',
@@ -895,16 +900,20 @@ function invoiceForm() {
             }).format(amount || 0);
         },
 
-        onSupplierChange() {
-            const select = document.getElementById('supplier_id');
-            const option = select.options[select.selectedIndex];
-            if (option && option.value) {
-                const currency = option.dataset.currency;
-                const terms = parseInt(option.dataset.terms) || 30;
-                if (currency) this.form.currency_code = currency;
-                this.paymentTermsDays = terms;
-                this.calculateDueDate();
-            }
+        onSupplierSelected() {
+            const hidden = document.getElementById('supplier_id');
+            if (!hidden || !hidden.value) return;
+            const raw = hidden.getAttribute('data-typeahead-item');
+            if (!raw) return;
+            let item = null;
+            try { item = JSON.parse(raw); } catch (e) { item = null; }
+            if (!item) return;
+
+            const currency = item.currency_code;
+            const terms = parseInt(item.payment_terms_days, 10) || 30;
+            if (currency) this.form.currency_code = currency;
+            this.paymentTermsDays = terms;
+            this.calculateDueDate();
         },
 
         calculateDueDate() {
@@ -960,6 +969,17 @@ function invoiceForm() {
         },
 
         async submitForm() {
+            // Ensure Alpine state is synced with DOM values (typeahead sets hidden inputs).
+            // This makes validation reliable even if the browser cached an older typeahead.js.
+            const supplierIdEl = document.getElementById('supplier_id');
+            if (supplierIdEl && supplierIdEl.value) {
+                this.form.supplier_id = supplierIdEl.value;
+            }
+            const supplierNameEl = document.getElementById('supplier_name');
+            if (supplierNameEl && supplierNameEl.value) {
+                this.form.supplier_name = supplierNameEl.value;
+            }
+
             if (!this.form.supplier_id || !this.form.invoice_number || !this.form.invoice_date || !this.form.received_date || !this.form.due_date) {
                 window.dispatchEvent(new CustomEvent('show-toast', {
                     detail: { message: 'Please fill in all required fields', type: 'error' }
@@ -975,7 +995,10 @@ function invoiceForm() {
             }
 
             try {
-                const response = await fetch('/finance/ap/invoices/new', {
+                const endpoint = this.form.invoice_id
+                    ? `/finance/ap/invoices/${this.form.invoice_id}/edit`
+                    : '/finance/ap/invoices/new';
+                const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

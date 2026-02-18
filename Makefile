@@ -1,4 +1,4 @@
-.PHONY: help test lint type-check format security check migrate dev docker-up docker-down docker-logs worker beat css coverage clean
+.PHONY: help test lint type-check format security check migrate dev docker-up docker-down docker-logs worker beat css coverage clean schema-skill mcp-health
 
 # Default target
 help: ## Show this help
@@ -40,8 +40,10 @@ test-e2e: ## Run end-to-end browser tests
 
 # ─── Database ─────────────────────────────────────────────
 
-migrate: ## Apply all pending migrations
+migrate: ## Apply all pending migrations + regenerate schema skill
 	poetry run alembic upgrade head
+	@echo "Regenerating schema skill..."
+	@poetry run python scripts/generate_schema_skill.py
 
 migrate-new: ## Create a new migration (usage: make migrate-new msg="add users table")
 	poetry run alembic revision --autogenerate -m "$(msg)"
@@ -51,6 +53,14 @@ migrate-down: ## Rollback last migration
 
 migrate-history: ## Show migration history
 	poetry run alembic history --verbose
+
+# ─── Claude Code ─────────────────────────────────────────────
+
+schema-skill: ## Regenerate database schema skill for Claude Code
+	poetry run python scripts/generate_schema_skill.py
+
+mcp-health: ## Validate MCP DB config and read-only connectivity
+	poetry run python scripts/check_mcp_db.py
 
 # ─── Development ──────────────────────────────────────────
 
@@ -86,8 +96,10 @@ docker-rebuild: ## Rebuild and restart app container
 docker-shell: ## Open shell in app container
 	docker exec -it dotmac_erp_app bash
 
-docker-migrate: ## Run migrations inside Docker
+docker-migrate: ## Run migrations inside Docker + regenerate schema skill
 	docker exec dotmac_erp_app alembic upgrade head
+	@echo "Regenerating schema skill..."
+	@poetry run python scripts/generate_schema_skill.py
 
 # ─── Pre-commit ───────────────────────────────────────────
 

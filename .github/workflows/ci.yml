@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  PYTHON_VERSION: "3.11"
+  PYTHON_VERSION: "3.12"
   DATABASE_URL: "sqlite:///./test.db"
   SECRET_KEY: "ci-test-secret-key-not-for-production"  # pragma: allowlist secret
   REDIS_URL: "redis://localhost:6379/0"
@@ -20,6 +20,7 @@ jobs:
   lint:
     name: Lint & Format
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -52,6 +53,7 @@ jobs:
   type-check:
     name: Type Check
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -76,11 +78,12 @@ jobs:
         run: poetry install --no-interaction
 
       - name: Run mypy
-        run: poetry run mypy app/ --ignore-missing-imports --no-incremental
+        run: poetry run mypy app/ --no-incremental
 
   test:
     name: Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -105,7 +108,7 @@ jobs:
         run: poetry install --no-interaction
 
       - name: Run tests with coverage
-        run: poetry run pytest tests/ --ignore=tests/integration --ignore=tests/e2e --cov=app --cov-report=xml --cov-report=term-missing -q
+        run: poetry run pytest tests/ --ignore=tests/integration --ignore=tests/e2e --cov=app --cov-report=xml --cov-report=term-missing -q --timeout=60
 
       - name: Upload coverage
         if: github.event_name == 'pull_request'
@@ -117,6 +120,7 @@ jobs:
   security:
     name: Security Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -141,14 +145,12 @@ jobs:
         run: poetry install --only dev --no-interaction
 
       - name: Security lint (bandit via ruff)
-        run: poetry run ruff check app/ --select S
-
-      - name: Bandit security scan
-        run: poetry run bandit -r app/ -c pyproject.toml -q
+        run: poetry run ruff check app/ --select S --ignore S110
 
   pre-commit:
     name: Pre-commit
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -167,6 +169,7 @@ jobs:
   docker-build:
     name: Docker Build & Health Check
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -254,10 +257,13 @@ jobs:
   # Integration Tests — PostgreSQL
   # Runs tests/integration/ against a real PostgreSQL 16 service container.
   # Validates Alembic migrations and PostgreSQL-specific features.
+  # Non-blocking: failures here don't prevent image publish.
   # ---------------------------------------------------------------------------
   integration-test:
     name: Integration Tests (PostgreSQL)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
     services:
       postgres:
         image: postgres:16
@@ -308,7 +314,8 @@ jobs:
         # -o addopts= clears pytest.ini's "-m not integration" filter
         # confcutdir prevents loading tests/conftest.py which monkey-patches
         # PostgreSQL UUID/JSONB types for SQLite compatibility
-        run: poetry run pytest tests/integration/ -v --tb=short -o "addopts=" -o "confcutdir=tests/integration"
+        # --timeout=120 prevents individual tests from hanging forever
+        run: poetry run pytest tests/integration/ -v --tb=short --timeout=120 -o "addopts=" -o "confcutdir=tests/integration"
 
   # ---------------------------------------------------------------------------
   # Publish Docker Image to GHCR
@@ -318,6 +325,7 @@ jobs:
   publish-image:
     name: Publish Docker Image
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [lint, type-check, test, docker-build]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:

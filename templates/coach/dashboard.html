@@ -2,11 +2,7 @@
 {% from "components/macros.html" import topbar, stats_card, empty_state, icon_svg, status_badge %}
 
 {% block content %}
-{% call(breadcrumbs, actions) topbar("Coach Dashboard", accent="teal") %}
-  {% call(bc) breadcrumbs %}
-    {{ bc("Coach") }}
-  {% endcall %}
-{% endcall %}
+{{ topbar("Coach Dashboard", accent="teal") }}
 
 {# ── Stat cards ──────────────────────────────────────────────── #}
 <div class="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

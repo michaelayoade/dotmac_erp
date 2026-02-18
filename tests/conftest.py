@@ -269,6 +269,23 @@ class MockSettings:
     coach_monthly_token_budget = 500_000
     coach_cache_ttl_hours = 24
     coach_max_insights_per_run = 20
+    # S3 / MinIO settings
+    s3_endpoint_url = "http://minio:9000"
+    s3_access_key = "minioadmin"
+    s3_secret_key = "minioadmin"
+    s3_bucket_name = "dotmac-erp-test"
+    s3_region = "us-east-1"
+    # Branding settings
+    branding_upload_dir = "static/branding"
+    branding_max_size_bytes = 5 * 1024 * 1024
+    branding_allowed_types = "image/jpeg,image/png,image/gif,image/webp,image/svg+xml,image/x-icon,image/vnd.microsoft.icon"
+    branding_url_prefix = "/static/branding"
+    # Generated docs
+    generated_docs_dir = "uploads/generated_docs"
+    # DB statement timeout
+    db_statement_timeout_ms = 30000
+    # Default org
+    default_organization_id = None
 
 
 mock_config_module.settings = MockSettings()

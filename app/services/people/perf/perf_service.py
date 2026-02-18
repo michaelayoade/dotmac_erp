@@ -697,7 +697,7 @@ class PerformanceService:
             weightage=weightage,
             notes=notes,
             description=description,
-            status=KPIStatus.PENDING,
+            status=KPIStatus.DRAFT,
         )
 
         self.db.add(kpi)

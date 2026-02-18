@@ -173,6 +173,30 @@ class TestGLRoutes:
         response = web_client.get("/finance/gl/periods")
         assert_route_exists(response)
 
+    def test_period_open_post_routes_exist(self, web_client):
+        """Test that period open POST route exists with and without trailing slash."""
+        period_id = "00000000-0000-0000-0000-000000000001"
+        assert_route_exists(web_client.post(f"/finance/gl/periods/{period_id}/open"))
+        assert_route_exists(web_client.post(f"/finance/gl/periods/{period_id}/open/"))
+
+    def test_period_open_get_legacy_routes_exist(self, web_client):
+        """Test that period open legacy GET route exists with and without trailing slash."""
+        period_id = "00000000-0000-0000-0000-000000000001"
+        assert_route_exists(web_client.get(f"/finance/gl/periods/{period_id}/open"))
+        assert_route_exists(web_client.get(f"/finance/gl/periods/{period_id}/open/"))
+
+    def test_period_close_post_routes_exist(self, web_client):
+        """Test that period close POST route exists with and without trailing slash."""
+        period_id = "00000000-0000-0000-0000-000000000001"
+        assert_route_exists(web_client.post(f"/finance/gl/periods/{period_id}/close"))
+        assert_route_exists(web_client.post(f"/finance/gl/periods/{period_id}/close/"))
+
+    def test_period_close_get_legacy_routes_exist(self, web_client):
+        """Test that period close legacy GET route exists with and without trailing slash."""
+        period_id = "00000000-0000-0000-0000-000000000001"
+        assert_route_exists(web_client.get(f"/finance/gl/periods/{period_id}/close"))
+        assert_route_exists(web_client.get(f"/finance/gl/periods/{period_id}/close/"))
+
     def test_trial_balance_route_exists(self, web_client):
         """Test that trial balance route exists."""
         response = web_client.get("/finance/gl/trial-balance")

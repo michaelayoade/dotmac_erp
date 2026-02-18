@@ -4,13 +4,7 @@
 {% block content %}
 {% if report %}
 
-{% call(breadcrumbs, actions) topbar(report.title, accent="teal") %}
-  {% call(bc) breadcrumbs %}
-    {{ bc("Coach", "/coach/") }}
-    {{ bc("Reports", "/coach/reports") }}
-    {{ bc(report.title[:40]) }}
-  {% endcall %}
-{% endcall %}
+{{ topbar(report.title, accent="teal") }}
 
 {# ── Metadata bar ──────────────────────────────────────── #}
 <div class="mt-4 flex flex-wrap items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
@@ -106,13 +100,7 @@
 
 {% else %}
 {# ── Report not found ─────────────────────────────────── #}
-{% call(breadcrumbs, actions) topbar("Report Not Found", accent="teal") %}
-  {% call(bc) breadcrumbs %}
-    {{ bc("Coach", "/coach/") }}
-    {{ bc("Reports", "/coach/reports") }}
-    {{ bc("Not Found") }}
-  {% endcall %}
-{% endcall %}
+{{ topbar("Report Not Found", accent="teal") }}
 
 <div class="mt-6">
   {{ empty_state(

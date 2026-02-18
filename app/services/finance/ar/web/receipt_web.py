@@ -23,6 +23,7 @@ from app.models.finance.ar.invoice import Invoice, InvoiceStatus
 from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.finance.ar.ar_aging import ar_aging_service
 from app.services.finance.ar.customer import customer_service
 from app.services.finance.ar.customer_payment import (
@@ -76,6 +77,8 @@ class ReceiptWebService:
         start_date: str | None,
         end_date: str | None,
         page: int,
+        sort: str | None = None,
+        sort_dir: str | None = None,
         limit: int = 50,
     ) -> dict:
         """Get context for receipt listing page."""
@@ -104,9 +107,24 @@ class ReceiptWebService:
         total_count = (
             query.with_entities(func.count(CustomerPayment.payment_id)).scalar() or 0
         )
+
+        sort_dir_norm = (sort_dir or "desc").lower()
+        if sort_dir_norm not in {"asc", "desc"}:
+            sort_dir_norm = "desc"
+
+        order_map = {
+            "payment_date": CustomerPayment.payment_date,
+            "receipt_number": CustomerPayment.payment_number,
+            "customer_name": Customer.legal_name,
+            "amount": CustomerPayment.amount,
+            "status": CustomerPayment.status,
+        }
+        order_col = order_map.get(sort or "", CustomerPayment.payment_date)
+        order_expr = order_col.asc() if sort_dir_norm == "asc" else order_col.desc()
+
         receipts = (
             query.with_entities(CustomerPayment, Customer)
-            .order_by(CustomerPayment.payment_date.desc())
+            .order_by(order_expr, CustomerPayment.payment_date.desc())
             .limit(limit)
             .offset(offset)
             .all()
@@ -141,6 +159,15 @@ class ReceiptWebService:
 
         logger.debug("list_receipts_context: found %d receipts", total_count)
 
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "customer_id": customer_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            labels={"start_date": "From", "end_date": "To"},
+        )
         return {
             "receipts": receipts_view,
             "customers_list": customers_list,
@@ -154,6 +181,9 @@ class ReceiptWebService:
             "offset": offset,
             "total_count": total_count,
             "total_pages": total_pages,
+            "active_filters": active_filters,
+            "sort": sort or "",
+            "sort_dir": sort_dir_norm,
         }
 
     @staticmethod
@@ -595,6 +625,8 @@ class ReceiptWebService:
         start_date: str | None,
         end_date: str | None,
         page: int,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> HTMLResponse:
         """Render receipt list page."""
         start_date, end_date = normalize_date_range_filters(
@@ -613,6 +645,8 @@ class ReceiptWebService:
                 start_date=start_date,
                 end_date=end_date,
                 page=page,
+                sort=sort,
+                sort_dir=sort_dir,
             )
         )
         return templates.TemplateResponse(request, "finance/ar/receipts.html", context)

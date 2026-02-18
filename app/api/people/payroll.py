@@ -7,6 +7,7 @@ Thin API wrapper for Payroll endpoints. All business logic is in services.
 import csv
 import io
 from datetime import date
+from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -454,6 +455,7 @@ def export_salary_slips(
         to_date=to_date,
         limit=10000,
         offset=0,
+        include_lines=True,
     )
 
     rows = [
@@ -461,7 +463,15 @@ def export_salary_slips(
             "Slip #",
             "Employee",
             "Period",
+            "Basic Salary (Basic)",
+            "Housing Allowance (Hsg)",
+            "Transport Allowance (Trsp)",
+            "Other Allowances (Other)",
             "Gross",
+            "Employee Pension (8%) (Pen)",
+            "National Housing Fund (2.5%) (NHF)",
+            "PAYE Tax (PAYE)",
+            "Employer Pension Contribution (PEN-ER)",
             "Deductions",
             "Net Pay",
             "Status",
@@ -472,12 +482,62 @@ def export_salary_slips(
     ]
     for slip in slips:
         period = f"{slip.start_date.strftime('%b %d')} - {slip.end_date.strftime('%b %d, %Y')}"
+
+        # Earnings breakdown (only components included in gross)
+        basic = Decimal("0")
+        housing = Decimal("0")
+        transport = Decimal("0")
+        other = Decimal("0")
+        for earning in slip.earnings or []:
+            if earning.statistical_component or earning.do_not_include_in_total:
+                continue
+            code = (
+                (earning.component.component_code if earning.component else "") or ""
+            ).upper()
+            amount = earning.amount or Decimal("0")
+            if code == "BASIC":
+                basic += amount
+            elif code == "HOUSING":
+                housing += amount
+            elif code == "TRANSPORT":
+                transport += amount
+            else:
+                other += amount
+
+        # Deductions breakdown
+        employee_pension = Decimal("0")
+        nhf = Decimal("0")
+        paye = Decimal("0")
+        employer_pension = Decimal("0")
+        for deduction in slip.deductions or []:
+            code = (
+                (deduction.component.component_code if deduction.component else "")
+                or ""
+            ).upper()
+            amount = deduction.amount or Decimal("0")
+            if code == "PENSION" and not deduction.do_not_include_in_total:
+                employee_pension += amount
+            elif code == "NHF" and not deduction.do_not_include_in_total:
+                nhf += amount
+            elif code == "PAYE" and not deduction.do_not_include_in_total:
+                paye += amount
+            elif code == "PENSION_EMPLOYER":
+                employer_pension += amount
+
         rows.append(
             [
                 slip.slip_number,
                 slip.employee_name or "",
                 period,
+                f"{basic:,.2f}",
+                f"{housing:,.2f}",
+                f"{transport:,.2f}",
+                f"{other:,.2f}",
                 f"{slip.gross_pay:,.2f}",
+                f"({employee_pension:,.2f})",
+                f"({nhf:,.2f})",
+                f"({paye:,.2f})",
+                f"({employer_pension:,.2f})",
                 f"({slip.total_deduction:,.2f})",
                 f"{slip.net_pay:,.2f}",
                 slip.status.value.title(),

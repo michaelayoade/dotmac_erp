@@ -6,9 +6,11 @@ All upload services (avatar, branding, resume, finance attachments,
 support attachments, PM attachments, discipline attachments) delegate
 to this core service.
 
-Key improvements:
-- Size validated BEFORE writing to disk
-- Consistent path-traversal protection
+Storage backend: S3 (MinIO).  Validation still runs in-process before
+the upload is sent to the object store.
+
+Key features:
+- Size validated BEFORE uploading to S3
 - Magic byte validation (opt-in)
 - SHA-256 checksum (opt-in)
 - Shared helpers: coerce_uuid, format_file_size, compute_checksum_*
@@ -22,10 +24,13 @@ import re
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Union
+from pathlib import Path, PurePosixPath
+from typing import TYPE_CHECKING, Union
 
 from app.config import settings
+
+if TYPE_CHECKING:
+    from app.services.storage import S3StorageService
 
 logger = logging.getLogger(__name__)
 
@@ -132,6 +137,24 @@ def safe_entity_segment(entity_type: str) -> str:
     return entity_type
 
 
+def _derive_s3_prefix(base_dir: str) -> str:
+    """
+    Derive a clean S3 key prefix from a legacy base_dir path.
+
+    Examples:
+        "/app/uploads/support"   → "support"
+        "uploads/attachments"    → "attachments"
+        "static/avatars"         → "avatars"
+        "uploads/generated_docs" → "generated_docs"
+    """
+    # Take the last meaningful path component
+    parts = PurePosixPath(base_dir.rstrip("/")).parts
+    # Skip common prefixes like /app, uploads, static
+    skip = {"", "/", "app", "uploads", "static"}
+    meaningful = [p for p in parts if p not in skip]
+    return "/".join(meaningful) if meaningful else "uploads"
+
+
 @dataclass(frozen=True)
 class FileUploadConfig:
     """Policy object defining upload constraints for a specific domain."""
@@ -142,17 +165,28 @@ class FileUploadConfig:
     allowed_extensions: frozenset[str] = field(default_factory=frozenset)
     require_magic_bytes: bool = False
     compute_checksum: bool = False
+    s3_prefix: str = ""  # Explicit S3 prefix; derived from base_dir if empty
+
+    @property
+    def effective_s3_prefix(self) -> str:
+        """Return the S3 key prefix to use."""
+        return self.s3_prefix or _derive_s3_prefix(self.base_dir)
 
 
 @dataclass
 class UploadResult:
     """Result of a successful file upload."""
 
-    file_path: Path
+    s3_key: str
     relative_path: str
     filename: str
     file_size: int
     checksum: str | None = None
+
+    @property
+    def file_path(self) -> Path:
+        """Backward-compat: return the S3 key as a Path-like object."""
+        return Path(self.s3_key)
 
 
 class FileUploadError(Exception):
@@ -195,8 +229,7 @@ class FileUploadService:
     """
     Core file upload service.
 
-    Handles validation, storage, and deletion with consistent
-    security guarantees across all upload domains.
+    Handles validation and delegates storage to S3StorageService.
     """
 
     def __init__(self, config: FileUploadConfig) -> None:
@@ -204,8 +237,15 @@ class FileUploadService:
 
     @property
     def base_path(self) -> Path:
-        """Resolved base directory for uploads."""
+        """Legacy compat: resolved base directory."""
         return Path(self.config.base_dir).resolve()
+
+    def _get_storage(self) -> S3StorageService:
+        """Lazy import to avoid circular deps and allow test patching."""
+        from app.services.storage import get_storage
+
+        svc: S3StorageService = get_storage()
+        return svc
 
     def validate(
         self,
@@ -215,7 +255,7 @@ class FileUploadService:
         file_data: bytes | None = None,
     ) -> None:
         """
-        Run all validation checks BEFORE writing to disk.
+        Run all validation checks BEFORE uploading.
 
         Raises FileUploadError subclass on failure.
         """
@@ -280,6 +320,18 @@ class FileUploadService:
             return f"{prefix}_{unique_id}{ext}"
         return f"{unique_id}{ext}"
 
+    def _build_s3_key(
+        self,
+        filename: str,
+        subdirs: Sequence[str] | None = None,
+    ) -> str:
+        """Build the full S3 object key."""
+        parts: list[str] = [self.config.effective_s3_prefix]
+        if subdirs:
+            parts.extend(subdirs)
+        parts.append(filename)
+        return "/".join(parts)
+
     def save(
         self,
         file_data: bytes,
@@ -289,49 +341,38 @@ class FileUploadService:
         original_filename: str | None = None,
     ) -> UploadResult:
         """
-        Validate and save a file.
+        Validate and upload a file to S3.
 
         Args:
             file_data: Raw file bytes.
             content_type: MIME type.
-            subdirs: Optional subdirectory components (e.g. [org_id]).
+            subdirs: Optional key segments (e.g. [org_id]).
             prefix: Optional filename prefix (e.g. "logo", "favicon").
             original_filename: Original filename for extension preservation.
 
         Returns:
-            UploadResult with paths and metadata.
+            UploadResult with S3 key and metadata.
 
         Raises:
             FileUploadError subclass on validation failure.
         """
-        # Validate BEFORE writing
+        # Validate BEFORE uploading
         self.validate(content_type, original_filename, len(file_data), file_data)
 
-        # Build target directory
-        target_dir = self.base_path
-        if subdirs:
-            for sub in subdirs:
-                target_dir = target_dir / sub
-        target_dir.mkdir(parents=True, exist_ok=True)
-
-        # Generate unique filename
+        # Generate unique filename and S3 key
         filename = self._generate_filename(content_type, original_filename, prefix)
-        file_path = target_dir / filename
+        s3_key = self._build_s3_key(filename, subdirs)
 
-        # Path traversal protection
-        resolved = file_path.resolve()
-        try:
-            resolved.relative_to(self.base_path)
-        except ValueError:
-            raise PathTraversalError(
-                "Path traversal detected: target is outside upload directory"
-            )
+        # Relative path (without the domain prefix)
+        rel_parts: list[str] = []
+        if subdirs:
+            rel_parts.extend(subdirs)
+        rel_parts.append(filename)
+        relative_path = "/".join(rel_parts)
 
-        # Write
-        resolved.write_bytes(file_data)
-
-        # Relative path from base_dir
-        relative = str(resolved.relative_to(self.base_path))
+        # Upload to S3
+        storage = self._get_storage()
+        storage.upload(s3_key, file_data, content_type)
 
         # Optional checksum
         checksum: str | None = None
@@ -339,15 +380,15 @@ class FileUploadService:
             checksum = hashlib.sha256(file_data).hexdigest()
 
         logger.info(
-            "File saved: %s (%d bytes, type=%s)",
-            relative,
+            "File uploaded to S3: %s (%d bytes, type=%s)",
+            s3_key,
             len(file_data),
             content_type,
         )
 
         return UploadResult(
-            file_path=resolved,
-            relative_path=relative,
+            s3_key=s3_key,
+            relative_path=relative_path,
             filename=filename,
             file_size=len(file_data),
             checksum=checksum,
@@ -355,24 +396,20 @@ class FileUploadService:
 
     def delete(self, relative_path: str) -> bool:
         """
-        Delete a file by its relative path within base_dir.
+        Delete a file by its relative path (or full S3 key).
 
-        Returns True if deleted, False if not found.
-        Raises PathTraversalError if path escapes base_dir.
+        Returns True after issuing the delete (S3 delete is idempotent).
         """
-        target = (self.base_path / relative_path).resolve()
-        try:
-            target.relative_to(self.base_path)
-        except ValueError:
-            raise PathTraversalError(
-                "Path traversal detected: target is outside upload directory"
-            )
+        # Build the full S3 key if only a relative path was given
+        if relative_path.startswith(self.config.effective_s3_prefix + "/"):
+            s3_key = relative_path
+        else:
+            s3_key = f"{self.config.effective_s3_prefix}/{relative_path}"
 
-        if target.exists():
-            target.unlink()
-            logger.info("File deleted: %s", relative_path)
-            return True
-        return False
+        storage = self._get_storage()
+        storage.delete(s3_key)
+        logger.info("File deleted from S3: %s", s3_key)
+        return True
 
     def delete_by_url(self, url: str, url_prefix: str) -> bool:
         """
@@ -401,6 +438,7 @@ def _avatar_config() -> FileUploadConfig:
         base_dir=settings.avatar_upload_dir,
         allowed_content_types=frozenset(settings.avatar_allowed_types.split(",")),
         max_size_bytes=settings.avatar_max_size_bytes,
+        s3_prefix="avatars",
     )
 
 
@@ -409,6 +447,7 @@ def _branding_config() -> FileUploadConfig:
         base_dir=settings.branding_upload_dir,
         allowed_content_types=frozenset(settings.branding_allowed_types.split(",")),
         max_size_bytes=settings.branding_max_size_bytes,
+        s3_prefix="branding",
     )
 
 
@@ -429,16 +468,16 @@ def _resume_config() -> FileUploadConfig:
         allowed_extensions=extensions,
         max_size_bytes=settings.resume_max_size_bytes,
         require_magic_bytes=True,
+        s3_prefix="resumes",
     )
 
 
 def _finance_attachment_config() -> FileUploadConfig:
     import os
 
-    base_dir = os.getenv("ATTACHMENT_UPLOAD_DIR", "uploads/attachments")
     max_size = int(os.getenv("MAX_ATTACHMENT_SIZE", str(10 * 1024 * 1024)))
     return FileUploadConfig(
-        base_dir=base_dir,
+        base_dir="uploads/attachments",
         allowed_content_types=frozenset(
             {
                 "application/pdf",
@@ -456,6 +495,7 @@ def _finance_attachment_config() -> FileUploadConfig:
         ),
         max_size_bytes=max_size,
         compute_checksum=True,
+        s3_prefix="attachments",
     )
 
 
@@ -497,6 +537,7 @@ def _support_attachment_config() -> FileUploadConfig:
         ),
         max_size_bytes=10 * 1024 * 1024,
         compute_checksum=True,
+        s3_prefix="support",
     )
 
 
@@ -563,16 +604,16 @@ def _pm_attachment_config() -> FileUploadConfig:
         ),
         max_size_bytes=10 * 1024 * 1024,
         compute_checksum=True,
+        s3_prefix="projects",
     )
 
 
 def _discipline_attachment_config() -> FileUploadConfig:
     import os
 
-    base_dir = os.getenv("DISCIPLINE_UPLOAD_DIR", "uploads/discipline")
     max_size = int(os.getenv("MAX_DISCIPLINE_FILE_SIZE", str(10 * 1024 * 1024)))
     return FileUploadConfig(
-        base_dir=base_dir,
+        base_dir="uploads/discipline",
         allowed_content_types=frozenset(
             {
                 "application/pdf",
@@ -591,6 +632,7 @@ def _discipline_attachment_config() -> FileUploadConfig:
         max_size_bytes=max_size,
         require_magic_bytes=True,
         compute_checksum=True,
+        s3_prefix="discipline",
     )
 
 
@@ -629,9 +671,24 @@ def _expense_receipt_config() -> FileUploadConfig:
         max_size_bytes=10 * 1024 * 1024,
         compute_checksum=True,
         require_magic_bytes=True,
+        s3_prefix="expense_receipts",
+    )
+
+
+def _generated_docs_config() -> FileUploadConfig:
+    return FileUploadConfig(
+        base_dir=settings.generated_docs_dir,
+        allowed_content_types=frozenset({"application/pdf"}),
+        max_size_bytes=50 * 1024 * 1024,  # 50MB for large reports
+        s3_prefix="generated_docs",
     )
 
 
 def get_expense_receipt_upload() -> FileUploadService:
     """Get expense receipt upload service."""
     return FileUploadService(_expense_receipt_config())
+
+
+def get_generated_docs_upload() -> FileUploadService:
+    """Get generated documents upload service."""
+    return FileUploadService(_generated_docs_config())

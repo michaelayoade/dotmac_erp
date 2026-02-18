@@ -304,15 +304,4 @@ class PurchaseInvoiceSyncService(BaseSyncService[SupplierInvoice]):
                 self._invoice_cache[source_name] = invoice
                 return invoice
 
-        # Fallback for historical rows that may have erpnext_id but no sync link.
-        invoice = self.db.scalar(
-            select(SupplierInvoice).where(
-                SupplierInvoice.organization_id == self.organization_id,
-                SupplierInvoice.erpnext_id == source_name,
-            )
-        )
-        if invoice:
-            self._invoice_cache[source_name] = invoice
-            return invoice
-
         return None

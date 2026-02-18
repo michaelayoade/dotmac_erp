@@ -5,7 +5,7 @@ HTML template routes for Chart of Accounts, Journal Entries, and Fiscal Periods.
 """
 
 from fastapi import APIRouter, Depends, Form, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.gl.web import gl_web_service
@@ -520,11 +520,12 @@ def period_close(
 @router.get("/periods", response_class=HTMLResponse)
 def list_periods(
     request: Request,
+    year_id: str | None = None,
     auth: WebAuthContext = Depends(require_finance_access),
     db: Session = Depends(get_db),
 ):
     """Fiscal periods list page."""
-    return gl_web_service.list_periods_response(request, auth, db)
+    return gl_web_service.list_periods_response(request, auth, db, year_id=year_id)
 
 
 @router.get("/periods/new", response_class=HTMLResponse)
@@ -535,6 +536,111 @@ def new_period_form(
 ):
     """New fiscal period form page."""
     return gl_web_service.new_period_form_response(request, auth, db)
+
+
+@router.post("/periods/new")
+@router.post("/periods/new/", include_in_schema=False)
+def create_period(
+    request: Request,
+    fiscal_year_id: str = Form(...),
+    period_number: int = Form(...),
+    period_name: str = Form(...),
+    start_date: str = Form(...),
+    end_date: str = Form(...),
+    is_adjustment_period: str | None = Form(None),
+    is_closing_period: str | None = Form(None),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Create a new fiscal period."""
+    return gl_web_service.create_period_response(
+        request=request,
+        auth=auth,
+        db=db,
+        fiscal_year_id=fiscal_year_id,
+        period_number=period_number,
+        period_name=period_name,
+        start_date=start_date,
+        end_date=end_date,
+        is_adjustment_period=is_adjustment_period is not None,
+        is_closing_period=is_closing_period is not None,
+    )
+
+
+@router.post("/periods/{period_id}/open")
+@router.post("/periods/{period_id}/open/", include_in_schema=False)
+def open_period(
+    request: Request,
+    period_id: str,
+    year_id: str | None = Form(default=None),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Open (or reopen) a fiscal period."""
+    return gl_web_service.open_period_response(
+        request=request,
+        auth=auth,
+        db=db,
+        period_id=period_id,
+        year_id=year_id,
+    )
+
+
+@router.get("/periods/{period_id}/open", include_in_schema=False)
+@router.get("/periods/{period_id}/open/", include_in_schema=False)
+def open_period_legacy_get(
+    period_id: str,
+    year_id: str | None = None,
+):
+    """Legacy GET endpoint kept for backward compatibility.
+
+    State-changing actions must use POST with CSRF protection.
+    """
+    url = "/finance/gl/periods?error=Use+the+Open+button+to+submit+this+action"
+    if year_id:
+        url = (
+            f"/finance/gl/periods?year_id={year_id}"
+            "&error=Use+the+Open+button+to+submit+this+action"
+        )
+    return RedirectResponse(url=url, status_code=303)
+
+
+@router.post("/periods/{period_id}/close")
+@router.post("/periods/{period_id}/close/", include_in_schema=False)
+def close_period(
+    request: Request,
+    period_id: str,
+    year_id: str | None = Form(default=None),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Soft-close a fiscal period."""
+    return gl_web_service.close_period_response(
+        request=request,
+        auth=auth,
+        db=db,
+        period_id=period_id,
+        year_id=year_id,
+    )
+
+
+@router.get("/periods/{period_id}/close", include_in_schema=False)
+@router.get("/periods/{period_id}/close/", include_in_schema=False)
+def close_period_legacy_get(
+    period_id: str,
+    year_id: str | None = None,
+):
+    """Legacy GET endpoint kept for backward compatibility.
+
+    State-changing actions must use POST with CSRF protection.
+    """
+    url = "/finance/gl/periods?error=Use+the+Close+button+to+submit+this+action"
+    if year_id:
+        url = (
+            f"/finance/gl/periods?year_id={year_id}"
+            "&error=Use+the+Close+button+to+submit+this+action"
+        )
+    return RedirectResponse(url=url, status_code=303)
 
 
 @router.get("/trial-balance", response_class=HTMLResponse)

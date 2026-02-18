@@ -441,12 +441,14 @@ class BankingWebService:
 
         status_value = _parse_account_status(status)
 
-        query = db.query(BankAccount).filter(BankAccount.organization_id == org_id)
+        filtered_query = db.query(BankAccount).filter(
+            BankAccount.organization_id == org_id
+        )
         if status_value:
-            query = query.filter(BankAccount.status == status_value)
+            filtered_query = filtered_query.filter(BankAccount.status == status_value)
         if search:
             search_pattern = f"%{search}%"
-            query = query.filter(
+            filtered_query = filtered_query.filter(
                 or_(
                     BankAccount.bank_name.ilike(search_pattern),
                     BankAccount.account_name.ilike(search_pattern),
@@ -456,7 +458,10 @@ class BankingWebService:
             )
 
         total_count = (
-            query.with_entities(func.count(BankAccount.bank_account_id)).scalar() or 0
+            filtered_query.with_entities(
+                func.count(BankAccount.bank_account_id)
+            ).scalar()
+            or 0
         )
         account_sort_map: dict[str, Any] = {
             "bank_name": BankAccount.bank_name,
@@ -464,22 +469,22 @@ class BankingWebService:
             "account_number": BankAccount.account_number,
             "status": BankAccount.status,
         }
-        query = apply_sort(
-            query,
+        list_query = apply_sort(
+            filtered_query,
             sort,
             sort_dir,
             account_sort_map,
             default=[BankAccount.bank_name.asc(), BankAccount.account_name.asc()],
         )
-        accounts = query.limit(limit).offset(offset).all()
+        accounts = list_query.limit(limit).offset(offset).all()
 
         active_count = (
-            query.filter(BankAccount.status == BankAccountStatus.active)
+            filtered_query.filter(BankAccount.status == BankAccountStatus.active)
             .with_entities(func.count(BankAccount.bank_account_id))
             .scalar()
             or 0
         )
-        total_balance = query.with_entities(
+        total_balance = filtered_query.with_entities(
             func.coalesce(func.sum(BankAccount.last_statement_balance), 0)
         ).scalar() or Decimal("0")
         pending_recon = (

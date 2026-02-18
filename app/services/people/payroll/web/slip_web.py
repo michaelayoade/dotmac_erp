@@ -14,12 +14,17 @@ from urllib.parse import quote
 
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.models.people.hr.employee import Employee, EmployeeStatus
 from app.models.people.hr.employment_type import EmploymentType
 from app.models.people.payroll.employee_tax_profile import EmployeeTaxProfile
-from app.models.people.payroll.salary_slip import SalarySlip, SalarySlipStatus
+from app.models.people.payroll.salary_slip import (
+    SalarySlip,
+    SalarySlipDeduction,
+    SalarySlipEarning,
+    SalarySlipStatus,
+)
 from app.models.people.payroll.salary_structure import SalaryStructure
 from app.services.common import coerce_uuid
 from app.services.people.payroll import (
@@ -41,6 +46,15 @@ from .base import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Standard component codes used for fixed CSV columns
+_CSV_BASIC = "BASIC"
+_CSV_HOUSING = "HOUSING"
+_CSV_TRANSPORT = "TRANSPORT"
+_CSV_PENSION = "PENSION"
+_CSV_NHF = "NHF"
+_CSV_PAYE = "PAYE"
+_CSV_PENSION_EMPLOYER = "PENSION_EMPLOYER"
 
 
 class SlipWebService:
@@ -130,7 +144,18 @@ class SlipWebService:
         """Export salary slips to CSV."""
         org_id = coerce_uuid(auth.organization_id)
 
-        query = db.query(SalarySlip).filter(SalarySlip.organization_id == org_id)
+        query = (
+            db.query(SalarySlip)
+            .filter(SalarySlip.organization_id == org_id)
+            .options(
+                selectinload(SalarySlip.earnings).selectinload(
+                    SalarySlipEarning.component
+                ),
+                selectinload(SalarySlip.deductions).selectinload(
+                    SalarySlipDeduction.component
+                ),
+            )
+        )
 
         if search:
             query = query.filter(
@@ -148,7 +173,15 @@ class SlipWebService:
             "Slip #",
             "Employee",
             "Period",
+            "Basic Salary (Basic)",
+            "Housing Allowance (Hsg)",
+            "Transport Allowance (Trsp)",
+            "Other Allowances (Other)",
             "Gross",
+            "Employee Pension (8%) (Pen)",
+            "National Housing Fund (2.5%) (NHF)",
+            "PAYE Tax (PAYE)",
+            "Employer Pension Contribution (PEN-ER)",
             "Deductions",
             "Net Pay",
             "Status",
@@ -157,17 +190,73 @@ class SlipWebService:
             "Bank Branch Code",
         ]
 
+        def _fmt(amount: Decimal) -> str:
+            return f"{amount:,.2f}"
+
+        def _fmt_deduction(amount: Decimal) -> str:
+            return f"({amount:,.2f})"
+
         rows: list[list[str]] = [headers]
         for slip in slips:
             period = f"{slip.start_date.strftime('%b %d')} - {slip.end_date.strftime('%b %d, %Y')}"
+
+            basic = Decimal("0")
+            housing = Decimal("0")
+            transport = Decimal("0")
+            other = Decimal("0")
+            for earning in slip.earnings or []:
+                if earning.statistical_component or earning.do_not_include_in_total:
+                    continue
+                code = (
+                    (earning.component.component_code if earning.component else "")
+                    or ""
+                ).upper()
+                amount = earning.amount or Decimal("0")
+                if code == _CSV_BASIC:
+                    basic += amount
+                elif code == _CSV_HOUSING:
+                    housing += amount
+                elif code == _CSV_TRANSPORT:
+                    transport += amount
+                else:
+                    other += amount
+
+            employee_pension = Decimal("0")
+            nhf = Decimal("0")
+            paye = Decimal("0")
+            employer_pension = Decimal("0")
+            for deduction in slip.deductions or []:
+                code = (
+                    (deduction.component.component_code if deduction.component else "")
+                    or ""
+                ).upper()
+                amount = deduction.amount or Decimal("0")
+                if code == _CSV_PENSION and not deduction.do_not_include_in_total:
+                    employee_pension += amount
+                elif code == _CSV_NHF and not deduction.do_not_include_in_total:
+                    nhf += amount
+                elif code == _CSV_PAYE and not deduction.do_not_include_in_total:
+                    paye += amount
+                elif code == _CSV_PENSION_EMPLOYER:
+                    # Employer pension is tracked as a statistical deduction line.
+                    employer_pension += amount
+
             rows.append(
                 [
                     slip.slip_number,
                     slip.employee_name or "",
                     period,
-                    f"{slip.gross_pay:,.2f}",
-                    f"({slip.total_deduction:,.2f})",
-                    f"{slip.net_pay:,.2f}",
+                    _fmt(basic),
+                    _fmt(housing),
+                    _fmt(transport),
+                    _fmt(other),
+                    _fmt(slip.gross_pay),
+                    _fmt_deduction(employee_pension),
+                    _fmt_deduction(nhf),
+                    _fmt_deduction(paye),
+                    _fmt_deduction(employer_pension),
+                    _fmt_deduction(slip.total_deduction),
+                    _fmt(slip.net_pay),
                     slip.status.value.title(),
                     slip.bank_name or "",
                     slip.bank_account_number or "",

@@ -112,6 +112,15 @@ class Settings:
     sso_provider_url: str | None = os.getenv("SSO_PROVIDER_URL") or None
 
     # ==========================================================================
+    # S3 / MinIO Object Storage
+    # ==========================================================================
+    s3_endpoint_url: str = os.getenv("S3_ENDPOINT_URL", "")
+    s3_access_key: str = os.getenv("S3_ACCESS_KEY", "")
+    s3_secret_key: str = os.getenv("S3_SECRET_KEY", "")
+    s3_bucket_name: str = os.getenv("S3_BUCKET_NAME", "dotmac-erp")
+    s3_region: str = os.getenv("S3_REGION", "us-east-1")
+
+    # ==========================================================================
     # CRM Integration (crm.dotmac.io)
     # ==========================================================================
     # CRM API base URL

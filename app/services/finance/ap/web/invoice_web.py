@@ -22,9 +22,11 @@ from app.models.finance.ap.supplier_invoice import (
     SupplierInvoice,
     SupplierInvoiceStatus,
 )
+from app.models.finance.ap.supplier_invoice_line import SupplierInvoiceLine
 from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.finance.ap.supplier import supplier_service
 from app.services.finance.ap.supplier_invoice import (
     SupplierInvoiceInput,
@@ -45,6 +47,7 @@ from app.services.finance.ap.web.base import (
     supplier_option_view,
 )
 from app.services.finance.common.attachment import AttachmentInput, attachment_service
+from app.services.finance.common.sorting import apply_sort
 from app.services.finance.platform.currency_context import get_currency_context
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
@@ -77,6 +80,8 @@ class InvoiceWebService:
         end_date: str | None,
         page: int,
         limit: int = 50,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> dict:
         """Get context for invoice listing page."""
         logger.debug(
@@ -93,7 +98,7 @@ class InvoiceWebService:
 
         from app.services.finance.ap.invoice_query import build_invoice_query
 
-        query = build_invoice_query(
+        base_query = build_invoice_query(
             db=db,
             organization_id=organization_id,
             search=search,
@@ -104,11 +109,28 @@ class InvoiceWebService:
         )
 
         total_count = (
-            query.with_entities(func.count(SupplierInvoice.invoice_id)).scalar() or 0
+            base_query.with_entities(func.count(SupplierInvoice.invoice_id)).scalar()
+            or 0
         )
+
+        invoice_sort_map = {
+            "invoice_date": SupplierInvoice.invoice_date,
+            "invoice_number": SupplierInvoice.invoice_number,
+            "supplier_name": Supplier.legal_name,
+            "total_amount": SupplierInvoice.total_amount,
+            "due_date": SupplierInvoice.due_date,
+            "status": SupplierInvoice.status,
+        }
+        sorted_query = apply_sort(
+            base_query,
+            sort,
+            sort_dir,
+            invoice_sort_map,
+            default=SupplierInvoice.invoice_date.desc(),
+        )
+
         invoices = (
-            query.with_entities(SupplierInvoice, Supplier)
-            .order_by(SupplierInvoice.invoice_date.desc())
+            sorted_query.with_entities(SupplierInvoice, Supplier)
             .limit(limit)
             .offset(offset)
             .all()
@@ -118,7 +140,7 @@ class InvoiceWebService:
             SupplierInvoiceStatus.POSTED,
             SupplierInvoiceStatus.PARTIALLY_PAID,
         ]
-        stats_base = query.with_entities(SupplierInvoice)
+        stats_base = base_query.with_entities(SupplierInvoice)
         outstanding_filter = stats_base.filter(
             SupplierInvoice.status.in_(open_statuses)
         )
@@ -200,6 +222,21 @@ class InvoiceWebService:
 
         logger.debug("list_invoices_context: found %d invoices", total_count)
 
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "supplier_id": supplier_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            labels={"start_date": "From", "end_date": "To"},
+            options={
+                "supplier_id": {
+                    str(s["supplier_id"]): s["supplier_name"] for s in suppliers_list
+                }
+            },
+        )
+
         return {
             "invoices": invoices_view,
             "suppliers_list": suppliers_list,
@@ -209,11 +246,14 @@ class InvoiceWebService:
             "status": status,
             "start_date": start_date,
             "end_date": end_date,
+            "sort": sort,
+            "sort_dir": sort_dir,
             "page": page,
             "limit": limit,
             "offset": offset,
             "total_count": total_count,
             "total_pages": total_pages,
+            "active_filters": active_filters,
         }
 
     @staticmethod
@@ -482,6 +522,8 @@ class InvoiceWebService:
         end_date: str | None,
         page: int,
         db: Session,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> HTMLResponse:
         """Render invoice list page."""
         context = base_context(request, auth, "AP Invoices", "ap")
@@ -495,6 +537,8 @@ class InvoiceWebService:
                 start_date=start_date,
                 end_date=end_date,
                 page=page,
+                sort=sort,
+                sort_dir=sort_dir,
             )
         )
         return templates.TemplateResponse(request, "finance/ap/invoices.html", context)
@@ -517,6 +561,77 @@ class InvoiceWebService:
                 po_id=po_id,
             )
         )
+        return templates.TemplateResponse(
+            request, "finance/ap/invoice_form.html", context
+        )
+
+    def invoice_edit_form_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> HTMLResponse | RedirectResponse:
+        """Render edit invoice form with existing invoice data."""
+        org_id = coerce_uuid(auth.organization_id)
+        inv_id = coerce_uuid(invoice_id)
+
+        invoice = db.get(SupplierInvoice, inv_id)
+        if not invoice or invoice.organization_id != org_id:
+            return RedirectResponse(
+                url="/finance/ap/invoices?error=Invoice+not+found",
+                status_code=303,
+            )
+
+        if invoice.status != SupplierInvoiceStatus.DRAFT:
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?error=Only+draft+invoices+can+be+edited",
+                status_code=303,
+            )
+
+        context = base_context(request, auth, "Edit AP Invoice", "ap")
+        context.update(
+            self.invoice_form_context(
+                db,
+                str(auth.organization_id),
+                supplier_id=str(invoice.supplier_id),
+            )
+        )
+
+        lines = (
+            db.query(SupplierInvoiceLine)
+            .filter(SupplierInvoiceLine.invoice_id == inv_id)
+            .order_by(SupplierInvoiceLine.line_number)
+            .all()
+        )
+
+        context["invoice"] = {
+            "invoice_id": invoice.invoice_id,
+            "invoice_number": invoice.invoice_number,
+            "supplier_id": invoice.supplier_id,
+            "invoice_date": invoice.invoice_date,
+            "received_date": invoice.received_date,
+            "due_date": invoice.due_date,
+            "currency_code": invoice.currency_code,
+            "exchange_rate": str(invoice.exchange_rate)
+            if invoice.exchange_rate
+            else "",
+            "lines": [
+                {
+                    "line_id": line.line_id,
+                    "expense_account_id": line.expense_account_id,
+                    "description": line.description,
+                    "quantity": line.quantity,
+                    "unit_price": line.unit_price,
+                    "tax_code_id": line.tax_code_id,
+                    "tax_amount": line.tax_amount,
+                    "cost_center_id": line.cost_center_id,
+                    "project_id": line.project_id,
+                }
+                for line in lines
+            ],
+        }
+
         return templates.TemplateResponse(
             request, "finance/ap/invoice_form.html", context
         )
@@ -576,6 +691,57 @@ class InvoiceWebService:
                 request, "finance/ap/invoice_form.html", context
             )
 
+    async def update_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> HTMLResponse | JSONResponse | RedirectResponse | dict:
+        """Handle invoice update form submission."""
+        content_type = request.headers.get("content-type", "")
+        org_id = auth.organization_id
+        if org_id is None:
+            raise HTTPException(status_code=401, detail="Authentication required")
+
+        if "application/json" in content_type:
+            data = await request.json()
+        else:
+            form_data = await request.form()
+            data = dict(form_data)
+
+        try:
+            input_data = self.build_invoice_input(db, data, org_id)
+
+            invoice = supplier_invoice_service.update_invoice(
+                db=db,
+                organization_id=org_id,
+                invoice_id=coerce_uuid(invoice_id),
+                input=input_data,
+            )
+
+            if "application/json" in content_type:
+                return JSONResponse(
+                    content={"success": True, "invoice_id": str(invoice.invoice_id)}
+                )
+
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice.invoice_id}?success=Invoice+updated+successfully",
+                status_code=303,
+            )
+        except Exception as e:
+            logger.exception("update_invoice_response: failed")
+            if "application/json" in content_type:
+                return JSONResponse(status_code=400, content={"detail": str(e)})
+
+            context = base_context(request, auth, "Edit AP Invoice", "ap")
+            context.update(self.invoice_form_context(db, str(auth.organization_id)))
+            context["error"] = str(e)
+            context["form_data"] = data
+            return templates.TemplateResponse(
+                request, "finance/ap/invoice_form.html", context
+            )
+
     def invoice_detail_response(
         self,
         request: Request,
@@ -624,6 +790,107 @@ class InvoiceWebService:
             url="/finance/ap/invoices?success=Record+deleted+successfully",
             status_code=303,
         )
+
+    def submit_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> RedirectResponse:
+        """Submit invoice for approval."""
+        try:
+            supplier_invoice_service.submit_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(invoice_id),
+                submitted_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?success=Invoice+submitted+for+approval",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def approve_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> RedirectResponse:
+        """Approve a submitted invoice."""
+        try:
+            supplier_invoice_service.approve_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(invoice_id),
+                approved_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?success=Invoice+approved",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def post_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> RedirectResponse:
+        """Post invoice to general ledger."""
+        try:
+            supplier_invoice_service.post_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(invoice_id),
+                posted_by_user_id=auth.user_id,
+            )
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?success=Invoice+posted+to+ledger",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
+                status_code=303,
+            )
+
+    def void_invoice_response(
+        self,
+        request: Request,
+        auth: WebAuthContext,
+        db: Session,
+        invoice_id: str,
+    ) -> RedirectResponse:
+        """Void an invoice."""
+        try:
+            supplier_invoice_service.void_invoice(
+                db=db,
+                organization_id=auth.organization_id,
+                invoice_id=coerce_uuid(invoice_id),
+                voided_by_user_id=auth.user_id,
+                reason="Voided via web interface",
+            )
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?success=Invoice+voided",
+                status_code=303,
+            )
+        except Exception as e:
+            return RedirectResponse(
+                url=f"/finance/ap/invoices/{invoice_id}?error={str(e)}",
+                status_code=303,
+            )
 
     async def upload_invoice_attachment_response(
         self,

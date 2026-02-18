@@ -49,6 +49,21 @@ class SalarySlipStatus(str, enum.Enum):
     PAID = "PAID"
     CANCELLED = "CANCELLED"
 
+    @classmethod
+    def gl_impacting(cls) -> frozenset["SalarySlipStatus"]:
+        """Statuses where the slip has been posted to the General Ledger."""
+        return frozenset({cls.POSTED, cls.PAID})
+
+    @classmethod
+    def payable(cls) -> frozenset["SalarySlipStatus"]:
+        """Statuses where the slip is posted but not yet disbursed."""
+        return frozenset({cls.POSTED})
+
+    @classmethod
+    def terminal(cls) -> frozenset["SalarySlipStatus"]:
+        """Statuses where the slip is fully settled or cancelled."""
+        return frozenset({cls.PAID, cls.CANCELLED})
+
 
 class SalarySlip(Base, AuditMixin, ERPNextSyncMixin, StatusTrackingMixin):
     """

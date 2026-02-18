@@ -19,6 +19,25 @@ services:
       timeout: 5s
       retries: 3
 
+  minio:
+    image: minio/minio:latest
+    container_name: dotmac_erp_minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - dotmac_minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   app:
     build: .
     container_name: dotmac_erp_app
@@ -41,6 +60,11 @@ services:
       OPENBAO_ADDR: http://openbao:8200
       OPENBAO_TOKEN: ${OPENBAO_TOKEN:-devtoken}
       OPENBAO_ALLOW_INSECURE: "true"
+      # S3 / MinIO
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-dotmac-erp}
       GUNICORN_WORKERS: "4"
       PYTHONDONTWRITEBYTECODE: "1"
       PYTHONPYCACHEPREFIX: "/tmp/pycache"
@@ -51,9 +75,10 @@ services:
         condition: service_started
       openbao:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     volumes:
       - dotmac_logs:/var/log/dotmac
-      - ./uploads:/app/uploads
       - ./static:/app/static:ro
       - ./templates:/app/templates:ro
       - ./app:/app/app:ro
@@ -83,12 +108,19 @@ services:
       OPENBAO_ADDR: http://openbao:8200
       OPENBAO_TOKEN: ${OPENBAO_TOKEN:-devtoken}
       OPENBAO_ALLOW_INSECURE: "true"
+      # S3 / MinIO
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-dotmac-erp}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_started
       openbao:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     volumes:
       - .:/app
@@ -108,12 +140,19 @@ services:
       OPENBAO_ADDR: http://openbao:8200
       OPENBAO_TOKEN: ${OPENBAO_TOKEN:-devtoken}
       OPENBAO_ALLOW_INSECURE: "true"
+      # S3 / MinIO (worker needs access for Celery task file ops)
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-dotmac-erp}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_started
       openbao:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     volumes:
       - ./app:/app/app:ro
@@ -133,6 +172,11 @@ services:
       OPENBAO_ADDR: http://openbao:8200
       OPENBAO_TOKEN: ${OPENBAO_TOKEN:-devtoken}
       OPENBAO_ALLOW_INSECURE: "true"
+      # S3 / MinIO (beat schedules tasks that may need file access)
+      S3_ENDPOINT_URL: http://minio:9000
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      S3_BUCKET_NAME: ${S3_BUCKET_NAME:-dotmac-erp}
     depends_on:
       db:
         condition: service_healthy
@@ -172,3 +216,4 @@ volumes:
   dotmac_erp_db_data:
   openbao_data:
   dotmac_logs:
+  dotmac_minio_data:

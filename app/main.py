@@ -25,6 +25,8 @@ from app.api.crm import webhook_router as crm_webhook_router
 from app.api.deps import require_role, require_tenant_auth
 from app.api.expense import router as expense_router
 from app.api.expense_limits import router as expense_limits_router
+from app.api.files import legacy_router as files_legacy_router
+from app.api.files import router as files_router
 from app.api.finance import (
     ap_router,
     ar_router,
@@ -487,6 +489,10 @@ app.include_router(projects_web_router)  # /projects/* web routes
 app.include_router(module_settings_web_router)  # /settings/* web routes
 app.include_router(coach_web_router)  # /coach/* web routes
 
+# Authenticated file downloads (S3-backed)
+app.include_router(files_router)  # /files/* (avatars, resumes, attachments, etc.)
+app.include_router(files_legacy_router)  # /uploads/* (legacy URL compat)
+
 # Standalone module API routes
 _include_api_router(fa_api_router, dependencies=[Depends(require_tenant_auth)])
 app.include_router(
@@ -502,14 +508,7 @@ app.include_router(
 _include_api_router(ipsas_router, dependencies=[Depends(require_tenant_auth)])
 
 static_dir = Path(__file__).resolve().parent.parent / "static"
-uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
-uploads_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-app.mount(
-    "/uploads",
-    StaticFiles(directory=str(uploads_dir), check_dir=False),
-    name="uploads",
-)
 
 
 @app.get("/favicon.ico", include_in_schema=False)

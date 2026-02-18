@@ -734,7 +734,7 @@ def new_scorecard_form(
     db: Session = Depends(get_db),
 ):
     """New scorecard form."""
-    return perf_web_service.scorecard_new_form_response(request, auth, db, employee_id)
+    return perf_web_service.scorecard_new_form_response(request, auth, db)
 
 
 @router.post("/scorecards/new", response_class=HTMLResponse)

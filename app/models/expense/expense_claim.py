@@ -48,6 +48,21 @@ class ExpenseClaimStatus(str, enum.Enum):
     PAID = "PAID"
     CANCELLED = "CANCELLED"
 
+    @classmethod
+    def gl_impacting(cls) -> frozenset["ExpenseClaimStatus"]:
+        """Statuses where the expense claim has been posted to the General Ledger."""
+        return frozenset({cls.APPROVED, cls.PAID})
+
+    @classmethod
+    def payable(cls) -> frozenset["ExpenseClaimStatus"]:
+        """Statuses where the claim is approved but not yet reimbursed."""
+        return frozenset({cls.APPROVED})
+
+    @classmethod
+    def terminal(cls) -> frozenset["ExpenseClaimStatus"]:
+        """Statuses where the claim is fully settled or cancelled."""
+        return frozenset({cls.PAID, cls.REJECTED, cls.CANCELLED})
+
 
 class ExpenseCategory(Base, AuditMixin, ERPNextSyncMixin):
     """

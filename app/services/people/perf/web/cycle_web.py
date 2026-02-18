@@ -167,7 +167,7 @@ class CycleWebService:
                 }
             )
             return templates.TemplateResponse(
-                request, "people/perf/cycle_form.html", context
+                request, "people/perf/appraisal_cycle_form.html", context
             )
 
     def cycle_detail_response(
@@ -177,35 +177,51 @@ class CycleWebService:
         db: Session,
         cycle_id: str,
         success: str | None = None,
+        error: str | None = None,
     ) -> HTMLResponse | RedirectResponse:
         """Render cycle detail page."""
         org_id = coerce_uuid(auth.organization_id)
         svc = PerformanceService(db)
 
         try:
-            cycle = svc.get_cycle(org_id, coerce_uuid(cycle_id))
+            cycle_uuid = coerce_uuid(cycle_id)
+            cycle = svc.get_cycle(org_id, cycle_uuid)
         except Exception:
             return RedirectResponse(url="/people/perf/cycles", status_code=303)
 
         appraisals = svc.list_appraisals(
             org_id,
-            cycle_id=coerce_uuid(cycle_id),
+            cycle_id=cycle_uuid,
             pagination=PaginationParams(limit=20),
         )
+        cycle_stats = svc.get_cycle_statistics(org_id, cycle_uuid)
+        status_counts = cycle_stats.get("status_counts", {})
+        stats = {
+            "total_appraisals": int(cycle_stats.get("total", 0) or 0),
+            "draft": int(status_counts.get("DRAFT", 0) or 0),
+            "self_assessment": int(status_counts.get("SELF_ASSESSMENT", 0) or 0)
+            + int(status_counts.get("PENDING_REVIEW", 0) or 0),
+            "under_review": int(status_counts.get("UNDER_REVIEW", 0) or 0),
+            "calibration": int(status_counts.get("CALIBRATION", 0) or 0)
+            + int(status_counts.get("PENDING_CALIBRATION", 0) or 0),
+            "completed": int(status_counts.get("COMPLETED", 0) or 0),
+            "cancelled": int(status_counts.get("CANCELLED", 0) or 0),
+        }
 
         context = base_context(request, auth, cycle.cycle_name, "perf", db=db)
         context["request"] = request
         context.update(
             {
                 "cycle": cycle,
+                "stats": stats,
                 "appraisals": appraisals.items,
                 "appraisals_total": appraisals.total,
                 "success": success,
-                "error": None,
+                "error": error,
             }
         )
         return templates.TemplateResponse(
-            request, "people/perf/cycle_detail.html", context
+            request, "people/perf/appraisal_cycle_detail.html", context
         )
 
     def cycle_edit_form_response(
@@ -234,7 +250,7 @@ class CycleWebService:
             }
         )
         return templates.TemplateResponse(
-            request, "people/perf/cycle_form.html", context
+            request, "people/perf/appraisal_cycle_form.html", context
         )
 
     async def update_cycle_response(
@@ -302,7 +318,7 @@ class CycleWebService:
                 }
             )
             return templates.TemplateResponse(
-                request, "people/perf/cycle_form.html", context
+                request, "people/perf/appraisal_cycle_form.html", context
             )
 
     def activate_cycle_response(
@@ -874,7 +890,7 @@ class CycleWebService:
             }
         )
         return templates.TemplateResponse(
-            request, "people/perf/template_detail.html", context
+            request, "people/perf/appraisal_template_detail.html", context
         )
 
     def template_edit_form_response(
@@ -1180,6 +1196,17 @@ class CycleWebService:
         except Exception:
             return RedirectResponse(url="/people/perf/scorecards", status_code=303)
 
+        perspectives = {
+            "FINANCIAL": [],
+            "CUSTOMER": [],
+            "PROCESS": [],
+            "LEARNING": [],
+        }
+        for item in scorecard.items:
+            key = (item.perspective or "").upper()
+            if key in perspectives:
+                perspectives[key].append(item)
+
         context = base_context(
             request,
             auth,
@@ -1191,6 +1218,7 @@ class CycleWebService:
         context.update(
             {
                 "scorecard": scorecard,
+                "perspectives": perspectives,
                 "success": success,
                 "error": None,
             }

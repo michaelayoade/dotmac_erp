@@ -2,12 +2,7 @@
 {% from "components/macros.html" import topbar, empty_state, status_badge %}
 
 {% block content %}
-{% call(breadcrumbs, actions) topbar("Coach Reports", accent="teal") %}
-  {% call(bc) breadcrumbs %}
-    {{ bc("Coach", "/coach/") }}
-    {{ bc("Reports") }}
-  {% endcall %}
-{% endcall %}
+{{ topbar("Coach Reports", accent="teal") }}
 
 <div class="mt-6 text-sm text-slate-600 dark:text-slate-300">
   Showing {{ reports|length }} of {{ total }} report(s)

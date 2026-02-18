@@ -33,6 +33,16 @@ class PeriodStatus(str, enum.Enum):
     HARD_CLOSED = "HARD_CLOSED"
     REOPENED = "REOPENED"
 
+    @classmethod
+    def accepts_postings(cls) -> frozenset["PeriodStatus"]:
+        """Statuses where new journal entries can be posted to this period."""
+        return frozenset({cls.OPEN, cls.REOPENED})
+
+    @classmethod
+    def closed(cls) -> frozenset["PeriodStatus"]:
+        """Statuses where the period is locked for posting."""
+        return frozenset({cls.SOFT_CLOSED, cls.HARD_CLOSED})
+
 
 class FiscalPeriod(Base):
     """

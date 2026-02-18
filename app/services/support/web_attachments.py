@@ -5,13 +5,15 @@ Handles file upload and attachment-related template responses.
 """
 
 import logging
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from fastapi import Request, UploadFile
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.services.common import coerce_uuid
+from app.services.storage import get_storage
 from app.services.support.attachment import attachment_service
 from app.services.support.ticket import ticket_service
 
@@ -83,7 +85,7 @@ class AttachmentWebService:
         db: Session,
         ticket_id: str,
         attachment_id: str,
-    ) -> FileResponse | RedirectResponse:
+    ) -> FileResponse | StreamingResponse | RedirectResponse:
         """Download an attachment."""
         org_id = coerce_uuid(auth.organization_id)
         aid = coerce_uuid(attachment_id)
@@ -95,17 +97,43 @@ class AttachmentWebService:
                 status_code=303,
             )
 
+        storage_path = attachment.storage_path or ""
+
+        # Preferred: stream from S3 (FileUploadService stores there).
+        if storage_path and not Path(storage_path).is_absolute():
+            s3_key = storage_path
+            if not s3_key.startswith("support/"):
+                s3_key = f"support/{s3_key}"
+
+            storage = get_storage()
+            if storage.exists(s3_key):
+                chunks, content_type, content_length = storage.stream(s3_key)
+                headers: dict[str, str] = {}
+                if content_length is not None:
+                    headers["Content-Length"] = str(content_length)
+                headers["Content-Disposition"] = (
+                    f'attachment; filename="{attachment.filename}"'
+                )
+                return StreamingResponse(
+                    chunks,
+                    media_type=content_type
+                    or attachment.content_type
+                    or "application/octet-stream",
+                    headers=headers,
+                )
+
+        # Fallback: legacy local-path attachments (older deployments)
         file_path = attachment_service.get_file_path(db, org_id, aid)
-        if not file_path:
-            return RedirectResponse(
-                url=f"/support/tickets/{ticket_id}?error=File+not+found",
-                status_code=303,
+        if file_path:
+            return FileResponse(
+                path=file_path,
+                filename=attachment.filename,
+                media_type=attachment.content_type,
             )
 
-        return FileResponse(
-            path=file_path,
-            filename=attachment.filename,
-            media_type=attachment.content_type,
+        return RedirectResponse(
+            url=f"/support/tickets/{ticket_id}?error=File+not+found",
+            status_code=303,
         )
 
     def delete_attachment_response(

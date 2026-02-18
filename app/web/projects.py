@@ -8,6 +8,7 @@ resources, and time tracking.
 import logging
 from datetime import date, timedelta
 from decimal import Decimal
+from pathlib import Path
 
 from fastapi import (
     APIRouter,
@@ -19,7 +20,13 @@ from fastapi import (
     Request,
     UploadFile,
 )
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    StreamingResponse,
+)
 from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.orm import Session
 
@@ -30,6 +37,7 @@ from app.services.common import (
     coerce_uuid,
 )
 from app.services.pm.web.import_web import project_import_web_service
+from app.services.storage import get_storage
 from app.templates import templates
 from app.web.deps import (
     WebAuthContext,
@@ -2077,6 +2085,29 @@ def download_task_attachment(
         db, org_id, coerce_uuid(attachment_id)
     )
     if not file_path:
+        # Preferred: stream from S3 (FileUploadService stores there).
+        if attachment.file_path and not Path(attachment.file_path).is_absolute():
+            s3_key = attachment.file_path
+            if not s3_key.startswith("projects/"):
+                s3_key = f"projects/{s3_key}"
+
+            storage = get_storage()
+            if storage.exists(s3_key):
+                chunks, content_type, content_length = storage.stream(s3_key)
+                headers: dict[str, str] = {}
+                if content_length is not None:
+                    headers["Content-Length"] = str(content_length)
+                headers["Content-Disposition"] = (
+                    f'attachment; filename="{attachment.file_name}"'
+                )
+                return StreamingResponse(
+                    chunks,
+                    media_type=content_type
+                    or attachment.content_type
+                    or "application/octet-stream",
+                    headers=headers,
+                )
+
         raise HTTPException(status_code=404, detail="File not found")
 
     return FileResponse(
@@ -4045,8 +4076,6 @@ def download_project_attachment(
     db: Session = Depends(get_db),
 ):
     """Download project attachment."""
-    from fastapi.responses import FileResponse
-
     from app.services.pm.attachment import project_attachment_service
 
     org_id = coerce_uuid(auth.organization_id)
@@ -4067,6 +4096,29 @@ def download_project_attachment(
     )
 
     if not file_path:
+        # Preferred: stream from S3 (FileUploadService stores there).
+        if attachment.file_path and not Path(attachment.file_path).is_absolute():
+            s3_key = attachment.file_path
+            if not s3_key.startswith("projects/"):
+                s3_key = f"projects/{s3_key}"
+
+            storage = get_storage()
+            if storage.exists(s3_key):
+                chunks, content_type, content_length = storage.stream(s3_key)
+                headers: dict[str, str] = {}
+                if content_length is not None:
+                    headers["Content-Length"] = str(content_length)
+                headers["Content-Disposition"] = (
+                    f'attachment; filename="{attachment.file_name}"'
+                )
+                return StreamingResponse(
+                    chunks,
+                    media_type=content_type
+                    or attachment.content_type
+                    or "application/octet-stream",
+                    headers=headers,
+                )
+
         raise HTTPException(status_code=404, detail="File not found")
 
     return FileResponse(

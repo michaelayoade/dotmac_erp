@@ -980,7 +980,9 @@ class PerfWebService:
             employee_id = _get_form_str(form_data, "employee_id")
             if not employee_id:
                 raise ValueError("Employee is required")
-            kpi_name = _get_form_str(form_data, "title")
+            kpi_name = _get_form_str(form_data, "kpi_name") or _get_form_str(
+                form_data, "title"
+            )
             if not kpi_name:
                 raise ValueError("KPI title is required")
             period_start = parse_date(_get_form_str(form_data, "period_start") or None)
@@ -1124,7 +1126,9 @@ class PerfWebService:
         svc = PerformanceService(db)
 
         try:
-            kpi_name = _get_form_str(form_data, "title")
+            kpi_name = _get_form_str(form_data, "kpi_name") or _get_form_str(
+                form_data, "title"
+            )
             period_start = parse_date(_get_form_str(form_data, "period_start") or None)
             period_end = parse_date(_get_form_str(form_data, "period_end") or None)
             svc.update_kpi(

@@ -43,6 +43,21 @@ class APPaymentStatus(str, enum.Enum):
     VOID = "VOID"
     REJECTED = "REJECTED"
 
+    @classmethod
+    def gl_impacting(cls) -> frozenset["APPaymentStatus"]:
+        """Statuses where the payment has been posted to the General Ledger."""
+        return frozenset({cls.CLEARED})
+
+    @classmethod
+    def effective(cls) -> frozenset["APPaymentStatus"]:
+        """Statuses where the payment reduces the supplier's balance."""
+        return frozenset({cls.SENT, cls.CLEARED})
+
+    @classmethod
+    def terminal(cls) -> frozenset["APPaymentStatus"]:
+        """Statuses where the payment is fully settled or cancelled."""
+        return frozenset({cls.CLEARED, cls.VOID, cls.REJECTED})
+
 
 class SupplierPayment(Base):
     """

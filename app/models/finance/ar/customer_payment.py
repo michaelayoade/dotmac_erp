@@ -43,6 +43,21 @@ class PaymentStatus(str, enum.Enum):
     REVERSED = "REVERSED"
     VOID = "VOID"
 
+    @classmethod
+    def gl_impacting(cls) -> frozenset["PaymentStatus"]:
+        """Statuses where the payment has been posted to the General Ledger."""
+        return frozenset({cls.CLEARED})
+
+    @classmethod
+    def effective(cls) -> frozenset["PaymentStatus"]:
+        """Statuses where the payment reduces the customer's balance."""
+        return frozenset({cls.APPROVED, cls.CLEARED})
+
+    @classmethod
+    def terminal(cls) -> frozenset["PaymentStatus"]:
+        """Statuses where the payment is fully settled or cancelled."""
+        return frozenset({cls.CLEARED, cls.BOUNCED, cls.REVERSED, cls.VOID})
+
 
 class CustomerPayment(Base):
     """

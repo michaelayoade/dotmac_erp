@@ -22,6 +22,7 @@ from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
 from app.models.inventory.item import Item
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.finance.ar.customer import customer_service
 from app.services.finance.ar.invoice import ARInvoiceInput, ar_invoice_service
 from app.services.finance.ar.web.base import (
@@ -74,6 +75,8 @@ class InvoiceWebService:
         start_date: str | None,
         end_date: str | None,
         page: int,
+        sort: str | None = None,
+        sort_dir: str | None = None,
         limit: int = 50,
     ) -> dict:
         """Get context for invoice listing page."""
@@ -102,9 +105,25 @@ class InvoiceWebService:
         )
 
         total_count = query.with_entities(func.count(Invoice.invoice_id)).scalar() or 0
+
+        sort_dir_norm = (sort_dir or "desc").lower()
+        if sort_dir_norm not in {"asc", "desc"}:
+            sort_dir_norm = "desc"
+
+        order_map = {
+            "invoice_date": Invoice.invoice_date,
+            "invoice_number": Invoice.invoice_number,
+            "customer_name": Customer.legal_name,
+            "due_date": Invoice.due_date,
+            "total_amount": Invoice.total_amount,
+            "status": Invoice.status,
+        }
+        order_col = order_map.get(sort or "", Invoice.invoice_date)
+        order_expr = order_col.asc() if sort_dir_norm == "asc" else order_col.desc()
+
         invoices = (
             query.with_entities(Invoice, Customer)
-            .order_by(Invoice.invoice_date.desc())
+            .order_by(order_expr, Invoice.invoice_date.desc())
             .limit(limit)
             .offset(offset)
             .all()
@@ -191,6 +210,15 @@ class InvoiceWebService:
 
         logger.debug("list_invoices_context: found %d invoices", total_count)
 
+        active_filters = build_active_filters(
+            params={
+                "status": status,
+                "customer_id": customer_id,
+                "start_date": start_date,
+                "end_date": end_date,
+            },
+            labels={"start_date": "From", "end_date": "To"},
+        )
         return {
             "invoices": invoices_view,
             "customers_list": customers_list,
@@ -205,6 +233,9 @@ class InvoiceWebService:
             "offset": offset,
             "total_count": total_count,
             "total_pages": total_pages,
+            "active_filters": active_filters,
+            "sort": sort or "",
+            "sort_dir": sort_dir_norm,
         }
 
     @staticmethod
@@ -400,6 +431,8 @@ class InvoiceWebService:
         start_date: str | None,
         end_date: str | None,
         page: int,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> HTMLResponse:
         """Render invoice list page."""
         start_date, end_date = normalize_date_range_filters(
@@ -418,6 +451,8 @@ class InvoiceWebService:
                 start_date=start_date,
                 end_date=end_date,
                 page=page,
+                sort=sort,
+                sort_dir=sort_dir,
             )
         )
         return templates.TemplateResponse(request, "finance/ar/invoices.html", context)

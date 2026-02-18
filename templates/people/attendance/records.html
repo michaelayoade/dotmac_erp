@@ -48,6 +48,12 @@
             <p class="text-sm text-slate-500 dark:text-slate-400">Track daily presence, check-ins, and hours.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
+            <a href="#attendance-filters" class="btn btn-secondary">
+                <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+                </svg>
+                Filters
+            </a>
             <a href="/people/attendance/requests" class="btn btn-secondary">
                 <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
@@ -161,25 +167,38 @@
         </div>
     </div>
     {# Filters #}
-    {% call(filter_attrs) compact_filters(
-        base_url="/people/attendance/records",
-        active_filters=active_filters | default([]),
-        date_range=true,
-        start_date=start_date | default('', true),
-        end_date=end_date | default('', true)
-    ) %}
-    <div>
-                <div class="w-44">
-                    <label class="form-label text-xs">Status</label>
-                    <select name="status" class="form-select w-full" {{ filter_attrs }}>
-                        <option value="">All Statuses</option>
-                        {% for s in statuses %}
-                        <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s | replace("_", " ") | title }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+    <div id="attendance-filters" class="scroll-mt-24">
+        {% call(filter_attrs) compact_filters(
+            base_url="/people/attendance/records",
+            active_filters=active_filters | default([]),
+            date_range=true,
+            start_date=start_date | default('', true),
+            end_date=end_date | default('', true),
+            auto_submit=false,
+            show_apply_button=true
+        ) %}
+            <div>
+                <label class="form-label text-xs">Employee</label>
+                <select name="employee_id" class="form-select w-full" {{ filter_attrs }}>
+                    <option value="">All Employees</option>
+                    {% for emp in employees %}
+                    <option value="{{ emp.employee_id }}" {% if employee_id == emp.employee_id|string %}selected{% endif %}>
+                        {{ emp.full_name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="form-label text-xs">Status</label>
+                <select name="status" class="form-select w-full" {{ filter_attrs }}>
+                    <option value="">All Statuses</option>
+                    {% for s in statuses %}
+                    <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s | replace("_", " ") | title }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        {% endcall %}
     </div>
-    {% endcall %}
 
     <div id="results-container">
 

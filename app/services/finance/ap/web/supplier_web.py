@@ -8,11 +8,12 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import func
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.finance.ap.supplier import Supplier
@@ -39,6 +40,7 @@ from app.services.finance.ap.web.base import (
     supplier_list_view,
 )
 from app.services.finance.common.attachment import AttachmentInput, attachment_service
+from app.services.finance.common.sorting import apply_sort
 from app.services.finance.platform.currency_context import get_currency_context
 from app.templates import templates
 from app.web.deps import WebAuthContext, base_context
@@ -46,6 +48,55 @@ from app.web.deps import WebAuthContext, base_context
 
 class SupplierWebService:
     """Web service methods for AP suppliers."""
+
+    @staticmethod
+    def supplier_typeahead(
+        db: Session,
+        organization_id: str,
+        query: str,
+        limit: int = 8,
+    ) -> dict:
+        """Search active suppliers for typeahead/autocomplete fields."""
+        org_id = coerce_uuid(organization_id)
+        term = query.strip()
+        if not term:
+            return {"items": []}
+
+        search_term = f"%{term}%"
+        stmt = (
+            select(Supplier)
+            .where(
+                Supplier.organization_id == org_id,
+                Supplier.is_active.is_(True),
+            )
+            .where(
+                or_(
+                    Supplier.supplier_code.ilike(search_term),
+                    Supplier.legal_name.ilike(search_term),
+                    Supplier.trading_name.ilike(search_term),
+                    Supplier.tax_identification_number.ilike(search_term),
+                )
+            )
+            .order_by(Supplier.legal_name.asc())
+            .limit(limit)
+        )
+        suppliers = list(db.scalars(stmt).all())
+        items = []
+        for supplier in suppliers:
+            name = supplier.trading_name or supplier.legal_name or ""
+            code = supplier.supplier_code or ""
+            label = f"{code} - {name}".strip(" -")
+            items.append(
+                {
+                    "ref": str(supplier.supplier_id),
+                    "label": label,
+                    "supplier_code": code,
+                    "supplier_name": name,
+                    "currency_code": supplier.currency_code,
+                    "payment_terms_days": supplier.payment_terms_days or 30,
+                }
+            )
+        return {"items": items}
 
     @staticmethod
     def build_supplier_input(
@@ -67,6 +118,8 @@ class SupplierWebService:
         status: str | None,
         page: int,
         limit: int = 50,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> dict:
         """Get context for supplier listing page."""
         logger.debug(
@@ -90,9 +143,21 @@ class SupplierWebService:
         total_count = (
             query.with_entities(func.count(Supplier.supplier_id)).scalar() or 0
         )
-        suppliers = (
-            query.order_by(Supplier.legal_name).limit(limit).offset(offset).all()
+        supplier_sort_map: dict[str, Any] = {
+            "legal_name": Supplier.legal_name,
+            "trading_name": Supplier.trading_name,
+            "supplier_code": Supplier.supplier_code,
+            # UI "Status" column maps to active/inactive flag on Supplier.
+            "status": Supplier.is_active,
+        }
+        query = apply_sort(
+            query,
+            sort,
+            sort_dir,
+            supplier_sort_map,
+            default=Supplier.legal_name.asc(),
         )
+        suppliers = query.limit(limit).offset(offset).all()
 
         open_statuses = [
             SupplierInvoiceStatus.POSTED,
@@ -182,6 +247,8 @@ class SupplierWebService:
             "suppliers": suppliers_view,
             "search": search,
             "status": status,
+            "sort": sort,
+            "sort_dir": sort_dir,
             "page": page,
             "limit": limit,
             "per_page": limit,
@@ -460,6 +527,8 @@ class SupplierWebService:
         status: str | None,
         page: int,
         limit: int = 50,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> HTMLResponse:
         """Render supplier list page."""
         context = base_context(request, auth, "Suppliers", "ap")
@@ -471,6 +540,8 @@ class SupplierWebService:
                 status=status,
                 page=page,
                 limit=limit,
+                sort=sort,
+                sort_dir=sort_dir,
             )
         )
         return templates.TemplateResponse(request, "finance/ap/suppliers.html", context)

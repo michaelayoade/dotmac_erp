@@ -24,6 +24,7 @@ from app.models.finance.common.attachment import AttachmentCategory
 from app.models.finance.gl.account_category import IFRSCategory
 from app.services.audit_info import get_audit_service
 from app.services.common import coerce_uuid
+from app.services.common_filters import build_active_filters
 from app.services.finance.ar.customer import CustomerInput, customer_service
 from app.services.finance.ar.web.base import (
     calculate_customer_balance_trends,
@@ -67,6 +68,8 @@ class CustomerWebService:
         search: str | None,
         status: str | None,
         page: int,
+        sort: str | None = None,
+        sort_dir: str | None = None,
         limit: int = 50,
     ) -> dict:
         """Get context for customer listing page."""
@@ -81,6 +84,10 @@ class CustomerWebService:
         org_id = coerce_uuid(organization_id)
         from app.services.finance.ar.customer_query import build_customer_query
 
+        sort_dir_norm = (sort_dir or "asc").lower()
+        if sort_dir_norm not in {"asc", "desc"}:
+            sort_dir_norm = "asc"
+
         query = build_customer_query(
             db=db,
             organization_id=organization_id,
@@ -91,8 +98,20 @@ class CustomerWebService:
         total_count = (
             query.with_entities(func.count(Customer.customer_id)).scalar() or 0
         )
+
+        order_map = {
+            "customer_code": Customer.customer_code,
+            "legal_name": Customer.legal_name,
+            "status": Customer.is_active,
+        }
+        order_col = order_map.get(sort or "", Customer.legal_name)
+        order_expr = order_col.asc() if sort_dir_norm == "asc" else order_col.desc()
+
         customers = (
-            query.order_by(Customer.legal_name).limit(limit).offset(offset).all()
+            query.order_by(order_expr, Customer.legal_name)
+            .limit(limit)
+            .offset(offset)
+            .all()
         )
 
         open_statuses = [
@@ -145,6 +164,9 @@ class CustomerWebService:
 
         logger.debug("list_customers_context: found %d customers", total_count)
 
+        active_filters = build_active_filters(
+            params={"status": status},
+        )
         return {
             "customers": customers_view,
             "search": search,
@@ -154,6 +176,9 @@ class CustomerWebService:
             "offset": offset,
             "total_count": total_count,
             "total_pages": total_pages,
+            "active_filters": active_filters,
+            "sort": sort or "",
+            "sort_dir": sort_dir_norm,
         }
 
     @staticmethod
@@ -460,6 +485,8 @@ class CustomerWebService:
         search: str | None,
         status: str | None,
         page: int,
+        sort: str | None = None,
+        sort_dir: str | None = None,
     ) -> HTMLResponse:
         """Render customer list page."""
         context = base_context(request, auth, "Customers", "ar")
@@ -470,6 +497,8 @@ class CustomerWebService:
                 search=search,
                 status=status,
                 page=page,
+                sort=sort,
+                sort_dir=sort_dir,
             )
         )
         return templates.TemplateResponse(request, "finance/ar/customers.html", context)

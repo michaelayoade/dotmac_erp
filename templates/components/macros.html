@@ -716,7 +716,9 @@ if (typeof window.searchAutosuggest === 'undefined') {
     {# Caller block for custom filters (date inputs, dynamic selects, etc.) #}
     {% if caller %}
     {{ caller(
-        'hx-get="' ~ base_url ~ '" hx-trigger="change" hx-target="#' ~ target_id ~ '" hx-select="#' ~ target_id ~ '" hx-push-url="true" hx-include="closest form"'
+        (
+            'hx-get="' ~ base_url ~ '" hx-trigger="change" hx-target="#' ~ target_id ~ '" hx-select="#' ~ target_id ~ '" hx-push-url="true" hx-include="closest form"'
+        ) | safe
     ) }}
     {% endif %}
 
@@ -791,9 +793,13 @@ if (typeof window.searchAutosuggest === 'undefined') {
 {% macro compact_filters(
     base_url, target_id="results-container", active_filters=[],
     show_search=false, search="", search_name="search", search_placeholder="Search...",
-    date_range=false, start_date="", end_date="", debounce_ms=300
+    date_range=false, start_date="", end_date="", debounce_ms=300,
+    auto_submit=true, show_apply_button=false
 ) %}
 {% set filter_count = active_filters | length %}
+{% set caller_attrs = (
+    'hx-get="' ~ base_url ~ '" hx-trigger="change" hx-target="#' ~ target_id ~ '" hx-select="#' ~ target_id ~ '" hx-push-url="true" hx-include="closest form"'
+) if auto_submit else "" %}
 <div class="card" data-compact-filters data-live-search
      x-data='{ open: {{ "true" if filter_count > 0 else "false" }} }'>
 
@@ -879,12 +885,14 @@ if (typeof window.searchAutosuggest === 'undefined') {
                placeholder="{{ search_placeholder }}"
                autocomplete="off"
                class="form-input pl-10 w-full"
+               {% if auto_submit %}
                hx-get="{{ base_url }}"
                hx-trigger="input changed delay:{{ debounce_ms }}ms, search"
                hx-target="#{{ target_id }}"
                hx-select="#{{ target_id }}"
                hx-push-url="true"
                hx-include="closest form">
+               {% endif %}
       </div>
       {% endif %}
 
@@ -893,8 +901,8 @@ if (typeof window.searchAutosuggest === 'undefined') {
         {# Caller block for custom filter inputs #}
         {% if caller %}
         {{ caller(
-            'hx-get="' ~ base_url ~ '" hx-trigger="change" hx-target="#' ~ target_id ~ '" hx-select="#' ~ target_id ~ '" hx-push-url="true" hx-include="closest form"'
-        ) }}
+            caller_attrs | safe
+        ) | safe }}
         {% endif %}
 
         {# Built-in date range inputs #}
@@ -903,26 +911,37 @@ if (typeof window.searchAutosuggest === 'undefined') {
           <label class="form-label text-xs">From</label>
           <input type="date" name="start_date" value="{{ start_date if start_date else '' }}"
                  class="form-input w-full"
+                 {% if auto_submit %}
                  hx-get="{{ base_url }}"
                  hx-trigger="change"
                  hx-target="#{{ target_id }}"
                  hx-select="#{{ target_id }}"
                  hx-push-url="true"
                  hx-include="closest form">
+                 {% endif %}
         </div>
         <div>
           <label class="form-label text-xs">To</label>
           <input type="date" name="end_date" value="{{ end_date if end_date else '' }}"
                  class="form-input w-full"
+                 {% if auto_submit %}
                  hx-get="{{ base_url }}"
                  hx-trigger="change"
                  hx-target="#{{ target_id }}"
                  hx-select="#{{ target_id }}"
                  hx-push-url="true"
                  hx-include="closest form">
+                 {% endif %}
         </div>
         {% endif %}
       </div>
+
+      {% if show_apply_button %}
+      <div class="flex flex-wrap items-center gap-3 pt-2">
+        <button type="submit" class="btn btn-primary">Apply Filters</button>
+        <a href="{{ base_url }}" class="btn btn-secondary">Clear</a>
+      </div>
+      {% endif %}
 
       {# Submit fallback for no-JS #}
       <noscript>

@@ -67,6 +67,7 @@ from app.tasks.performance import (
     sync_all_cycle_progress,
 )
 from app.tasks.splynx import (
+    cleanup_stale_splynx_sync_history,
     run_scheduled_splynx_sync,
     run_splynx_daily_reconciliation,
     run_splynx_full_reconciliation,
@@ -93,6 +94,7 @@ __all__ = [
     "run_splynx_incremental_sync",
     "run_splynx_daily_reconciliation",
     "run_splynx_full_reconciliation",
+    "cleanup_stale_splynx_sync_history",
     # Expense module tasks
     "refresh_period_usage_cache",
     "process_expense_approval_reminders",

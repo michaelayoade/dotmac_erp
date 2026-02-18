@@ -7,7 +7,7 @@ HTML template routes for Suppliers, Invoices, and Payments.
 import logging
 
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from app.services.finance.ap.web import ap_web_service
@@ -42,6 +42,23 @@ def list_suppliers(
         sort,
         sort_dir,
     )
+
+
+@router.get("/suppliers/search")
+def supplier_search(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(default=8, ge=1, le=20),
+    auth: WebAuthContext = Depends(require_finance_access),
+    db: Session = Depends(get_db),
+):
+    """Search active suppliers for typeahead/autocomplete."""
+    payload = ap_web_service.supplier_typeahead(
+        db=db,
+        organization_id=str(auth.organization_id),
+        query=q,
+        limit=limit,
+    )
+    return JSONResponse(payload)
 
 
 @router.get("/suppliers/new", response_class=HTMLResponse)

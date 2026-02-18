@@ -88,7 +88,7 @@ class ComplianceComputer(BaseComputer):
         # ── 3. Open fiscal periods ─────────────────────────────────
         open_fp_stmt = select(func.count(FiscalPeriod.fiscal_period_id)).where(
             FiscalPeriod.organization_id == organization_id,
-            FiscalPeriod.status.in_((PeriodStatus.OPEN, PeriodStatus.REOPENED)),
+            FiscalPeriod.status.in_(PeriodStatus.accepts_postings()),
         )
         open_periods = int(self.db.scalar(open_fp_stmt) or 0)
 
@@ -145,7 +145,7 @@ class ComplianceComputer(BaseComputer):
         # Open/Reopened periods past their end_date
         overdue_fp_stmt = select(func.count(FiscalPeriod.fiscal_period_id)).where(
             FiscalPeriod.organization_id == organization_id,
-            FiscalPeriod.status.in_((PeriodStatus.OPEN, PeriodStatus.REOPENED)),
+            FiscalPeriod.status.in_(PeriodStatus.accepts_postings()),
             FiscalPeriod.end_date < snapshot_date,
         )
         overdue_periods = int(self.db.scalar(overdue_fp_stmt) or 0)

@@ -425,13 +425,11 @@ class MaterialRequestWebService:
     ) -> dict:
         """Get context for material request detail page."""
         org_id = coerce_uuid(organization_id)
+        req_id = coerce_uuid(request_id)
         request = (
             db.query(MaterialRequest)
-            .options(
-                joinedload(MaterialRequest.items),
-            )
             .filter(
-                MaterialRequest.request_id == coerce_uuid(request_id),
+                MaterialRequest.request_id == req_id,
                 MaterialRequest.organization_id == org_id,
             )
             .first()
@@ -440,10 +438,20 @@ class MaterialRequestWebService:
         if not request:
             return {"material_request": None}
 
+        request_items = (
+            db.query(MaterialRequestItem)
+            .filter(
+                MaterialRequestItem.request_id == req_id,
+                MaterialRequestItem.organization_id == org_id,
+            )
+            .order_by(MaterialRequestItem.sequence.asc())
+            .all()
+        )
+
         # Get related data for items
-        item_ids = [item.inventory_item_id for item in request.items]
+        item_ids = [item.inventory_item_id for item in request_items]
         warehouse_ids = [
-            item.warehouse_id for item in request.items if item.warehouse_id
+            item.warehouse_id for item in request_items if item.warehouse_id
         ]
         items_map = {}
         if item_ids:
@@ -528,18 +536,18 @@ class MaterialRequestWebService:
                 ticket_subject = ticket.subject
 
         total_qty = (
-            sum((item.requested_qty for item in request.items), Decimal("0"))
-            if request.items
+            sum((item.requested_qty for item in request_items), Decimal("0"))
+            if request_items
             else Decimal("0")
         )
         total_ordered = (
-            sum((item.ordered_qty for item in request.items), Decimal("0"))
-            if request.items
+            sum((item.ordered_qty for item in request_items), Decimal("0"))
+            if request_items
             else Decimal("0")
         )
 
         detail_items = []
-        for item in sorted(request.items, key=lambda x: x.sequence):
+        for item in request_items:
             inv_item = items_map.get(item.inventory_item_id)
             wh = warehouses_map.get(item.warehouse_id) if item.warehouse_id else None
 
@@ -581,7 +589,7 @@ class MaterialRequestWebService:
                 "total_requested_qty": _format_currency(total_qty),
                 "total_ordered_qty": _format_currency(total_ordered),
                 "total_pending": _format_currency(total_qty - total_ordered),
-                "total_items": len(request.items),
+                "total_items": len(request_items),
                 "created_at": _format_datetime(request.created_at),
                 "updated_at": _format_datetime(request.updated_at)
                 if request.updated_at

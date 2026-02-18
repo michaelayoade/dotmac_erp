@@ -488,7 +488,7 @@
     </div>
 
     <form method="post"
-          action="{{ '/tax/codes/' ~ tax_code.tax_code_id ~ '/edit' if tax_code else '/tax/codes/new' }}"
+          action="{{ '/finance/tax/codes/' ~ tax_code.tax_code_id ~ '/edit' if tax_code else '/finance/tax/codes/new' }}"
           class="space-y-8">
         {{ request.state.csrf_form | safe }}
 
