@@ -144,13 +144,13 @@
     </div>
     {% endif %}
 
-    <div x-show="showClaimModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" aria-modal="true" role="dialog">
+    <div x-show="showClaimModal" x-trap="showClaimModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showClaimModal = false" aria-modal="true" role="dialog" aria-labelledby="new-claim-modal-title">
     <div class="flex min-h-screen items-center justify-center px-4 py-10">
         <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm" @click="showClaimModal = false"></div>
         <div class="relative w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-slate-900">
             <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4 dark:border-slate-800">
                 <div>
-                    <h2 class="text-lg font-semibold text-slate-900 dark:text-white">New Expense Claim</h2>
+                    <h2 id="new-claim-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white">New Expense Claim</h2>
                     <p class="text-sm text-slate-500 dark:text-slate-400">Fill in the details and submit when ready.</p>
                 </div>
                 <button type="button" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" @click="showClaimModal = false">

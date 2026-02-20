@@ -1,18 +1,14 @@
 {% extends "finance/base_finance.html" %}
-{% from "components/macros.html" import empty_state, status_badge %}
+{% from "components/macros.html" import empty_state, status_badge, icon_svg %}
 
 {% block page_title %}Bank Statement{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
+    {{ icon_svg("chevron-right", "h-4 w-4") }}
     <a href="/finance/banking/statements" class="hover:text-teal-600 dark:hover:text-teal-400 transition-colors">Statements</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
+    {{ icon_svg("chevron-right", "h-4 w-4") }}
     <span class="font-medium text-slate-900 dark:text-white" aria-current="page">{{ statement.statement_number if statement and statement.statement_number else "Detail" }}</span>
 </nav>
 {% endblock %}
@@ -26,25 +22,19 @@
 {% set auto_matched = request.query_params.get('auto_matched') %}
 {% if success_msg %}
 <div class="mb-4 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 flex items-center gap-3">
-    <svg class="h-5 w-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-    </svg>
+    {{ icon_svg("check-circle", "h-5 w-5 text-emerald-600 dark:text-emerald-400 flex-shrink-0") }}
     <span class="text-sm text-emerald-700 dark:text-emerald-300">{{ success_msg | replace('+', ' ') }}</span>
 </div>
 {% endif %}
 {% if auto_matched %}
 <div class="mb-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 p-4 flex items-center gap-3">
-    <svg class="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-    </svg>
+    {{ icon_svg("lightning-bolt", "h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0") }}
     <span class="text-sm text-blue-700 dark:text-blue-300">{{ auto_matched }} line{{ 's' if auto_matched != '1' else '' }} auto-matched to internal Paystack transfers.</span>
 </div>
 {% endif %}
 {% if error_msg %}
 <div class="mb-4 rounded-lg bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 p-4 flex items-center gap-3">
-    <svg class="h-5 w-5 text-rose-600 dark:text-rose-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-    </svg>
+    {{ icon_svg("exclamation-circle", "h-5 w-5 text-rose-600 dark:text-rose-400 flex-shrink-0") }}
     <span class="text-sm text-rose-700 dark:text-rose-300">{{ error_msg | replace('+', ' ') }}</span>
 </div>
 {% endif %}
@@ -416,9 +406,7 @@
         <div class="card p-5">
             <div class="flex items-center gap-3">
                 <div class="card-icon bg-teal-50 text-teal-600 dark:bg-teal-900/30 dark:text-teal-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
-                    </svg>
+                    {{ icon_svg("credit-card") }}
                 </div>
                 <div>
                     <p class="text-2xl font-bold text-slate-900 dark:text-white font-display font-mono tabular-nums">{{ statement.opening_balance }}</p>
@@ -429,9 +417,7 @@
         <div class="card p-5">
             <div class="flex items-center gap-3">
                 <div class="card-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("currency") }}
                 </div>
                 <div>
                     <p class="text-2xl font-bold text-slate-900 dark:text-white font-display font-mono tabular-nums">{{ statement.closing_balance }}</p>
@@ -442,9 +428,7 @@
         <div class="card p-5">
             <div class="flex items-center gap-3">
                 <div class="card-icon bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                    </svg>
+                    {{ icon_svg("document-report") }}
                 </div>
                 <div>
                     <p class="text-2xl font-bold text-slate-900 dark:text-white font-display tabular-nums">{{ statement.total_lines }}</p>
@@ -455,9 +439,7 @@
         <div class="card p-5">
             <div class="flex items-center gap-3">
                 <div class="card-icon bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("check-circle") }}
                 </div>
                 <div>
                     <div class="flex items-center gap-2">
@@ -566,9 +548,7 @@
                                 <td class="text-center">
                                     <span x-show="matchedLines['{{ line.line_id }}']"
                                           class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                                        <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                                        </svg>
+                                        {{ icon_svg("check", "h-3 w-3") }}
                                         Matched
                                     </span>
                                     <span x-show="!matchedLines['{{ line.line_id }}']"
@@ -592,9 +572,7 @@
                                             <span class="inline-flex rounded-full bg-rose-100 px-1.5 py-0.5 text-xs font-mono tabular-nums text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">{{ line.suggested_confidence }}%</span>
                                             {% endif %}
                                             {% endif %}
-                                            {% if line.categorization_status == 'FLAGGED' %}
-                                            <span class="inline-flex rounded-full bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Review</span>
-                                            {% endif %}
+                                            {{ status_badge(line.categorization_status, 'sm') }}
                                         </div>
                                         {% if line.suggested_match_reason %}
                                         <p class="text-xs text-slate-400 dark:text-slate-500 truncate max-w-[180px]" title="{{ line.suggested_match_reason }}">{{ line.suggested_match_reason }}</p>
@@ -604,35 +582,27 @@
                                             <form method="POST" action="/finance/banking/statements/{{ statement.statement_id }}/lines/{{ line.line_id }}/accept" class="inline">
                                                 {{ request.state.csrf_form | safe }}
                                                 <button type="submit" class="inline-flex items-center rounded px-1.5 py-0.5 text-xs text-emerald-700 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:bg-emerald-900/30 transition-colors" aria-label="Accept suggestion" title="Accept">
-                                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                                                    </svg>
+                                                    {{ icon_svg("check", "h-3.5 w-3.5") }}
                                                 </button>
                                             </form>
                                             <form method="POST" action="/finance/banking/statements/{{ statement.statement_id }}/lines/{{ line.line_id }}/reject" class="inline">
                                                 {{ request.state.csrf_form | safe }}
                                                 <button type="submit" class="inline-flex items-center rounded px-1.5 py-0.5 text-xs text-rose-700 hover:bg-rose-100 dark:text-rose-400 dark:hover:bg-rose-900/30 transition-colors" aria-label="Reject suggestion" title="Reject">
-                                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                                    </svg>
+                                                    {{ icon_svg("x-mark", "h-3.5 w-3.5") }}
                                                 </button>
                                             </form>
                                         </div>
                                     </div>
                                     {% elif line.categorization_status == 'ACCEPTED' %}
                                     <div class="flex items-center gap-1.5">
-                                        <svg class="h-3.5 w-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                                        </svg>
+                                        {{ icon_svg("check", "h-3.5 w-3.5 text-emerald-500") }}
                                         <span class="text-xs text-emerald-700 dark:text-emerald-400 truncate max-w-[140px]" title="{{ account_map.get(line.suggested_account_id, '') }}">
                                             {{ account_map.get(line.suggested_account_id, 'Accepted') }}
                                         </span>
                                     </div>
                                     {% elif line.categorization_status == 'AUTO_APPLIED' %}
                                     <div class="flex items-center gap-1.5">
-                                        <svg class="h-3.5 w-3.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                                        </svg>
+                                        {{ icon_svg("check", "h-3.5 w-3.5 text-emerald-500") }}
                                         <span class="text-xs text-emerald-700 dark:text-emerald-400 truncate max-w-[120px]" title="{{ account_map.get(line.suggested_account_id, '') }}">
                                             {{ account_map.get(line.suggested_account_id, 'Applied') }}
                                         </span>
@@ -649,9 +619,7 @@
                                 <td>
                                     {# ── Matched state ── #}
                                     <div x-show="matchedLines['{{ line.line_id }}']" class="flex items-start gap-1.5">
-                                        <svg class="h-3.5 w-3.5 text-emerald-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
-                                        </svg>
+                                        {{ icon_svg("link", "h-3.5 w-3.5 text-emerald-500 flex-shrink-0 mt-0.5") }}
                                         {# Rich detail when metadata is available #}
                                         <template x-if="matchDetails['{{ line.line_id }}']">
                                             <div class="min-w-0 flex-1">
@@ -692,9 +660,7 @@
                                             class="inline-flex items-center rounded px-1 py-0.5 text-xs text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:text-rose-400 dark:hover:bg-rose-900/20 transition-colors flex-shrink-0"
                                             aria-label="Remove match" title="Remove match"
                                             :disabled="matchLoading['{{ line.line_id }}']">
-                                            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                            </svg>
+                                            {{ icon_svg("x-mark", "h-3 w-3") }}
                                         </button>
                                     </div>
 
@@ -738,9 +704,7 @@
                                                 aria-label="Accept GL match" title="Accept match"
                                                 :disabled="matchLoading['{{ line_id_str }}']">
                                                     <template x-if="!matchLoading['{{ line_id_str }}']">
-                                                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
-                                                        </svg>
+                                                        {{ icon_svg("link", "h-3.5 w-3.5") }}
                                                     </template>
                                                     <template x-if="matchLoading['{{ line_id_str }}']">
                                                         <svg class="h-3.5 w-3.5 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
@@ -754,17 +718,13 @@
                                                     <a :href="suggestions['{{ line_id_str }}'].source_url" target="_blank"
                                                        class="inline-flex items-center rounded px-1 py-0.5 text-xs text-slate-400 hover:text-teal-600 hover:bg-teal-50 dark:hover:text-teal-400 dark:hover:bg-teal-900/20 transition-colors"
                                                        aria-label="View source document" title="View document">
-                                                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-                                                        </svg>
+                                                        {{ icon_svg("external-link", "h-3.5 w-3.5") }}
                                                     </a>
                                                 </template>
                                                 <button @click="openMatchModal('{{ line_id_str }}')"
                                                     class="inline-flex items-center rounded px-1 py-0.5 text-xs text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 transition-colors"
                                                     aria-label="Browse GL transactions" title="Browse all">
-                                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                                                    </svg>
+                                                    {{ icon_svg("search", "h-3.5 w-3.5") }}
                                                 </button>
                                             </div>
                                         </div>
@@ -774,9 +734,7 @@
                                     <button @click="openMatchModal('{{ line.line_id }}')"
                                         class="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-slate-500 hover:text-blue-700 hover:bg-blue-50 dark:text-slate-400 dark:hover:text-blue-400 dark:hover:bg-blue-900/20 transition-colors"
                                         aria-label="Find GL match" title="Find match">
-                                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                                        </svg>
+                                        {{ icon_svg("search", "h-3.5 w-3.5") }}
                                         <span>Find</span>
                                     </button>
                                     {% endif %}
@@ -851,9 +809,7 @@
                         {{ request.state.csrf_form | safe }}
                         <button type="submit"
                                 class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-teal-700 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-900/20 transition-colors">
-                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                            </svg>
+                            {{ icon_svg("lightning-bolt", "h-4 w-4") }}
                             Apply Rules
                         </button>
                     </form>
@@ -865,9 +821,7 @@
                         {{ request.state.csrf_form | safe }}
                         <button type="submit"
                                 class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20 transition-colors">
-                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                            </svg>
+                            {{ icon_svg("check-circle", "h-4 w-4") }}
                             Auto-Match Payments
                         </button>
                     </form>
@@ -876,24 +830,18 @@
                     {% if statement.bank_account_id %}
                     <a href="/finance/banking/accounts/{{ statement.bank_account_id }}"
                        class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800/50 transition-colors">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
-                        </svg>
+                        {{ icon_svg("credit-card", "h-4 w-4") }}
                         View Account
                     </a>
                     <a href="/finance/banking/reconciliations/new?account_id={{ statement.bank_account_id }}"
                        class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800/50 transition-colors">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
+                        {{ icon_svg("check-circle", "h-4 w-4") }}
                         New Reconciliation
                     </a>
                     {% endif %}
                     <a href="/finance/banking/statements"
                        class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800/50 transition-colors">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
-                        </svg>
+                        {{ icon_svg("list-bullet", "h-4 w-4") }}
                         All Statements
                     </a>
 
@@ -901,14 +849,12 @@
                     <div x-data="{ showDeleteModal: false }" class="border-t border-slate-200 dark:border-slate-700 pt-2 mt-2">
                         <button @click="showDeleteModal = true"
                                 class="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-900/20 transition-colors">
-                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-                            </svg>
+                            {{ icon_svg("trash", "h-4 w-4") }}
                             Delete Statement
                         </button>
 
                         {# Confirmation modal #}
-                        <div x-show="showDeleteModal" x-cloak
+                        <div x-show="showDeleteModal" x-trap="showDeleteModal" x-cloak
                              role="dialog" aria-modal="true" aria-labelledby="delete-modal-title"
                              @keydown.escape.window="showDeleteModal = false"
                              class="fixed inset-0 z-50 flex items-center justify-center">
@@ -1002,7 +948,7 @@
     </div>
 
     {# ── Manual Match Modal ────────────────────────────────────────── #}
-    <div x-show="matchModal" x-cloak
+    <div x-show="matchModal" x-trap="matchModal" x-cloak
          role="dialog" aria-modal="true" aria-labelledby="match-modal-title"
          @keydown.escape.window="matchModal = false"
          class="fixed inset-0 z-50 flex items-center justify-center">
@@ -1031,14 +977,12 @@
                                 ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800'
                                 : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400'"
                             :title="multiMatchMode ? 'Switch to single match' : 'Match multiple GL entries to this bank line'">
-                        <svg class="h-3.5 w-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-                        </svg>
+                        {{ icon_svg("clipboard-check", "h-3.5 w-3.5 mr-1") }}
                         <span x-text="multiMatchMode ? 'Multi ON' : 'Multi'" class="whitespace-nowrap"></span>
                     </button>
                 </div>
                 <button @click="matchModal = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" aria-label="Close">
-                    <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                    {{ icon_svg("x-mark") }}
                 </button>
             </div>
             {# Bank line context card #}
@@ -1065,9 +1009,7 @@
             <div class="px-6 py-3 border-b border-slate-200 dark:border-slate-700 space-y-3">
                 {# Text search row #}
                 <div class="relative">
-                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                    </svg>
+                    {{ icon_svg("search", "absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400") }}
                     <input x-model="matchSearch" @input="debouncedFetch()" type="text" placeholder="Search by description, reference, counterparty, or amount..."
                            class="form-input pl-9 w-full text-sm" autofocus>
                 </div>
@@ -1166,9 +1108,7 @@
                 </template>
                 <template x-if="!glLoading && glCandidates.length === 0">
                     <div class="py-12 text-center">
-                        <svg class="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                        </svg>
+                        {{ icon_svg("document", "mx-auto h-10 w-10 text-slate-300 dark:text-slate-600 mb-3", stroke_width="1.5") }}
                         <p class="text-sm font-medium text-slate-600 dark:text-slate-400">No posted GL transactions</p>
                         <p class="text-xs text-slate-400 dark:text-slate-500 mt-1">
                             There are no posted journal entries for this bank account yet.<br>
@@ -1287,12 +1227,12 @@
                                 <button @click="goToPage(1)" :disabled="glPage <= 1"
                                         class="px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
                                         aria-label="First page">
-                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"/></svg>
+                                    {{ icon_svg("chevron-double-left", "h-3.5 w-3.5") }}
                                 </button>
                                 <button @click="goToPage(glPage - 1)" :disabled="glPage <= 1"
                                         class="px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
                                         aria-label="Previous page">
-                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                                    {{ icon_svg("chevron-left", "h-3.5 w-3.5") }}
                                 </button>
                                 <span class="px-2 py-1 text-xs font-medium text-slate-700 dark:text-slate-300">
                                     Page <span x-text="glPage"></span> of <span x-text="glTotalPages"></span>
@@ -1300,7 +1240,7 @@
                                 <button @click="goToPage(glPage + 1)" :disabled="glPage >= glTotalPages"
                                         class="px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
                                         aria-label="Next page">
-                                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                                    {{ icon_svg("chevron-right", "h-3.5 w-3.5") }}
                                 </button>
                                 <button @click="goToPage(glTotalPages)" :disabled="glPage >= glTotalPages"
                                         class="px-2 py-1 text-xs rounded border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
@@ -1340,9 +1280,7 @@
                                           x-text="'(diff: ' + currency + ' ' + _fmtAmt(multiMatchDiff) + ')'"></span>
                                 </template>
                                 <template x-if="multiMatchReady">
-                                    <svg class="h-4 w-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                                    </svg>
+                                    {{ icon_svg("check", "h-4 w-4 text-emerald-600 dark:text-emerald-400") }}
                                 </template>
                             </div>
                         </div>
@@ -1366,7 +1304,7 @@
                             <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Create a new GL journal entry and match it to this bank line</p>
                         </div>
                         <button @click="createJournalMode = false" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300" aria-label="Close create journal panel">
-                            <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            {{ icon_svg("x-mark", "h-4 w-4") }}
                         </button>
                     </div>
                     <div class="grid gap-3 sm:grid-cols-2">
@@ -1416,9 +1354,7 @@
                     <button @click="createJournalMode = !createJournalMode; if (createJournalMode) autoSuggestAccount()"
                             x-show="!createJournalMode"
                             class="btn btn-sm text-xs px-3 bg-teal-50 text-teal-700 hover:bg-teal-100 dark:bg-teal-900/30 dark:text-teal-400 dark:hover:bg-teal-900/50 border border-teal-200 dark:border-teal-800 transition-colors">
-                        <svg class="h-3.5 w-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-                        </svg>
+                        {{ icon_svg("plus", "h-3.5 w-3.5 mr-1") }}
                         Create Journal
                     </button>
                     <button @click="matchModal = false" class="btn btn-secondary btn-sm">Cancel</button>
@@ -1428,7 +1364,7 @@
     </div>
 
     {# ── Amount Mismatch Confirmation Modal ──────────────────────── #}
-    <div x-show="confirmModal" x-cloak
+    <div x-show="confirmModal" x-trap="confirmModal" x-cloak
          role="dialog" aria-modal="true" aria-labelledby="mismatch-modal-title"
          @keydown.escape.window="confirmModal = false"
          class="fixed inset-0 z-[60] flex items-center justify-center">
@@ -1440,9 +1376,7 @@
              x-transition:leave="duration-150 ease-in" x-transition:leave-end="opacity-0 scale-95">
             <div class="flex items-start gap-3">
                 <div class="flex-shrink-0 rounded-full bg-amber-100 dark:bg-amber-900/30 p-2">
-                    <svg class="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                    </svg>
+                    {{ icon_svg("warning", "h-5 w-5 text-amber-600 dark:text-amber-400") }}
                 </div>
                 <div>
                     <h3 id="mismatch-modal-title" class="text-lg font-semibold text-slate-900 dark:text-white">Amount Mismatch</h3>
@@ -1476,7 +1410,7 @@
     </div>
 
     {# ── Batch Match Confirmation Modal ─────────────────────────── #}
-    <div x-show="batchMatchConfirmModal" x-cloak
+    <div x-show="batchMatchConfirmModal" x-trap="batchMatchConfirmModal" x-cloak
          role="dialog" aria-modal="true" aria-labelledby="batch-match-modal-title"
          @keydown.escape.window="batchMatchConfirmModal = false"
          class="fixed inset-0 z-[60] flex items-center justify-center">
@@ -1531,7 +1465,7 @@
     </div>
 
     {# ── Unmatch Confirmation Modal ──────────────────────────────── #}
-    <div x-show="unmatchModal" x-cloak
+    <div x-show="unmatchModal" x-trap="unmatchModal" x-cloak
          role="dialog" aria-modal="true" aria-labelledby="unmatch-modal-title"
          @keydown.escape.window="unmatchModal = false"
          class="fixed inset-0 z-[60] flex items-center justify-center">

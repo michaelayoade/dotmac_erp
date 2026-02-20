@@ -1,18 +1,14 @@
 {% extends "finance/base_finance.html" %}
 
-{% from "components/macros.html" import status_badge, empty_state %}
+{% from "components/macros.html" import status_badge, empty_state, icon_svg %}
 {% block page_title %}Quote {{ quote.quote_number if quote else 'Not Found' }}{% endblock %}
 
 {% block breadcrumbs %}
 <nav class="flex items-center gap-2 text-sm text-slate-500 mt-1" aria-label="Breadcrumb">
     <a href="/dashboard" class="hover:text-slate-700 dark:hover:text-slate-300">Dashboard</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
+    {{ icon_svg("chevron-right", "h-4 w-4") }}
     <a href="/finance/quotes" class="hover:text-slate-700 dark:hover:text-slate-300">Quotes</a>
-    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-    </svg>
+    {{ icon_svg("chevron-right", "h-4 w-4") }}
     <span class="text-slate-700 dark:text-slate-300" aria-current="page">{{ quote.quote_number if quote else 'Not Found' }}</span>
 </nav>
 {% endblock %}
@@ -20,9 +16,7 @@
 {% block header_actions %}
 {% if quote and quote.can_edit %}
 <a href="/finance/quotes/{{ quote.quote_id }}/edit" class="btn btn-secondary">
-    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-    </svg>
+    {{ icon_svg("edit", "h-4 w-4 mr-1.5") }}
     Edit
 </a>
 {% endif %}
@@ -34,9 +28,7 @@
     <div class="card p-12">
         <div class="empty-state">
             <div class="empty-state-icon">
-                <svg class="h-8 w-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
+                {{ icon_svg("exclamation-circle", "h-8 w-8") }}
             </div>
             <h3 class="empty-state-title">Quote Not Found</h3>
             <p class="empty-state-description">This quote could not be found.</p>
@@ -187,9 +179,7 @@
         <div class="space-y-4">
             <div class="flex items-center gap-3">
                 <div class="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
-                    <svg class="h-4 w-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                    </svg>
+                    {{ icon_svg("plus", "h-4 w-4 text-slate-500") }}
                 </div>
                 <div>
                     <p class="text-sm text-slate-900 dark:text-white">Created</p>
@@ -199,9 +189,7 @@
             {% if quote.sent_at %}
             <div class="flex items-center gap-3">
                 <div class="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">
-                    <svg class="h-4 w-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                    </svg>
+                    {{ icon_svg("paper-airplane", "h-4 w-4 text-blue-600 dark:text-blue-400") }}
                 </div>
                 <div>
                     <p class="text-sm text-slate-900 dark:text-white">Sent</p>
@@ -212,10 +200,7 @@
             {% if quote.viewed_at %}
             <div class="flex items-center gap-3">
                 <div class="flex h-8 w-8 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/30">
-                    <svg class="h-4 w-4 text-purple-600 dark:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                    </svg>
+                    {{ icon_svg("eye", "h-4 w-4 text-purple-600 dark:text-purple-400") }}
                 </div>
                 <div>
                     <p class="text-sm text-slate-900 dark:text-white">Viewed by Customer</p>
@@ -226,9 +211,7 @@
             {% if quote.accepted_at %}
             <div class="flex items-center gap-3">
                 <div class="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-                    <svg class="h-4 w-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
+                    {{ icon_svg("check", "h-4 w-4 text-emerald-600 dark:text-emerald-400") }}
                 </div>
                 <div>
                     <p class="text-sm text-slate-900 dark:text-white">Accepted</p>
@@ -239,9 +222,7 @@
             {% if quote.rejected_at %}
             <div class="flex items-center gap-3">
                 <div class="flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/30">
-                    <svg class="h-4 w-4 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
+                    {{ icon_svg("x-mark", "h-4 w-4 text-rose-600 dark:text-rose-400") }}
                 </div>
                 <div>
                     <p class="text-sm text-slate-900 dark:text-white">Rejected</p>
@@ -255,9 +236,7 @@
             {% if quote.converted_at %}
             <div class="flex items-center gap-3">
                 <div class="flex h-8 w-8 items-center justify-center rounded-full bg-teal-100 dark:bg-teal-900/30">
-                    <svg class="h-4 w-4 text-teal-600 dark:text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                    </svg>
+                    {{ icon_svg("clipboard", "h-4 w-4 text-teal-600 dark:text-teal-400") }}
                 </div>
                 <div>
                     <p class="text-sm text-slate-900 dark:text-white">Converted</p>
@@ -281,9 +260,7 @@
             <form method="post" action="/finance/quotes/{{ quote.quote_id }}/send" class="inline">
                 {{ request.state.csrf_form | safe }}
                 <button type="submit" class="btn btn-info">
-                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                    </svg>
+                    {{ icon_svg("paper-airplane", "h-4 w-4 mr-1.5") }}
                     Send to Customer
                 </button>
             </form>
@@ -293,9 +270,7 @@
             <form method="post" action="/finance/quotes/{{ quote.quote_id }}/accept" class="inline">
                 {{ request.state.csrf_form | safe }}
                 <button type="submit" class="btn btn-success">
-                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
+                    {{ icon_svg("check", "h-4 w-4 mr-1.5") }}
                     Accept
                 </button>
             </form>
@@ -305,13 +280,11 @@
             <form method="post" action="/finance/quotes/{{ quote.quote_id }}/reject" class="inline" x-data="{ showReject: false }">
                 {{ request.state.csrf_form | safe }}
                 <button type="button" @click="showReject = true" class="btn btn-danger">
-                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                    </svg>
+                    {{ icon_svg("x-mark", "h-4 w-4 mr-1.5") }}
                     Reject
                 </button>
                 <!-- Reject Modal -->
-                <div x-show="showReject" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showReject = false" role="dialog" aria-modal="true" aria-labelledby="reject-quote-modal-title">
+                <div x-show="showReject" x-trap="showReject" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showReject = false" role="dialog" aria-modal="true" aria-labelledby="reject-quote-modal-title">
                     <div class="flex min-h-screen items-center justify-center p-4">
                         <div class="fixed inset-0 bg-slate-900/50" @click="showReject = false"></div>
                         <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6">
@@ -334,22 +307,18 @@
             <form method="post" action="/finance/quotes/{{ quote.quote_id }}/convert-to-invoice" class="inline">
                 {{ request.state.csrf_form | safe }}
                 <button type="submit" class="btn btn-primary">
-                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                    </svg>
+                    {{ icon_svg("document", "h-4 w-4 mr-1.5") }}
                     Convert to Invoice
                 </button>
             </form>
             <form method="post" action="/finance/quotes/{{ quote.quote_id }}/convert-to-so" class="inline" x-data="{ showSO: false }">
                 {{ request.state.csrf_form | safe }}
                 <button type="button" @click="showSO = true" class="btn btn-secondary">
-                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-                    </svg>
+                    {{ icon_svg("clipboard", "h-4 w-4 mr-1.5") }}
                     Convert to Sales Order
                 </button>
                 <!-- SO Modal -->
-                <div x-show="showSO" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showSO = false" role="dialog" aria-modal="true" aria-labelledby="create-so-modal-title">
+                <div x-show="showSO" x-trap="showSO" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="showSO = false" role="dialog" aria-modal="true" aria-labelledby="create-so-modal-title">
                     <div class="flex min-h-screen items-center justify-center p-4">
                         <div class="fixed inset-0 bg-slate-900/50" @click="showSO = false"></div>
                         <div class="relative bg-white dark:bg-slate-800 rounded-xl shadow-xl max-w-md w-full p-6">
@@ -372,9 +341,7 @@
             <form method="post" action="/finance/quotes/{{ quote.quote_id }}/void" class="inline" onsubmit="return confirm('Are you sure you want to void this quote?')">
                 {{ request.state.csrf_form | safe }}
                 <button type="submit" class="btn btn-secondary text-rose-600 hover:text-rose-700">
-                    <svg class="h-4 w-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
-                    </svg>
+                    {{ icon_svg("ban", "h-4 w-4 mr-1.5") }}
                     Void
                 </button>
             </form>

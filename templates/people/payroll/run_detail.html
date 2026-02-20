@@ -1,5 +1,5 @@
 {% extends "people/base_people.html" %}
-{% from "components/macros.html" import compact_filters, filter_select_field, status_badge, empty_state, pagination %}
+{% from "components/macros.html" import compact_filters, filter_select_field, status_badge, empty_state, pagination, icon_svg %}
 
 {% block page_title %}Payroll Run {{ entry.entry_number }}{% endblock %}
 
@@ -45,15 +45,14 @@
             <!-- Bank Upload Modal Trigger -->
             <div x-data="{ showBankModal: false }">
                 <button @click="showBankModal = true" type="button" class="btn btn-secondary">
-                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-                    </svg>
+                    {{ icon_svg("download", "h-4 w-4 mr-1") }}
                     Bank Upload
                 </button>
 
                 <!-- Bank Upload Modal -->
-                <div x-show="showBankModal" x-cloak
+                <div x-show="showBankModal" x-trap="showBankModal" x-cloak
                      class="fixed inset-0 z-50 overflow-y-auto"
+                     @keydown.escape.window="showBankModal = false"
                      aria-labelledby="modal-title" role="dialog" aria-modal="true">
                     <div class="flex min-h-screen items-center justify-center px-4 pt-4 pb-20 text-center sm:p-0">
                         <div x-show="showBankModal" @click="showBankModal = false"
@@ -92,9 +91,7 @@
                                         </button>
                                         <button type="submit" class="btn btn-primary"
                                                 {% if not bank_accounts %}disabled{% endif %}>
-                                            <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-                                            </svg>
+                                            {{ icon_svg("download", "h-4 w-4 mr-1") }}
                                             Download CSV
                                         </button>
                                     </div>
@@ -124,9 +121,7 @@
             <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/submit" class="inline">
                 {{ request.state.csrf_form | safe }}
                 <button type="submit" class="btn btn-primary">
-                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
+                    {{ icon_svg("check-circle", "h-4 w-4 mr-1") }}
                     Submit All Slips
                 </button>
             </form>
@@ -139,9 +134,7 @@
             <form method="post" action="/people/payroll/runs/{{ entry.entry_id }}/approve" class="inline">
                 {{ request.state.csrf_form | safe }}
                 <button type="submit" class="btn btn-primary">
-                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                    </svg>
+                    {{ icon_svg("check", "h-4 w-4 mr-1") }}
                     Approve All Slips
                 </button>
             </form>
@@ -281,19 +274,7 @@
                             {{ "{:,.2f}".format(slip.net_pay) }}
                         </td>
                         <td class="px-4 py-3">
-                            {% if slip.status.value == "DRAFT" %}
-                            <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">Draft</span>
-                            {% elif slip.status.value == "SUBMITTED" %}
-                            <span class="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">Submitted</span>
-                            {% elif slip.status.value == "APPROVED" %}
-                            <span class="inline-flex rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">Approved</span>
-                            {% elif slip.status.value == "POSTED" %}
-                            <span class="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">Posted</span>
-                            {% elif slip.status.value == "PAID" %}
-                            <span class="inline-flex rounded-full bg-teal-50 px-2.5 py-1 text-xs font-medium text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">Paid</span>
-                            {% elif slip.status.value == "CANCELLED" %}
-                            <span class="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-medium text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">Cancelled</span>
-                            {% endif %}
+                            {{ status_badge(slip.status.value, 'sm') }}
                         </td>
                         <td class="px-4 py-3 text-right">
                             <a href="/people/payroll/slips/{{ slip.slip_id }}" class="text-sm text-violet-600 hover:text-violet-700 dark:text-violet-400 dark:hover:text-violet-300">View</a>
